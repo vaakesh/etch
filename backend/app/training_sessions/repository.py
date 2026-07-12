@@ -20,14 +20,14 @@ class TrainingSessionRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
     
-    async def get_all_by_user_uuid(
+    async def get_all_by_user_id(
         self,
-        user_uuid: UUID,
+        user_id: int,
         limit: int = 10,
     ) -> list[TrainingSession]:
         stmt = (
             select(TrainingSession)
-            .where(TrainingSession.user_uuid == user_uuid)
+            .where(TrainingSession.user_id == user_id)
             .limit(limit)
         )
         result = await self.session.execute(stmt)

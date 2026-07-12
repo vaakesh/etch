@@ -59,8 +59,9 @@ class TrainingSessionService:
         limit: int = 10,
     ) -> list[TrainingSessionSchema]:
         async with self.uow_factory() as uow:
-            training_sessions = await uow.training_session_repo.get_all_by_user_uuid(
-                user_id=user_uuid,
+            user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
+            training_sessions = await uow.training_session_repo.get_all_by_user_id(
+                user_id=user.id,
                 limit=limit,
             )
             return [

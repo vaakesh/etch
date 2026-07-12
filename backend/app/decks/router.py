@@ -101,7 +101,7 @@ async def add_card_to_deck(
 
 
 @router.patch(
-    "/deck-cards/{deck_card_uuid}",
+    "/{deck_uuid}/cards/{card_uuid}",
     response_model=DeckCardSchema,
 )
 async def update_deck_card(

@@ -29,6 +29,19 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "${db_port}:${db_port}"
+
+  frontend:
+    container_name: etch-frontend
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/frontend
+      - /frontend/node_modules
     
   cloudbeaver:
     image: dbeaver/cloudbeaver:latest

@@ -6,14 +6,14 @@ from app.users.service import UserService
 from app.users.deps import get_user_service
 from app.users.schemas import UserCreate, UserOut, UserSchema, UserUpdate
 from app.training_sessions.schemas import TrainingSessionSchema
-from backend.app.cards.deps import get_card_service
-from backend.app.cards.schemas import CardSchema
-from backend.app.cards.service import CardService
-from backend.app.decks.deps import get_deck_service
-from backend.app.decks.schemas import DeckSchema
-from backend.app.decks.service import DeckService
-from backend.app.training_sessions.deps import get_training_session_service
-from backend.app.training_sessions.service import TrainingSessionService
+from app.cards.deps import get_card_service
+from app.cards.schemas import CardSchema
+from app.cards.service import CardService
+from app.decks.deps import get_deck_service
+from app.decks.schemas import DeckSchema
+from app.decks.service import DeckService
+from app.training_sessions.deps import get_training_session_service
+from app.training_sessions.service import TrainingSessionService
 
 
 router = APIRouter(prefix="/users")
@@ -48,7 +48,7 @@ async def update_user(
 ):
     return await user_service.update_user(user_uuid, payload)
 
-@router.delete("/{user_uuid}", response_model=UserSchema)
+@router.delete("/{user_uuid}", )
 async def delete_user(
     user_uuid: UUID,
     user_service: UserService = Depends(get_user_service),
@@ -83,7 +83,7 @@ async def get_decks_by_user(
     )
 
 @router.get("/{user_uuid}/cards", response_model=list[CardSchema])
-async def get_cards_by_user_id(
+async def get_cards_by_user(
     user_uuid: UUID,
     limit: int = 10,
     card_service: CardService = Depends(get_card_service),

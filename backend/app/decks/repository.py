@@ -20,14 +20,14 @@ class DeckRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_all_by_user_uuid(
+    async def get_all_by_user_id(
         self,
-        user_uuid: UUID,
+        user_id: int,
         limit: int = 10,
     ) -> list[Deck]:
         stmt = (
             select(Deck)
-            .where(Deck.user_uuid == user_uuid)
+            .where(Deck.user_id == user_id)
             .limit(limit)
         )
         result = await self.session.execute(stmt)

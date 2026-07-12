@@ -13,7 +13,7 @@ from app.users.models import User
 from app.users.errors import UserAlreadyExistsError, UserNotFoundError
 from app.auth.utils import hash_password
 from app.training_sessions.schemas import TrainingSessionSchema
-from backend.app.decks.schemas import DeckSchema
+from app.decks.schemas import DeckSchema
 
 
 class UserService:

@@ -83,8 +83,9 @@ class DeckService:
         limit: int = 10,
     ) -> list[DeckSchema]:
         async with self.uow_factory() as uow:
-            decks = await uow.deck_repo.get_all_by_user_uuid(
-                user_uuid=user_uuid,
+            user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
+            decks = await uow.deck_repo.get_all_by_user_id(
+                user_id=user.id,
                 limit=limit,
             )
             return [DeckSchema.model_validate(deck) for deck in decks]
