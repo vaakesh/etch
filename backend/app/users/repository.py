@@ -10,6 +10,9 @@ class UserRepository():
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def get_by_id(self, user_id: int) -> User | None:
+        return await self.session.get(User, user_id)
+
     async def get_by_uuid(self, user_uuid: UUID) -> User | None:
         stmt = select(User).where(User.uuid == user_uuid)
         result = await self.session.execute(stmt)
@@ -38,4 +41,12 @@ class UserRepository():
     async def refresh(self, user: User) -> None:
         await self.session.refresh(user)
 
-    
+    async def get_by_username(self, username: str) -> User | None:
+        stmt = select(User).where(User.username == username)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(User.email == email)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()

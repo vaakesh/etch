@@ -27,3 +27,10 @@ class UserUpdate(BaseModel):
 
 class UserOut(UserSchema):
     pass
+
+class UserMe(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID
+    username: str
+    email: EmailStr

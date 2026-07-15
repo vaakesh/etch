@@ -6,6 +6,7 @@ from collections.abc import Callable
 from app.training_sessions.repository import TrainingSessionRepository
 from app.cards.repository import CardRepository
 from app.decks.repository import DeckCardRepository, DeckRepository
+from app.auth.repository import AuthRepository
 
 
 class UnitOfWork:
@@ -17,6 +18,7 @@ class UnitOfWork:
         self.card_repo: CardRepository | None = None
         self.deck_repo: DeckRepository | None = None
         self.deck_card_repo: DeckCardRepository | None = None
+        self.auth_repo: AuthRepository | None = None
 
     async def __aenter__(self):
         self.session = self._async_session_maker()
@@ -25,6 +27,7 @@ class UnitOfWork:
         self.card_repo = CardRepository(self.session)
         self.deck_repo = DeckRepository(self.session)
         self.deck_card_repo = DeckCardRepository(self.session)
+        self.auth_repo = AuthRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -38,6 +41,9 @@ class UnitOfWork:
             self.user_repo = None
             self.training_session_repo = None
             self.card_repo = None
+            self.deck_repo = None
+            self.deck_card_repo = None
+            self.auth_repo = None
 
     async def commit(self):
         if self.session is None:

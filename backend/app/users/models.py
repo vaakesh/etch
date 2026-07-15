@@ -41,3 +41,8 @@ class User(Base):
     cards = relationship("Card", back_populates="user")
     decks = relationship("Deck", back_populates="user")
     training_sessions = relationship("TrainingSession", back_populates="user")
+    user_sessions = relationship(
+        "UserSession", 
+        foreign_keys="UserSession.user_id", 
+        back_populates="user"
+    )

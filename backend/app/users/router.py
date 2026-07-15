@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.users.service import UserService
 from app.users.deps import get_user_service
-from app.users.schemas import UserCreate, UserOut, UserSchema, UserUpdate
+from app.users.schemas import UserCreate, UserMe, UserOut, UserSchema, UserUpdate
 from app.training_sessions.schemas import TrainingSessionSchema
 from app.cards.deps import get_card_service
 from app.cards.schemas import CardSchema
@@ -14,9 +14,18 @@ from app.decks.schemas import DeckSchema
 from app.decks.service import DeckService
 from app.training_sessions.deps import get_training_session_service
 from app.training_sessions.service import TrainingSessionService
+from app.auth.deps import get_current_user
+from app.users.models import User
 
 
 router = APIRouter(prefix="/users")
+
+@router.get("/me", response_model=UserMe)
+async def get_me(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    return UserMe.model_validate(current_user)
 
 @router.get("/", response_model=list[UserSchema])
 async def get_all_users_by_limit(

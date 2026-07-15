@@ -2,6 +2,13 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.auth.errors import (
+    AccessTokenNotFoundError,
+    InvalidTokenError,
+    InvalidTokenTypeError,
+    RefreshTokenNotFoundError,
+)
+
 from app.users.errors import (
     PermissionDeniedError as UserPermissionDeniedError,
     UserAlreadyExistsError,
@@ -27,6 +34,54 @@ from app.training_sessions.errors import (
     TrainingSessionAlreadyExistsError,
     TrainingSessionNotFoundError,
 )
+
+
+async def invalid_token_handler(
+    request: Request,
+    exc: InvalidTokenError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def invalid_token_type_handler(
+    request: Request,
+    exc: InvalidTokenTypeError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def refresh_token_not_found_handler(
+    request: Request,
+    exc: RefreshTokenNotFoundError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def access_token_not_found_handler(
+    request: Request,
+    exc: AccessTokenNotFoundError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "message": str(exc),
+        },
+    )
 
 
 async def user_not_found_handler(
@@ -197,16 +252,22 @@ async def training_session_permission_denied_handler(
     )
 
 
-async def unhandled_exception_handler(request: Request, exc: Exception):
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+):
     return JSONResponse(
-        status_code=500,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "message": "Internal server error",
         },
     )
 
 
-async def request_validation_handler(request: Request, exc: RequestValidationError):
+async def request_validation_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
@@ -217,6 +278,17 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 
 def register_exception_handlers(app: FastAPI):
+    app.add_exception_handler(InvalidTokenError, invalid_token_handler)
+    app.add_exception_handler(InvalidTokenTypeError, invalid_token_type_handler)
+    app.add_exception_handler(
+        RefreshTokenNotFoundError,
+        refresh_token_not_found_handler,
+    )
+    app.add_exception_handler(
+        AccessTokenNotFoundError,
+        access_token_not_found_handler,
+    )
+
     app.add_exception_handler(UserNotFoundError, user_not_found_handler)
     app.add_exception_handler(UserAlreadyExistsError, user_already_exists_handler)
     app.add_exception_handler(UserPermissionDeniedError, user_permission_denied_handler)
@@ -244,5 +316,5 @@ def register_exception_handlers(app: FastAPI):
         training_session_permission_denied_handler,
     )
 
-    app.add_exception_handler(Exception, unhandled_exception_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
