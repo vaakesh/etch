@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
-import { DASHBOARD_PATH, getSafeReturnPath, LOGIN_PATH } from "./navigation-state";
+import { PageLoader } from "../PageLoader";
+import { getSafeReturnPath, HOME_PATH, LOGIN_PATH } from "./navigation-state";
 import type { RouteAccess } from "./route-config";
 
 interface RouteGuardProps {
@@ -10,26 +11,41 @@ interface RouteGuardProps {
 }
 
 export function RouteGuard({ access, children }: RouteGuardProps) {
-  const auth = useAuth();
+  const { initialize, status } = useAuth();
   const location = useLocation();
+  const [isSessionRevalidated, setIsSessionRevalidated] = useState(access !== "protected");
+
+  useEffect(() => {
+    if (access !== "protected") {
+      return;
+    }
+
+    let isActive = true;
+
+    void initialize().finally(() => {
+      if (isActive) {
+        setIsSessionRevalidated(true);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [access, initialize]);
 
   if (access === "public") {
     return children;
   }
 
-  if (auth.status === "loading") {
-    return (
-      <div aria-live="polite" role="status">
-        Проверяем сессию…
-      </div>
-    );
+  if (!isSessionRevalidated || status === "loading") {
+    return <PageLoader />;
   }
 
-  if (auth.status === "error") {
+  if (status === "error") {
     return (
       <div role="alert">
         <p>Не удалось проверить сессию.</p>
-        <button onClick={() => void auth.initialize()} type="button">
+        <button onClick={() => void initialize()} type="button">
           Повторить
         </button>
       </div>
@@ -37,14 +53,14 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
   }
 
   if (access === "guest") {
-    if (auth.status === "authorized") {
-      return <Navigate replace to={getSafeReturnPath(location.state, DASHBOARD_PATH)} />;
+    if (status === "authorized") {
+      return <Navigate replace to={getSafeReturnPath(location.state, HOME_PATH)} />;
     }
 
     return children;
   }
 
-  if (auth.status === "authorized") {
+  if (status === "authorized") {
     return children;
   }
 

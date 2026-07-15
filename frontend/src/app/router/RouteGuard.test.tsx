@@ -41,23 +41,41 @@ describe("RouteGuard session states", () => {
     useAuthMock.mockReset();
   });
 
-  it("renders a visible status while the session is loading", () => {
+  it("renders the page loader without visible session text while the session is loading", () => {
     setAuthStatus("loading");
 
     const markup = renderGuard("protected");
 
     expect(markup).toContain('role="status"');
-    expect(markup).toContain("Проверяем сессию");
+    expect(markup).toContain('aria-label="Загрузка страницы"');
+    expect(markup).toContain('class="page-loader__spinner"');
+    expect(markup).not.toContain("Проверяем сессию");
   });
 
-  it("renders a retry action when the session check fails", () => {
+  it("renders a retry action for a completed session check error", () => {
     setAuthStatus("error");
 
-    const markup = renderGuard("protected");
+    const markup = renderGuard("guest");
 
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("Не удалось проверить сессию");
     expect(markup).toContain("Повторить");
+    expect(markup).not.toContain("Содержимое страницы");
+  });
+
+  it("fails closed while an authorized session is being revalidated for a protected route", () => {
+    setAuthStatus("authorized");
+
+    const markup = renderGuard("protected");
+
+    expect(markup).toContain('aria-label="Загрузка страницы"');
+    expect(markup).not.toContain("Содержимое страницы");
+  });
+
+  it("renders the login route immediately for a known unauthorized session", () => {
+    setAuthStatus("unauthorized");
+
+    expect(renderGuard("guest")).toContain("Содержимое страницы");
   });
 
   it("does not block public routes on an auth error", () => {

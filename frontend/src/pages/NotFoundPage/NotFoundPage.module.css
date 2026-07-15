@@ -1,0 +1,81 @@
+.page {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 32px 20px;
+  color: #f2e9da;
+  background: radial-gradient(circle at 50% 0%, rgb(42 111 107 / 12%), transparent 38rem), #0f1116;
+  color-scheme: dark;
+}
+
+.content {
+  width: min(100%, 520px);
+  text-align: center;
+}
+
+.code {
+  margin: 0 0 12px;
+  color: #2a6f6b;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(5rem, 24vw, 9rem);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+}
+
+.heading {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.description {
+  max-width: 430px;
+  margin: 18px auto 0;
+  color: #a7a0b3;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.homeLink {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 32px;
+  padding: 0 24px;
+  color: #f2e9da;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  background: #2a6f6b;
+  border: 1px solid rgb(242 233 218 / 10%);
+  border-radius: 11px;
+  box-shadow: 0 10px 28px rgb(42 111 107 / 16%);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.homeLink:hover {
+  background: #337b76;
+  border-color: rgb(242 233 218 / 18%);
+  box-shadow: 0 12px 32px rgb(42 111 107 / 22%);
+}
+
+.homeLink:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px #0f1116,
+    0 0 0 6px rgb(42 111 107 / 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homeLink {
+    transition: none;
+  }
+}

@@ -3,9 +3,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const LOGIN_PATH = "/login";
-export const DASHBOARD_PATH = "/dashboard";
+export const HOME_PATH = "/";
 
-export function getSafeReturnPath(state: unknown, fallback = "/"): string {
+export function getSafeReturnPath(state: unknown, fallback = HOME_PATH): string {
   if (!isRecord(state) || typeof state.from !== "string") {
     return fallback;
   }
