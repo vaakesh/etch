@@ -1,6 +1,6 @@
 # Etch frontend
 
-Минимальный React 19 + TypeScript + Vite frontend-каркас. UI-страницы пока намеренно не добавлены: список `src/app/router/route-config.ts` пуст, а `src/pages` является точкой расширения.
+React 19 + TypeScript + Vite frontend с cookie-only auth и защищённой dashboard-страницей `/`, которая загружает данные из `GET /bff/home`.
 
 Перед изменениями прочитай `AGENTS.md`.
 
@@ -47,6 +47,6 @@ Vitest сейчас работает в `node` environment. DOM test stack не 
 - `src/api` — общий transport и глобальные API-типы;
 - `src/auth` — централизованная cookie-only auth-инфраструктура;
 - `src/app/router` — единственный корневой router и конфигурация маршрутов;
+- `src/features/home` — контракт, API-запрос и состояние главной страницы;
 - `src/pages` — route-level страницы;
-- `src/features` — создаётся вместе с первой предметной фичей;
 - `src/styles` — глобальные стили.

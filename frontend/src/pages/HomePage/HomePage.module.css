@@ -1,0 +1,1621 @@
+.page {
+  --canvas: #f6f2eb;
+  --surface: #fffdf9;
+  --surface-muted: #fbf8f2;
+  --ink: #14242d;
+  --muted: #66716f;
+  --line: #e7dfd4;
+  --teal: #4d9892;
+  --teal-dark: #367d78;
+  --teal-soft: #dcebe7;
+  --motion-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background:
+    radial-gradient(circle at 70% 0%, rgb(255 255 255 / 75%), transparent 38rem), var(--canvas);
+  color-scheme: light;
+  animation: pageReveal 520ms ease-out both;
+}
+
+.page button,
+.page a {
+  font: inherit;
+}
+
+.shell {
+  --sidebar-width: 220px;
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--surface);
+  transition: grid-template-columns 520ms var(--motion-spring);
+}
+
+.shellCollapsed {
+  --sidebar-width: 78px;
+}
+
+.sidebar,
+.dashboard {
+  background: rgb(255 253 249 / 96%);
+}
+
+.sidebar {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  padding: 26px 14px 20px;
+  border-right: 1px solid var(--line);
+  animation: sidebarReveal 720ms var(--motion-spring) both;
+  transition: padding 440ms var(--motion-spring);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  transition:
+    gap 400ms var(--motion-spring),
+    padding 400ms var(--motion-spring);
+}
+
+.brandMark {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  transition:
+    width 420ms var(--motion-spring),
+    height 420ms var(--motion-spring),
+    transform 420ms var(--motion-spring);
+}
+
+.brandName {
+  max-width: 100px;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  translate: 0;
+  transition:
+    max-width 380ms var(--motion-spring),
+    opacity 220ms ease,
+    translate 380ms var(--motion-spring);
+}
+
+.sidebarToggle {
+  position: absolute;
+  z-index: 4;
+  top: 51px;
+  left: calc(var(--sidebar-width) - 21px);
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  color: var(--teal-dark);
+  touch-action: manipulation;
+  cursor: pointer;
+  background: #fffdf9;
+  border: 1px solid #d6e2de;
+  border-radius: 50%;
+  box-shadow:
+    0 8px 20px rgb(44 91 86 / 16%),
+    inset 0 1px 0 #fff;
+  transform: translateY(-50%);
+  animation: toggleReveal 520ms var(--motion-spring) 480ms both;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 220ms ease,
+    left 520ms var(--motion-spring),
+    transform 220ms var(--motion-spring);
+}
+
+.sidebarToggle:hover {
+  color: #fff;
+  background: var(--teal);
+  box-shadow: 0 10px 24px rgb(44 91 86 / 24%);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.sidebarToggle:focus-visible {
+  outline: 3px solid rgb(77 152 146 / 30%);
+  outline-offset: 3px;
+}
+
+.sidebarToggleIcon {
+  width: 17px;
+  height: 17px;
+  transform: rotate(180deg);
+  transition: transform 440ms var(--motion-spring);
+}
+
+.navigation {
+  margin-top: 36px;
+  transition:
+    margin 420ms var(--motion-spring),
+    opacity 220ms ease,
+    max-width 420ms var(--motion-spring);
+}
+
+.navigationList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navigationList li {
+  opacity: 0;
+  translate: -16px 0;
+  animation: navigationItemReveal 460ms var(--motion-spring) forwards;
+}
+
+.navigationList li:nth-child(1) {
+  animation-delay: 180ms;
+}
+
+.navigationList li:nth-child(2) {
+  animation-delay: 230ms;
+}
+
+.navigationList li:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+.navigationList li:nth-child(4) {
+  animation-delay: 330ms;
+}
+
+.navigationList li:nth-child(5) {
+  animation-delay: 380ms;
+}
+
+.navigationList li:nth-child(6) {
+  animation-delay: 430ms;
+}
+
+.navigationItem,
+.navigationItemActive {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  transition:
+    gap 400ms var(--motion-spring),
+    padding 400ms var(--motion-spring),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.navigationItem {
+  cursor: default;
+}
+
+.navigationItemActive {
+  background: linear-gradient(135deg, #e4efec, #cedfdb);
+  border-color: #c8dcd8;
+  box-shadow:
+    0 9px 20px rgb(63 118 112 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 72%);
+}
+
+.navigationItemActive:focus-visible {
+  outline: 3px solid rgb(77 152 146 / 28%);
+  outline-offset: 2px;
+}
+
+.navigationIcon {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  transition: transform 320ms var(--motion-spring);
+}
+
+.navigationLabel {
+  max-width: 120px;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  translate: 0;
+  transition:
+    max-width 390ms var(--motion-spring),
+    opacity 200ms ease,
+    translate 390ms var(--motion-spring);
+}
+
+.sidebarArtwork {
+  position: relative;
+  height: 180px;
+  margin-top: auto;
+  overflow: hidden;
+  opacity: 1;
+  transform-origin: bottom center;
+  transition:
+    height 400ms var(--motion-spring),
+    opacity 220ms ease,
+    translate 420ms var(--motion-spring),
+    scale 420ms var(--motion-spring);
+}
+
+.sidebarIllustration {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  width: 150px;
+  height: 130px;
+}
+
+.artBook,
+.artBookSecondary {
+  position: absolute;
+  bottom: 20px;
+  left: 10px;
+  width: 82px;
+  height: 24px;
+  background: #f0986d;
+  border: 1.5px solid var(--ink);
+  border-radius: 5px 12px 12px 5px;
+  box-shadow: inset -9px 0 #fff8ec;
+  transform: rotate(8deg);
+}
+
+.artBookSecondary {
+  bottom: 2px;
+  left: 25px;
+  width: 92px;
+  background: #92bbb5;
+  transform: rotate(-3deg);
+}
+
+.shellCollapsed .sidebar {
+  padding-inline: 9px;
+}
+
+.shellCollapsed .brand {
+  gap: 0;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.shellCollapsed .brandMark {
+  width: 48px;
+  height: 48px;
+  transform: rotate(-4deg);
+}
+
+.shellCollapsed .brandName,
+.shellCollapsed .navigationLabel {
+  max-width: 0;
+  opacity: 0;
+  translate: -8px 0;
+}
+
+.shellCollapsed .sidebarToggleIcon {
+  transform: rotate(0deg);
+}
+
+.shellCollapsed .navigationItem,
+.shellCollapsed .navigationItemActive {
+  gap: 0;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.shellCollapsed .navigationIcon {
+  transform: scale(1.04);
+}
+
+.shellCollapsed .sidebarArtwork {
+  height: 0;
+  opacity: 0;
+  visibility: hidden;
+  translate: -18px 12px;
+  scale: 0.84;
+}
+
+.dashboard {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 26px 28px 22px;
+  overflow: hidden;
+  animation: dashboardReveal 760ms var(--motion-spring) 70ms both;
+}
+
+.dashboard::after {
+  position: absolute;
+  z-index: 3;
+  inset: -25% auto -25% -38%;
+  width: 28%;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 5%) 28%,
+    rgb(99 174 166 / 14%) 50%,
+    rgb(255 255 255 / 7%) 72%,
+    transparent 100%
+  );
+  filter: blur(14px);
+  transform: skewX(-10deg);
+  animation: dashboardSheen 1050ms ease-out 160ms both;
+}
+
+.header {
+  display: flex;
+  min-height: 88px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 2px 2px 24px;
+  border-bottom: 1px solid var(--line);
+  animation: headerReveal 620ms var(--motion-spring) 150ms both;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: clamp(2.35rem, 3.2vw, 3rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.newDeckButton {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  opacity: 1;
+}
+
+.newDeckButton:disabled,
+.startButton:disabled {
+  color: inherit;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.newDeckButton {
+  gap: 10px;
+  min-width: 154px;
+  padding: 0 20px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  background: linear-gradient(135deg, #dfece8, #c8dcd7);
+  border: 1px solid #cedfda;
+  border-radius: 17px;
+  box-shadow: 0 8px 18px rgb(48 106 100 / 10%);
+  animation: actionReveal 520ms var(--motion-spring) 300ms both;
+}
+
+.newDeckButton svg {
+  width: 20px;
+  height: 20px;
+}
+
+.contentGrid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 270px);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 20px;
+  padding-top: 20px;
+  overflow: hidden;
+}
+
+.mainColumn {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sectionHeading {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.sectionHeading h2,
+.progressPanel > h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.sectionAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--teal-dark);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sectionAction svg {
+  width: 16px;
+  height: 16px;
+}
+
+.decksSection {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.decksGrid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, min(310px, calc((100% - 18px) / 2)));
+  gap: 18px;
+}
+
+.deckCard {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  max-height: 310px;
+  grid-template-rows: auto 1fr auto;
+  padding: 20px 20px 17px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 35%, rgb(238 139 100 / 5%), transparent 8rem), var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow:
+    0 9px 22px rgb(81 69 51 / 6%),
+    inset 0 1px 0 rgb(255 255 255 / 80%);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+  animation: deckReveal 640ms var(--motion-spring) both;
+}
+
+.deckCard:nth-child(1) {
+  animation-delay: 90ms;
+}
+
+.deckCard:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.deckCard:nth-child(3) {
+  animation-delay: 230ms;
+}
+
+.deckCard:nth-child(4) {
+  animation-delay: 300ms;
+}
+
+.deckCard:nth-child(5) {
+  animation-delay: 370ms;
+}
+
+.deckCard:nth-child(6) {
+  animation-delay: 440ms;
+}
+
+.deckCard:hover {
+  box-shadow:
+    0 13px 28px rgb(81 69 51 / 9%),
+    inset 0 1px 0 rgb(255 255 255 / 80%);
+  transform: translateY(-2px);
+}
+
+.deckCopy {
+  min-width: 0;
+}
+
+.deckCopy h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deckCopy p {
+  min-height: 2.5em;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.deckBody {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(72px, 0.82fr) minmax(86px, 1.18fr);
+  align-items: end;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.deckStats {
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.deckStats p {
+  margin: 0 0 22px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.deckStats p strong {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.deckAccuracy {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  background: #eee8dc;
+  border-radius: 999px;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), #70aaa4);
+  border-radius: inherit;
+  transform-origin: left center;
+  animation: progressGrow 720ms var(--motion-spring) 420ms both;
+}
+
+.deckIllustration {
+  display: block;
+  width: 100%;
+  max-height: 132px;
+  align-self: end;
+}
+
+.startButton {
+  min-height: 44px;
+  color: #fffdf9;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  background: linear-gradient(180deg, #76afa9, #4b948e);
+  border: 1px solid #4b918b;
+  border-radius: 17px;
+  box-shadow:
+    0 8px 14px rgb(52 116 110 / 18%),
+    inset 0 1px 0 rgb(255 255 255 / 25%);
+}
+
+.emptyDecks {
+  display: flex;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 34px;
+  text-align: left;
+  background: var(--surface-muted);
+  border: 1px dashed #d9cec0;
+  border-radius: 24px;
+  animation: deckReveal 620ms var(--motion-spring) 120ms both;
+}
+
+.emptyIllustration {
+  width: min(42%, 210px);
+  flex: 0 0 auto;
+}
+
+.emptyDecks h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.emptyDecks p {
+  max-width: 340px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.progressPanel {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: 20px 20px 18px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 10px 24px rgb(81 69 51 / 6%);
+  animation: progressPanelReveal 720ms var(--motion-spring) 180ms both;
+}
+
+.metricsList {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  margin-top: 8px;
+}
+
+.progressMetric {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  animation: metricReveal 500ms var(--motion-spring) both;
+}
+
+.progressMetric:nth-child(1) {
+  animation-delay: 300ms;
+}
+
+.progressMetric:nth-child(2) {
+  animation-delay: 360ms;
+}
+
+.progressMetric:nth-child(3) {
+  animation-delay: 420ms;
+}
+
+.progressMetric:nth-child(4) {
+  animation-delay: 480ms;
+}
+
+.metricIcon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.metricIcon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.metricIconteal {
+  background: #e0ece8;
+}
+
+.metricIconmint {
+  background: #edf2ef;
+}
+
+.metricIconcoral {
+  color: #ed7650;
+  background: #fff0e8;
+}
+
+.metricIconcoral svg {
+  fill: currentcolor;
+  stroke-width: 1.25;
+}
+
+.metricIconsand {
+  background: #f2f1ec;
+}
+
+.metricCopy {
+  display: grid;
+  min-width: 0;
+}
+
+.metricCopy > span,
+.metricCopy small {
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.metricCopy strong {
+  margin: 3px 0 2px;
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.weeklySection {
+  padding-top: 12px;
+}
+
+.weeklySection h3 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.weeklyChart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(17px, 1fr));
+  gap: 9px;
+}
+
+.weeklyBar {
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.barTrack {
+  display: flex;
+  height: clamp(54px, 9vh, 86px);
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.barFill {
+  display: block;
+  width: 9px;
+  min-height: 4px;
+  background: #d9d1c5;
+  border-radius: 999px;
+  transform-origin: bottom center;
+  animation: activityRise 620ms var(--motion-spring) both;
+}
+
+.weeklyBar:nth-child(1) .barFill {
+  animation-delay: 520ms;
+}
+
+.weeklyBar:nth-child(2) .barFill {
+  animation-delay: 570ms;
+}
+
+.weeklyBar:nth-child(3) .barFill {
+  animation-delay: 620ms;
+}
+
+.weeklyBar:nth-child(4) .barFill {
+  animation-delay: 670ms;
+}
+
+.weeklyBar:nth-child(5) .barFill {
+  animation-delay: 720ms;
+}
+
+.weeklyBar:nth-child(6) .barFill {
+  animation-delay: 770ms;
+}
+
+.weeklyBar:nth-child(7) .barFill {
+  animation-delay: 820ms;
+}
+
+.weeklyBar:nth-child(3n + 1) .barFill {
+  background: var(--teal);
+}
+
+.noActivity {
+  margin: 0;
+  padding: 30px 0 15px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.errorState {
+  display: grid;
+  min-height: 530px;
+  place-items: center;
+  align-content: center;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.errorIcon {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  border-radius: 50%;
+}
+
+.errorIcon svg {
+  width: 39px;
+  height: 39px;
+}
+
+.errorState h2 {
+  margin: 22px 0 0;
+  font-size: 1.7rem;
+}
+
+.errorState p {
+  max-width: 430px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.errorState button {
+  min-height: 46px;
+  margin-top: 24px;
+  padding: 0 22px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--teal);
+  border: 1px solid var(--teal-dark);
+  border-radius: 14px;
+}
+
+.errorState button:focus-visible {
+  outline: 3px solid rgb(77 152 146 / 30%);
+  outline-offset: 3px;
+}
+
+.skeletonHeading,
+.skeletonLine,
+.skeletonLineWide,
+.skeletonArtwork,
+.skeletonButton,
+.skeletonMetric {
+  display: block;
+  background: linear-gradient(90deg, #eee8de 25%, #f7f3ec 50%, #eee8de 75%);
+  background-size: 200% 100%;
+  border-radius: 999px;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.skeletonHeading {
+  width: 160px;
+  height: 28px;
+  margin: 3px 0 17px;
+}
+
+.skeletonCard {
+  display: grid;
+  min-height: 0;
+  max-height: 310px;
+  align-content: start;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+}
+
+.skeletonLineWide {
+  width: 70%;
+  height: 17px;
+}
+
+.skeletonLine {
+  width: 48%;
+  height: 10px;
+  margin-top: 11px;
+}
+
+.skeletonArtwork {
+  width: 70%;
+  height: 105px;
+  margin: 22px 0 20px auto;
+  border-radius: 20px;
+}
+
+.skeletonButton {
+  width: 100%;
+  height: 44px;
+  margin-top: auto;
+  border-radius: 17px;
+}
+
+.skeletonPanel {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  align-content: start;
+  gap: 18px;
+  padding: 24px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+}
+
+.skeletonMetric {
+  width: 100%;
+  height: 82px;
+  border-radius: 18px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes pageReveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sidebarReveal {
+  from {
+    opacity: 0;
+    translate: -20px 0;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+
+@keyframes dashboardReveal {
+  from {
+    opacity: 0;
+    scale: 0.985;
+    translate: 18px 0;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0;
+  }
+}
+
+@keyframes dashboardSheen {
+  from {
+    opacity: 0;
+    translate: 0;
+  }
+
+  32% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    translate: 560% 0;
+  }
+}
+
+@keyframes headerReveal {
+  from {
+    opacity: 0;
+    translate: 0 -15px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+
+@keyframes actionReveal {
+  from {
+    opacity: 0;
+    scale: 0.9;
+    translate: 12px 0;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0;
+  }
+}
+
+@keyframes toggleReveal {
+  from {
+    opacity: 0;
+    scale: 0.65;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes navigationItemReveal {
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+
+@keyframes deckReveal {
+  from {
+    opacity: 0;
+    filter: blur(7px);
+    scale: 0.965;
+    translate: 0 26px;
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    scale: 1;
+    translate: 0;
+  }
+}
+
+@keyframes progressPanelReveal {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    translate: 20px 0;
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    translate: 0;
+  }
+}
+
+@keyframes metricReveal {
+  from {
+    opacity: 0;
+    translate: 10px 0;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+
+@keyframes progressGrow {
+  from {
+    scale: 0 1;
+  }
+
+  to {
+    scale: 1 1;
+  }
+}
+
+@keyframes activityRise {
+  from {
+    opacity: 0;
+    scale: 1 0;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1 1;
+  }
+}
+
+@keyframes skeletonShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 1180px) {
+  .shell {
+    --sidebar-width: 190px;
+  }
+
+  .shellCollapsed {
+    --sidebar-width: 74px;
+  }
+
+  .sidebar {
+    padding-inline: 10px;
+  }
+
+  .brand {
+    padding-inline: 6px;
+  }
+
+  .navigationItem,
+  .navigationItemActive {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .dashboard {
+    padding-inline: 20px;
+  }
+
+  .contentGrid {
+    grid-template-columns: minmax(0, 1fr) 235px;
+    gap: 14px;
+  }
+
+  .decksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, min(310px, calc((100% - 24px) / 3)));
+    gap: 12px;
+  }
+
+  .deckCard,
+  .skeletonCard {
+    padding: 14px;
+  }
+
+  .progressPanel,
+  .skeletonPanel {
+    padding-inline: 15px;
+  }
+
+  .progressMetric {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .metricIcon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .metricIcon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .metricCopy strong {
+    font-size: 1.25rem;
+  }
+
+  .weeklyChart {
+    gap: 4px;
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 64px minmax(0, 1fr);
+    transition: none;
+  }
+
+  .sidebarToggle {
+    display: none;
+  }
+
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: 64px;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    padding: 0;
+    font-size: 1.5rem;
+  }
+
+  .brandMark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .navigation {
+    min-width: 0;
+    margin: 0 0 0 auto;
+  }
+
+  .navigationList {
+    display: flex;
+    max-width: none;
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .navigationItem,
+  .navigationItemActive {
+    min-height: 44px;
+    gap: 8px;
+    padding: 0 12px;
+    border-radius: 15px;
+    white-space: nowrap;
+  }
+
+  .navigationIcon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .sidebarArtwork {
+    display: none;
+  }
+
+  .shellCollapsed .sidebar {
+    padding: 8px 12px;
+  }
+
+  .shellCollapsed .brand {
+    gap: 8px;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .shellCollapsed .brandMark {
+    width: 42px;
+    height: 42px;
+    transform: none;
+  }
+
+  .shellCollapsed .brandName,
+  .shellCollapsed .navigationLabel {
+    max-width: 120px;
+    opacity: 1;
+    translate: 0;
+  }
+
+  .shellCollapsed .navigationItem,
+  .shellCollapsed .navigationItemActive {
+    gap: 8px;
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .shellCollapsed .navigationIcon {
+    transform: none;
+  }
+
+  .dashboard {
+    height: 100%;
+    padding: 18px 18px 14px;
+  }
+}
+
+@media (max-width: 650px) {
+  .shell {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    height: 56px;
+    padding: 6px 8px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .navigationList {
+    justify-content: space-between;
+  }
+
+  .navigationItem,
+  .navigationItemActive {
+    width: 36px;
+    min-height: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .navigationItem > span,
+  .navigationItemActive > span {
+    display: none;
+  }
+
+  .dashboard {
+    padding: 12px 10px 10px;
+  }
+
+  .header {
+    min-height: 58px;
+    align-items: flex-start;
+    padding-bottom: 10px;
+  }
+
+  .header h1 {
+    font-size: 1.8rem;
+  }
+
+  .headerActions {
+    gap: 5px;
+  }
+
+  .newDeckButton {
+    min-width: 40px;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .newDeckButton span {
+    display: none;
+  }
+
+  .contentGrid {
+    grid-template-columns: minmax(0, 1fr) 170px;
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .decksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, calc((100% - 14px) / 3));
+    gap: 7px;
+  }
+
+  .deckCard {
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .deckIllustration {
+    display: none;
+  }
+
+  .deckCopy h3 {
+    font-size: 0.78rem;
+  }
+
+  .deckCopy p {
+    display: none;
+  }
+
+  .deckBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .deckStats {
+    padding-bottom: 4px;
+  }
+
+  .deckStats p {
+    margin-bottom: 5px;
+    font-size: 0.65rem;
+  }
+
+  .deckAccuracy {
+    margin-bottom: 4px;
+    font-size: 0.82rem;
+  }
+
+  .startButton {
+    min-height: 30px;
+    font-size: 0.72rem;
+    border-radius: 10px;
+  }
+
+  .sectionHeading {
+    min-height: 25px;
+    margin-bottom: 6px;
+  }
+
+  .sectionHeading h2,
+  .progressPanel > h2 {
+    font-size: 0.95rem;
+  }
+
+  .sectionAction {
+    display: none;
+  }
+
+  .progressPanel,
+  .skeletonPanel {
+    padding: 10px 8px;
+    border-radius: 14px;
+  }
+
+  .progressMetric {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 6px;
+    padding: 4px 0;
+  }
+
+  .metricIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .metricIcon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .metricCopy > span,
+  .metricCopy small {
+    font-size: 0.58rem;
+  }
+
+  .metricCopy strong {
+    font-size: 0.9rem;
+  }
+
+  .weeklySection {
+    display: none;
+  }
+
+  .skeletonArtwork {
+    height: 40px;
+  }
+}
+
+@media (max-height: 800px) and (min-width: 651px) {
+  .dashboard {
+    padding-block: 18px 14px;
+  }
+
+  .header {
+    min-height: 70px;
+    padding-bottom: 14px;
+  }
+
+  .contentGrid {
+    padding-top: 12px;
+  }
+
+  .sectionHeading {
+    margin-bottom: 8px;
+  }
+
+  .deckCard,
+  .skeletonCard {
+    padding-block: 12px;
+  }
+
+  .deckCopy p {
+    min-height: 1.35em;
+    -webkit-line-clamp: 1;
+  }
+
+  .deckStats p {
+    margin-bottom: 10px;
+  }
+
+  .deckIllustration {
+    max-height: 92px;
+  }
+
+  .startButton {
+    min-height: 36px;
+  }
+
+  .sidebarArtwork {
+    height: 135px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .sidebar,
+  .dashboard,
+  .header,
+  .newDeckButton,
+  .sidebarToggle,
+  .navigationList li,
+  .deckCard,
+  .emptyDecks,
+  .progressPanel,
+  .progressMetric,
+  .progressTrack span,
+  .barFill,
+  .skeletonHeading,
+  .skeletonLine,
+  .skeletonLineWide,
+  .skeletonArtwork,
+  .skeletonButton,
+  .skeletonMetric {
+    animation: none;
+  }
+
+  .shell,
+  .sidebar,
+  .brand,
+  .brandMark,
+  .brandName,
+  .sidebarToggle,
+  .sidebarToggleIcon,
+  .navigation,
+  .navigationItem,
+  .navigationItemActive,
+  .navigationIcon,
+  .navigationLabel,
+  .sidebarArtwork {
+    transition: none;
+  }
+
+  .dashboard::after {
+    display: none;
+  }
+
+  .navigationList li {
+    opacity: 1;
+    translate: 0;
+  }
+
+  .deckCard {
+    filter: none;
+    scale: 1;
+    translate: 0;
+  }
+
+  .deckCard:hover {
+    transform: none;
+  }
+}
