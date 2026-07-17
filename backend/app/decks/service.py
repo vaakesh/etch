@@ -101,11 +101,13 @@ class DeckService:
     async def create_deck(
         self,
         payload: DeckCreate,
+        user_id: int,
     ) -> DeckSchema:
         try:
             async with self.uow_factory() as uow:
                 deck = Deck(
                     **payload.model_dump(),
+                    user_id=user_id,
                 )
 
                 uow.deck_repo.add(deck)

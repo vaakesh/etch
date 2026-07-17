@@ -2,6 +2,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
+from app.auth.deps import get_current_user
+from app.users.models import User
+
 from .deps import get_deck_service
 from .schemas import (
     DeckCardAdd,
@@ -45,9 +48,10 @@ async def get_deck(
 @router.post("/", response_model=DeckOut)
 async def create_deck(
     payload: DeckCreate,
+    current_user: User = Depends(get_current_user),
     deck_service: DeckService = Depends(get_deck_service),
 ):
-    return await deck_service.create_deck(payload)
+    return await deck_service.create_deck(payload, user_id=current_user.id)
 
 
 @router.patch("/{deck_uuid}", response_model=DeckSchema)

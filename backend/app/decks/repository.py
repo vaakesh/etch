@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Deck, DeckCard
+from .models import Deck, DeckCard, UserDeck
 
 
 class DeckRepository:
@@ -30,6 +30,24 @@ class DeckRepository:
             .where(Deck.user_id == user_id)
             .limit(limit)
             .order_by(Deck.updated_at.desc())
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+    
+    async def get_user_statistics_by_decks(
+            self,
+            deck_ids: list[int],
+            user_id: int,
+    ) -> list[UserDeck]:
+        if not deck_ids:
+            return []
+        
+        stmt = (
+            select(UserDeck)
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.deck_id.in_(deck_ids),
+            )
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

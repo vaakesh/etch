@@ -20,8 +20,7 @@ class DeckSchema(BaseModel):
     updated_at: datetime | None = None
 
 class DeckCreate(BaseModel):
-    user_id: int
-
+    
     title: str = Field(..., max_length=150)
     description: str | None = None
     is_public: bool = False

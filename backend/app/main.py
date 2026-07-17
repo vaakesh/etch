@@ -10,6 +10,7 @@ from app.training_sessions.router import router as training_sessions_router
 from app.cards.router import router as cards_router
 from app.decks.router import router as decks_router
 from app.auth.router import router as auth_router
+from app.bff.home.router import router as bff_router
 from app.utils import format_duration
 from app.logging_config import setup_logging
 from app.exception_handlers import register_exception_handlers
@@ -29,6 +30,7 @@ def create_app(*args, **kwargs) -> FastAPI:
     app.include_router(cards_router)
     app.include_router(decks_router)
     app.include_router(auth_router)
+    app.include_router(bff_router)
     
     register_exception_handlers(app)
 
