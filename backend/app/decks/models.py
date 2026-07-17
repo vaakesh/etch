@@ -92,3 +92,25 @@ class DeckCard(Base):
         UniqueConstraint("deck_id", "card_id", name="uq_deck_card"),
     )
 
+
+class UserDeck(Base):
+    __tablename__ = "user_decks"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    deck_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("decks.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    sessions_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_studied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

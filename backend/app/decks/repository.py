@@ -29,6 +29,7 @@ class DeckRepository:
             select(Deck)
             .where(Deck.user_id == user_id)
             .limit(limit)
+            .order_by(Deck.updated_at.desc())
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

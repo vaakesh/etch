@@ -13,6 +13,7 @@ class DeckSchema(BaseModel):
 
     title: str = Field(..., max_length=150)
     description: str | None = None
+    words_count: int
     is_public: bool = False
 
     created_at: datetime | None = None
@@ -67,3 +68,13 @@ class DeckCardAdd(BaseModel):
 
 class DeckCardOut(DeckCardSchema):
     pass
+
+
+class UserDeck(BaseModel):
+    user_id: int
+    deck_id: int
+
+    sessions_count: int
+    correct_count: int
+    wrong_count: int
+    last_studied_at: datetime
