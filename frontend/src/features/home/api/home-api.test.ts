@@ -15,7 +15,15 @@ const RESPONSE = {
     user_current_streak: 6,
     user_total_study_time: 120,
   },
-  user_weekly_activity: [55, 67, 32, 12, 0, 38, 100],
+  user_weekly_activity: [
+    { date: "2026-07-12", percent: 55 },
+    { date: "2026-07-13", percent: 67 },
+    { date: "2026-07-14", percent: 32 },
+    { date: "2026-07-15", percent: 12 },
+    { date: "2026-07-16", percent: 0 },
+    { date: "2026-07-17", percent: 38 },
+    { date: "2026-07-18", percent: 100 },
+  ],
 };
 
 describe("getHomeDashboard", () => {

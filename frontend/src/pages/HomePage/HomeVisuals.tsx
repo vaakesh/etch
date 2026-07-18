@@ -118,26 +118,6 @@ export function DashboardIcon({ name, className }: DashboardIconProps) {
   );
 }
 
-interface BrandMarkProps {
-  className?: string;
-}
-
-export function BrandMark({ className }: BrandMarkProps) {
-  return (
-    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 58 58">
-      <circle cx="29" cy="29" r="21" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M10 22c3-8 8-12 15-14M48 20c-3-7-8-10-14-12M48 38c-4 8-10 11-16 12M10 36c3 8 8 12 15 14"
-        stroke="currentColor"
-        strokeDasharray="5 4"
-        strokeLinecap="round"
-        strokeWidth="1.5"
-      />
-      <path d="M22 17v24h15" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
 interface DeckIllustrationProps {
   className?: string;
   variant: number;

@@ -1,5 +1,7 @@
 import { ApiError } from "../../../api";
-import type { HomeDashboard, HomeDeck, HomeProgress } from "./home-types";
+import type { HomeDashboard, HomeDeck, HomeProgress, HomeWeeklyActivityDay } from "./home-types";
+
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function invalidHomeResponse(path: string): never {
   throw new ApiError({
@@ -59,6 +61,45 @@ function readNullableDateTime(value: unknown, path: string): string | null {
   return dateTime;
 }
 
+function readDateOnly(value: unknown, path: string): string {
+  const date = readString(value, path);
+  const match = DATE_ONLY_PATTERN.exec(date);
+
+  if (match === null) {
+    return invalidHomeResponse(path);
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    return invalidHomeResponse(path);
+  }
+
+  return date;
+}
+
+function parseWeeklyActivityDay(value: unknown, index: number): HomeWeeklyActivityDay {
+  const path = `user_weekly_activity[${index}]`;
+  const activityDay = readRecord(value, path);
+  const percent = readInteger(activityDay.percent, `${path}.percent`);
+
+  if (percent < 0 || percent > 100) {
+    return invalidHomeResponse(`${path}.percent`);
+  }
+
+  return {
+    date: readDateOnly(activityDay.date, `${path}.date`),
+    percent,
+  };
+}
+
 function parseDeck(value: unknown, index: number): HomeDeck {
   const path = `decks[${index}]`;
   const deck = readRecord(value, path);
@@ -102,8 +143,6 @@ export function parseHomeDashboard(value: unknown): HomeDashboard {
   return {
     decks: dashboard.decks.map(parseDeck),
     progress: parseProgress(dashboard.progress),
-    weeklyActivity: dashboard.user_weekly_activity.map((value, index) =>
-      readInteger(value, `user_weekly_activity[${index}]`),
-    ),
+    weeklyActivity: dashboard.user_weekly_activity.map(parseWeeklyActivityDay),
   };
 }

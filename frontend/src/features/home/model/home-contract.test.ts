@@ -18,7 +18,15 @@ const VALID_RESPONSE = {
     user_current_streak: 6,
     user_total_study_time: 120,
   },
-  user_weekly_activity: [55, 67, 32, 12, 0, 38, 100],
+  user_weekly_activity: [
+    { date: "2026-07-12", percent: 55 },
+    { date: "2026-07-13", percent: 67 },
+    { date: "2026-07-14", percent: 32 },
+    { date: "2026-07-15", percent: 12 },
+    { date: "2026-07-16", percent: 0 },
+    { date: "2026-07-17", percent: 38 },
+    { date: "2026-07-18", percent: 100 },
+  ],
 };
 
 describe("parseHomeDashboard", () => {
@@ -39,13 +47,16 @@ describe("parseHomeDashboard", () => {
         currentStreakDays: 6,
         totalStudyTimeSeconds: 120,
       },
-      weeklyActivity: [55, 67, 32, 12, 0, 38, 100],
+      weeklyActivity: VALID_RESPONSE.user_weekly_activity,
     });
   });
 
   it("rejects a response that does not match the required BFF fields", () => {
     try {
-      parseHomeDashboard({ ...VALID_RESPONSE, user_weekly_activity: [20, null] });
+      parseHomeDashboard({
+        ...VALID_RESPONSE,
+        user_weekly_activity: [{ date: "2026-07-18", percent: null }],
+      });
       expect.fail("Expected parseHomeDashboard to throw.");
     } catch (error) {
       expect(isApiError(error)).toBe(true);
@@ -54,5 +65,21 @@ describe("parseHomeDashboard", () => {
         expect(error.status).toBe(0);
       }
     }
+  });
+
+  it("rejects invalid calendar dates and percentages outside the contract range", () => {
+    expect(() =>
+      parseHomeDashboard({
+        ...VALID_RESPONSE,
+        user_weekly_activity: [{ date: "2026-02-30", percent: 50 }],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseHomeDashboard({
+        ...VALID_RESPONSE,
+        user_weekly_activity: [{ date: "2026-07-18", percent: 101 }],
+      }),
+    ).toThrow();
   });
 });

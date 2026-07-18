@@ -13,8 +13,13 @@ export interface HomeProgress {
   totalStudyTimeSeconds: number;
 }
 
+export interface HomeWeeklyActivityDay {
+  date: string;
+  percent: number;
+}
+
 export interface HomeDashboard {
   decks: readonly HomeDeck[];
   progress: HomeProgress;
-  weeklyActivity: readonly number[];
+  weeklyActivity: readonly HomeWeeklyActivityDay[];
 }

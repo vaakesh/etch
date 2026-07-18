@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { isApiError } from "../../api";
 import {
   clampPercent,
   formatCount,
+  formatDeckUpdatedAt,
   formatPercent,
+  formatShortWeekday,
   formatStreak,
   formatStudyTime,
 } from "../../features/home/model/home-formatters";
-import type { HomeDashboard, HomeDeck, HomeProgress } from "../../features/home/model/home-types";
+import type {
+  HomeDashboard,
+  HomeDeck,
+  HomeProgress,
+  HomeWeeklyActivityDay,
+} from "../../features/home/model/home-types";
 import { useHomeDashboard } from "../../features/home/model/useHomeDashboard";
-import { BrandMark, DashboardIcon, DeckIllustration, type DashboardIconName } from "./HomeVisuals";
+import { DashboardIcon, DeckIllustration, type DashboardIconName } from "./HomeVisuals";
 import styles from "./HomePage.module.css";
 
 interface NavigationItem {
@@ -26,8 +33,6 @@ const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { label: "Статистика", icon: "chart" },
   { label: "Настройки", icon: "settings" },
 ];
-
-const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 
 function getHomeErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
@@ -58,7 +63,6 @@ function Sidebar({ collapsed }: SidebarProps) {
   return (
     <aside className={styles.sidebar} id="home-sidebar">
       <div className={styles.brand}>
-        <BrandMark className={styles.brandMark} />
         <span className={styles.brandName}>Etch</span>
       </div>
 
@@ -127,13 +131,69 @@ interface DeckCardProps {
   index: number;
 }
 
+function getAccuracyToneClassName(accuracy: number): string {
+  if (accuracy >= 85) {
+    return styles.deckAccuracyGreen;
+  }
+  if (accuracy >= 70) {
+    return styles.deckAccuracyYellow;
+  }
+  if (accuracy >= 50) {
+    return styles.deckAccuracyOrange;
+  }
+
+  return styles.deckAccuracyRed;
+}
+
 function DeckCard({ deck, index }: DeckCardProps) {
-  const progress = clampPercent(deck.accuracy);
+  const accuracy = clampPercent(deck.accuracy);
+  const accuracyTooltipId = useId();
+  const [isAccuracyTooltipOpen, setIsAccuracyTooltipOpen] = useState(false);
+  const updatedAtLabel = formatDeckUpdatedAt(deck.updatedAt);
+  const accuracyHintClassName = isAccuracyTooltipOpen
+    ? `${styles.deckAccuracyHint} ${styles.deckAccuracyHintOpen}`
+    : styles.deckAccuracyHint;
 
   return (
     <article className={styles.deckCard}>
       <div className={styles.deckCopy}>
-        <h3>{deck.title}</h3>
+        <div className={styles.deckHeading}>
+          <h3>{deck.title}</h3>
+          <span className={accuracyHintClassName}>
+            <span
+              aria-describedby={accuracyTooltipId}
+              aria-label="Точность колоды"
+              aria-valuemax={100}
+              aria-valuemin={0}
+              aria-valuenow={accuracy}
+              aria-valuetext={formatPercent(accuracy)}
+              className={`${styles.deckAccuracy} ${getAccuracyToneClassName(accuracy)}`}
+              onBlur={() => setIsAccuracyTooltipOpen(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setIsAccuracyTooltipOpen(false);
+                  event.currentTarget.blur();
+                } else if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setIsAccuracyTooltipOpen((isOpen) => !isOpen);
+                }
+              }}
+              onPointerDown={(event) => {
+                if (event.button === 0) {
+                  setIsAccuracyTooltipOpen((isOpen) => !isOpen);
+                }
+              }}
+              role="meter"
+              tabIndex={0}
+            >
+              {formatCount(accuracy)}
+            </span>
+            <span className={styles.deckAccuracyTooltip} id={accuracyTooltipId} role="tooltip">
+              <strong>Точность колоды</strong>
+              <span>Правильных ответов — {formatPercent(accuracy)}</span>
+            </span>
+          </span>
+        </div>
         <p>{deck.description ?? "Без описания"}</p>
       </div>
 
@@ -142,17 +202,16 @@ function DeckCard({ deck, index }: DeckCardProps) {
           <p>
             <strong>{formatCount(deck.totalWordsCount)}</strong> слов
           </p>
-          <strong className={styles.deckAccuracy}>{formatPercent(progress)}</strong>
-          <div
-            aria-label={`Прогресс ${formatPercent(progress)}`}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={progress}
-            className={styles.progressTrack}
-            role="progressbar"
-          >
-            <span style={{ width: `${progress}%` }} />
-          </div>
+          {deck.updatedAt !== null && updatedAtLabel !== null ? (
+            <time
+              className={styles.deckUpdatedAt}
+              dateTime={deck.updatedAt}
+              title={`Последнее обновление: ${updatedAtLabel}`}
+            >
+              <span className={styles.deckUpdatedLabel}>Обновлено</span>
+              <span className={styles.deckUpdatedValue}>{updatedAtLabel}</span>
+            </time>
+          ) : null}
         </div>
         <DeckIllustration className={styles.deckIllustration} variant={index} />
       </div>
@@ -233,11 +292,13 @@ function ProgressMetric({ icon, label, value, detail, tone }: ProgressMetricProp
 
 interface ProgressPanelProps {
   progress: HomeProgress;
-  weeklyActivity: readonly number[];
+  weeklyActivity: readonly HomeWeeklyActivityDay[];
 }
 
 function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
-  const chartValues = weeklyActivity.slice(0, WEEKDAY_LABELS.length);
+  const chartValues = [...weeklyActivity]
+    .sort((first, second) => first.date.localeCompare(second.date))
+    .slice(-7);
 
   return (
     <aside aria-labelledby="progress-heading" className={styles.progressPanel}>
@@ -278,15 +339,15 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
         <h3 id="weekly-heading">Активность за неделю</h3>
         {chartValues.length > 0 ? (
           <div className={styles.weeklyChart}>
-            {chartValues.map((value, index) => {
-              const percent = clampPercent(value);
-              const weekday = WEEKDAY_LABELS[index];
+            {chartValues.map((activityDay) => {
+              const percent = clampPercent(activityDay.percent);
+              const weekday = formatShortWeekday(activityDay.date);
 
               return (
-                <div className={styles.weeklyBar} key={`${weekday}-${index}`}>
+                <div className={styles.weeklyBar} key={activityDay.date}>
                   <div className={styles.barTrack}>
                     <span
-                      aria-label={`${weekday}: ${formatPercent(percent)}`}
+                      aria-label={`${weekday}, ${activityDay.date}: ${formatPercent(percent)}`}
                       className={styles.barFill}
                       role="img"
                       style={{ height: `${Math.max(4, percent)}%` }}

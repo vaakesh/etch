@@ -72,24 +72,11 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 0 9px;
   font-size: 1.6rem;
   font-weight: 600;
   letter-spacing: -0.035em;
-  transition:
-    gap 400ms var(--motion-spring),
-    padding 400ms var(--motion-spring);
-}
-
-.brandMark {
-  width: 50px;
-  height: 50px;
-  flex: 0 0 auto;
-  transition:
-    width 420ms var(--motion-spring),
-    height 420ms var(--motion-spring),
-    transform 420ms var(--motion-spring);
+  transition: padding 400ms var(--motion-spring);
 }
 
 .brandName {
@@ -305,18 +292,10 @@
 }
 
 .shellCollapsed .brand {
-  gap: 0;
   justify-content: center;
   padding-inline: 0;
 }
 
-.shellCollapsed .brandMark {
-  width: 48px;
-  height: 48px;
-  transform: rotate(-4deg);
-}
-
-.shellCollapsed .brandName,
 .shellCollapsed .navigationLabel {
   max-width: 0;
   opacity: 0;
@@ -475,6 +454,10 @@
   letter-spacing: -0.025em;
 }
 
+.progressPanel > h2 {
+  font-size: 1.1rem;
+}
+
 .sectionAction {
   display: inline-flex;
   align-items: center;
@@ -508,6 +491,7 @@
 }
 
 .deckCard {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -563,6 +547,14 @@
   min-width: 0;
 }
 
+.deckHeading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: start;
+  gap: 10px;
+}
+
 .deckCopy h3 {
   margin: 0;
   overflow: hidden;
@@ -595,12 +587,16 @@
 }
 
 .deckStats {
+  display: grid;
   min-width: 0;
+  align-content: end;
+  justify-items: start;
+  gap: 10px;
   padding-bottom: 12px;
 }
 
 .deckStats p {
-  margin: 0 0 22px;
+  margin: 0;
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -610,28 +606,133 @@
   font-weight: 500;
 }
 
-.deckAccuracy {
-  display: block;
-  margin-bottom: 9px;
-  font-size: 1.15rem;
+.deckUpdatedAt {
+  display: grid;
+  max-width: 100%;
+  min-width: 0;
+  gap: 2px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.deckUpdatedLabel {
+  font-size: 0.58rem;
   font-weight: 500;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
 }
 
-.progressTrack {
-  width: 100%;
-  height: 7px;
-  overflow: hidden;
-  background: #eee8dc;
-  border-radius: 999px;
+.deckUpdatedValue {
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
-.progressTrack span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--teal), #70aaa4);
-  border-radius: inherit;
-  transform-origin: left center;
-  animation: progressGrow 720ms var(--motion-spring) 420ms both;
+.deckAccuracyHint {
+  display: inline-grid;
+  width: 36px;
+  place-items: center;
+  justify-self: end;
+}
+
+.deckAccuracy {
+  display: inline-grid;
+  width: 36px;
+  aspect-ratio: 1;
+  place-items: center;
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  cursor: pointer;
+  background: var(--surface-muted);
+  border: 2.5px solid var(--line);
+  border-radius: 50%;
+  outline: none;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.deckAccuracy:focus-visible {
+  box-shadow: 0 0 0 4px rgb(77 152 146 / 10%);
+  transform: translateY(-1px);
+  outline: 2px solid rgb(77 152 146 / 34%);
+  outline-offset: 3px;
+}
+
+.deckAccuracyTooltip {
+  position: absolute;
+  z-index: 5;
+  top: 61px;
+  right: 18px;
+  left: 18px;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  color: #f8fcfb;
+  cursor: default;
+  visibility: hidden;
+  background: linear-gradient(145deg, #284447, #1c3437);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 13px;
+  box-shadow:
+    0 14px 30px rgb(24 49 52 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 9%);
+  opacity: 0;
+  transform: translateY(-5px) scale(0.98);
+  transform-origin: top right;
+}
+
+.deckAccuracyTooltip::before {
+  position: absolute;
+  top: -5px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  content: "";
+  background: #284447;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+  transform: rotate(45deg);
+}
+
+.deckAccuracyTooltip strong {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.deckAccuracyTooltip span {
+  color: rgb(235 245 243 / 78%);
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.deckAccuracyHintOpen .deckAccuracyTooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.deckAccuracyRed {
+  border-color: #bd625d;
+}
+
+.deckAccuracyOrange {
+  border-color: #c77941;
+}
+
+.deckAccuracyYellow {
+  border-color: #a88b2f;
+}
+
+.deckAccuracyGreen {
+  border-color: #4f8964;
 }
 
 .deckIllustration {
@@ -688,9 +789,10 @@
 
 .progressPanel {
   display: grid;
-  height: 100%;
+  height: auto;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  align-self: start;
   padding: 20px 20px 18px;
   overflow: hidden;
   background: var(--surface);
@@ -703,18 +805,23 @@
 .metricsList {
   display: grid;
   min-height: 0;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
-  margin-top: 8px;
+  grid-template-rows: repeat(4, auto);
+  align-content: start;
+  margin-top: 12px;
 }
 
 .progressMetric {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 8px 0;
+  gap: 10px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--line);
   animation: metricReveal 500ms var(--motion-spring) both;
+}
+
+.progressMetric:last-child {
+  border-bottom: 0;
 }
 
 .progressMetric:nth-child(1) {
@@ -735,15 +842,16 @@
 
 .metricIcon {
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 34px;
+  height: 34px;
   place-items: center;
-  border-radius: 50%;
+  border: 1px solid rgb(20 36 45 / 5%);
+  border-radius: 11px;
 }
 
 .metricIcon svg {
-  width: 30px;
-  height: 30px;
+  width: 18px;
+  height: 18px;
 }
 
 .metricIconteal {
@@ -771,21 +879,43 @@
 .metricCopy {
   display: grid;
   min-width: 0;
+  grid-template-areas:
+    "label value"
+    "detail value";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 1px;
 }
 
 .metricCopy > span,
 .metricCopy small {
   color: var(--muted);
-  font-size: 0.73rem;
-  line-height: 1.35;
+  line-height: 1.25;
+}
+
+.metricCopy > span {
+  grid-area: label;
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.metricCopy small {
+  grid-area: detail;
+  font-size: 0.62rem;
 }
 
 .metricCopy strong {
-  margin: 3px 0 2px;
-  font-size: 1.5rem;
+  grid-area: value;
+  margin: 0;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
-  line-height: 1.08;
+  line-height: 1;
   letter-spacing: -0.03em;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .weeklySection {
@@ -980,8 +1110,9 @@
 
 .skeletonPanel {
   display: grid;
-  height: 100%;
+  height: auto;
   min-height: 0;
+  align-self: start;
   align-content: start;
   gap: 18px;
   padding: 24px 22px;
@@ -1146,16 +1277,6 @@
   }
 }
 
-@keyframes progressGrow {
-  from {
-    scale: 0 1;
-  }
-
-  to {
-    scale: 1 1;
-  }
-}
-
 @keyframes activityRise {
   from {
     opacity: 0;
@@ -1217,28 +1338,34 @@
     padding: 14px;
   }
 
+  .deckAccuracyTooltip {
+    top: 55px;
+    right: 12px;
+    left: 12px;
+  }
+
   .progressPanel,
   .skeletonPanel {
     padding-inline: 15px;
   }
 
   .progressMetric {
-    grid-template-columns: 46px minmax(0, 1fr);
-    gap: 9px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 8px;
   }
 
   .metricIcon {
-    width: 46px;
-    height: 46px;
+    width: 32px;
+    height: 32px;
   }
 
   .metricIcon svg {
-    width: 26px;
-    height: 26px;
+    width: 17px;
+    height: 17px;
   }
 
   .metricCopy strong {
-    font-size: 1.25rem;
+    font-size: 0.98rem;
   }
 
   .weeklyChart {
@@ -1272,11 +1399,6 @@
   .brand {
     padding: 0;
     font-size: 1.5rem;
-  }
-
-  .brandMark {
-    width: 42px;
-    height: 42px;
   }
 
   .navigation {
@@ -1314,18 +1436,10 @@
   }
 
   .shellCollapsed .brand {
-    gap: 8px;
     justify-content: flex-start;
     padding: 0;
   }
 
-  .shellCollapsed .brandMark {
-    width: 42px;
-    height: 42px;
-    transform: none;
-  }
-
-  .shellCollapsed .brandName,
   .shellCollapsed .navigationLabel {
     max-width: 120px;
     opacity: 1;
@@ -1357,10 +1471,6 @@
   .sidebar {
     height: 56px;
     padding: 6px 8px;
-  }
-
-  .brand span {
-    display: none;
   }
 
   .navigationList {
@@ -1443,17 +1553,60 @@
   }
 
   .deckStats {
+    gap: 4px;
     padding-bottom: 4px;
   }
 
   .deckStats p {
-    margin-bottom: 5px;
+    margin-bottom: 0;
     font-size: 0.65rem;
   }
 
+  .deckUpdatedAt {
+    gap: 0;
+  }
+
+  .deckUpdatedLabel {
+    display: none;
+  }
+
+  .deckUpdatedValue {
+    font-size: 0.6rem;
+    line-height: 1.15;
+  }
+
   .deckAccuracy {
-    margin-bottom: 4px;
-    font-size: 0.82rem;
+    width: 30px;
+    font-size: 0.6rem;
+  }
+
+  .deckAccuracyHint {
+    width: 30px;
+  }
+
+  .deckAccuracyTooltip {
+    top: 43px;
+    right: 7px;
+    left: 7px;
+    padding: 8px 9px;
+    border-radius: 10px;
+  }
+
+  .deckAccuracyTooltip::before {
+    right: 10px;
+  }
+
+  .deckAccuracyTooltip strong {
+    font-size: 0.64rem;
+  }
+
+  .deckAccuracyTooltip span {
+    font-size: 0.58rem;
+  }
+
+  .deckHeading {
+    grid-template-columns: minmax(0, 1fr) 30px;
+    gap: 5px;
   }
 
   .startButton {
@@ -1483,19 +1636,20 @@
   }
 
   .progressMetric {
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 6px;
-    padding: 4px 0;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 5px;
+    padding: 5px 0;
   }
 
   .metricIcon {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
   }
 
   .metricIcon svg {
-    width: 19px;
-    height: 19px;
+    width: 16px;
+    height: 16px;
   }
 
   .metricCopy > span,
@@ -1503,8 +1657,12 @@
     font-size: 0.58rem;
   }
 
+  .metricCopy {
+    column-gap: 4px;
+  }
+
   .metricCopy strong {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
   }
 
   .weeklySection {
@@ -1544,8 +1702,8 @@
     -webkit-line-clamp: 1;
   }
 
-  .deckStats p {
-    margin-bottom: 10px;
+  .deckStats {
+    gap: 6px;
   }
 
   .deckIllustration {
@@ -1573,7 +1731,6 @@
   .emptyDecks,
   .progressPanel,
   .progressMetric,
-  .progressTrack span,
   .barFill,
   .skeletonHeading,
   .skeletonLine,
@@ -1587,7 +1744,6 @@
   .shell,
   .sidebar,
   .brand,
-  .brandMark,
   .brandName,
   .sidebarToggle,
   .sidebarToggleIcon,
@@ -1596,7 +1752,9 @@
   .navigationItemActive,
   .navigationIcon,
   .navigationLabel,
-  .sidebarArtwork {
+  .sidebarArtwork,
+  .deckAccuracy,
+  .deckAccuracyTooltip {
     transition: none;
   }
 

@@ -4,9 +4,10 @@
 
 
 
+from datetime import date as Date
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeckDashboard(BaseModel):
@@ -26,10 +27,15 @@ class UserProgress(BaseModel):
     user_current_streak: int # days
     user_total_study_time: int # seconds
 
+
+class WeeklyActivityDay(BaseModel):
+    date: Date
+    percent: int = Field(ge=0, le=100)
+
+
 class HomeDashboard(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     decks: list[DeckDashboard]
     progress: UserProgress
-    user_weekly_activity: list[int] # массив процентов, которыми нужно заполнить шкалы, 100 - 100%, 55 - 55% и тд
-
+    user_weekly_activity: list[WeeklyActivityDay]
