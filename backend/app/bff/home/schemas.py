@@ -6,8 +6,11 @@
 
 from datetime import date as Date
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.cards.schemas import CardOut
 
 
 class DeckDashboard(BaseModel):
@@ -39,3 +42,25 @@ class HomeDashboard(BaseModel):
     decks: list[DeckDashboard]
     progress: UserProgress
     user_weekly_activity: list[WeeklyActivityDay]
+
+class DeckForDeckPage(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID
+    title: str
+    description: str | None = None
+    deck_total_words_count: int
+    user_accuracy: int
+    is_favourite: bool
+    updated_at: datetime | None = None
+
+    cards: list[CardOut]
+
+    
+
+class DeckPageData(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    decks: list[DeckForDeckPage]
+    next_cursor: str | None
+    has_more: bool

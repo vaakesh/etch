@@ -28,7 +28,7 @@ class Deck(Base):
 
     title: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    words_count: Mapped[int | None] = mapped_column(Integer, default=0)
+    words_count: Mapped[int] = mapped_column(Integer, default=0)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -115,3 +115,4 @@ class UserDeck(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    is_favourite: Mapped[bool] = mapped_column(Boolean, default=False)

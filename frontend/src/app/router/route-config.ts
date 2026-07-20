@@ -10,6 +10,7 @@ export interface AppRouteDefinition {
 
 const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const HomePage = lazy(() => import("../../pages/HomePage"));
+const LibraryPage = lazy(() => import("../../pages/LibraryPage"));
 const NotFoundPage = lazy(() => import("../../pages/NotFoundPage"));
 
 export const appRoutes: readonly AppRouteDefinition[] = [
@@ -22,6 +23,11 @@ export const appRoutes: readonly AppRouteDefinition[] = [
     path: "/",
     access: "protected",
     Component: HomePage,
+  },
+  {
+    path: "/library",
+    access: "protected",
+    Component: LibraryPage,
   },
   {
     path: "*",

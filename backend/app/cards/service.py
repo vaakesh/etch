@@ -56,11 +56,13 @@ class CardService:
     async def create_card(
         self,
         payload: CardCreate,
+        user_id: int,
     ) -> CardSchema:
         try:
             async with self.uow_factory() as uow:
                 card = Card(
                     **payload.model_dump(),
+                    user_id=user_id,
                 )
 
                 uow.card_repo.add(card)

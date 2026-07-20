@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, status
 from app.cards.deps import get_card_service
 from app.cards.schemas import CardCreate, CardOut, CardSchema, CardUpdate
 from app.cards.service import CardService
+from app.auth.deps import get_current_user
+from app.users.models import User
 
 
 router = APIRouter(prefix="/cards")
@@ -30,8 +32,9 @@ async def get_card(
 async def create_card(
     payload: CardCreate,
     card_service: CardService = Depends(get_card_service),
+    current_user: User = Depends(get_current_user),
 ):
-    return await card_service.create_card(payload)
+    return await card_service.create_card(payload, current_user.id)
 
 
 @router.patch("/{card_uuid}", response_model=CardSchema)

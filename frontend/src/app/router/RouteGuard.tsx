@@ -38,7 +38,7 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
   }
 
   if (!isSessionRevalidated || status === "loading") {
-    return <PageLoader />;
+    return <PageLoader tone={access === "protected" ? "light" : "dark"} />;
   }
 
   if (status === "error") {

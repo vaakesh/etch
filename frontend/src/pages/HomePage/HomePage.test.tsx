@@ -47,19 +47,16 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
 import { HomePage } from "./HomePage";
 
 describe("HomePage", () => {
-  it("renders an accessible expanded sidebar control and BFF dashboard content", () => {
+  it("renders BFF dashboard content without duplicating the app navigation", () => {
     const markup = renderToStaticMarkup(<HomePage />);
     const accuracyTooltipIds = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map(
       ([, id]) => id,
     );
 
-    expect(markup).toContain("Etch");
-    expect(markup).toContain('id="home-sidebar"');
-    expect(markup).toContain('aria-controls="home-sidebar"');
-    expect(markup).toContain('aria-expanded="true"');
-    expect(markup).toContain('aria-label="Свернуть боковое меню"');
+    expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).not.toContain('viewBox="0 0 160 140"');
     expect(markup.match(/role="meter"/g)).toHaveLength(2);
     expect(markup).toContain('aria-valuenow="72"');
     expect(markup).toContain('aria-valuetext="72%"');

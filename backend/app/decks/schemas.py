@@ -77,3 +77,4 @@ class UserDeck(BaseModel):
     correct_count: int
     wrong_count: int
     last_studied_at: datetime
+    is_favourite: bool

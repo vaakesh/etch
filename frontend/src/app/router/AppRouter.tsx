@@ -1,19 +1,33 @@
 import { Suspense } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AppShell } from "../layout/AppShell";
 import { PageLoader } from "../PageLoader";
 import { RouteGuard } from "./RouteGuard";
 import { appRoutes } from "./route-config";
 
 function AppRoutes() {
-  const location = useLocation();
+  const protectedRoutes = appRoutes.filter(({ access }) => access === "protected");
+  const standaloneRoutes = appRoutes.filter(({ access }) => access !== "protected");
 
   return (
     <Routes>
-      {appRoutes.map(({ Component, access, path }) => (
+      <Route
+        element={
+          <RouteGuard access="protected">
+            <AppShell />
+          </RouteGuard>
+        }
+      >
+        {protectedRoutes.map(({ Component, path }) => (
+          <Route element={<Component />} key={path} path={path} />
+        ))}
+      </Route>
+
+      {standaloneRoutes.map(({ Component, access, path }) => (
         <Route
           element={
-            <RouteGuard access={access} key={`${path}:${location.key}`}>
-              <Suspense fallback={<PageLoader />}>
+            <RouteGuard access={access}>
+              <Suspense fallback={<PageLoader tone="dark" />}>
                 <Component />
               </Suspense>
             </RouteGuard>

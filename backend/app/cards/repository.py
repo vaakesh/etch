@@ -22,7 +22,7 @@ class CardRepository:
 
     async def get_all_by_user_id(
         self,
-        user_id: UUID,
+        user_id: int,
         limit: int = 10,
     ) -> list[Card]:
         stmt = (

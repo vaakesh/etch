@@ -14,7 +14,7 @@ Frontend-правила не применяй автоматически к back
 
 ## Текущее состояние
 
-Frontend является минимальным auth-aware UI-приложением с первой предметной страницей.
+Frontend является минимальным auth-aware UI-приложением с предметными страницами главной и библиотеки.
 
 Уже существуют:
 
@@ -23,8 +23,9 @@ Frontend является минимальным auth-aware UI-приложен�
 * `AuthProvider` и `useAuth()`;
 * `AppRouter`, `RouteGuard` и конфигурация маршрутов;
 * защищённая главная страница с данными из `GET /bff/home` и feature-слоем `src/features/home`.
+* защищённая библиотека с cursor-пагинацией из `GET /bff/decks` и feature-слоем `src/features/library`.
 
-Сейчас зарегистрированы guest-маршрут `/login`, protected-маршрут `/` с dashboard-страницей и публичный wildcard-маршрут `*` со страницей 404. Их route-pages расположены в `src/pages/LoginPage`, `src/pages/HomePage` и `src/pages/NotFoundPage`. Остальных маршрутов и страниц пока нет.
+Сейчас зарегистрированы guest-маршрут `/login`, protected-маршруты `/` и `/library`, а также публичный wildcard-маршрут `*` со страницей 404. Их route-pages расположены в `src/pages/LoginPage`, `src/pages/HomePage`, `src/pages/LibraryPage` и `src/pages/NotFoundPage`. Остальных маршрутов и страниц пока нет.
 
 Не считай страницу, маршрут или фичу существующими только потому, что путь встречается в redirect, константе или примере. Источники истины — текущее дерево, `route-config.ts`, backend-код и OpenAPI.
 

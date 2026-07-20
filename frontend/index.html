@@ -3,8 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f1116" />
+    <meta id="theme-color" name="theme-color" content="#0f1116" />
+    <script>
+      const usesLightBootPalette =
+        window.location.pathname === "/" ||
+        window.location.pathname === "/library" ||
+        window.location.pathname.startsWith("/library/");
+
+      document.documentElement.dataset.bootPalette = usesLightBootPalette ? "light" : "dark";
+      if (usesLightBootPalette) {
+        document.getElementById("theme-color")?.setAttribute("content", "#f6f2eb");
+      }
+    </script>
     <style>
+      :root {
+        --loader-background: #0f1116;
+        --loader-track: rgb(242 233 218 / 14%);
+        --loader-accent: #2a6f6b;
+      }
+
+      :root[data-boot-palette="light"] {
+        --loader-background: #f6f2eb;
+        --loader-track: #e7dfd4;
+        --loader-accent: #4d9892;
+      }
+
       html,
       body,
       #root {
@@ -17,15 +40,15 @@
 
       body {
         margin: 0;
-        background: #0f1116;
+        background: var(--loader-background);
       }
 
-      .page-loader {
+      #boot-loader {
         display: grid;
         min-height: 100vh;
         min-height: 100dvh;
         place-items: center;
-        background: #0f1116;
+        background: var(--loader-background);
       }
 
       #boot-loader {
@@ -34,12 +57,12 @@
         inset: 0;
       }
 
-      .page-loader__spinner {
+      #boot-loader .page-loader__spinner {
         box-sizing: border-box;
         width: 32px;
         height: 32px;
-        border: 3px solid rgb(242 233 218 / 14%);
-        border-top-color: #2a6f6b;
+        border: 3px solid var(--loader-track);
+        border-top-color: var(--loader-accent);
         border-radius: 50%;
         animation: page-loader-spin 700ms linear infinite;
       }
@@ -51,7 +74,7 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .page-loader__spinner {
+        #boot-loader .page-loader__spinner {
           animation: none;
         }
       }

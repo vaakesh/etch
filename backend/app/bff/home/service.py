@@ -1,18 +1,53 @@
+from collections import defaultdict
 from typing import Callable
 from uuid import UUID
-
+import base64
+import json
+from datetime import datetime
 from app.service import UnitOfWork
-from app.bff.home.schemas import DeckDashboard, HomeDashboard, UserProgress
+from app.bff.home.schemas import DeckDashboard, DeckForDeckPage, DeckPageData, HomeDashboard, UserProgress
 from app.decks.models import UserDeck
+from app.cards.models import Card
 
 
 def calculate_accuracy(user_deck: UserDeck) -> int:
-    if user_deck is None:
-        return 100
-    
+    if (user_deck is None) or (user_deck.correct_count + user_deck.wrong_count == 0):
+        return 0
+
     accuracy = int(user_deck.correct_count / (user_deck.correct_count + user_deck.wrong_count) * 100)
     return accuracy
 
+def get_is_favourite(user_deck: UserDeck) -> bool:
+    if user_deck is None:
+        return False
+    
+    return user_deck.is_favourite
+
+def encode_cursor(updated_at: datetime, deck_id: int) -> str:
+    payload = {
+        "updated_at": updated_at.isoformat(),
+        "id": deck_id,
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+def decode_cursor(cursor: str) -> tuple[datetime, int]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode())
+        payload = json.loads(raw)
+
+        updated_at = datetime.fromisoformat(payload["updated_at"])
+        deck_id = int(payload["id"])
+
+        if updated_at.tzinfo is None:
+            raise ValueError("Cursor datetime must include timezone")
+
+        if deck_id <= 0:
+            raise ValueError("Cursor id must be positive")
+
+        return updated_at, deck_id
+    except Exception:
+        raise
 
 class BffService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
@@ -63,3 +98,52 @@ class BffService:
             )
             return result
     
+    async def get_deck_page_data(self, user_id: int, cursor: str | None = None) -> DeckPageData:
+        async with self.uow_factory() as uow:
+            decoded_cursor = decode_cursor(cursor) if cursor is not None else None
+            decks, has_more = await uow.deck_repo.get_page_by_user_id(
+                user_id=user_id,
+                limit=20,
+                cursor=decoded_cursor,
+            )
+
+            next_cursor = None
+            if has_more and decks:
+                last_deck = decks[-1]
+                next_cursor = encode_cursor(
+                    updated_at=last_deck.updated_at,
+                    deck_id=last_deck.id,
+                )
+            
+            user_decks = await uow.deck_repo.get_user_statistics_by_decks(
+                deck_ids=[deck.id for deck in decks],
+                user_id=user_id,
+            )
+            user_decks_by_deck_id = {
+                user_deck.deck_id: user_deck
+                for user_deck in user_decks
+            }
+
+            cards = await uow.deck_card_repo.get_all_by_deck_ids(
+                [deck.id for deck in decks],
+                limit=2,
+            )
+            deck_cards_by_deck_id: dict[int, list[Card]] = defaultdict(list)
+            for deck_id, card in cards:
+                deck_cards_by_deck_id[deck_id].append(card)
+
+            result = DeckPageData(
+                decks=[DeckForDeckPage(
+                    uuid=deck.uuid,
+                    title=deck.title,
+                    description=deck.description,
+                    deck_total_words_count=deck.words_count,
+                    user_accuracy=calculate_accuracy(user_decks_by_deck_id.get(deck.id)),
+                    is_favourite=get_is_favourite(user_decks_by_deck_id.get(deck.id)),
+                    updated_at=deck.updated_at,
+                    cards=deck_cards_by_deck_id.get(deck.id, []),
+                ) for deck in decks],
+                next_cursor=next_cursor,
+                has_more=has_more,
+            )
+            return result

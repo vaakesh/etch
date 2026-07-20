@@ -1,6 +1,11 @@
 import { useId, useState } from "react";
 import { isApiError } from "../../api";
 import {
+  DashboardIcon,
+  DeckIllustration,
+  type DashboardIconName,
+} from "../../components/DashboardVisuals";
+import {
   clampPercent,
   formatCount,
   formatDeckUpdatedAt,
@@ -16,23 +21,7 @@ import type {
   HomeWeeklyActivityDay,
 } from "../../features/home/model/home-types";
 import { useHomeDashboard } from "../../features/home/model/useHomeDashboard";
-import { DashboardIcon, DeckIllustration, type DashboardIconName } from "./HomeVisuals";
 import styles from "./HomePage.module.css";
-
-interface NavigationItem {
-  label: string;
-  icon: DashboardIconName;
-  active?: boolean;
-}
-
-const NAVIGATION_ITEMS: readonly NavigationItem[] = [
-  { label: "Главная", icon: "home", active: true },
-  { label: "Колоды", icon: "decks" },
-  { label: "Библиотека", icon: "book" },
-  { label: "Практика", icon: "practice" },
-  { label: "Статистика", icon: "chart" },
-  { label: "Настройки", icon: "settings" },
-];
 
 function getHomeErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
@@ -53,57 +42,6 @@ function getHomeErrorMessage(error: unknown): string {
   }
 
   return "Не удалось загрузить главную страницу. Попробуйте ещё раз.";
-}
-
-interface SidebarProps {
-  collapsed: boolean;
-}
-
-function Sidebar({ collapsed }: SidebarProps) {
-  return (
-    <aside className={styles.sidebar} id="home-sidebar">
-      <div className={styles.brand}>
-        <span className={styles.brandName}>Etch</span>
-      </div>
-
-      <nav aria-label="Основная навигация" className={styles.navigation} id="home-navigation">
-        <ul className={styles.navigationList}>
-          {NAVIGATION_ITEMS.map((item) => (
-            <li key={item.label}>
-              {item.active ? (
-                <a
-                  aria-current="page"
-                  aria-label={item.label}
-                  className={styles.navigationItemActive}
-                  href="/"
-                  title={collapsed ? item.label : undefined}
-                >
-                  <DashboardIcon className={styles.navigationIcon} name={item.icon} />
-                  <span className={styles.navigationLabel}>{item.label}</span>
-                </a>
-              ) : (
-                <span
-                  aria-label={item.label}
-                  aria-disabled="true"
-                  className={styles.navigationItem}
-                  title={collapsed ? item.label : "Раздел пока не подключён"}
-                >
-                  <DashboardIcon className={styles.navigationIcon} name={item.icon} />
-                  <span className={styles.navigationLabel}>{item.label}</span>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <div aria-hidden="true" className={styles.sidebarArtwork}>
-        <DeckIllustration className={styles.sidebarIllustration} variant={5} />
-        <span className={styles.artBook} />
-        <span className={styles.artBookSecondary} />
-      </div>
-    </aside>
-  );
 }
 
 function DashboardHeader() {
@@ -128,7 +66,6 @@ function DashboardHeader() {
 
 interface DeckCardProps {
   deck: HomeDeck;
-  index: number;
 }
 
 function getAccuracyToneClassName(accuracy: number): string {
@@ -145,7 +82,7 @@ function getAccuracyToneClassName(accuracy: number): string {
   return styles.deckAccuracyRed;
 }
 
-function DeckCard({ deck, index }: DeckCardProps) {
+function DeckCard({ deck }: DeckCardProps) {
   const accuracy = clampPercent(deck.accuracy);
   const accuracyTooltipId = useId();
   const [isAccuracyTooltipOpen, setIsAccuracyTooltipOpen] = useState(false);
@@ -213,7 +150,6 @@ function DeckCard({ deck, index }: DeckCardProps) {
             </time>
           ) : null}
         </div>
-        <DeckIllustration className={styles.deckIllustration} variant={index} />
       </div>
 
       <button
@@ -257,7 +193,7 @@ function DecksSection({ decks }: { decks: readonly HomeDeck[] }) {
       {decks.length > 0 ? (
         <div className={styles.decksGrid}>
           {decks.map((deck, index) => (
-            <DeckCard deck={deck} index={index} key={`${deck.title}-${index}`} />
+            <DeckCard deck={deck} key={`${deck.title}-${index}`} />
           ))}
         </div>
       ) : (
@@ -428,35 +364,15 @@ function ErrorState({ error, onRetry }: ErrorStateProps) {
 
 export function HomePage() {
   const { data, error, retry, status } = useHomeDashboard();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const shellClassName = isSidebarCollapsed
-    ? `${styles.shell} ${styles.shellCollapsed}`
-    : styles.shell;
 
   return (
     <main className={styles.page}>
-      <div className={shellClassName}>
-        <button
-          aria-controls="home-sidebar"
-          aria-expanded={!isSidebarCollapsed}
-          aria-label={isSidebarCollapsed ? "Развернуть боковое меню" : "Свернуть боковое меню"}
-          className={styles.sidebarToggle}
-          onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
-          title={isSidebarCollapsed ? "Развернуть боковое меню" : "Свернуть боковое меню"}
-          type="button"
-        >
-          <DashboardIcon className={styles.sidebarToggleIcon} name="chevron" />
-        </button>
-        <Sidebar collapsed={isSidebarCollapsed} />
-        <section className={styles.dashboard}>
-          <DashboardHeader />
-          {status === "loading" ? <DashboardSkeleton /> : null}
-          {status === "error" && error !== null ? (
-            <ErrorState error={error} onRetry={retry} />
-          ) : null}
-          {status === "success" && data !== null ? <DashboardContent dashboard={data} /> : null}
-        </section>
-      </div>
+      <section className={styles.dashboard}>
+        <DashboardHeader />
+        {status === "loading" ? <DashboardSkeleton /> : null}
+        {status === "error" && error !== null ? <ErrorState error={error} onRetry={retry} /> : null}
+        {status === "success" && data !== null ? <DashboardContent dashboard={data} /> : null}
+      </section>
     </main>
   );
 }

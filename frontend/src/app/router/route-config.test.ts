@@ -18,6 +18,14 @@ describe("app route configuration", () => {
     expect(homeRoute?.Component).toBeDefined();
   });
 
+  it("registers /library as a protected route", () => {
+    const libraryRoute = appRoutes.find(({ path }) => path === "/library");
+
+    expect(libraryRoute).toBeDefined();
+    expect(libraryRoute?.access).toBe("protected");
+    expect(libraryRoute?.Component).toBeDefined();
+  });
+
   it("renders unmatched routes as a public 404 page", () => {
     const fallbackRoute = appRoutes.find(({ path }) => path === "*");
 

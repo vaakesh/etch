@@ -21,7 +21,6 @@ class CardSchema(BaseModel):
     updated_at: datetime
 
 class CardCreate(BaseModel):
-    user_id: int
 
     front_text: str = Field(..., max_length=255)
     back_text: str = Field(..., max_length=255)
@@ -38,5 +37,10 @@ class CardUpdate(BaseModel):
     target_lang: str | None = Field(default=None, max_length=10)
 
 
-class CardOut(CardSchema):
-    pass
+class CardOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID
+
+    front_text: str
+    back_text: str

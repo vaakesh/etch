@@ -10,8 +10,8 @@
   --teal-soft: #dcebe7;
   --motion-spring: cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
   color: var(--ink);
@@ -209,6 +209,15 @@
 
 .navigationItem {
   cursor: default;
+}
+
+a.navigationItem {
+  cursor: pointer;
+}
+
+a.navigationItem:hover {
+  background: var(--surface-muted);
+  border-color: var(--line);
 }
 
 .navigationItemActive {
@@ -580,9 +589,8 @@
 .deckBody {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(72px, 0.82fr) minmax(86px, 1.18fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
-  gap: 2px;
   margin-top: 2px;
 }
 
@@ -733,13 +741,6 @@
 
 .deckAccuracyGreen {
   border-color: #4f8964;
-}
-
-.deckIllustration {
-  display: block;
-  width: 100%;
-  max-height: 132px;
-  align-self: end;
 }
 
 .startButton {
@@ -1536,20 +1537,12 @@
     border-radius: 14px;
   }
 
-  .deckIllustration {
-    display: none;
-  }
-
   .deckCopy h3 {
     font-size: 0.78rem;
   }
 
   .deckCopy p {
     display: none;
-  }
-
-  .deckBody {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .deckStats {
@@ -1704,10 +1697,6 @@
 
   .deckStats {
     gap: 6px;
-  }
-
-  .deckIllustration {
-    max-height: 92px;
   }
 
   .startButton {

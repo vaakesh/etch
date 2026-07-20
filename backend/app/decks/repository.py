@@ -1,7 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.cards.models import Card
 
 from .models import Deck, DeckCard, UserDeck
 
@@ -33,6 +36,32 @@ class DeckRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_page_by_user_id(
+        self,
+        user_id: int,
+        limit: int = 16,
+        cursor: tuple[datetime, int] | None = None,
+    ) -> tuple[list[Deck], bool]:
+        stmt = select(Deck).where(Deck.user_id == user_id)
+
+        if cursor is not None:
+            cursor_updated_at, cursor_id = cursor
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    ),
+                )
+            )
+
+        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc()).limit(limit + 1)
+        result = await self.session.execute(stmt)
+        decks = list(result.scalars().all())
+        has_more = len(decks) > limit
+        return decks[:limit], has_more
     
     async def get_user_statistics_by_decks(
             self,
@@ -108,19 +137,47 @@ class DeckCardRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-    async def get_all_by_card_id(
+    
+    async def get_all_by_deck_ids(
         self,
-        card_id: int,
+        deck_ids: list[int],
         limit: int = 100,
-    ) -> list[DeckCard]:
+    ) -> list[tuple[int, Card]]:
+        if not deck_ids or limit <= 0:
+            return []
+        
+        ranked_deck_cards = (
+            select(
+                DeckCard.deck_id.label("deck_id"),
+                DeckCard.card_id.label("card_id"),
+                DeckCard.position.label("position"),
+                DeckCard.id.label("deck_card_id"),
+                func.row_number()
+                .over(
+                    partition_by=DeckCard.deck_id,
+                    order_by=(
+                        DeckCard.position.asc(),
+                        DeckCard.id.asc(),
+                    ),
+                )
+                .label("row_number"),
+            )
+            .where(DeckCard.deck_id.in_(deck_ids))
+            .subquery()
+        )
+
         stmt = (
-            select(DeckCard)
-            .where(DeckCard.card_id == card_id)
-            .limit(limit)
+            select(ranked_deck_cards.c.deck_id, Card)
+            .join(Card, Card.id == ranked_deck_cards.c.card_id)
+            .where(ranked_deck_cards.c.row_number <= limit)
+            .order_by(
+                ranked_deck_cards.c.deck_id.asc(),
+                ranked_deck_cards.c.position.asc(),
+                ranked_deck_cards.c.deck_card_id.asc(),
+            )
         )
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        return list(result.all())
 
     def add(self, deck_card: DeckCard) -> None:
         self.session.add(deck_card)
