@@ -1,5 +1,11 @@
 import { ApiError } from "../../../api";
-import type { LibraryDeck, LibraryDeckPage, LibraryPreviewCard } from "./library-types";
+import type {
+  FavouriteLibraryDeck,
+  FavouriteLibraryDeckPage,
+  LibraryDeck,
+  LibraryDeckPage,
+  LibraryPreviewCard,
+} from "./library-types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -33,6 +39,14 @@ function readNullableString(value: unknown, path: string): string | null {
   }
 
   return readString(value, path);
+}
+
+function readOptionalNullableString(value: unknown, path: string): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return readNullableString(value, path);
 }
 
 function readBoolean(value: unknown, path: string): boolean {
@@ -69,6 +83,14 @@ function readNullableDateTime(value: unknown, path: string): string | null {
   }
 
   return dateTime;
+}
+
+function readOptionalNullableDateTime(value: unknown, path: string): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return readNullableDateTime(value, path);
 }
 
 function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
@@ -115,6 +137,41 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   };
 }
 
+function parseFavouriteDeck(value: unknown, index: number): FavouriteLibraryDeck {
+  const path = `decks[${index}]`;
+  const deck = readRecord(value, path);
+  const description = readOptionalNullableString(deck.description, `${path}.description`);
+  const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
+  const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
+  const updatedAt = readOptionalNullableDateTime(deck.updated_at, `${path}.updated_at`);
+
+  if (!Array.isArray(deck.cards)) {
+    return invalidLibraryResponse(`${path}.cards`);
+  }
+
+  if (totalWordsCount < 0) {
+    return invalidLibraryResponse(`${path}.words_count`);
+  }
+  if (accuracy < 0 || accuracy > 100) {
+    return invalidLibraryResponse(`${path}.user_accuracy`);
+  }
+
+  return {
+    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
+    ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
+    title: readString(deck.title, `${path}.title`),
+    ...(description === undefined ? {} : { description }),
+    totalWordsCount,
+    accuracy,
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+    isFavourite: readBoolean(deck.is_favourite, `${path}.is_favourite`),
+    isFollowing: readBoolean(deck.is_following, `${path}.is_following`),
+    cards: deck.cards.map((card, cardIndex) =>
+      parsePreviewCard(card, `${path}.cards[${cardIndex}]`),
+    ),
+  };
+}
+
 export function parseLibraryDeckPage(value: unknown): LibraryDeckPage {
   const page = readRecord(value, "library");
 
@@ -134,6 +191,30 @@ export function parseLibraryDeckPage(value: unknown): LibraryDeckPage {
 
   return {
     decks: page.decks.map(parseDeck),
+    nextCursor,
+    hasMore,
+  };
+}
+
+export function parseFavouriteLibraryDeckPage(value: unknown): FavouriteLibraryDeckPage {
+  const page = readRecord(value, "favouriteLibrary");
+
+  if (!Array.isArray(page.decks)) {
+    return invalidLibraryResponse("decks");
+  }
+
+  const nextCursor = readNullableString(page.next_cursor, "next_cursor");
+  const hasMore = readBoolean(page.has_more, "has_more");
+
+  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
+    return invalidLibraryResponse("next_cursor");
+  }
+  if (!hasMore && nextCursor !== null) {
+    return invalidLibraryResponse("next_cursor");
+  }
+
+  return {
+    decks: page.decks.map(parseFavouriteDeck),
     nextCursor,
     hasMore,
   };

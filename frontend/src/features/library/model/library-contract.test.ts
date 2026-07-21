@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
-import { parseLibraryDeckPage } from "./library-contract";
+import { parseFavouriteLibraryDeckPage, parseLibraryDeckPage } from "./library-contract";
 
 const VALID_RESPONSE = {
   decks: [
@@ -27,6 +27,31 @@ const VALID_RESPONSE = {
     },
   ],
   next_cursor: "cursor-2",
+  has_more: true,
+};
+
+const VALID_FAVOURITE_RESPONSE = {
+  decks: [
+    {
+      deck_uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+      owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+      title: "Daily Words",
+      description: null,
+      words_count: 48,
+      user_accuracy: 91,
+      updated_at: "2026-07-17T10:30:00Z",
+      is_favourite: true,
+      is_following: false,
+      cards: [
+        {
+          uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+          front_text: "hello",
+          back_text: "привет",
+        },
+      ],
+    },
+  ],
+  next_cursor: "favourite-cursor-2",
   has_more: true,
 };
 
@@ -111,4 +136,89 @@ describe("parseLibraryDeckPage", () => {
       parseLibraryDeckPage({ ...VALID_RESPONSE, next_cursor: "cursor-2", has_more: false }),
     ).toThrow();
   });
+});
+
+describe("parseFavouriteLibraryDeckPage", () => {
+  it("maps the public DeckWithUserData UUIDs and accuracy", () => {
+    expect(parseFavouriteLibraryDeckPage(VALID_FAVOURITE_RESPONSE)).toEqual({
+      decks: [
+        {
+          uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+          ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+          title: "Daily Words",
+          description: null,
+          totalWordsCount: 48,
+          accuracy: 91,
+          updatedAt: "2026-07-17T10:30:00Z",
+          isFavourite: true,
+          isFollowing: false,
+          cards: [
+            {
+              uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+              frontText: "hello",
+              backText: "привет",
+            },
+          ],
+        },
+      ],
+      nextCursor: "favourite-cursor-2",
+      hasMore: true,
+    });
+  });
+
+  it("accepts omitted optional nullable fields", () => {
+    const deck: Partial<(typeof VALID_FAVOURITE_RESPONSE.decks)[number]> = {
+      ...VALID_FAVOURITE_RESPONSE.decks[0],
+    };
+    delete deck.description;
+    delete deck.updated_at;
+
+    expect(
+      parseFavouriteLibraryDeckPage({
+        decks: [deck],
+        next_cursor: null,
+        has_more: false,
+      }),
+    ).toEqual({
+      decks: [
+        {
+          uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+          ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+          title: "Daily Words",
+          totalWordsCount: 48,
+          accuracy: 91,
+          isFavourite: true,
+          isFollowing: false,
+          cards: [
+            {
+              uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+              frontText: "hello",
+              backText: "привет",
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+  });
+
+  it.each(["deck_uuid", "owner_uuid"] as const)(
+    "rejects a malformed %s with the library contract code",
+    (field) => {
+      try {
+        parseFavouriteLibraryDeckPage({
+          ...VALID_FAVOURITE_RESPONSE,
+          decks: [{ ...VALID_FAVOURITE_RESPONSE.decks[0], [field]: "not-a-uuid" }],
+        });
+        expect.fail("Expected parseFavouriteLibraryDeckPage to throw.");
+      } catch (error) {
+        expect(isApiError(error)).toBe(true);
+        if (isApiError(error)) {
+          expect(error.code).toBe("INVALID_LIBRARY_RESPONSE");
+          expect(error.status).toBe(0);
+        }
+      }
+    },
+  );
 });

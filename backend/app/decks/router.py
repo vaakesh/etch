@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.auth.deps import get_current_user
 from app.users.models import User
 
-from .deps import get_deck_service
+from .deps import get_deck_service, get_user_deck_service
 from .schemas import (
     DeckCardAdd,
     DeckCardSchema,
@@ -14,8 +14,9 @@ from .schemas import (
     DeckOut,
     DeckSchema,
     DeckUpdate,
+    UserDeckSchema,
 )
-from .service import DeckService
+from .service import DeckService, UserDeckService
 
 
 router = APIRouter(prefix="/decks")
@@ -35,6 +36,20 @@ async def get_public_decks_by_limit(
     deck_service: DeckService = Depends(get_deck_service),
 ):
     return await deck_service.get_public_decks_by_limit(limit)
+
+@router.get(
+    "/followed",
+)
+async def get_followed_decks_by_user(
+    limit: int = Query(default=10),
+    current_user: User = Depends(get_current_user),
+    user_deck_service: UserDeckService = Depends(get_user_deck_service),
+) -> list[UserDeckSchema]:
+    user_decks = await user_deck_service.get_followed_decks_by_user_id(
+        user_id=current_user.id,
+        limit=limit,
+    )
+    return user_decks
 
 
 @router.get("/{deck_uuid}", response_model=DeckSchema)
@@ -133,3 +148,52 @@ async def remove_card_from_deck(
         card_uuid=card_uuid,
     )
     return None
+
+
+@router.patch(
+    "/{deck_uuid}/set-favourite",
+    response_model=UserDeckSchema,
+)
+async def set_favourite(
+    deck_uuid: UUID,
+    value: bool = Query(),
+    current_user: User = Depends(get_current_user),
+    user_deck_service: UserDeckService = Depends(get_user_deck_service),
+):
+    user_deck = await user_deck_service.set_favourite_deck(
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        value=value,
+    )
+    return user_deck
+
+
+@router.post(
+    "/{deck_uuid}/follow",
+    response_model=UserDeckSchema,
+)
+async def follow_deck(
+    deck_uuid: UUID,
+    current_user: User = Depends(get_current_user),
+    user_deck_service: UserDeckService = Depends(get_user_deck_service),
+):
+    user_deck = await user_deck_service.follow_deck(
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+    )
+    return user_deck
+
+@router.post(
+    "/{deck_uuid}/unfollow",
+    response_model=UserDeckSchema,
+)
+async def unfollow_deck(
+    deck_uuid: UUID,
+    current_user: User = Depends(get_current_user),
+    user_deck_service: UserDeckService = Depends(get_user_deck_service),
+):
+    user_deck = await user_deck_service.unfollow_deck(
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+    )
+    return user_deck

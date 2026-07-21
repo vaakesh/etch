@@ -1,7 +1,7 @@
-import { useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { isApiError } from "../../api";
 import { DashboardIcon } from "../../components/DashboardVisuals";
-import type { LibraryDeck } from "../../features/library/model/library-types";
+import type { LibraryDeckItem } from "../../features/library/model/library-types";
 import { useLibraryDecks } from "../../features/library/model/useLibraryDecks";
 import styles from "./LibraryPage.module.css";
 
@@ -40,6 +40,19 @@ function getLibraryErrorMessage(error: unknown): string {
   }
 
   return "Не удалось загрузить библиотеку. Попробуйте ещё раз.";
+}
+
+function getFavouriteErrorMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.status === 403) {
+      return "Нет доступа к изменению этой колоды.";
+    }
+    if (error.status === 404) {
+      return "Колода больше не найдена.";
+    }
+  }
+
+  return "Не удалось изменить избранное. Попробуйте ещё раз.";
 }
 
 function Glyph({ name }: { name: "heart" | "pencil" | "play" | "sparkles" }) {
@@ -109,40 +122,84 @@ function getAccuracyTone(value: number): "green" | "yellow" | "orange" | "red" {
 
 function AccuracyStat({ value }: { value: number }) {
   const tone = getAccuracyTone(value);
+  const tooltipId = useId();
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const hintClassName = isTooltipOpen
+    ? `${styles.accuracyHint} ${styles.accuracyHintOpen}`
+    : styles.accuracyHint;
 
   return (
-    <div
-      aria-label={`Точность ${value}%`}
-      aria-valuemax={100}
-      aria-valuemin={0}
-      aria-valuenow={value}
-      className={`${styles.accuracy} ${styles[`accuracy${tone}`]}`}
-      role="meter"
-    >
-      <span aria-hidden="true" className={styles.accuracyIcon}>
-        <DashboardIcon name="target" />
+    <span className={hintClassName}>
+      <span
+        aria-describedby={tooltipId}
+        aria-label="Точность колоды"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={value}
+        aria-valuetext={`${value}%`}
+        className={`${styles.accuracy} ${styles[`accuracy${tone}`]}`}
+        onBlur={() => setIsTooltipOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setIsTooltipOpen(false);
+            event.currentTarget.blur();
+          } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        onPointerDown={(event) => {
+          if (event.button === 0) {
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        role="meter"
+        tabIndex={0}
+      >
+        {value}
       </span>
-      <span className={styles.accuracyLabel}>Точность пользователя:</span>
-      <strong>{value}%</strong>
-    </div>
+      <span className={styles.accuracyTooltip} id={tooltipId} role="tooltip">
+        <strong>Точность колоды</strong>
+        <span>Правильных ответов — {value}%</span>
+      </span>
+    </span>
   );
 }
 
-function DeckCard({ deck }: { deck: LibraryDeck }) {
+interface DeckCardProps {
+  deck: LibraryDeckItem;
+  favouriteError: unknown | null;
+  isFavouriteUpdating: boolean;
+  onFavouriteChange: (deckUuid: string, value: boolean) => void;
+}
+
+function DeckCard({ deck, favouriteError, isFavouriteUpdating, onFavouriteChange }: DeckCardProps) {
   const previewCards = deck.cards.slice(0, 2);
+  const favouriteErrorId = `favourite-error-${deck.uuid}`;
+  const favouriteAction = deck.isFavourite ? "Удалить из избранного" : "Добавить в избранное";
 
   return (
     <article className={styles.deckCard} data-deck-uuid={deck.uuid}>
       <div className={styles.deckTopline}>
         <AccuracyStat value={deck.accuracy} />
-        <span
-          aria-label={deck.isFavourite ? "В избранном" : "Не в избранном"}
+        <button
+          aria-describedby={favouriteError === null ? undefined : favouriteErrorId}
+          aria-label={`${favouriteAction}: «${deck.title}»`}
+          aria-pressed={deck.isFavourite}
           className={deck.isFavourite ? styles.favouriteActive : styles.favourite}
-          title={deck.isFavourite ? "В избранном" : "Не в избранном"}
+          disabled={isFavouriteUpdating}
+          onClick={() => onFavouriteChange(deck.uuid, !deck.isFavourite)}
+          title={isFavouriteUpdating ? "Сохраняем…" : favouriteAction}
+          type="button"
         >
           <Glyph name="heart" />
-        </span>
+        </button>
       </div>
+      {favouriteError === null ? null : (
+        <p className={styles.favouriteError} id={favouriteErrorId} role="alert">
+          {getFavouriteErrorMessage(favouriteError)}
+        </p>
+      )}
 
       <div className={styles.deckHero}>
         <div className={styles.deckCopy}>
@@ -209,7 +266,9 @@ function DeckCard({ deck }: { deck: LibraryDeck }) {
         <span>
           <DashboardIcon name="clock" />
           <span>Последнее обновление: </span>
-          <time dateTime={deck.updatedAt ?? undefined}>{formatUpdatedAt(deck.updatedAt)}</time>
+          <time dateTime={deck.updatedAt ?? undefined}>
+            {formatUpdatedAt(deck.updatedAt ?? null)}
+          </time>
         </span>
       </footer>
     </article>
@@ -335,18 +394,36 @@ export function LibraryPage() {
 
         <div className={styles.toolbar}>
           <LibraryTabs activeView={activeView} onChange={setActiveView} />
-          {activeView === "decks" && library.status === "success" ? (
-            <div aria-live="polite" className={styles.summary}>
-              <Glyph name="sparkles" />
-              <span>
-                <strong>{library.decks.length}</strong> колод загружено
-              </span>
+          {activeView === "decks" ? (
+            <div className={styles.toolbarDetails}>
+              <button
+                aria-controls="library-decks-panel"
+                aria-pressed={library.onlyFavourites}
+                className={
+                  library.onlyFavourites ? styles.favouritesFilterActive : styles.favouritesFilter
+                }
+                onClick={() => library.setOnlyFavourites(!library.onlyFavourites)}
+                type="button"
+              >
+                <Glyph name="heart" />
+                <span>Только любимые</span>
+              </button>
+              {library.status === "success" ? (
+                <div aria-live="polite" className={styles.summary}>
+                  <Glyph name="sparkles" />
+                  <span>
+                    <strong>{library.decks.length}</strong>{" "}
+                    {library.onlyFavourites ? "любимых колод" : "колод"} загружено
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
 
         <section
           aria-labelledby="library-decks-tab"
+          aria-busy={library.status === "loading" || library.isLoadingMore}
           className={styles.libraryPanel}
           hidden={activeView !== "decks"}
           id="library-decks-panel"
@@ -358,20 +435,34 @@ export function LibraryPage() {
               actionLabel="Попробовать снова"
               description={getLibraryErrorMessage(library.error)}
               onAction={library.retry}
-              title="Библиотека не загрузилась"
+              title={
+                library.onlyFavourites
+                  ? "Любимые колоды не загрузились"
+                  : "Библиотека не загрузилась"
+              }
             />
           ) : null}
-          {library.status === "success" && library.decks.length === 0 ? (
+          {library.status === "success" && library.decks.length === 0 && !library.hasMore ? (
             <StateMessage
-              description="Когда у вас появятся колоды, они соберутся здесь."
-              title="В библиотеке пока пусто"
+              description={
+                library.onlyFavourites
+                  ? "Добавьте колоды в любимые, и они появятся здесь."
+                  : "Когда у вас появятся колоды, они соберутся здесь."
+              }
+              title={library.onlyFavourites ? "Любимых колод пока нет" : "В библиотеке пока пусто"}
             />
           ) : null}
-          {library.status === "success" && library.decks.length > 0 ? (
+          {library.status === "success" && (library.decks.length > 0 || library.hasMore) ? (
             <>
               <div className={styles.decksGrid}>
                 {library.decks.map((deck) => (
-                  <DeckCard deck={deck} key={deck.uuid} />
+                  <DeckCard
+                    deck={deck}
+                    favouriteError={library.favouriteErrors[deck.uuid] ?? null}
+                    isFavouriteUpdating={library.favouriteUpdatingDeckUuids.includes(deck.uuid)}
+                    key={deck.uuid}
+                    onFavouriteChange={library.setFavourite}
+                  />
                 ))}
               </div>
               {library.loadMoreError ? (

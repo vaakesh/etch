@@ -440,6 +440,61 @@ a.navigationItem:hover {
   transform: scale(0.97);
 }
 
+.toolbarDetails {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.favouritesFilter,
+.favouritesFilterActive {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: #68716e;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid #e2d9cd;
+  border-radius: 14px;
+  box-shadow: 0 5px 14px rgb(81 69 51 / 5%);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.favouritesFilter svg,
+.favouritesFilterActive svg {
+  width: 18px;
+  height: 18px;
+  fill: transparent;
+  transition: fill 180ms ease;
+}
+
+.favouritesFilter:hover,
+.favouritesFilterActive {
+  color: #c55f49;
+  background: #fff6f1;
+  border-color: #efc7b9;
+  box-shadow: 0 7px 17px rgb(197 95 73 / 10%);
+}
+
+.favouritesFilter:hover {
+  transform: translateY(-1px);
+}
+
+.favouritesFilterActive svg {
+  fill: currentcolor;
+}
+
 .summary {
   display: inline-flex;
   align-items: center;
@@ -553,8 +608,17 @@ a.navigationItem:hover {
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
+  padding: 0;
   place-items: center;
   color: #87908d;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
 }
 
 .favourite svg,
@@ -570,6 +634,33 @@ a.navigationItem:hover {
 
 .favouriteActive svg {
   fill: currentcolor;
+}
+
+.favourite:hover:not(:disabled),
+.favouriteActive:hover:not(:disabled) {
+  color: #d86f56;
+  background: rgb(216 111 86 / 10%);
+  transform: scale(1.08);
+}
+
+.favourite:focus-visible,
+.favouriteActive:focus-visible {
+  outline: 3px solid rgb(216 111 86 / 24%);
+  outline-offset: 2px;
+}
+
+.favourite:disabled,
+.favouriteActive:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.favouriteError {
+  margin: -4px 0 4px;
+  color: #a34837;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .deckHero {
@@ -603,56 +694,105 @@ a.navigationItem:hover {
   -webkit-line-clamp: 2;
 }
 
-.accuracy {
-  --accuracy-color: #6e7a76;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 0.68rem;
-}
-
-.accuracyIcon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
+.accuracyHint {
+  display: inline-grid;
+  width: 36px;
   place-items: center;
-  color: var(--accuracy-color);
-  background: color-mix(in srgb, var(--accuracy-color) 12%, transparent);
-  border-radius: 10px;
 }
 
-.accuracyIcon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.accuracyLabel {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.accuracy strong {
-  color: var(--accuracy-color);
-  font-size: 0.75rem;
+.accuracy {
+  display: inline-grid;
+  width: 36px;
+  aspect-ratio: 1;
+  place-items: center;
+  color: var(--ink);
+  cursor: pointer;
+  background: var(--surface-muted);
+  border: 2.5px solid var(--line);
+  border-radius: 50%;
+  outline: none;
+  font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
+
+.accuracy:focus-visible {
+  box-shadow: 0 0 0 4px rgb(77 152 146 / 10%);
+  outline: 2px solid rgb(77 152 146 / 34%);
+  outline-offset: 3px;
+  transform: translateY(-1px);
+}
+
+.accuracyTooltip {
+  position: absolute;
+  z-index: 5;
+  top: 61px;
+  right: 18px;
+  left: 18px;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  color: #f8fcfb;
+  cursor: default;
+  visibility: hidden;
+  background: linear-gradient(145deg, #284447, #1c3437);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 13px;
+  box-shadow:
+    0 14px 30px rgb(24 49 52 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 9%);
+  opacity: 0;
+  transform: translateY(-5px) scale(0.98);
+  transform-origin: top left;
+}
+
+.accuracyTooltip::before {
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  content: "";
+  background: #284447;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  border-left: 1px solid rgb(255 255 255 / 12%);
+  transform: rotate(45deg);
+}
+
+.accuracyTooltip strong {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.accuracyTooltip span {
+  color: rgb(235 245 243 / 78%);
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.accuracyHintOpen .accuracyTooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
 .accuracygreen {
-  --accuracy-color: var(--teal-dark);
+  border-color: #4f8964;
 }
 .accuracyyellow {
-  --accuracy-color: #987a2e;
+  border-color: #a88b2f;
 }
 .accuracyorange {
-  --accuracy-color: #c9754f;
+  border-color: #c77941;
 }
 .accuracyred {
-  --accuracy-color: #b85d59;
+  border-color: #bd625d;
 }
 
 .deckPreview {
@@ -1157,8 +1297,13 @@ a.navigationItem:hover {
   .librarySwitch {
     width: 100%;
   }
+  .toolbarDetails {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
   .summary {
-    justify-self: end;
+    margin-left: auto;
   }
   .decksGrid {
     grid-template-columns: 1fr;
@@ -1195,9 +1340,6 @@ a.navigationItem:hover {
 }
 
 @media (max-width: 420px) {
-  .accuracyLabel {
-    display: none;
-  }
   .deckHero {
     min-height: auto;
     grid-template-columns: 1fr;

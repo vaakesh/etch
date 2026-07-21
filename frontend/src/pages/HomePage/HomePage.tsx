@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Link } from "react-router-dom";
 import { isApiError } from "../../api";
 import {
   DashboardIcon,
@@ -183,10 +184,10 @@ function DecksSection({ decks }: { decks: readonly HomeDeck[] }) {
       <div className={styles.sectionHeading}>
         <h2 id="decks-heading">Ваши колоды</h2>
         {decks.length > 0 ? (
-          <span aria-hidden="true" className={styles.sectionAction}>
+          <Link className={styles.sectionAction} to="/library">
             Все колоды
             <DashboardIcon name="chevron" />
-          </span>
+          </Link>
         ) : null}
       </div>
 

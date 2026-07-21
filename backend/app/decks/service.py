@@ -7,12 +7,14 @@ from app.cards.errors import CardNotFoundError
 from app.service import UnitOfWork
 
 from .errors import (
+    CannotFollowOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
+    DeckIsNotFollowedError,
     DeckNotFoundError,
 )
-from .models import Deck, DeckCard
+from .models import Deck, DeckCard, UserDeck
 from .schemas import (
     DeckCardAdd,
     DeckCardSchema,
@@ -244,3 +246,89 @@ class DeckService:
             await uow.commit()
 
             return None
+        
+
+class UserDeckService:
+    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+        self.uow_factory = uow_factory
+
+    async def unfollow_deck(
+            self,
+            user_id: int,
+            deck_uuid: UUID,
+    ) -> UserDeck:
+        async with self.uow_factory() as uow:
+            deck = await uow.deck_repo.get_by_uuid_and_is_public(deck_uuid=deck_uuid)
+            if deck.user_id == user_id:
+                raise CannotFollowOwnDeckError()
+            if deck is None or not deck.is_public:
+                raise DeckNotFoundError()
+            
+            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
+                user_id=user_id,
+                deck_id=deck.id,
+            )
+            if user_deck is None:
+                raise DeckIsNotFollowedError()
+            else:
+                user_deck.is_following = False
+            await uow.commit()
+            return user_deck
+
+    async def follow_deck(
+            self,
+            user_id: int,
+            deck_uuid: UUID,
+    ) -> UserDeck:
+        async with self.uow_factory() as uow:
+            deck = await uow.deck_repo.get_by_uuid(deck_uuid=deck_uuid)
+            if deck.user_id == user_id:
+                raise CannotFollowOwnDeckError()
+            if deck is None or not deck.is_public:
+                raise DeckNotFoundError()
+            
+            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
+                user_id=user_id,
+                deck_id=deck.id,
+            )
+            if user_deck is None:
+                user_deck = UserDeck(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                    last_seen_version=deck.version,
+                    is_following=True,
+                )
+                uow.user_deck_repo.add(user_deck)
+            else:
+                user_deck.is_following = True
+            await uow.commit()
+            return user_deck
+        
+    async def get_followed_decks_by_user_id(
+            self,
+            user_id: int,
+            limit: int = 10,
+    ) -> list[UserDeck]:
+        async with self.uow_factory() as uow:
+            user_decks = await uow.user_deck_repo.get_followed_decks_by_user_id(
+                user_id=user_id,
+                limit=limit,
+            )
+            return user_decks
+        
+
+    async def set_favourite_deck(
+            self,
+            user_id: int,
+            deck_uuid: UUID,
+            value: bool,
+    ):
+        async with self.uow_factory() as uow:
+            deck = await uow.deck_repo.get_by_uuid(deck_uuid=deck_uuid)
+            user_deck = await uow.user_deck_repo.set_favourite(
+                user_id=user_id,
+                deck_id=deck.id,
+                value=value
+            )
+            await uow.commit()
+            return user_deck

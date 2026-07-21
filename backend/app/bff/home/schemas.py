@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.cards.schemas import CardOut
+from app.decks.schemas import DeckWithUserData, DeckWithUserDataInternal
 
 
 class DeckDashboard(BaseModel):
@@ -62,5 +63,12 @@ class DeckPageData(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     decks: list[DeckForDeckPage]
+    next_cursor: str | None
+    has_more: bool
+
+class DeckPageFavouritesDecks(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    decks: list[DeckWithUserData]
     next_cursor: str | None
     has_more: bool

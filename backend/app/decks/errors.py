@@ -21,3 +21,13 @@ class DeckCardAlreadyExistsError(Exception):
 class PermissionDeniedError(Exception):
     def __init__(self, message: str = "Permission denied"):
         super().__init__(message)
+
+
+class DeckIsNotFollowedError(Exception):
+    def __init__(self, message: str = "Deck is not followed"):
+        super().__init__(message)
+
+
+class CannotFollowOwnDeckError(Exception):
+    def __init__(self, message: str = "Your own deck can't be followed"):
+        super().__init__(message)

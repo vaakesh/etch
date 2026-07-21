@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database import Base
@@ -26,10 +26,23 @@ class Deck(Base):
         index=True,
     )
 
+    source_deck_id: Mapped[int | None] = mapped_column(
+        ForeignKey("decks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     title: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     words_count: Mapped[int] = mapped_column(Integer, default=0)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    version: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default=text("1"),
+        nullable=False,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -116,3 +129,18 @@ class UserDeck(Base):
         nullable=True,
     )
     is_favourite: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_following: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        server_default=text("false"),
+    )
+
+    last_seen_version: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

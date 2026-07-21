@@ -1,10 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cards.models import Card
+from app.decks.schemas import DeckWithUserDataInternal
+from app.users.models import User
+from app.bff.utils import calculate_accuracy
 
 from .models import Deck, DeckCard, UserDeck
 
@@ -15,6 +18,17 @@ class DeckRepository:
 
     async def get_by_uuid(self, deck_uuid: UUID) -> Deck | None:
         stmt = select(Deck).where(Deck.uuid == deck_uuid)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def get_by_uuid_and_is_public(self, deck_uuid: UUID) -> Deck | None:
+        stmt = (
+            select(Deck)
+            .where(
+                Deck.uuid == deck_uuid,
+                Deck.is_public == True,    
+            )
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -187,3 +201,131 @@ class DeckCardRepository:
 
     async def refresh(self, deck_card: DeckCard) -> None:
         await self.session.refresh(deck_card)
+
+
+class UserDeckRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get_favourite_decks_by_user_id(
+            self,
+            user_id: int,
+            limit: int = 16,
+            cursor: tuple[datetime, int] | None = None
+    ) -> tuple[list[DeckWithUserDataInternal], bool]:
+        stmt = (
+            select(UserDeck, Deck, User)
+            .join(Deck, UserDeck.deck_id == Deck.id)
+            .join(User, User.id == Deck.user_id)
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.is_favourite.is_(True),
+            )
+        )
+
+        if cursor is not None:
+            cursor_updated_at, cursor_id = cursor
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    ),
+                )
+            )
+
+        stmt = stmt.order_by(
+            Deck.updated_at.desc(),
+            Deck.id.desc(),
+        ).limit(limit + 1)
+        result = await self.session.execute(stmt)
+        rows = list(result.all())
+        has_more = len(rows) > limit
+        
+        decks_with_user_data = []
+        for user_deck, deck, owner_deck in rows[:limit]:
+            decks_with_user_data.append(
+                DeckWithUserDataInternal(
+                    deck_id=deck.id,
+                    deck_uuid=deck.uuid,
+                    owner_id=deck.user_id,
+                    owner_uuid=owner_deck.uuid,
+                    user_id=user_deck.user_id,
+                    title=deck.title,
+                    description=deck.description,
+                    words_count=deck.words_count,
+                    updated_at=deck.updated_at,
+                    is_favourite=user_deck.is_favourite,
+                    is_following=user_deck.is_following,
+                    user_accuracy=calculate_accuracy(user_deck),
+                    cards=[],
+                )
+            )
+
+        return decks_with_user_data[:limit], has_more
+
+    async def get_followed_decks_by_user_id(
+            self,
+            user_id: int,
+            limit: int,
+    ) -> list[UserDeck]:
+        stmt = (
+            select(UserDeck)
+            .join(Deck, UserDeck.deck_id == Deck.id)
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.is_following.is_(True),
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_by_user_id_and_deck_id(
+            self,
+            user_id: int,
+            deck_id: int,
+    ) -> UserDeck | None:
+        stmt = (
+            select(UserDeck)
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.deck_id == deck_id,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def set_favourite(
+            self,
+            user_id: int,
+            deck_id: int,
+            value: bool,
+    ) -> UserDeck:
+        stmt = (
+            select(UserDeck)
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.deck_id == deck_id,
+            )
+            .with_for_update()
+        )
+        result = await self.session.execute(stmt)
+        user_deck = result.scalar_one_or_none()
+
+        if user_deck is None:
+            user_deck = UserDeck(
+                user_id=user_id,
+                deck_id=deck_id,
+                is_favourite=value,
+            )
+            self.add(user_deck=user_deck)
+        else:
+            user_deck.is_favourite = value
+
+        await self.session.flush()
+        
+        return user_deck
+    
+    def add(self, user_deck: UserDeck):
+        self.session.add(user_deck)

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const { retryMock } = vi.hoisted(() => ({ retryMock: vi.fn() }));
@@ -48,7 +49,11 @@ import { HomePage } from "./HomePage";
 
 describe("HomePage", () => {
   it("renders BFF dashboard content without duplicating the app navigation", () => {
-    const markup = renderToStaticMarkup(<HomePage />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
     const accuracyTooltipIds = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map(
       ([, id]) => id,
     );
@@ -56,6 +61,7 @@ describe("HomePage", () => {
     expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).toContain('href="/library"');
     expect(markup).not.toContain('viewBox="0 0 160 140"');
     expect(markup.match(/role="meter"/g)).toHaveLength(2);
     expect(markup).toContain('aria-valuenow="72"');

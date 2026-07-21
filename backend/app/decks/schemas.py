@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.cards.schemas import CardOut
+
 
 class DeckSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -11,10 +13,13 @@ class DeckSchema(BaseModel):
     uuid: UUID | None = None
     user_id: int | None = None
 
+    source_deck_id: int | None = None
+
     title: str = Field(..., max_length=150)
     description: str | None = None
     words_count: int
     is_public: bool = False
+    version: int
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -69,12 +74,54 @@ class DeckCardOut(DeckCardSchema):
     pass
 
 
-class UserDeck(BaseModel):
+class UserDeckSchema(BaseModel):
     user_id: int
     deck_id: int
 
     sessions_count: int
     correct_count: int
     wrong_count: int
-    last_studied_at: datetime
+    last_studied_at: datetime | None
     is_favourite: bool
+    is_following: bool
+
+    last_seen_version: int | None
+    added_at: datetime
+
+
+class DeckWithUserDataInternal(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    deck_id: int
+    deck_uuid: UUID
+    owner_id: int
+    owner_uuid: UUID
+    user_id: int
+
+    title: str
+    description: str | None = None
+    words_count: int
+    updated_at: datetime | None = None
+
+    user_accuracy: int
+    is_favourite: bool
+    is_following: bool
+
+    cards: list[CardOut]
+
+class DeckWithUserData(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    deck_uuid: UUID
+    owner_uuid: UUID
+
+    title: str
+    description: str | None = None
+    words_count: int
+    updated_at: datetime | None = None
+
+    user_accuracy: int
+    is_favourite: bool
+    is_following: bool
+
+    cards: list[CardOut]

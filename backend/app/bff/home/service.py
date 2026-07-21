@@ -5,17 +5,12 @@ import base64
 import json
 from datetime import datetime
 from app.service import UnitOfWork
-from app.bff.home.schemas import DeckDashboard, DeckForDeckPage, DeckPageData, HomeDashboard, UserProgress
+from app.bff.home.schemas import DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, UserProgress
 from app.decks.models import UserDeck
 from app.cards.models import Card
+from app.decks.schemas import DeckWithUserData
+from app.bff.utils import calculate_accuracy
 
-
-def calculate_accuracy(user_deck: UserDeck) -> int:
-    if (user_deck is None) or (user_deck.correct_count + user_deck.wrong_count == 0):
-        return 0
-
-    accuracy = int(user_deck.correct_count / (user_deck.correct_count + user_deck.wrong_count) * 100)
-    return accuracy
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
     if user_deck is None:
@@ -98,9 +93,52 @@ class BffService:
             )
             return result
     
+    async def get_favourite_decks_by_user_id(
+            self,
+            user_id:int,
+            cursor: str | None = None,
+    ) -> DeckPageFavouritesDecks:
+        async with self.uow_factory() as uow:
+            decoded_cursor = decode_cursor(cursor) if cursor is not None else None
+
+            decks, has_more = await uow.user_deck_repo.get_favourite_decks_by_user_id(
+                user_id=user_id,
+                limit=16,
+                cursor=decoded_cursor,
+            ) # получаем decks с пустыми cards
+            deck_ids = [deck.deck_id for deck in decks]
+            cards = await uow.deck_card_repo.get_all_by_deck_ids(
+                deck_ids=deck_ids,
+                limit=2,
+            )
+            deck_cards_by_deck_id: dict[int, list[Card]] = defaultdict(list)
+            for deck_id, card in cards:
+                deck_cards_by_deck_id[deck_id].append(card)
+            
+            for deck in decks:
+                deck.cards = deck_cards_by_deck_id[deck.deck_id]
+
+            next_cursor = None
+            if has_more and decks:
+                last_deck = decks[-1]
+                next_cursor = encode_cursor(
+                    updated_at=last_deck.updated_at,
+                    deck_id=last_deck.deck_id,
+                )
+            
+            result = DeckPageFavouritesDecks(
+                decks=[DeckWithUserData.model_validate(deck) for deck in decks],
+                next_cursor=next_cursor,
+                has_more=has_more,
+            )
+            return result
+        
+
+
     async def get_deck_page_data(self, user_id: int, cursor: str | None = None) -> DeckPageData:
         async with self.uow_factory() as uow:
             decoded_cursor = decode_cursor(cursor) if cursor is not None else None
+
             decks, has_more = await uow.deck_repo.get_page_by_user_id(
                 user_id=user_id,
                 limit=20,
