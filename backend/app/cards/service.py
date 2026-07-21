@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.service import UnitOfWork
 
-from app.cards.errors import CardAlreadyExistsError, CardNotFoundError
+from app.cards.errors import CardAlreadyExistsError, CardNotFoundError, PermissionDeniedError
 from .models import Card
 from .schemas import CardCreate, CardSchema, CardUpdate
 
@@ -78,11 +78,14 @@ class CardService:
     async def update_card(
         self,
         card_uuid: UUID,
+        user_id: int,
         payload: CardUpdate,
     ) -> CardSchema:
         try:
             async with self.uow_factory() as uow:
                 card = await self._get_by_uuid(uow, card_uuid)
+                if card.user_id != user_id:
+                    raise PermissionDeniedError()
 
                 update_data = payload.model_dump(exclude_unset=True)
 

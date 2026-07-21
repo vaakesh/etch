@@ -44,3 +44,6 @@ class CardOut(BaseModel):
 
     front_text: str
     back_text: str
+
+    source_lang: str
+    target_lang: str

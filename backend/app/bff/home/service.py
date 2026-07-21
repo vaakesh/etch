@@ -5,7 +5,7 @@ import base64
 import json
 from datetime import datetime
 from app.service import UnitOfWork
-from app.bff.home.schemas import DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, UserProgress
+from app.bff.home.schemas import CardsLibraryPage, DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, ResponseCardsLibraryPage, UserProgress
 from app.decks.models import UserDeck
 from app.cards.models import Card
 from app.decks.schemas import DeckWithUserData
@@ -18,10 +18,10 @@ def get_is_favourite(user_deck: UserDeck) -> bool:
     
     return user_deck.is_favourite
 
-def encode_cursor(updated_at: datetime, deck_id: int) -> str:
+def encode_cursor(updated_at: datetime, entity_id: int) -> str:
     payload = {
         "updated_at": updated_at.isoformat(),
-        "id": deck_id,
+        "id": entity_id,
     }
     raw = json.dumps(payload, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).decode()
@@ -32,15 +32,15 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
         payload = json.loads(raw)
 
         updated_at = datetime.fromisoformat(payload["updated_at"])
-        deck_id = int(payload["id"])
+        entity_id = int(payload["id"])
 
         if updated_at.tzinfo is None:
             raise ValueError("Cursor datetime must include timezone")
 
-        if deck_id <= 0:
+        if entity_id <= 0:
             raise ValueError("Cursor id must be positive")
 
-        return updated_at, deck_id
+        return updated_at, entity_id
     except Exception:
         raise
 
@@ -123,7 +123,7 @@ class BffService:
                 last_deck = decks[-1]
                 next_cursor = encode_cursor(
                     updated_at=last_deck.updated_at,
-                    deck_id=last_deck.deck_id,
+                    entity_id=last_deck.deck_id,
                 )
             
             result = DeckPageFavouritesDecks(
@@ -150,7 +150,7 @@ class BffService:
                 last_deck = decks[-1]
                 next_cursor = encode_cursor(
                     updated_at=last_deck.updated_at,
-                    deck_id=last_deck.id,
+                    entity_id=last_deck.id,
                 )
             
             user_decks = await uow.deck_repo.get_user_statistics_by_decks(
@@ -182,6 +182,36 @@ class BffService:
                     cards=deck_cards_by_deck_id.get(deck.id, []),
                 ) for deck in decks],
                 next_cursor=next_cursor,
+                has_more=has_more,
+            )
+            return result
+        
+    async def get_cards_library_page_by_user_id(
+            self,
+            user_id: int,
+            user_uuid: UUID,
+            cursor: str,
+    ) -> ResponseCardsLibraryPage:
+        async with self.uow_factory() as uow:
+            decoded_cursor = decode_cursor(cursor) if cursor is not None else None
+            cards, has_more = await uow.card_repo.get_cards_library_page(
+                user_id=user_id,
+                user_uuid=user_uuid,
+                cursor=decoded_cursor,
+                limit=50,
+            )
+
+            next_cursor = None
+            if cards and has_more:
+                last_card = cards[-1]
+                next_cursor = encode_cursor(
+                    last_card.updated_at,
+                    last_card.id,
+                )
+            
+            result = ResponseCardsLibraryPage(
+                cards=cards,
+                cursor=next_cursor,
                 has_more=has_more,
             )
             return result

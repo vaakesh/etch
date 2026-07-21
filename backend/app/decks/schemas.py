@@ -37,8 +37,19 @@ class DeckUpdate(BaseModel):
     is_public: bool | None = None
 
 
-class DeckOut(DeckSchema):
-    pass
+class DeckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID | None = None
+
+    title: str = Field(..., max_length=150)
+    description: str | None = None
+    words_count: int
+    is_public: bool = False
+    version: int
+
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 

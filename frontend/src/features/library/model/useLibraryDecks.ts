@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  createLibraryDeck,
   getFavouriteLibraryDeckPage,
   getLibraryDeckPage,
   setLibraryDeckFavourite,
 } from "../api/library-api";
-import type { LibraryDeckItem } from "./library-types";
+import type {
+  CreateLibraryDeckInput,
+  CreatedLibraryDeck,
+  LibraryDeck,
+  LibraryDeckItem,
+} from "./library-types";
 
 export type LibraryDecksStatus = "loading" | "success" | "error";
 
@@ -20,10 +26,11 @@ interface LibraryDecksState {
   favouriteErrors: Readonly<Record<string, unknown>>;
 }
 
-interface UseLibraryDecksResult extends LibraryDecksState {
+export interface UseLibraryDecksResult extends LibraryDecksState {
   onlyFavourites: boolean;
   retry: () => void;
   loadMore: () => void;
+  createDeck: (input: CreateLibraryDeckInput) => Promise<void>;
   setOnlyFavourites: (value: boolean) => void;
   setFavourite: (deckUuid: string, value: boolean) => void;
 }
@@ -49,18 +56,33 @@ function appendUniqueDecks(
   return [...currentDecks, ...nextDecks.filter((deck) => !knownDeckUuids.has(deck.uuid))];
 }
 
+function toLibraryDeck(deck: CreatedLibraryDeck): LibraryDeck {
+  return {
+    uuid: deck.uuid,
+    title: deck.title,
+    description: deck.description,
+    totalWordsCount: deck.totalWordsCount,
+    accuracy: 0,
+    isFavourite: false,
+    updatedAt: deck.updatedAt,
+    cards: [],
+  };
+}
+
 export function useLibraryDecks(): UseLibraryDecksResult {
   const [state, setState] = useState<LibraryDecksState>(INITIAL_STATE);
   const [onlyFavourites, setOnlyFavouritesState] = useState(false);
   const onlyFavouritesRef = useRef(false);
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
+  const createControllerRef = useRef<AbortController | null>(null);
   const favouriteControllerRefs = useRef(new Map<string, AbortController>());
   const requestRevisionRef = useRef(0);
 
   const loadFirstPage = useCallback((loadOnlyFavourites = onlyFavouritesRef.current): void => {
     initialControllerRef.current?.abort();
     loadMoreControllerRef.current?.abort();
+    createControllerRef.current?.abort();
     favouriteControllerRefs.current.forEach((controller) => controller.abort());
     favouriteControllerRefs.current.clear();
 
@@ -247,6 +269,62 @@ export function useLibraryDecks(): UseLibraryDecksResult {
     loadFirstPage(onlyFavouritesRef.current);
   }, [loadFirstPage]);
 
+  const createDeck = useCallback(
+    async (input: CreateLibraryDeckInput): Promise<void> => {
+      createControllerRef.current?.abort();
+
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current;
+      createControllerRef.current = controller;
+
+      try {
+        const createdDeck = await createLibraryDeck(input, controller.signal);
+
+        if (controller.signal.aborted || requestRevisionRef.current !== requestRevision) {
+          return;
+        }
+
+        const shouldReloadAllDecks = onlyFavouritesRef.current;
+        initialControllerRef.current?.abort();
+        loadMoreControllerRef.current?.abort();
+        favouriteControllerRefs.current.forEach((favouriteController) =>
+          favouriteController.abort(),
+        );
+        favouriteControllerRefs.current.clear();
+        initialControllerRef.current = null;
+        loadMoreControllerRef.current = null;
+        requestRevisionRef.current += 1;
+        onlyFavouritesRef.current = false;
+        setOnlyFavouritesState(false);
+
+        const libraryDeck = toLibraryDeck(createdDeck);
+        setState((currentState) => ({
+          ...(currentState.status === "success" ? currentState : INITIAL_STATE),
+          status: "success",
+          decks: [
+            libraryDeck,
+            ...currentState.decks.filter((deck) => deck.uuid !== libraryDeck.uuid),
+          ],
+          error: null,
+          isLoadingMore: false,
+          loadMoreError: null,
+          favouriteUpdatingDeckUuids: [],
+          favouriteErrors: {},
+        }));
+
+        createControllerRef.current = null;
+        if (shouldReloadAllDecks) {
+          loadFirstPage(false);
+        }
+      } finally {
+        if (createControllerRef.current === controller) {
+          createControllerRef.current = null;
+        }
+      }
+    },
+    [loadFirstPage],
+  );
+
   useEffect(() => {
     const favouriteControllers = favouriteControllerRefs.current;
     loadFirstPage();
@@ -255,6 +333,7 @@ export function useLibraryDecks(): UseLibraryDecksResult {
       requestRevisionRef.current += 1;
       initialControllerRef.current?.abort();
       loadMoreControllerRef.current?.abort();
+      createControllerRef.current?.abort();
       favouriteControllers.forEach((controller) => controller.abort());
       favouriteControllers.clear();
       initialControllerRef.current = null;
@@ -267,6 +346,7 @@ export function useLibraryDecks(): UseLibraryDecksResult {
     onlyFavourites,
     retry,
     loadMore,
+    createDeck,
     setOnlyFavourites,
     setFavourite,
   };

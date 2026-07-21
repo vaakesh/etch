@@ -4,6 +4,40 @@ export interface LibraryPreviewCard {
   backText: string;
 }
 
+export interface LibraryCard {
+  uuid: string;
+  ownerUuid: string;
+  frontText: string;
+  backText: string;
+  sourceLang: string;
+  targetLang: string;
+  updatedAt: string;
+}
+
+export interface LibraryCardPage {
+  cards: readonly LibraryCard[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface UpdateLibraryCardInput {
+  frontText: string;
+  backText: string;
+  sourceLang: string;
+  targetLang: string;
+}
+
+export type CreateLibraryCardInput = UpdateLibraryCardInput;
+
+export interface CreatedLibraryCard extends CreateLibraryCardInput {
+  uuid: string;
+}
+
+export interface UpdatedLibraryCard extends UpdateLibraryCardInput {
+  uuid: string;
+  updatedAt: string;
+}
+
 export interface LibraryDeck {
   uuid: string;
   title: string;
@@ -13,6 +47,21 @@ export interface LibraryDeck {
   isFavourite: boolean;
   updatedAt: string | null;
   cards: readonly LibraryPreviewCard[];
+}
+
+export interface CreateLibraryDeckInput {
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+}
+
+export interface CreatedLibraryDeck {
+  uuid: string;
+  title: string;
+  description: string | null;
+  totalWordsCount: number;
+  isPublic: boolean;
+  updatedAt: string | null;
 }
 
 export interface LibraryDeckPage {

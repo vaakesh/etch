@@ -1,10 +1,15 @@
 import { ApiError } from "../../../api";
 import type {
+  CreatedLibraryDeck,
+  CreatedLibraryCard,
   FavouriteLibraryDeck,
   FavouriteLibraryDeckPage,
+  LibraryCard,
+  LibraryCardPage,
   LibraryDeck,
   LibraryDeckPage,
   LibraryPreviewCard,
+  UpdatedLibraryCard,
 } from "./library-types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -85,6 +90,16 @@ function readNullableDateTime(value: unknown, path: string): string | null {
   return dateTime;
 }
 
+function readDateTime(value: unknown, path: string): string {
+  const dateTime = readString(value, path);
+
+  if (Number.isNaN(Date.parse(dateTime))) {
+    return invalidLibraryResponse(path);
+  }
+
+  return dateTime;
+}
+
 function readOptionalNullableDateTime(value: unknown, path: string): string | null | undefined {
   if (value === undefined) {
     return undefined;
@@ -100,6 +115,64 @@ function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
     uuid: readUuid(card.uuid, `${path}.uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
+  };
+}
+
+function parseLibraryCard(value: unknown, index: number): LibraryCard {
+  const path = `cards[${index}]`;
+  const card = readRecord(value, path);
+
+  return {
+    uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
+    ownerUuid: readUuid(card.card_owner_uuid, `${path}.card_owner_uuid`),
+    frontText: readString(card.card_front_text, `${path}.card_front_text`),
+    backText: readString(card.card_back_text, `${path}.card_back_text`),
+    sourceLang: readString(card.card_source_lang, `${path}.card_source_lang`),
+    targetLang: readString(card.card_target_lang, `${path}.card_target_lang`),
+    updatedAt: readDateTime(card.card_updated_at, `${path}.card_updated_at`),
+  };
+}
+
+export function parseUpdatedLibraryCard(value: unknown): UpdatedLibraryCard {
+  const card = readRecord(value, "card");
+
+  return {
+    uuid: readUuid(card.uuid, "card.uuid"),
+    frontText: readString(card.front_text, "card.front_text"),
+    backText: readString(card.back_text, "card.back_text"),
+    sourceLang: readString(card.source_lang, "card.source_lang"),
+    targetLang: readString(card.target_lang, "card.target_lang"),
+    updatedAt: readDateTime(card.updated_at, "card.updated_at"),
+  };
+}
+
+export function parseCreatedLibraryCard(value: unknown): CreatedLibraryCard {
+  const card = readRecord(value, "card");
+
+  return {
+    uuid: readUuid(card.uuid, "card.uuid"),
+    frontText: readString(card.front_text, "card.front_text"),
+    backText: readString(card.back_text, "card.back_text"),
+    sourceLang: readString(card.source_lang, "card.source_lang"),
+    targetLang: readString(card.target_lang, "card.target_lang"),
+  };
+}
+
+export function parseCreatedLibraryDeck(value: unknown): CreatedLibraryDeck {
+  const deck = readRecord(value, "deck");
+  const totalWordsCount = readInteger(deck.words_count, "deck.words_count");
+
+  if (totalWordsCount < 0) {
+    return invalidLibraryResponse("deck.words_count");
+  }
+
+  return {
+    uuid: readUuid(deck.uuid, "deck.uuid"),
+    title: readString(deck.title, "deck.title"),
+    description: readNullableString(deck.description, "deck.description"),
+    totalWordsCount,
+    isPublic: readBoolean(deck.is_public, "deck.is_public"),
+    updatedAt: readNullableDateTime(deck.updated_at, "deck.updated_at"),
   };
 }
 
@@ -215,6 +288,30 @@ export function parseFavouriteLibraryDeckPage(value: unknown): FavouriteLibraryD
 
   return {
     decks: page.decks.map(parseFavouriteDeck),
+    nextCursor,
+    hasMore,
+  };
+}
+
+export function parseLibraryCardPage(value: unknown): LibraryCardPage {
+  const page = readRecord(value, "cardLibrary");
+
+  if (!Array.isArray(page.cards)) {
+    return invalidLibraryResponse("cards");
+  }
+
+  const nextCursor = readNullableString(page.cursor, "cursor");
+  const hasMore = readBoolean(page.has_more, "has_more");
+
+  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
+    return invalidLibraryResponse("cursor");
+  }
+  if (!hasMore && nextCursor !== null) {
+    return invalidLibraryResponse("cursor");
+  }
+
+  return {
+    cards: page.cards.map(parseLibraryCard),
     nextCursor,
     hasMore,
   };

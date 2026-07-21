@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
-import { parseFavouriteLibraryDeckPage, parseLibraryDeckPage } from "./library-contract";
+import {
+  parseFavouriteLibraryDeckPage,
+  parseLibraryCardPage,
+  parseLibraryDeckPage,
+} from "./library-contract";
 
 const VALID_RESPONSE = {
   decks: [
@@ -52,6 +56,22 @@ const VALID_FAVOURITE_RESPONSE = {
     },
   ],
   next_cursor: "favourite-cursor-2",
+  has_more: true,
+};
+
+const VALID_CARD_RESPONSE = {
+  cards: [
+    {
+      card_uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+      card_owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+      card_front_text: "hello",
+      card_back_text: "привет",
+      card_source_lang: "en",
+      card_target_lang: "ru",
+      card_updated_at: "2026-07-20T09:15:00Z",
+    },
+  ],
+  cursor: "card-cursor-2",
   has_more: true,
 };
 
@@ -221,4 +241,47 @@ describe("parseFavouriteLibraryDeckPage", () => {
       }
     },
   );
+});
+
+describe("parseLibraryCardPage", () => {
+  it("maps the BFF card page and its cursor into the library model", () => {
+    expect(parseLibraryCardPage(VALID_CARD_RESPONSE)).toEqual({
+      cards: [
+        {
+          uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+          ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+          frontText: "hello",
+          backText: "привет",
+          sourceLang: "en",
+          targetLang: "ru",
+          updatedAt: "2026-07-20T09:15:00Z",
+        },
+      ],
+      nextCursor: "card-cursor-2",
+      hasMore: true,
+    });
+  });
+
+  it.each([
+    ["card_uuid", "not-a-uuid"],
+    ["card_owner_uuid", "not-an-owner-uuid"],
+    ["card_updated_at", "not-a-date"],
+    ["card_source_lang", null],
+  ])("rejects malformed %s card fields", (field, value) => {
+    expect(() =>
+      parseLibraryCardPage({
+        ...VALID_CARD_RESPONSE,
+        cards: [{ ...VALID_CARD_RESPONSE.cards[0], [field]: value }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects pagination metadata that contradicts has_more", () => {
+    expect(() =>
+      parseLibraryCardPage({ ...VALID_CARD_RESPONSE, cursor: null, has_more: true }),
+    ).toThrow();
+    expect(() =>
+      parseLibraryCardPage({ ...VALID_CARD_RESPONSE, cursor: "card-cursor-2", has_more: false }),
+    ).toThrow();
+  });
 });

@@ -1,14 +1,61 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cards.models import Card
+from app.bff.home.schemas import CardsLibraryPage
 
 
 class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def get_cards_library_page(
+            self,
+            user_id: int,
+            user_uuid: UUID,
+            cursor: tuple[datetime, int] | None = None,
+            limit: int = 50,
+    ) -> tuple[list[CardsLibraryPage], bool]:
+        stmt = (
+            select(Card)
+            .where(Card.user_id == user_id)
+        )
+
+        if cursor is not None:
+            cursor_updated_at, cursor_id = cursor
+            stmt = stmt.where(
+                or_(
+                    and_(
+                        Card.updated_at == cursor_updated_at,
+                        Card.id < cursor_id,
+                    ),
+                    Card.updated_at < cursor_updated_at,
+                )
+            )
+        
+        stmt = stmt.order_by(
+            Card.updated_at.desc(),
+            Card.id.desc(),
+        ).limit(limit + 1)
+        result = await self.session.execute(stmt)
+        rows = list(result.scalars().all())
+        has_more = len(rows) > limit
+
+        cards = [CardsLibraryPage(
+            card_uuid=card.uuid,
+            card_owner_uuid=user_uuid,
+            card_front_text=card.front_text,
+            card_back_text=card.back_text,
+            card_source_lang=card.source_lang,
+            card_target_lang=card.target_lang,
+            card_updated_at=card.updated_at,
+        ) for card in rows[:limit]]
+
+        return cards, has_more
+
 
     async def get_by_uuid(self, card_uuid: UUID) -> Card | None:
         stmt = select(Card).where(Card.uuid == card_uuid)

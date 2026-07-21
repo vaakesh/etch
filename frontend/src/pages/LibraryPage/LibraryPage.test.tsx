@@ -1,10 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { UseLibraryCardsResult } from "../../features/library/model/useLibraryCards";
 
 const useLibraryDecksMock = vi.hoisted(() => vi.fn());
+const useLibraryCardsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../features/library/model/useLibraryDecks", () => ({
   useLibraryDecks: useLibraryDecksMock,
+}));
+vi.mock("../../features/library/model/useLibraryCards", () => ({
+  useLibraryCards: useLibraryCardsMock,
 }));
 
 function createLibraryResult(overrides: Record<string, unknown> = {}) {
@@ -53,17 +58,53 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
     onlyFavourites: false,
     retry: vi.fn(),
     loadMore: vi.fn(),
+    createDeck: vi.fn(async () => undefined),
     setOnlyFavourites: vi.fn(),
     setFavourite: vi.fn(),
     ...overrides,
   };
 }
 
-import { LibraryPage } from "./LibraryPage";
+function createCardLibraryResult(
+  overrides: Partial<UseLibraryCardsResult> = {},
+): UseLibraryCardsResult {
+  return {
+    status: "success",
+    cards: [
+      {
+        uuid: "8f449a33-87ff-4cf8-a371-43c681623f61",
+        ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+        frontText: "indelible",
+        backText: "неизгладимый",
+        sourceLang: "en",
+        targetLang: "ru",
+        updatedAt: "2026-07-20T09:15:00Z",
+      },
+    ],
+    nextCursor: null,
+    hasMore: false,
+    error: null,
+    isLoadingMore: false,
+    loadMoreError: null,
+    retry: vi.fn(),
+    loadMore: vi.fn(),
+    createCard: vi.fn(async () => undefined),
+    updateCard: vi.fn(async () => undefined),
+    deleteCard: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
+
+import { CardEditorDialog } from "./CardEditorDialog";
+import { DeckCreatorDialog } from "./DeckCreatorDialog";
+import { LibraryCardsPanel, LibraryCreateButton, LibraryPage } from "./LibraryPage";
 
 describe("LibraryPage", () => {
   beforeEach(() => {
+    useLibraryDecksMock.mockReset();
+    useLibraryCardsMock.mockReset();
     useLibraryDecksMock.mockReturnValue(createLibraryResult());
+    useLibraryCardsMock.mockReturnValue(createCardLibraryResult());
   });
 
   it("renders deck card previews, empty previews, actions, and accessible tabs", () => {
@@ -113,8 +154,167 @@ describe("LibraryPage", () => {
     expect(markup).not.toContain('viewBox="0 0 160 140"');
     expect(markup).toContain("2</strong> колод загружено");
     expect(markup).toMatch(/<section[^>]*hidden=""[^>]*id="library-cards-panel"[^>]*><\/section>/);
+    expect(markup).not.toContain('data-card-uuid="8f449a33-87ff-4cf8-a371-43c681623f61"');
+    expect(useLibraryCardsMock).toHaveBeenCalledWith({ enabled: false });
     expect(markup).toContain("Новая колода");
-    expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("changes the create button label with the active library view", () => {
+    const onCreateCard = vi.fn();
+    const onCreateDeck = vi.fn();
+    const decksMarkup = renderToStaticMarkup(
+      <LibraryCreateButton
+        activeView="decks"
+        onCreateCard={onCreateCard}
+        onCreateDeck={onCreateDeck}
+      />,
+    );
+    const cardsMarkup = renderToStaticMarkup(
+      <LibraryCreateButton
+        activeView="cards"
+        onCreateCard={onCreateCard}
+        onCreateDeck={onCreateDeck}
+      />,
+    );
+
+    expect(decksMarkup).toContain("Новая колода");
+    expect(decksMarkup).not.toContain("Новая карточка");
+    expect(decksMarkup).not.toContain("disabled");
+    expect(decksMarkup).toContain('title="Создать новую колоду"');
+    expect(cardsMarkup).toContain("Новая карточка");
+    expect(cardsMarkup).not.toContain("Новая колода");
+    expect(cardsMarkup).not.toContain("disabled");
+    expect(cardsMarkup).toContain('title="Создать новую карточку"');
+  });
+
+  it("renders accessible compact cards and placeholder actions after the panel is opened", () => {
+    const cardLibrary = createCardLibraryResult({
+      hasMore: true,
+      nextCursor: "next-card-page",
+    });
+
+    const markup = renderToStaticMarkup(
+      <LibraryCardsPanel cardLibrary={cardLibrary} isHidden={false} />,
+    );
+    const actionsTrigger = markup.match(
+      /<button[^>]*aria-label="Действия с карточкой «неизгладимый»"[^>]*id="([^"]+)"[^>]*popoverTarget="([^"]+)"/,
+    );
+
+    expect(markup).toContain('id="library-cards-panel"');
+    expect(markup).not.toContain(" hidden=");
+    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('data-card-uuid="8f449a33-87ff-4cf8-a371-43c681623f61"');
+    expect(markup).toContain('lang="en"');
+    expect(markup).toContain('lang="ru"');
+    expect(markup).toContain("indelible");
+    expect(markup).toContain("неизгладимый");
+    expect(markup).toContain("EN");
+    expect(markup).toContain("RU");
+    expect(markup).not.toContain("<span>Слово</span>");
+    expect(markup).not.toContain("<span>Перевод</span>");
+    expect(markup.indexOf("неизгладимый")).toBeLessThan(markup.indexOf("indelible"));
+    expect(markup).not.toContain("Поменять слово и перевод местами");
+    expect(markup).not.toContain('dateTime="2026-07-20T09:15:00Z"');
+    expect(markup).not.toContain("Обновлено");
+    expect(markup).toContain("Загружено карточек: <strong>1</strong>");
+    expect(markup).toContain("Показать ещё");
+    expect(actionsTrigger).not.toBeNull();
+    expect(markup).toContain(`aria-labelledby="${actionsTrigger?.[1]}"`);
+    expect(markup).toContain(`id="${actionsTrigger?.[2]}" popover="auto" role="group"`);
+    expect(markup).toContain('data-card-action="edit"');
+    expect(markup).toContain('data-card-action="add-to-deck"');
+    expect(markup).toContain('data-card-action="delete"');
+    expect(markup).toContain("Редактировать");
+    expect(markup).toContain("Добавить в колоду");
+    expect(markup).toContain("Удалить");
+    expect(markup.match(/<small>скоро<\/small>/g)).toHaveLength(1);
+    expect(markup.match(/data-card-action="[^"]+" disabled=""/g)).toHaveLength(1);
+    expect(markup).not.toMatch(/data-card-action="edit" disabled=""/);
+    expect(markup).not.toMatch(/data-card-action="delete" disabled=""/);
+    expect(markup).not.toContain("<header");
+    expect(markup).not.toContain("<footer");
+  });
+
+  it("renders the card editor with all PATCH contract fields", () => {
+    const markup = renderToStaticMarkup(
+      <CardEditorDialog
+        card={createCardLibraryResult().cards[0]}
+        onClose={vi.fn()}
+        onSave={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain("Редактировать карточку");
+    expect(markup).toContain('name="front_text"');
+    expect(markup).toContain('name="back_text"');
+    expect(markup).toContain('name="source_lang"');
+    expect(markup).toContain('name="target_lang"');
+    expect(markup.match(/maxLength="255"/g)).toHaveLength(2);
+    expect(markup.match(/maxLength="10"/g)).toHaveLength(2);
+    expect(markup).toContain("indelible");
+    expect(markup).toContain("неизгладимый");
+    expect(markup).toContain("Сохранить");
+    expect(markup).toContain("Отмена");
+  });
+
+  it("renders the new-card editor with empty required fields", () => {
+    const markup = renderToStaticMarkup(
+      <CardEditorDialog card={null} onClose={vi.fn()} onSave={vi.fn(async () => undefined)} />,
+    );
+
+    expect(markup).toContain('data-card-editor="new"');
+    expect(markup).toContain("Новая карточка");
+    expect(markup).toContain("Заполните тексты и языки обеих сторон.");
+    expect(markup.match(/required=""/g)).toHaveLength(4);
+    expect(markup.match(/<textarea[^>]*><\/textarea>/g)).toHaveLength(2);
+    expect(markup.match(/value=""/g)).toHaveLength(2);
+    expect(markup).toContain("Создать");
+    expect(markup).toContain("Карточка появится в библиотеке после создания.");
+  });
+
+  it("renders the deck creator with optional description and private default", () => {
+    const markup = renderToStaticMarkup(
+      <DeckCreatorDialog onClose={vi.fn()} onSave={vi.fn(async () => undefined)} />,
+    );
+
+    expect(markup).toContain('data-deck-creator="new"');
+    expect(markup).toContain("Новая колода");
+    expect(markup).toContain('name="title"');
+    expect(markup).toContain('maxLength="150"');
+    expect(markup).toContain('name="description"');
+    expect(markup).toContain("необязательно");
+    expect(markup.match(/name="is_public"/g)).toHaveLength(2);
+    expect(markup).toMatch(
+      /<input[^>]*type="radio"[^>]*name="is_public"[^>]*checked=""[^>]*value="false"/,
+    );
+    expect(markup).toContain("Приватная");
+    expect(markup).toContain("Публичная");
+    expect(markup).toContain("Новая колода появится первой в вашей библиотеке.");
+  });
+
+  it("renders loading, empty, and error states for the cards panel", () => {
+    const loadingLibrary = createCardLibraryResult({ status: "loading", cards: [] });
+    expect(
+      renderToStaticMarkup(<LibraryCardsPanel cardLibrary={loadingLibrary} isHidden={false} />),
+    ).toContain('aria-label="Загрузка карточек"');
+
+    const emptyLibrary = createCardLibraryResult({ cards: [] });
+    expect(
+      renderToStaticMarkup(<LibraryCardsPanel cardLibrary={emptyLibrary} isHidden={false} />),
+    ).toContain("Карточек пока нет");
+
+    const errorLibrary = createCardLibraryResult({
+      status: "error",
+      cards: [],
+      error: new Error("failed"),
+    });
+    const errorMarkup = renderToStaticMarkup(
+      <LibraryCardsPanel cardLibrary={errorLibrary} isHidden={false} />,
+    );
+    expect(errorMarkup).toContain("Карточки не загрузились");
+    expect(errorMarkup).toContain("Попробовать снова");
   });
 
   it("renders the favourite endpoint UUID and accuracy fields", () => {

@@ -41,10 +41,12 @@ async def create_card(
 async def update_card(
     card_uuid: UUID,
     payload: CardUpdate,
+    current_user: User = Depends(get_current_user),
     card_service: CardService = Depends(get_card_service),
 ):
     return await card_service.update_card(
         card_uuid,
+        current_user.id,
         payload,
     )
 

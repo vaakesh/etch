@@ -104,7 +104,7 @@ class DeckService:
         self,
         payload: DeckCreate,
         user_id: int,
-    ) -> DeckSchema:
+    ) -> Deck:
         try:
             async with self.uow_factory() as uow:
                 deck = Deck(
@@ -117,7 +117,7 @@ class DeckService:
                 await uow.commit()
                 await uow.deck_repo.refresh(deck)
 
-                return DeckSchema.model_validate(deck)
+                return deck
 
         except IntegrityError as e:
             raise DeckAlreadyExistsError() from e

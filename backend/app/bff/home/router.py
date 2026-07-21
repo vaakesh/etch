@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.deps import get_current_user
-from app.bff.home.schemas import DeckPageData, DeckPageFavouritesDecks, HomeDashboard
+from app.bff.home.schemas import CardsLibraryPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, ResponseCardsLibraryPage
 from app.users.models import User
 from app.bff.home.deps import get_bff_service
 from app.bff.home.service import BffService
@@ -36,6 +36,19 @@ async def get_deck_page_favourite_decks(
 ):
     result = await bff_service.get_favourite_decks_by_user_id(
         user_id = current_user.id,
+        cursor=cursor,
+    )
+    return result
+
+@router.get("/library/cards", response_model=ResponseCardsLibraryPage)
+async def get_cards_library_page(
+    cursor: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    bff_service: BffService = Depends(get_bff_service),
+) -> ResponseCardsLibraryPage:
+    result = await bff_service.get_cards_library_page_by_user_id(
+        user_id=current_user.id,
+        user_uuid=current_user.uuid,
         cursor=cursor,
     )
     return result

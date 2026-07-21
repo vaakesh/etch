@@ -72,3 +72,22 @@ class DeckPageFavouritesDecks(BaseModel):
     decks: list[DeckWithUserData]
     next_cursor: str | None
     has_more: bool
+
+
+class CardsLibraryPage(BaseModel):
+
+    card_uuid: UUID
+    card_owner_uuid: UUID
+
+    card_front_text: str
+    card_back_text: str
+    card_source_lang: str
+    card_target_lang: str
+
+    card_updated_at: datetime
+
+class ResponseCardsLibraryPage(BaseModel):
+    
+    cards: list[CardsLibraryPage]
+    cursor: str | None
+    has_more: bool

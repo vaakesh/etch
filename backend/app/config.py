@@ -12,7 +12,7 @@ class AuthJWT(BaseModel):
     private_key_path: Path
     public_key_path: Path
     algorithm: str = "RS256"
-    access_token_expire_minutes: int = 5
+    access_token_expire_minutes: int = 50
     refresh_token_expire_days: int = 7
 
     @model_validator(mode="after")

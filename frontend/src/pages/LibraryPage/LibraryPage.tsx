@@ -1,8 +1,18 @@
-import { useId, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { isApiError } from "../../api";
 import { DashboardIcon } from "../../components/DashboardVisuals";
-import type { LibraryDeckItem } from "../../features/library/model/library-types";
+import type {
+  LibraryCard,
+  LibraryDeckItem,
+  UpdateLibraryCardInput,
+} from "../../features/library/model/library-types";
+import {
+  useLibraryCards,
+  type UseLibraryCardsResult,
+} from "../../features/library/model/useLibraryCards";
 import { useLibraryDecks } from "../../features/library/model/useLibraryDecks";
+import { CardEditorDialog } from "./CardEditorDialog";
+import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import styles from "./LibraryPage.module.css";
 
 type LibraryView = "decks" | "cards";
@@ -40,6 +50,46 @@ function getLibraryErrorMessage(error: unknown): string {
   }
 
   return "Не удалось загрузить библиотеку. Попробуйте ещё раз.";
+}
+
+function getLibraryCardsErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Не удалось загрузить карточки. Попробуйте ещё раз.";
+  }
+  if (error.status === 403) {
+    return "У этой учётной записи нет доступа к карточкам.";
+  }
+  if (error.code === "INVALID_LIBRARY_RESPONSE") {
+    return "Сервер вернул карточки в неожиданном формате.";
+  }
+  if (error.status === 0) {
+    return "Не удалось связаться с сервером. Проверьте подключение.";
+  }
+  if (error.status >= 500) {
+    return "Сервер временно не может загрузить карточки.";
+  }
+
+  return "Не удалось загрузить карточки. Попробуйте ещё раз.";
+}
+
+function getCardDeleteErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Не удалось удалить карточку. Попробуйте ещё раз.";
+  }
+  if (error.status === 403) {
+    return "У вас нет доступа к удалению этой карточки.";
+  }
+  if (error.status === 404) {
+    return "Карточка уже удалена или больше не существует.";
+  }
+  if (error.status === 0) {
+    return "Не удалось связаться с сервером. Проверьте подключение.";
+  }
+  if (error.status >= 500) {
+    return "Сервер временно не может удалить карточку.";
+  }
+
+  return "Не удалось удалить карточку. Попробуйте ещё раз.";
 }
 
 function getFavouriteErrorMessage(error: unknown): string {
@@ -275,6 +325,273 @@ function DeckCard({ deck, favouriteError, isFavouriteUpdating, onFavouriteChange
   );
 }
 
+type CardActionGlyphName = "add" | "delete" | "edit" | "menu";
+
+function CardActionGlyph({ name }: { name: CardActionGlyphName }) {
+  if (name === "menu") {
+    return (
+      <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1.7" />
+        <circle cx="12" cy="12" r="1.7" />
+        <circle cx="19" cy="12" r="1.7" />
+      </svg>
+    );
+  }
+
+  if (name === "edit") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <path d="m4 20 4.2-1 10.9-10.9a2.2 2.2 0 0 0-3.1-3.1L5.1 15.9 4 20Z" />
+        <path d="m14.7 6.3 3 3" />
+      </svg>
+    );
+  }
+
+  if (name === "add") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <path d="M4.5 6.5h8.2a3 3 0 0 1 3 3v10H7.5a3 3 0 0 1-3-3v-10Z" />
+        <path d="M7.5 3.5h8.2a3 3 0 0 1 3 3v7M12 10v6M9 13h6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M5 7h14M9 7V4.8h6V7M7.2 7l.8 13h8l.8-13M10 11v5M14 11v5" />
+    </svg>
+  );
+}
+
+interface CardActionsProps {
+  card: LibraryCard;
+  isDeleting: boolean;
+  onDelete: () => void;
+  onEdit: () => void;
+}
+
+function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
+  const menuId = useId();
+  const triggerId = useId();
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  function positionMenu(): void {
+    const menu = menuRef.current;
+    const trigger = triggerRef.current;
+
+    if (menu === null || trigger === null) {
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const viewportPadding = 12;
+    const menuWidth = Math.min(216, window.innerWidth - viewportPadding * 2);
+    const estimatedMenuHeight = 142;
+    const left = Math.min(
+      Math.max(viewportPadding, triggerRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+    const hasRoomBelow =
+      triggerRect.bottom + estimatedMenuHeight + viewportPadding <= window.innerHeight;
+    const top = hasRoomBelow
+      ? triggerRect.bottom + 7
+      : Math.max(viewportPadding, triggerRect.top - estimatedMenuHeight - 7);
+
+    menu.style.setProperty("--card-actions-menu-left", `${left}px`);
+    menu.style.setProperty("--card-actions-menu-top", `${top}px`);
+    menu.style.setProperty("--card-actions-menu-width", `${menuWidth}px`);
+    menu.style.setProperty(
+      "--card-actions-menu-origin",
+      hasRoomBelow ? "top right" : "bottom right",
+    );
+  }
+
+  function handleEdit(): void {
+    menuRef.current?.hidePopover();
+    onEdit();
+  }
+
+  function handleDelete(): void {
+    menuRef.current?.hidePopover();
+    onDelete();
+  }
+
+  return (
+    <div className={styles.cardActions}>
+      <button
+        aria-label={`Действия с карточкой «${card.backText}»`}
+        className={styles.cardActionsTrigger}
+        id={triggerId}
+        onClick={positionMenu}
+        popoverTarget={menuId}
+        popoverTargetAction="toggle"
+        ref={triggerRef}
+        title="Действия"
+        type="button"
+      >
+        <CardActionGlyph name="menu" />
+      </button>
+      <div
+        aria-labelledby={triggerId}
+        className={styles.cardActionsMenu}
+        id={menuId}
+        popover="auto"
+        ref={menuRef}
+        role="group"
+      >
+        <button
+          className={styles.cardEditAction}
+          data-card-action="edit"
+          disabled={isDeleting}
+          onClick={handleEdit}
+          type="button"
+        >
+          <CardActionGlyph name="edit" />
+          <span>Редактировать</span>
+        </button>
+        <span aria-hidden="true" className={styles.cardActionsDivider} />
+        <button
+          className={styles.cardDeleteAction}
+          data-card-action="delete"
+          disabled={isDeleting}
+          onClick={handleDelete}
+          title="Удалить карточку"
+          type="button"
+        >
+          <CardActionGlyph name="delete" />
+          <span>{isDeleting ? "Удаляем…" : "Удалить"}</span>
+        </button>
+        <button
+          data-card-action="add-to-deck"
+          disabled
+          title="Действие пока недоступно"
+          type="button"
+        >
+          <CardActionGlyph name="add" />
+          <span>Добавить в колоду</span>
+          <small>скоро</small>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface LibraryCardRowProps {
+  card: LibraryCard;
+  onDelete: (cardUuid: string) => Promise<void>;
+  onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
+}
+
+function LibraryCardRow({ card, onDelete, onUpdate }: LibraryCardRowProps) {
+  const isMountedRef = useRef(true);
+  const deleteInFlightRef = useRef(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<unknown | null>(null);
+  const cardRowClassName = isDeleting
+    ? `${styles.cardRow} ${styles.cardRowDeleting}`
+    : styles.cardRow;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  async function handleDelete(): Promise<void> {
+    if (deleteInFlightRef.current) {
+      return;
+    }
+
+    deleteInFlightRef.current = true;
+    setDeleteError(null);
+    setIsDeleting(true);
+
+    try {
+      await onDelete(card.uuid);
+    } catch (error: unknown) {
+      if (isMountedRef.current && (!isApiError(error) || error.code !== "REQUEST_ABORTED")) {
+        setDeleteError(error);
+      }
+    } finally {
+      deleteInFlightRef.current = false;
+      if (isMountedRef.current) {
+        setIsDeleting(false);
+      }
+    }
+  }
+
+  return (
+    <li aria-busy={isDeleting} className={cardRowClassName} data-card-uuid={card.uuid}>
+      <div className={`${styles.cardFace} ${styles.cardFaceSource}`}>
+        <span className={styles.languageBadge}>{card.targetLang.toUpperCase()}</span>
+        <div className={styles.cardFaceCopy}>
+          <p className={styles.cardWord} title={card.backText}>
+            <span className={styles.visuallyHidden}>Слово: </span>
+            <span lang={card.targetLang}>{card.backText}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className={`${styles.cardFace} ${styles.cardFaceTarget}`}>
+        <span className={styles.languageBadge}>{card.sourceLang.toUpperCase()}</span>
+        <div className={styles.cardFaceCopy}>
+          <p className={styles.cardTranslation} title={card.frontText}>
+            <span className={styles.visuallyHidden}>Перевод: </span>
+            <span lang={card.sourceLang}>{card.frontText}</span>
+          </p>
+        </div>
+      </div>
+
+      <CardActions
+        card={card}
+        isDeleting={isDeleting}
+        onDelete={() => void handleDelete()}
+        onEdit={() => setIsEditorOpen(true)}
+      />
+      {deleteError === null ? null : (
+        <p className={styles.cardMutationError} role="alert">
+          {getCardDeleteErrorMessage(deleteError)}
+        </p>
+      )}
+      {isEditorOpen ? (
+        <CardEditorDialog
+          card={card}
+          onClose={() => setIsEditorOpen(false)}
+          onSave={(input) => onUpdate(card.uuid, input)}
+        />
+      ) : null}
+    </li>
+  );
+}
+
 interface LibraryTabsProps {
   activeView: LibraryView;
   onChange: (view: LibraryView) => void;
@@ -345,6 +662,16 @@ function DeckSkeletons() {
   );
 }
 
+function CardSkeletons() {
+  return (
+    <div aria-label="Загрузка карточек" className={styles.cardSkeletons} role="status">
+      {Array.from({ length: 5 }, (_, index) => (
+        <div aria-hidden="true" className={styles.cardSkeleton} key={index} />
+      ))}
+    </div>
+  );
+}
+
 interface StateMessageProps {
   title: string;
   description: string;
@@ -369,9 +696,119 @@ function StateMessage({ title, description, actionLabel, onAction }: StateMessag
   );
 }
 
+export function LibraryCardsPanel({
+  cardLibrary,
+  isHidden,
+}: {
+  cardLibrary: UseLibraryCardsResult;
+  isHidden: boolean;
+}) {
+  return (
+    <section
+      aria-labelledby="library-cards-tab"
+      aria-busy={cardLibrary.status === "loading" || cardLibrary.isLoadingMore}
+      className={styles.cardsPanel}
+      hidden={isHidden}
+      id="library-cards-panel"
+      role="tabpanel"
+      tabIndex={0}
+    >
+      {cardLibrary.status === "loading" ? <CardSkeletons /> : null}
+      {cardLibrary.status === "error" ? (
+        <StateMessage
+          actionLabel="Попробовать снова"
+          description={getLibraryCardsErrorMessage(cardLibrary.error)}
+          onAction={cardLibrary.retry}
+          title="Карточки не загрузились"
+        />
+      ) : null}
+      {cardLibrary.status === "success" &&
+      cardLibrary.cards.length === 0 &&
+      !cardLibrary.hasMore ? (
+        <StateMessage
+          description="Когда у вас появятся карточки, они соберутся здесь."
+          title="Карточек пока нет"
+        />
+      ) : null}
+      {cardLibrary.status === "success" && (cardLibrary.cards.length > 0 || cardLibrary.hasMore) ? (
+        <>
+          <div aria-live="polite" className={styles.cardsSummary}>
+            <Glyph name="sparkles" />
+            <span>
+              Загружено карточек: <strong>{cardLibrary.cards.length}</strong>
+            </span>
+          </div>
+          <ul className={styles.cardsList}>
+            {cardLibrary.cards.map((card) => (
+              <LibraryCardRow
+                card={card}
+                key={card.uuid}
+                onDelete={cardLibrary.deleteCard}
+                onUpdate={cardLibrary.updateCard}
+              />
+            ))}
+          </ul>
+          {cardLibrary.loadMoreError ? (
+            <p className={styles.loadMoreError} role="alert">
+              {getLibraryCardsErrorMessage(cardLibrary.loadMoreError)}
+            </p>
+          ) : null}
+          {cardLibrary.hasMore ? (
+            <button
+              className={styles.loadMoreButton}
+              disabled={cardLibrary.isLoadingMore}
+              onClick={cardLibrary.loadMore}
+              type="button"
+            >
+              <span>{cardLibrary.isLoadingMore ? "Загружаем…" : "Показать ещё"}</span>
+              <DashboardIcon name="chevron" />
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+export function LibraryCreateButton({
+  activeView,
+  onCreateCard,
+  onCreateDeck,
+}: {
+  activeView: LibraryView;
+  onCreateCard: () => void;
+  onCreateDeck: () => void;
+}) {
+  const label = activeView === "decks" ? "Новая колода" : "Новая карточка";
+  const isDeckView = activeView === "decks";
+
+  return (
+    <button
+      className={styles.newDeckButton}
+      onClick={isDeckView ? onCreateDeck : onCreateCard}
+      title={isDeckView ? "Создать новую колоду" : "Создать новую карточку"}
+      type="button"
+    >
+      <DashboardIcon name="plus" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function LibraryPage() {
   const [activeView, setActiveView] = useState<LibraryView>("decks");
+  const [hasOpenedCards, setHasOpenedCards] = useState(false);
+  const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
+  const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
   const library = useLibraryDecks();
+  const cardLibrary = useLibraryCards({ enabled: hasOpenedCards });
+
+  function handleViewChange(view: LibraryView): void {
+    setActiveView(view);
+    if (view === "cards") {
+      setHasOpenedCards(true);
+    }
+  }
 
   return (
     <main className={styles.page}>
@@ -381,19 +818,15 @@ export function LibraryPage() {
             <span className={styles.eyebrow}>Ваше пространство</span>
             <h1>Библиотека</h1>
           </div>
-          <button
-            className={styles.newDeckButton}
-            disabled
-            title="Создание колоды пока не подключено"
-            type="button"
-          >
-            <DashboardIcon name="plus" />
-            <span>Новая колода</span>
-          </button>
+          <LibraryCreateButton
+            activeView={activeView}
+            onCreateCard={() => setIsCreateCardOpen(true)}
+            onCreateDeck={() => setIsCreateDeckOpen(true)}
+          />
         </header>
 
         <div className={styles.toolbar}>
-          <LibraryTabs activeView={activeView} onChange={setActiveView} />
+          <LibraryTabs activeView={activeView} onChange={handleViewChange} />
           {activeView === "decks" ? (
             <div className={styles.toolbarDetails}>
               <button
@@ -485,13 +918,31 @@ export function LibraryPage() {
           ) : null}
         </section>
 
-        <section
-          aria-labelledby="library-cards-tab"
-          className={styles.cardsPanel}
-          hidden={activeView !== "cards"}
-          id="library-cards-panel"
-          role="tabpanel"
-        />
+        {hasOpenedCards ? (
+          <LibraryCardsPanel cardLibrary={cardLibrary} isHidden={activeView !== "cards"} />
+        ) : (
+          <section
+            aria-labelledby="library-cards-tab"
+            className={styles.cardsPanel}
+            hidden
+            id="library-cards-panel"
+            role="tabpanel"
+            tabIndex={0}
+          />
+        )}
+        {isCreateCardOpen ? (
+          <CardEditorDialog
+            card={null}
+            onClose={() => setIsCreateCardOpen(false)}
+            onSave={cardLibrary.createCard}
+          />
+        ) : null}
+        {isCreateDeckOpen ? (
+          <DeckCreatorDialog
+            onClose={() => setIsCreateDeckOpen(false)}
+            onSave={library.createDeck}
+          />
+        ) : null}
       </section>
     </main>
   );
