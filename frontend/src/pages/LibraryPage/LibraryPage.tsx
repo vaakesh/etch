@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Link } from "react-router-dom";
 import { isApiError } from "../../api";
+import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import type {
   LibraryCard,
@@ -11,6 +13,7 @@ import {
   type UseLibraryCardsResult,
 } from "../../features/library/model/useLibraryCards";
 import { useLibraryDecks } from "../../features/library/model/useLibraryDecks";
+import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import styles from "./LibraryPage.module.css";
@@ -217,13 +220,20 @@ function AccuracyStat({ value }: { value: number }) {
 }
 
 interface DeckCardProps {
+  canEdit: boolean;
   deck: LibraryDeckItem;
   favouriteError: unknown | null;
   isFavouriteUpdating: boolean;
   onFavouriteChange: (deckUuid: string, value: boolean) => void;
 }
 
-function DeckCard({ deck, favouriteError, isFavouriteUpdating, onFavouriteChange }: DeckCardProps) {
+function DeckCard({
+  canEdit,
+  deck,
+  favouriteError,
+  isFavouriteUpdating,
+  onFavouriteChange,
+}: DeckCardProps) {
   const previewCards = deck.cards.slice(0, 2);
   const favouriteErrorId = `favourite-error-${deck.uuid}`;
   const favouriteAction = deck.isFavourite ? "Удалить из избранного" : "Добавить в избранное";
@@ -285,16 +295,28 @@ function DeckCard({ deck, favouriteError, isFavouriteUpdating, onFavouriteChange
       </section>
 
       <div className={styles.deckActions}>
-        <button
-          aria-label={`Изменить колоду «${deck.title}» — пока недоступно`}
-          className={styles.editButton}
-          disabled
-          title="Редактирование колоды пока не подключено"
-          type="button"
-        >
-          <Glyph name="pencil" />
-          <span>Редактировать</span>
-        </button>
+        {canEdit ? (
+          <Link
+            aria-label={`Редактировать колоду «${deck.title}»`}
+            className={styles.editButton}
+            title={`Редактировать колоду «${deck.title}»`}
+            to={`/library/${deck.uuid}/edit`}
+          >
+            <Glyph name="pencil" />
+            <span>Редактировать</span>
+          </Link>
+        ) : (
+          <button
+            aria-label={`Колоду «${deck.title}» может редактировать только владелец`}
+            className={styles.editButton}
+            disabled
+            title="Редактировать эту колоду может только владелец"
+            type="button"
+          >
+            <Glyph name="pencil" />
+            <span>Редактировать</span>
+          </button>
+        )}
         <button
           aria-label={`Начать колоду «${deck.title}» — пока недоступно`}
           className={styles.startButton}
@@ -390,11 +412,12 @@ function CardActionGlyph({ name }: { name: CardActionGlyphName }) {
 interface CardActionsProps {
   card: LibraryCard;
   isDeleting: boolean;
+  onAdd: () => void;
   onDelete: () => void;
   onEdit: () => void;
 }
 
-function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
+function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsProps) {
   const menuId = useId();
   const triggerId = useId();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -441,6 +464,11 @@ function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
     onDelete();
   }
 
+  function handleAdd(): void {
+    menuRef.current?.hidePopover();
+    onAdd();
+  }
+
   return (
     <div className={styles.cardActions}>
       <button
@@ -474,6 +502,18 @@ function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
           <CardActionGlyph name="edit" />
           <span>Редактировать</span>
         </button>
+        <button
+          aria-haspopup="dialog"
+          className={styles.cardAddAction}
+          data-card-action="add-to-deck"
+          disabled={isDeleting}
+          onClick={handleAdd}
+          title="Добавить карточку в одну или несколько колод"
+          type="button"
+        >
+          <CardActionGlyph name="add" />
+          <span>Добавить в колоду</span>
+        </button>
         <span aria-hidden="true" className={styles.cardActionsDivider} />
         <button
           className={styles.cardDeleteAction}
@@ -486,16 +526,6 @@ function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
           <CardActionGlyph name="delete" />
           <span>{isDeleting ? "Удаляем…" : "Удалить"}</span>
         </button>
-        <button
-          data-card-action="add-to-deck"
-          disabled
-          title="Действие пока недоступно"
-          type="button"
-        >
-          <CardActionGlyph name="add" />
-          <span>Добавить в колоду</span>
-          <small>скоро</small>
-        </button>
       </div>
     </div>
   );
@@ -503,13 +533,15 @@ function CardActions({ card, isDeleting, onDelete, onEdit }: CardActionsProps) {
 
 interface LibraryCardRowProps {
   card: LibraryCard;
+  onCardAssigned?: () => void;
   onDelete: (cardUuid: string) => Promise<void>;
   onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
 }
 
-function LibraryCardRow({ card, onDelete, onUpdate }: LibraryCardRowProps) {
+function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCardRowProps) {
   const isMountedRef = useRef(true);
   const deleteInFlightRef = useRef(false);
+  const [isDeckPickerOpen, setIsDeckPickerOpen] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<unknown | null>(null);
@@ -573,6 +605,7 @@ function LibraryCardRow({ card, onDelete, onUpdate }: LibraryCardRowProps) {
       <CardActions
         card={card}
         isDeleting={isDeleting}
+        onAdd={() => setIsDeckPickerOpen(true)}
         onDelete={() => void handleDelete()}
         onEdit={() => setIsEditorOpen(true)}
       />
@@ -586,6 +619,13 @@ function LibraryCardRow({ card, onDelete, onUpdate }: LibraryCardRowProps) {
           card={card}
           onClose={() => setIsEditorOpen(false)}
           onSave={(input) => onUpdate(card.uuid, input)}
+        />
+      ) : null}
+      {isDeckPickerOpen ? (
+        <AddCardToDeckDialog
+          card={card}
+          onAssigned={onCardAssigned}
+          onClose={() => setIsDeckPickerOpen(false)}
         />
       ) : null}
     </li>
@@ -699,9 +739,11 @@ function StateMessage({ title, description, actionLabel, onAction }: StateMessag
 export function LibraryCardsPanel({
   cardLibrary,
   isHidden,
+  onCardAssigned,
 }: {
   cardLibrary: UseLibraryCardsResult;
   isHidden: boolean;
+  onCardAssigned?: () => void;
 }) {
   return (
     <section
@@ -743,6 +785,7 @@ export function LibraryCardsPanel({
               <LibraryCardRow
                 card={card}
                 key={card.uuid}
+                onCardAssigned={onCardAssigned}
                 onDelete={cardLibrary.deleteCard}
                 onUpdate={cardLibrary.updateCard}
               />
@@ -800,6 +843,7 @@ export function LibraryPage() {
   const [hasOpenedCards, setHasOpenedCards] = useState(false);
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
+  const { user } = useAuth();
   const library = useLibraryDecks();
   const cardLibrary = useLibraryCards({ enabled: hasOpenedCards });
 
@@ -890,6 +934,7 @@ export function LibraryPage() {
               <div className={styles.decksGrid}>
                 {library.decks.map((deck) => (
                   <DeckCard
+                    canEdit={!("ownerUuid" in deck) || deck.ownerUuid === user?.uuid}
                     deck={deck}
                     favouriteError={library.favouriteErrors[deck.uuid] ?? null}
                     isFavouriteUpdating={library.favouriteUpdatingDeckUuids.includes(deck.uuid)}
@@ -919,7 +964,11 @@ export function LibraryPage() {
         </section>
 
         {hasOpenedCards ? (
-          <LibraryCardsPanel cardLibrary={cardLibrary} isHidden={activeView !== "cards"} />
+          <LibraryCardsPanel
+            cardLibrary={cardLibrary}
+            isHidden={activeView !== "cards"}
+            onCardAssigned={library.retry}
+          />
         ) : (
           <section
             aria-labelledby="library-cards-tab"

@@ -10,7 +10,7 @@ from app.cards.deps import get_card_service
 from app.cards.schemas import CardSchema
 from app.cards.service import CardService
 from app.decks.deps import get_deck_service
-from app.decks.schemas import DeckSchema
+from app.decks.schemas import DeckOut, DeckSchema, ShortDeckOut
 from app.decks.service import DeckService
 from app.training_sessions.deps import get_training_session_service
 from app.training_sessions.service import TrainingSessionService
@@ -26,6 +26,17 @@ async def get_me(
     current_user: User = Depends(get_current_user),
 ):
     return UserMe.model_validate(current_user)
+
+@router.get("/me/decks", response_model=list[ShortDeckOut])
+async def get_my_decks(
+    current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+):
+    result = await user_service.get_user_decks(
+        user_id=current_user.id,
+    )
+    return result
+    
 
 @router.get("/", response_model=list[UserSchema])
 async def get_all_users_by_limit(
@@ -66,6 +77,8 @@ async def delete_user(
 
 
 # ----
+
+
 
 
 @router.get("/{user_uuid}/training-sessions", response_model=list[TrainingSessionSchema])

@@ -12,7 +12,7 @@ import jwt
 
 from app.config import AuthTokensConfig
 from app.utils import utcnow
-from app.auth.errors import InvalidTokenError, InvalidTokenTypeError
+from app.auth.errors import InvalidRefreshTokenError, InvalidTokenError, InvalidTokenTypeError
 from app.auth.schemas import IssuedTokens, TokenPair
 from app.service import UnitOfWork
 from app.auth.models import UserSession
@@ -152,7 +152,7 @@ class AuthService:
             or user_session.replaced_by_session_id is not None
             or user_session.expires_at <= utcnow()
         ):
-            raise InvalidTokenError("Session expired")
+            raise InvalidRefreshTokenError("Session expired")
 
         return user_session
 

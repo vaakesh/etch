@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
 import {
+  parseDeckCardPage,
+  parseEditableLibraryDeck,
   parseFavouriteLibraryDeckPage,
   parseLibraryCardPage,
+  parseLibraryDeckOptions,
   parseLibraryDeckPage,
 } from "./library-contract";
 
@@ -74,6 +77,196 @@ const VALID_CARD_RESPONSE = {
   cursor: "card-cursor-2",
   has_more: true,
 };
+
+const VALID_DECK_OPTIONS_RESPONSE = [
+  {
+    uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+    title: "Daily Words",
+    words_count: 48,
+  },
+  {
+    uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+    title: "Travel Essentials",
+    words_count: 0,
+  },
+];
+
+const VALID_EDITABLE_DECK_RESPONSE = {
+  id: 7,
+  uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+  user_id: 4,
+  source_deck_id: null,
+  title: "Daily Words",
+  description: "Core vocabulary",
+  words_count: 48,
+  is_public: false,
+  version: 2,
+  created_at: "2026-07-19T09:15:00Z",
+  updated_at: "2026-07-21T18:30:00Z",
+};
+
+const VALID_DECK_CARD_RESPONSE = {
+  id: 17,
+  uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+  user_id: 4,
+  front_text: "привет",
+  back_text: "hello",
+  source_lang: "ru",
+  target_lang: "en",
+  created_at: "2026-07-19T09:15:00Z",
+  updated_at: "2026-07-21T18:30:00Z",
+};
+
+describe("parseEditableLibraryDeck", () => {
+  it("maps the backend deck into editable metadata", () => {
+    expect(parseEditableLibraryDeck(VALID_EDITABLE_DECK_RESPONSE)).toEqual({
+      uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+      title: "Daily Words",
+      description: "Core vocabulary",
+      totalWordsCount: 48,
+      isPublic: false,
+      updatedAt: "2026-07-21T18:30:00Z",
+    });
+  });
+
+  it("accepts nullable deck metadata", () => {
+    expect(
+      parseEditableLibraryDeck({
+        ...VALID_EDITABLE_DECK_RESPONSE,
+        description: null,
+        updated_at: null,
+      }),
+    ).toMatchObject({
+      description: null,
+      updatedAt: null,
+    });
+  });
+
+  it.each([
+    ["uuid", "not-a-uuid"],
+    ["title", null],
+    ["description", 42],
+    ["words_count", -1],
+    ["words_count", 1.5],
+    ["is_public", "false"],
+    ["updated_at", "not-a-date"],
+  ])("rejects malformed %s values", (field, value) => {
+    expect(() =>
+      parseEditableLibraryDeck({
+        ...VALID_EDITABLE_DECK_RESPONSE,
+        [field]: value,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("parseDeckCardPage", () => {
+  it("maps a short page and advances the offset by the returned count", () => {
+    expect(parseDeckCardPage([VALID_DECK_CARD_RESPONSE], 50, 50)).toEqual({
+      cards: [
+        {
+          uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
+          frontText: "привет",
+          backText: "hello",
+          sourceLang: "ru",
+          targetLang: "en",
+          updatedAt: "2026-07-21T18:30:00Z",
+        },
+      ],
+      nextOffset: 51,
+      hasMore: false,
+    });
+  });
+
+  it("reports another page only when the backend returns the full limit", () => {
+    expect(
+      parseDeckCardPage(
+        Array.from({ length: 50 }, () => VALID_DECK_CARD_RESPONSE),
+        0,
+        50,
+      ),
+    ).toMatchObject({
+      nextOffset: 50,
+      hasMore: true,
+    });
+
+    expect(parseDeckCardPage([], 100, 50)).toEqual({
+      cards: [],
+      nextOffset: 100,
+      hasMore: false,
+    });
+  });
+
+  it.each([
+    ["uuid", "not-a-uuid"],
+    ["front_text", null],
+    ["back_text", null],
+    ["source_lang", null],
+    ["target_lang", null],
+    ["updated_at", "not-a-date"],
+  ])("rejects malformed card %s values", (field, value) => {
+    expect(() =>
+      parseDeckCardPage(
+        [
+          {
+            ...VALID_DECK_CARD_RESPONSE,
+            [field]: value,
+          },
+        ],
+        0,
+        50,
+      ),
+    ).toThrow();
+  });
+
+  it("rejects non-array and over-limit responses", () => {
+    expect(() => parseDeckCardPage({ cards: [] }, 0, 50)).toThrow();
+    expect(() =>
+      parseDeckCardPage(
+        Array.from({ length: 51 }, () => VALID_DECK_CARD_RESPONSE),
+        0,
+        50,
+      ),
+    ).toThrow();
+  });
+});
+
+describe("parseLibraryDeckOptions", () => {
+  it("maps the short current-user deck list", () => {
+    expect(parseLibraryDeckOptions(VALID_DECK_OPTIONS_RESPONSE)).toEqual([
+      {
+        uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+        title: "Daily Words",
+        totalWordsCount: 48,
+      },
+      {
+        uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+        title: "Travel Essentials",
+        totalWordsCount: 0,
+      },
+    ]);
+  });
+
+  it("rejects a non-array response", () => {
+    expect(() => parseLibraryDeckOptions({ decks: VALID_DECK_OPTIONS_RESPONSE })).toThrow();
+  });
+
+  it.each([
+    ["uuid", "not-a-uuid"],
+    ["title", null],
+    ["words_count", -1],
+    ["words_count", 1.5],
+  ])("rejects malformed %s values", (field, value) => {
+    expect(() =>
+      parseLibraryDeckOptions([
+        {
+          ...VALID_DECK_OPTIONS_RESPONSE[0],
+          [field]: value,
+        },
+      ]),
+    ).toThrow();
+  });
+});
 
 describe("parseLibraryDeckPage", () => {
   it("maps the BFF deck page into the library model", () => {

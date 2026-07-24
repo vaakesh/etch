@@ -3,7 +3,8 @@ from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 
-from app.cards.errors import CardNotFoundError
+from app.cards.errors import CardNotFoundError, PermissionDeniedError
+from app.cards.schemas import CardSchema
 from app.service import UnitOfWork
 
 from .errors import (
@@ -16,7 +17,6 @@ from .errors import (
 )
 from .models import Deck, DeckCard, UserDeck
 from .schemas import (
-    DeckCardAdd,
     DeckCardSchema,
     DeckCreate,
     DeckSchema,
@@ -37,8 +37,12 @@ class DeckService:
         self,
         uow: UnitOfWork,
         deck_uuid: UUID,
+        for_update: bool = False,
     ) -> Deck:
-        deck = await uow.deck_repo.get_by_uuid(deck_uuid)
+        deck = await uow.deck_repo.get_by_uuid(
+            deck_uuid,
+            for_update=for_update,
+        )
 
         if deck is None:
             raise DeckNotFoundError(f"Deck with uuid={deck_uuid} not found")
@@ -124,12 +128,16 @@ class DeckService:
 
     async def update_deck(
         self,
+        user_id: int,
         deck_uuid: UUID,
         payload: DeckUpdate,
     ) -> DeckSchema:
         try:
             async with self.uow_factory() as uow:
                 deck = await self._get_by_uuid(uow, deck_uuid)
+
+                if deck.user_id != user_id:
+                    raise PermissionDeniedError()
 
                 update_data = payload.model_dump(exclude_unset=True)
 
@@ -155,47 +163,65 @@ class DeckService:
 
     async def get_deck_cards(
         self,
+        user_id: int,
         deck_uuid: UUID,
-        limit: int = 100,
-    ) -> list[DeckCardSchema]:
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[CardSchema]:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
 
-            deck_cards = await uow.deck_card_repo.get_all_by_deck_id(
+            if deck.user_id != user_id and not deck.is_public:
+                raise PermissionDeniedError()
+
+            cards = await uow.deck_card_repo.get_all_by_deck_id(
                 deck_id=deck.id,
+                offset=offset,
                 limit=limit,
             )
 
             return [
-                DeckCardSchema.model_validate(deck_card)
-                for deck_card in deck_cards
+                CardSchema.model_validate(card)
+                for card in cards
             ]
 
     async def add_card_to_deck(
         self,
+        user_id: int,
         deck_uuid: UUID,
         card_uuid: UUID,
-        payload: DeckCardAdd,
     ) -> DeckCardSchema:
         try:
             async with self.uow_factory() as uow:
-                deck = await self._get_by_uuid(uow, deck_uuid)
-                card = await self._get_card_by_uuid(uow, card_uuid)
-
-                existing_link = await uow.deck_card_repo.get_by_deck_id_and_card_id(
-                    deck_id=deck.id,
-                    card_id=card.id,
+                deck = await self._get_by_uuid(
+                    uow=uow,
+                    deck_uuid=deck_uuid,
+                    for_update=True,
                 )
 
-                if existing_link is not None:
-                    raise DeckCardAlreadyExistsError(
-                        "Card already exists in this deck"
-                    )
+                card = await self._get_card_by_uuid(uow, card_uuid)
+                print(deck, card)
+
+                if deck.user_id != user_id or card.user_id != user_id:
+                    raise PermissionDeniedError()
+
+                deck_card = await uow.deck_card_repo.get_by_deck_id_and_card_id(
+                    deck_id=deck.id,
+                    card_id=card.id,
+                ) # todo: надо сделать, чтобы можно было добавлять одну карточку в колоду несколько раз
+
+                max_position = await uow.deck_card_repo.get_max_position(
+                    deck_id=deck.id,
+                )
+                if max_position is None:
+                    next_position = 0
+                else:
+                    next_position = max_position + 1
 
                 deck_card = DeckCard(
                     deck_id=deck.id,
                     card_id=card.id,
-                    position=payload.position,
+                    position=next_position,
                 )
 
                 uow.deck_card_repo.add(deck_card)
@@ -225,12 +251,16 @@ class DeckService:
 
     async def remove_card_from_deck(
         self,
+        user_id: int,
         deck_uuid: UUID,
         card_uuid: UUID,
     ) -> None:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
             card = await self._get_card_by_uuid(uow, card_uuid)
+
+            if deck.user_id != user_id or card.user_id != user_id:
+                raise PermissionDeniedError()
 
             deck_card = await uow.deck_card_repo.get_by_deck_id_and_card_id(
                 deck_id=deck.id,
@@ -247,6 +277,44 @@ class DeckService:
 
             return None
         
+    async def reorder_cards(
+            self,
+            user_id: int,
+            deck_uuid: UUID,
+            card_uuid: UUID,
+            to_position: int,
+    ):
+        async with self.uow_factory() as uow:
+            card = await self._get_card_by_uuid(
+                uow,
+                card_uuid=card_uuid,
+            )
+            deck = await self._get_by_uuid(
+                uow,
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
+            if card.user_id != user_id or deck.user_id != user_id:
+                raise PermissionDeniedError()
+            deck_card = await uow.deck_card_repo.get_by_deck_id_and_card_id(
+                deck_id=deck.id,
+                card_id=card.id,
+            )
+            from_position = deck_card.position
+            if from_position >= to_position:
+                start, end, add_to_position = to_position, from_position, 1
+            else:
+                start, end, add_to_position = from_position + 1, to_position + 1, -1
+
+            await uow.deck_card_repo.reorder_cards(
+                deck_id=deck.id,
+                start=start,
+                end=end,
+                add_to_position=add_to_position,
+            )
+            deck_card.position = to_position
+            await uow.commit()
+
 
 class UserDeckService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:

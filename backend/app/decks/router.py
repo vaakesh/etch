@@ -3,17 +3,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 
 from app.auth.deps import get_current_user
+from app.cards.schemas import CardSchema
 from app.users.models import User
 
 from .deps import get_deck_service, get_user_deck_service
 from .schemas import (
-    DeckCardAdd,
     DeckCardSchema,
     DeckCardUpdate,
     DeckCreate,
     DeckOut,
     DeckSchema,
     DeckUpdate,
+    ReorderCards,
     UserDeckSchema,
 )
 from .service import DeckService, UserDeckService
@@ -73,11 +74,13 @@ async def create_deck(
 async def update_deck(
     deck_uuid: UUID,
     payload: DeckUpdate,
+    current_user: User = Depends(get_current_user),
     deck_service: DeckService = Depends(get_deck_service),
 ):
     return await deck_service.update_deck(
-        deck_uuid,
-        payload,
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        payload=payload,
     )
 
 
@@ -90,17 +93,52 @@ async def delete_deck(
     return None
 
 
-@router.get("/{deck_uuid}/cards", response_model=list[DeckCardSchema])
+@router.get("/{deck_uuid}/cards", response_model=list[CardSchema])
 async def get_deck_cards(
     deck_uuid: UUID,
-    limit: int = 100,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
     deck_service: DeckService = Depends(get_deck_service),
 ):
     return await deck_service.get_deck_cards(
+        user_id=current_user.id,
         deck_uuid=deck_uuid,
+        offset=offset,
         limit=limit,
     )
 
+@router.post(
+    "/{deck_uuid}/cards/remove/{card_uuid}",
+    response_model=None,
+)
+async def remove_card_from_deck(
+    deck_uuid: UUID,
+    card_uuid: UUID,
+    current_user: User = Depends(get_current_user),
+    deck_service: DeckService = Depends(get_deck_service),
+):
+    return await deck_service.remove_card_from_deck(
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        card_uuid=card_uuid,
+    )
+
+@router.post(
+        "/{deck_uuid}/cards/reorder",
+)
+async def reorder_deck_cards(
+    deck_uuid: UUID,
+    payload: ReorderCards,
+    current_user: User = Depends(get_current_user),
+    deck_service: DeckService = Depends(get_deck_service),
+):
+    await deck_service.reorder_cards(
+            user_id=current_user.id,
+            deck_uuid=deck_uuid,
+            card_uuid=payload.card_uuid,
+            to_position=payload.to_position,
+    )
 
 @router.post(
     "/{deck_uuid}/cards/{card_uuid}",
@@ -109,13 +147,13 @@ async def get_deck_cards(
 async def add_card_to_deck(
     deck_uuid: UUID,
     card_uuid: UUID,
-    payload: DeckCardAdd,
+    current_user: User = Depends(get_current_user),
     deck_service: DeckService = Depends(get_deck_service),
 ):
     return await deck_service.add_card_to_deck(
+        user_id=current_user.id,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
-        payload=payload,
     )
 
 
@@ -141,9 +179,11 @@ async def update_deck_card(
 async def remove_card_from_deck(
     deck_uuid: UUID,
     card_uuid: UUID,
+    current_user: User = Depends(get_current_user),
     deck_service: DeckService = Depends(get_deck_service),
 ):
     await deck_service.remove_card_from_deck(
+        user_id=current_user.id,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )

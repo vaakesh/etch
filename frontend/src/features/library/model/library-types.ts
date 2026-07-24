@@ -4,9 +4,8 @@ export interface LibraryPreviewCard {
   backText: string;
 }
 
-export interface LibraryCard {
+export interface EditableLibraryCard {
   uuid: string;
-  ownerUuid: string;
   frontText: string;
   backText: string;
   sourceLang: string;
@@ -14,9 +13,19 @@ export interface LibraryCard {
   updatedAt: string;
 }
 
+export interface LibraryCard extends EditableLibraryCard {
+  ownerUuid: string;
+}
+
 export interface LibraryCardPage {
   cards: readonly LibraryCard[];
   nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface DeckCardPage {
+  cards: readonly EditableLibraryCard[];
+  nextOffset: number;
   hasMore: boolean;
 }
 
@@ -38,6 +47,20 @@ export interface UpdatedLibraryCard extends UpdateLibraryCardInput {
   updatedAt: string;
 }
 
+export interface EditableLibraryDeck {
+  uuid: string;
+  title: string;
+  description: string | null;
+  totalWordsCount: number;
+  isPublic: boolean;
+  updatedAt: string | null;
+}
+
+export interface UpdateLibraryDeckInput {
+  title: string;
+  description: string | null;
+}
+
 export interface LibraryDeck {
   uuid: string;
   title: string;
@@ -48,6 +71,14 @@ export interface LibraryDeck {
   updatedAt: string | null;
   cards: readonly LibraryPreviewCard[];
 }
+
+export interface LibraryDeckOption {
+  uuid: string;
+  title: string;
+  totalWordsCount: number;
+}
+
+export type LibraryCardDeckAddStatus = "added" | "already-present";
 
 export interface CreateLibraryDeckInput {
   title: string;

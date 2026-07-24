@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth.errors import (
     AccessTokenNotFoundError,
+    InvalidRefreshTokenError,
     InvalidTokenError,
     InvalidTokenTypeError,
     RefreshTokenNotFoundError,
@@ -34,6 +35,7 @@ from app.training_sessions.errors import (
     TrainingSessionAlreadyExistsError,
     TrainingSessionNotFoundError,
 )
+from app.auth.cookies import clear_tokens_cookie
 
 
 async def invalid_token_handler(
@@ -46,6 +48,19 @@ async def invalid_token_handler(
             "message": str(exc),
         },
     )
+
+async def invalid_refresh_token_handler(
+    request: Request,
+    exc: InvalidRefreshTokenError,
+):
+    json_response = JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "message": str(exc),
+        },
+    )
+    clear_tokens_cookie(json_response)
+    return json_response
 
 
 async def invalid_token_type_handler(
@@ -279,6 +294,7 @@ async def request_validation_handler(
 
 def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(InvalidTokenError, invalid_token_handler)
+    app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
     app.add_exception_handler(InvalidTokenTypeError, invalid_token_type_handler)
     app.add_exception_handler(
         RefreshTokenNotFoundError,

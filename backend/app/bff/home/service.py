@@ -1,15 +1,13 @@
 from collections import defaultdict
 from typing import Callable
 from uuid import UUID
-import base64
-import json
 from datetime import datetime
 from app.service import UnitOfWork
 from app.bff.home.schemas import CardsLibraryPage, DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, ResponseCardsLibraryPage, UserProgress
 from app.decks.models import UserDeck
 from app.cards.models import Card
 from app.decks.schemas import DeckWithUserData
-from app.bff.utils import calculate_accuracy
+from app.bff.utils import calculate_accuracy, decode_cursor, encode_cursor
 
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
@@ -17,32 +15,6 @@ def get_is_favourite(user_deck: UserDeck) -> bool:
         return False
     
     return user_deck.is_favourite
-
-def encode_cursor(updated_at: datetime, entity_id: int) -> str:
-    payload = {
-        "updated_at": updated_at.isoformat(),
-        "id": entity_id,
-    }
-    raw = json.dumps(payload, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-def decode_cursor(cursor: str) -> tuple[datetime, int]:
-    try:
-        raw = base64.urlsafe_b64decode(cursor.encode())
-        payload = json.loads(raw)
-
-        updated_at = datetime.fromisoformat(payload["updated_at"])
-        entity_id = int(payload["id"])
-
-        if updated_at.tzinfo is None:
-            raise ValueError("Cursor datetime must include timezone")
-
-        if entity_id <= 0:
-            raise ValueError("Cursor id must be positive")
-
-        return updated_at, entity_id
-    except Exception:
-        raise
 
 class BffService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:

@@ -51,6 +51,12 @@ class DeckOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+class ShortDeckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID
+    title: str
+    words_count: int
 
 
 class DeckCardSchema(BaseModel):
@@ -77,8 +83,9 @@ class DeckCardUpdate(BaseModel):
     position: int | None = Field(default=None, ge=0)
 
 
-class DeckCardAdd(BaseModel):
-    position: int = Field(default=0, ge=0)
+class ReorderCards(BaseModel):
+    card_uuid: UUID
+    to_position: int = Field(ge=0)
 
 
 class DeckCardOut(DeckCardSchema):

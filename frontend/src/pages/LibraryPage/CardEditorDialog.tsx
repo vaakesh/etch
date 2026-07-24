@@ -1,13 +1,13 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { isApiError } from "../../api";
 import type {
-  LibraryCard,
+  EditableLibraryCard,
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
 import styles from "./LibraryPage.module.css";
 
 interface CardEditorDialogProps {
-  card: LibraryCard | null;
+  card: EditableLibraryCard | null;
   onClose: () => void;
   onSave: (input: UpdateLibraryCardInput) => Promise<void>;
 }

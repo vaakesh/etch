@@ -13,12 +13,23 @@ from app.users.models import User
 from app.users.errors import UserAlreadyExistsError, UserNotFoundError
 from app.auth.utils import hash_password
 from app.training_sessions.schemas import TrainingSessionSchema
-from app.decks.schemas import DeckSchema
+from app.decks.schemas import DeckSchema, ShortDeckOut
 
 
 class UserService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
         self.uow_factory = uow_factory
+
+    async def get_user_decks(
+            self,
+            user_id: int,
+    ) -> list[ShortDeckOut]:
+        async with self.uow_factory() as uow:
+            decks = await uow.deck_repo.get_all_by_user_id(
+                user_id=user_id,
+                limit=30,
+            )
+            return decks
 
     async def get_by_uuid(self, user_uuid: UUID) -> UserSchema:
         async with self.uow_factory() as uow:

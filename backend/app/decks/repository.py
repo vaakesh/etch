@@ -16,8 +16,11 @@ class DeckRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_uuid(self, deck_uuid: UUID) -> Deck | None:
+    async def get_by_uuid(self, deck_uuid: UUID, for_update: bool = False) -> Deck | None:
         stmt = select(Deck).where(Deck.uuid == deck_uuid)
+        if for_update:
+            stmt = stmt.with_for_update()
+
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
     
@@ -118,10 +121,48 @@ class DeckCardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+
+    async def delete(self, deck_card: DeckCard) -> None:
+        await self.session.delete(deck_card)
+
+
     async def get_by_uuid(self, deck_card_uuid: UUID) -> DeckCard | None:
         stmt = select(DeckCard).where(DeckCard.uuid == deck_card_uuid)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_max_position(
+            self,
+            deck_id: int,
+    ) -> int:
+        stmt = (
+            select(DeckCard.position)
+            .where(DeckCard.deck_id == deck_id)
+            .order_by(DeckCard.position.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        max_position = result.scalar_one_or_none()
+        return max_position
+
+
+    async def reorder_cards(
+            self,
+            deck_id: int,
+            start: int,
+            end: int,
+            add_to_position: int,
+    ):
+        stmt = (
+            update(DeckCard)
+            .where(
+                DeckCard.deck_id == deck_id,
+                DeckCard.position >= start,
+                DeckCard.position < end,
+            )
+            .values(position=DeckCard.position + add_to_position)
+        )
+        await self.session.execute(stmt)
 
     async def get_by_deck_id_and_card_id(
         self,
@@ -141,12 +182,15 @@ class DeckCardRepository:
     async def get_all_by_deck_id(
         self,
         deck_id: int,
-        limit: int = 100,
-    ) -> list[DeckCard]:
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[Card]:
         stmt = (
-            select(DeckCard)
+            select(Card)
+            .join(DeckCard, DeckCard.card_id == Card.id)
             .where(DeckCard.deck_id == deck_id)
             .order_by(DeckCard.position.asc(), DeckCard.id.asc())
+            .offset(offset)
             .limit(limit)
         )
         result = await self.session.execute(stmt)
@@ -195,9 +239,6 @@ class DeckCardRepository:
 
     def add(self, deck_card: DeckCard) -> None:
         self.session.add(deck_card)
-
-    async def delete(self, deck_card: DeckCard) -> None:
-        await self.session.delete(deck_card)
 
     async def refresh(self, deck_card: DeckCard) -> None:
         await self.session.refresh(deck_card)

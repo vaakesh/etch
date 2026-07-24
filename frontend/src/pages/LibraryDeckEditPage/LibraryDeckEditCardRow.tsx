@@ -1,0 +1,281 @@
+import { useEffect, useId, useRef, useState } from "react";
+import { isApiError } from "../../api";
+import type {
+  EditableLibraryCard,
+  UpdateLibraryCardInput,
+} from "../../features/library/model/library-types";
+import { CardEditorDialog } from "../LibraryPage/CardEditorDialog";
+import libraryStyles from "../LibraryPage/LibraryPage.module.css";
+
+interface LibraryDeckEditCardRowProps {
+  card: EditableLibraryCard;
+  onRemove: (cardUuid: string) => Promise<void>;
+  onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
+}
+
+function getCardRemoveErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Не удалось удалить карточку из колоды. Попробуйте ещё раз.";
+  }
+  if (error.status === 403) {
+    return "У вас нет доступа к изменению этой колоды.";
+  }
+  if (error.status === 404) {
+    return "Карточка уже удалена из колоды или больше не существует.";
+  }
+  if (error.code === "REQUEST_ABORTED") {
+    return "Удаление карточки из колоды было отменено.";
+  }
+  if (error.status === 0) {
+    return "Не удалось связаться с сервером. Проверьте подключение.";
+  }
+  if (error.status >= 500) {
+    return "Сервер временно не может изменить колоду.";
+  }
+
+  return "Не удалось удалить карточку из колоды. Попробуйте ещё раз.";
+}
+
+function CardActionGlyph({ name }: { name: "delete" | "edit" | "menu" }) {
+  if (name === "menu") {
+    return (
+      <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1.7" />
+        <circle cx="12" cy="12" r="1.7" />
+        <circle cx="19" cy="12" r="1.7" />
+      </svg>
+    );
+  }
+
+  if (name === "edit") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <path d="m4 20 4.2-1 10.9-10.9a2.2 2.2 0 0 0-3.1-3.1L5.1 15.9 4 20Z" />
+        <path d="m14.7 6.3 3 3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M5 7h14M9 7V4.8h6V7M7.2 7l.8 13h8l.8-13M10 11v5M14 11v5" />
+    </svg>
+  );
+}
+
+function CardActions({
+  card,
+  isRemoving,
+  onEdit,
+  onRemove,
+}: {
+  card: EditableLibraryCard;
+  isRemoving: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const menuId = useId();
+  const triggerId = useId();
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  function positionMenu(): void {
+    const menu = menuRef.current;
+    const trigger = triggerRef.current;
+
+    if (menu === null || trigger === null) {
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const viewportPadding = 12;
+    const menuWidth = Math.min(216, window.innerWidth - viewportPadding * 2);
+    const estimatedMenuHeight = 105;
+    const left = Math.min(
+      Math.max(viewportPadding, triggerRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+    const hasRoomBelow =
+      triggerRect.bottom + estimatedMenuHeight + viewportPadding <= window.innerHeight;
+    const top = hasRoomBelow
+      ? triggerRect.bottom + 7
+      : Math.max(viewportPadding, triggerRect.top - estimatedMenuHeight - 7);
+
+    menu.style.setProperty("--card-actions-menu-left", `${left}px`);
+    menu.style.setProperty("--card-actions-menu-top", `${top}px`);
+    menu.style.setProperty("--card-actions-menu-width", `${menuWidth}px`);
+    menu.style.setProperty(
+      "--card-actions-menu-origin",
+      hasRoomBelow ? "top right" : "bottom right",
+    );
+  }
+
+  return (
+    <div className={libraryStyles.cardActions}>
+      <button
+        aria-label={`Действия с карточкой «${card.backText}»`}
+        className={libraryStyles.cardActionsTrigger}
+        id={triggerId}
+        onClick={positionMenu}
+        popoverTarget={menuId}
+        popoverTargetAction="toggle"
+        ref={triggerRef}
+        title="Действия"
+        type="button"
+      >
+        <CardActionGlyph name="menu" />
+      </button>
+      <div
+        aria-labelledby={triggerId}
+        className={libraryStyles.cardActionsMenu}
+        id={menuId}
+        popover="auto"
+        ref={menuRef}
+        role="group"
+      >
+        <button
+          className={libraryStyles.cardEditAction}
+          data-card-action="edit"
+          disabled={isRemoving}
+          onClick={() => {
+            menuRef.current?.hidePopover();
+            onEdit();
+          }}
+          type="button"
+        >
+          <CardActionGlyph name="edit" />
+          <span>Редактировать</span>
+        </button>
+        <span aria-hidden="true" className={libraryStyles.cardActionsDivider} />
+        <button
+          className={libraryStyles.cardDeleteAction}
+          data-card-action="remove-from-deck"
+          disabled={isRemoving}
+          onClick={() => {
+            menuRef.current?.hidePopover();
+            onRemove();
+          }}
+          title="Удалить карточку только из этой колоды"
+          type="button"
+        >
+          <CardActionGlyph name="delete" />
+          <span>{isRemoving ? "Удаляем…" : "Удалить из колоды"}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeckEditCardRowProps) {
+  const isMountedRef = useRef(true);
+  const removeInFlightRef = useRef(false);
+  const rowRef = useRef<HTMLLIElement | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<unknown | null>(null);
+  const cardRowClassName = isRemoving
+    ? `${libraryStyles.cardRow} ${libraryStyles.cardRowDeleting}`
+    : libraryStyles.cardRow;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  async function handleRemove(): Promise<void> {
+    if (removeInFlightRef.current) {
+      return;
+    }
+
+    removeInFlightRef.current = true;
+    setRemoveError(null);
+    setIsRemoving(true);
+    const row = rowRef.current;
+    const nextFocusTarget =
+      row?.nextElementSibling?.querySelector<HTMLButtonElement>('button[title="Действия"]') ??
+      row?.previousElementSibling?.querySelector<HTMLButtonElement>('button[title="Действия"]') ??
+      document.getElementById("deck-cards-heading");
+
+    try {
+      await onRemove(card.uuid);
+      if (nextFocusTarget !== null) {
+        requestAnimationFrame(() => {
+          if (nextFocusTarget.isConnected) {
+            nextFocusTarget.focus();
+          }
+        });
+      }
+    } catch (error: unknown) {
+      if (isMountedRef.current && (!isApiError(error) || error.code !== "REQUEST_ABORTED")) {
+        setRemoveError(error);
+      }
+    } finally {
+      removeInFlightRef.current = false;
+      if (isMountedRef.current) {
+        setIsRemoving(false);
+      }
+    }
+  }
+
+  return (
+    <li aria-busy={isRemoving} className={cardRowClassName} data-card-uuid={card.uuid} ref={rowRef}>
+      <div className={`${libraryStyles.cardFace} ${libraryStyles.cardFaceSource}`}>
+        <span className={libraryStyles.languageBadge}>{card.targetLang.toUpperCase()}</span>
+        <div className={libraryStyles.cardFaceCopy}>
+          <p className={libraryStyles.cardWord} title={card.backText}>
+            <span className={libraryStyles.visuallyHidden}>Слово: </span>
+            <span lang={card.targetLang}>{card.backText}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className={`${libraryStyles.cardFace} ${libraryStyles.cardFaceTarget}`}>
+        <span className={libraryStyles.languageBadge}>{card.sourceLang.toUpperCase()}</span>
+        <div className={libraryStyles.cardFaceCopy}>
+          <p className={libraryStyles.cardTranslation} title={card.frontText}>
+            <span className={libraryStyles.visuallyHidden}>Перевод: </span>
+            <span lang={card.sourceLang}>{card.frontText}</span>
+          </p>
+        </div>
+      </div>
+
+      <CardActions
+        card={card}
+        isRemoving={isRemoving}
+        onEdit={() => setIsEditorOpen(true)}
+        onRemove={() => void handleRemove()}
+      />
+      {removeError === null ? null : (
+        <p className={libraryStyles.cardMutationError} role="alert">
+          {getCardRemoveErrorMessage(removeError)}
+        </p>
+      )}
+      {isEditorOpen ? (
+        <CardEditorDialog
+          card={card}
+          onClose={() => setIsEditorOpen(false)}
+          onSave={(input) => onUpdate(card.uuid, input)}
+        />
+      ) : null}
+    </li>
+  );
+}

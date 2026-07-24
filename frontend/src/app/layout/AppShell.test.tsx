@@ -9,7 +9,10 @@ function SuspendedPage(): never {
   throw suspendedPage;
 }
 
-function renderShell(pathname: "/" | "/library", suspendContent = false): string {
+function renderShell(
+  pathname: "/" | "/library" | "/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit",
+  suspendContent = false,
+): string {
   const page = suspendContent ? <SuspendedPage /> : <main>Правая часть: {pathname}</main>;
 
   return renderToStaticMarkup(
@@ -27,6 +30,7 @@ describe("AppShell", () => {
   it.each([
     ["/", "0", "Главная"],
     ["/library", "1", "Библиотека"],
+    ["/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit", "1", "Библиотека"],
   ] as const)("selects the navigation row for %s", (pathname, activeIndex, activeLabel) => {
     const markup = renderShell(pathname);
 

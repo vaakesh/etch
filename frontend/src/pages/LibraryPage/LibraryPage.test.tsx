@@ -1,15 +1,37 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { UseCardDeckAssignmentResult } from "../../features/library/model/useCardDeckAssignment";
 import type { UseLibraryCardsResult } from "../../features/library/model/useLibraryCards";
 
 const useLibraryDecksMock = vi.hoisted(() => vi.fn());
 const useLibraryCardsMock = vi.hoisted(() => vi.fn());
+const useCardDeckAssignmentMock = vi.hoisted(() => vi.fn());
 
+vi.mock("../../auth/hooks/useAuth", () => ({
+  useAuth: () => ({
+    status: "authorized",
+    user: {
+      uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+      username: "etch-user",
+      email: "etch@example.com",
+    },
+    error: null,
+    isAuthenticated: true,
+    initialize: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
 vi.mock("../../features/library/model/useLibraryDecks", () => ({
   useLibraryDecks: useLibraryDecksMock,
 }));
 vi.mock("../../features/library/model/useLibraryCards", () => ({
   useLibraryCards: useLibraryCardsMock,
+}));
+vi.mock("../../features/library/model/useCardDeckAssignment", () => ({
+  useCardDeckAssignment: useCardDeckAssignmentMock,
 }));
 
 function createLibraryResult(overrides: Record<string, unknown> = {}) {
@@ -95,20 +117,55 @@ function createCardLibraryResult(
   };
 }
 
+function createCardDeckAssignmentResult(
+  overrides: Partial<UseCardDeckAssignmentResult> = {},
+): UseCardDeckAssignmentResult {
+  return {
+    status: "success",
+    decks: [
+      {
+        uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+        title: "Daily Words",
+        totalWordsCount: 48,
+      },
+      {
+        uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+        title: "Первая поездка",
+        totalWordsCount: 1,
+      },
+    ],
+    error: null,
+    retry: vi.fn(),
+    assignToDecks: vi.fn(async () => []),
+    ...overrides,
+  };
+}
+
+import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { LibraryCardsPanel, LibraryCreateButton, LibraryPage } from "./LibraryPage";
+
+function renderLibraryPage(): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <LibraryPage />
+    </MemoryRouter>,
+  );
+}
 
 describe("LibraryPage", () => {
   beforeEach(() => {
     useLibraryDecksMock.mockReset();
     useLibraryCardsMock.mockReset();
+    useCardDeckAssignmentMock.mockReset();
     useLibraryDecksMock.mockReturnValue(createLibraryResult());
     useLibraryCardsMock.mockReturnValue(createCardLibraryResult());
+    useCardDeckAssignmentMock.mockReturnValue(createCardDeckAssignmentResult());
   });
 
   it("renders deck card previews, empty previews, actions, and accessible tabs", () => {
-    const markup = renderToStaticMarkup(<LibraryPage />);
+    const markup = renderLibraryPage();
     const accuracyTooltipIds = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map(
       ([, id]) => id,
     );
@@ -147,6 +204,7 @@ describe("LibraryPage", () => {
     expect(markup.match(/role="tooltip"/g)).toHaveLength(2);
     expect(markup).toContain("Правильных ответов — 88%");
     expect(markup).toContain("Редактировать");
+    expect(markup).toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
     expect(markup).toContain("Начать");
     expect(markup).toContain("Всего слов: 48");
     expect(markup).toContain("Последнее обновление:");
@@ -157,7 +215,7 @@ describe("LibraryPage", () => {
     expect(markup).not.toContain('data-card-uuid="8f449a33-87ff-4cf8-a371-43c681623f61"');
     expect(useLibraryCardsMock).toHaveBeenCalledWith({ enabled: false });
     expect(markup).toContain("Новая колода");
-    expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it("changes the create button label with the active library view", () => {
@@ -188,7 +246,7 @@ describe("LibraryPage", () => {
     expect(cardsMarkup).toContain('title="Создать новую карточку"');
   });
 
-  it("renders accessible compact cards and placeholder actions after the panel is opened", () => {
+  it("renders accessible compact cards and active actions after the panel is opened", () => {
     const cardLibrary = createCardLibraryResult({
       hasMore: true,
       nextCursor: "next-card-page",
@@ -228,8 +286,10 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Редактировать");
     expect(markup).toContain("Добавить в колоду");
     expect(markup).toContain("Удалить");
-    expect(markup.match(/<small>скоро<\/small>/g)).toHaveLength(1);
-    expect(markup.match(/data-card-action="[^"]+" disabled=""/g)).toHaveLength(1);
+    expect(markup).not.toContain("скоро");
+    expect(markup).toContain('aria-haspopup="dialog"');
+    expect(markup).toContain('title="Добавить карточку в одну или несколько колод"');
+    expect(markup).not.toMatch(/data-card-action="[^"]+" disabled=""/);
     expect(markup).not.toMatch(/data-card-action="edit" disabled=""/);
     expect(markup).not.toMatch(/data-card-action="delete" disabled=""/);
     expect(markup).not.toContain("<header");
@@ -257,6 +317,63 @@ describe("LibraryPage", () => {
     expect(markup).toContain("неизгладимый");
     expect(markup).toContain("Сохранить");
     expect(markup).toContain("Отмена");
+  });
+
+  it("renders the deck picker with compact multi-select rows and save action", () => {
+    const card = createCardLibraryResult().cards[0];
+    if (card === undefined) {
+      throw new Error("Expected a card fixture.");
+    }
+
+    const markup = renderToStaticMarkup(<AddCardToDeckDialog card={card} onClose={vi.fn()} />);
+
+    expect(useCardDeckAssignmentMock).toHaveBeenCalledWith(card.uuid);
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain(`data-card-deck-picker="${card.uuid}"`);
+    expect(markup).toContain("Быстрое добавление");
+    expect(markup).toContain("Добавить в колоду");
+    expect(markup).toContain("Daily Words");
+    expect(markup).toContain("Первая поездка");
+    expect(markup).toContain("48 слов");
+    expect(markup).toContain("1 слово");
+    expect(markup.match(/name="deck_uuid"/g)).toHaveLength(2);
+    expect(markup.match(/type="checkbox"/g)).toHaveLength(2);
+    expect(markup).toContain("Выбрано колод: 0");
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"[^>]*>/);
+    expect(markup).toContain("Сохранить");
+    expect(markup).toContain("Отмена");
+  });
+
+  it("renders loading, empty, and error states for the deck picker", () => {
+    const card = createCardLibraryResult().cards[0];
+    if (card === undefined) {
+      throw new Error("Expected a card fixture.");
+    }
+
+    useCardDeckAssignmentMock.mockReturnValue(
+      createCardDeckAssignmentResult({ status: "loading", decks: [] }),
+    );
+    expect(renderToStaticMarkup(<AddCardToDeckDialog card={card} onClose={vi.fn()} />)).toContain(
+      'aria-label="Загрузка ваших колод"',
+    );
+
+    useCardDeckAssignmentMock.mockReturnValue(
+      createCardDeckAssignmentResult({ status: "success", decks: [] }),
+    );
+    expect(renderToStaticMarkup(<AddCardToDeckDialog card={card} onClose={vi.fn()} />)).toContain(
+      "У вас пока нет колод",
+    );
+
+    useCardDeckAssignmentMock.mockReturnValue(
+      createCardDeckAssignmentResult({
+        status: "error",
+        decks: [],
+        error: new Error("failed"),
+      }),
+    );
+    const errorMarkup = renderToStaticMarkup(<AddCardToDeckDialog card={card} onClose={vi.fn()} />);
+    expect(errorMarkup).toContain("Колоды не загрузились");
+    expect(errorMarkup).toContain("Попробовать снова");
   });
 
   it("renders the new-card editor with empty required fields", () => {
@@ -344,7 +461,7 @@ describe("LibraryPage", () => {
       }),
     );
 
-    const markup = renderToStaticMarkup(<LibraryPage />);
+    const markup = renderLibraryPage();
 
     expect(markup).toMatch(
       /<button[^>]*aria-controls="library-decks-panel"[^>]*aria-pressed="true"/,
@@ -358,6 +475,34 @@ describe("LibraryPage", () => {
     expect(markup).toContain("1</strong> любимых колод загружено");
   });
 
+  it("does not link a favourite deck owned by another user to the editor", () => {
+    useLibraryDecksMock.mockReturnValue(
+      createLibraryResult({
+        onlyFavourites: true,
+        decks: [
+          {
+            uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+            ownerUuid: "ed81133b-9f71-487c-89de-70bf643bf086",
+            title: "Чужая публичная колода",
+            description: null,
+            totalWordsCount: 12,
+            accuracy: 91,
+            updatedAt: "2026-07-20T09:15:00Z",
+            isFavourite: true,
+            isFollowing: true,
+            cards: [],
+          },
+        ],
+      }),
+    );
+
+    const markup = renderLibraryPage();
+
+    expect(markup).not.toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
+    expect(markup).toContain("может редактировать только владелец");
+    expect(markup).toMatch(/<button[^>]*class="[^"]+"[^>]*disabled=""[^>]*>/);
+  });
+
   it("shows a dedicated empty state for the favourite filter", () => {
     useLibraryDecksMock.mockReturnValue(
       createLibraryResult({
@@ -366,7 +511,7 @@ describe("LibraryPage", () => {
       }),
     );
 
-    const markup = renderToStaticMarkup(<LibraryPage />);
+    const markup = renderLibraryPage();
 
     expect(markup).toContain("Любимых колод пока нет");
     expect(markup).toContain("Добавьте колоды в любимые, и они появятся здесь.");
@@ -382,7 +527,7 @@ describe("LibraryPage", () => {
       }),
     );
 
-    const markup = renderToStaticMarkup(<LibraryPage />);
+    const markup = renderLibraryPage();
 
     expect(markup).not.toContain("Любимых колод пока нет");
     expect(markup).toContain("Показать ещё");

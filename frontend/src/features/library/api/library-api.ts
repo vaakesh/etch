@@ -1,9 +1,12 @@
-import { ApiError, apiFetch } from "../../../api";
+import { ApiError, apiFetch, isApiError } from "../../../api";
 import {
   parseCreatedLibraryCard,
   parseCreatedLibraryDeck,
+  parseDeckCardPage,
+  parseEditableLibraryDeck,
   parseFavouriteLibraryDeckPage,
   parseLibraryCardPage,
+  parseLibraryDeckOptions,
   parseLibraryDeckPage,
   parseUpdatedLibraryCard,
 } from "../model/library-contract";
@@ -12,17 +15,115 @@ import type {
   CreatedLibraryDeck,
   CreateLibraryCardInput,
   CreateLibraryDeckInput,
+  DeckCardPage,
+  EditableLibraryDeck,
   FavouriteLibraryDeckPage,
+  LibraryCardDeckAddStatus,
   LibraryCardPage,
+  LibraryDeckOption,
   LibraryDeckPage,
   LibraryFavouriteResult,
   UpdatedLibraryCard,
   UpdateLibraryCardInput,
+  UpdateLibraryDeckInput,
 } from "../model/library-types";
 
 const LIBRARY_DECKS_PATH = "/bff/decks";
 const FAVOURITE_LIBRARY_DECKS_PATH = "/bff/decks/favourite";
 const LIBRARY_CARDS_PATH = "/bff/library/cards";
+export const DECK_CARD_PAGE_SIZE = 50;
+
+function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: string): void {
+  if (actualUuid !== expectedUuid) {
+    throw new ApiError({
+      status: 0,
+      code: "INVALID_LIBRARY_RESPONSE",
+      message: `The backend returned ${resource} with an unexpected UUID.`,
+    });
+  }
+}
+
+export async function getEditableLibraryDeck(
+  deckUuid: string,
+  signal?: AbortSignal,
+): Promise<EditableLibraryDeck> {
+  const payload = await apiFetch<unknown>(`/decks/${deckUuid}`, { signal });
+  const deck = parseEditableLibraryDeck(payload);
+
+  assertExpectedUuid(deckUuid, deck.uuid, "a deck");
+  return deck;
+}
+
+export async function updateEditableLibraryDeck(
+  deckUuid: string,
+  input: UpdateLibraryDeckInput,
+  signal?: AbortSignal,
+): Promise<EditableLibraryDeck> {
+  const payload = await apiFetch<unknown>(`/decks/${deckUuid}`, {
+    method: "PATCH",
+    body: {
+      title: input.title,
+      description: input.description,
+    },
+    signal,
+  });
+  const deck = parseEditableLibraryDeck(payload);
+
+  assertExpectedUuid(deckUuid, deck.uuid, "an updated deck");
+  return deck;
+}
+
+export async function getLibraryDeckCardPage(
+  deckUuid: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<DeckCardPage> {
+  const payload = await apiFetch<unknown>(`/decks/${deckUuid}/cards`, {
+    query: { offset, limit: DECK_CARD_PAGE_SIZE },
+    signal,
+  });
+
+  return parseDeckCardPage(payload, offset, DECK_CARD_PAGE_SIZE);
+}
+
+export async function removeLibraryCardFromDeck(
+  deckUuid: string,
+  cardUuid: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await apiFetch<void>(`/decks/${deckUuid}/cards/remove/${cardUuid}`, {
+    method: "POST",
+    signal,
+  });
+}
+
+export async function getLibraryDeckOptions(
+  signal?: AbortSignal,
+): Promise<readonly LibraryDeckOption[]> {
+  const payload = await apiFetch<unknown>("/users/me/decks", { signal });
+
+  return parseLibraryDeckOptions(payload);
+}
+
+export async function addLibraryCardToDeck(
+  deckUuid: string,
+  cardUuid: string,
+  signal?: AbortSignal,
+): Promise<LibraryCardDeckAddStatus> {
+  try {
+    await apiFetch<unknown>(`/decks/${deckUuid}/cards/${cardUuid}`, {
+      method: "POST",
+      signal,
+    });
+    return "added";
+  } catch (error: unknown) {
+    if (isApiError(error) && error.status === 409) {
+      return "already-present";
+    }
+
+    throw error;
+  }
+}
 
 export async function createLibraryDeck(
   input: CreateLibraryDeckInput,
@@ -113,13 +214,7 @@ export async function updateLibraryCard(
 
   const updatedCard = parseUpdatedLibraryCard(payload);
 
-  if (updatedCard.uuid !== cardUuid) {
-    throw new ApiError({
-      status: 0,
-      code: "INVALID_LIBRARY_RESPONSE",
-      message: "The backend returned an updated card with an unexpected UUID.",
-    });
-  }
+  assertExpectedUuid(cardUuid, updatedCard.uuid, "an updated card");
 
   return updatedCard;
 }

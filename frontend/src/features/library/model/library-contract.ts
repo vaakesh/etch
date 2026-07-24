@@ -1,12 +1,16 @@
 import { ApiError } from "../../../api";
 import type {
-  CreatedLibraryDeck,
   CreatedLibraryCard,
+  CreatedLibraryDeck,
+  DeckCardPage,
+  EditableLibraryCard,
+  EditableLibraryDeck,
   FavouriteLibraryDeck,
   FavouriteLibraryDeckPage,
   LibraryCard,
   LibraryCardPage,
   LibraryDeck,
+  LibraryDeckOption,
   LibraryDeckPage,
   LibraryPreviewCard,
   UpdatedLibraryCard,
@@ -133,6 +137,20 @@ function parseLibraryCard(value: unknown, index: number): LibraryCard {
   };
 }
 
+function parseDeckCard(value: unknown, index: number): EditableLibraryCard {
+  const path = `deckCards[${index}]`;
+  const card = readRecord(value, path);
+
+  return {
+    uuid: readUuid(card.uuid, `${path}.uuid`),
+    frontText: readString(card.front_text, `${path}.front_text`),
+    backText: readString(card.back_text, `${path}.back_text`),
+    sourceLang: readString(card.source_lang, `${path}.source_lang`),
+    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
+  };
+}
+
 export function parseUpdatedLibraryCard(value: unknown): UpdatedLibraryCard {
   const card = readRecord(value, "card");
 
@@ -143,6 +161,38 @@ export function parseUpdatedLibraryCard(value: unknown): UpdatedLibraryCard {
     sourceLang: readString(card.source_lang, "card.source_lang"),
     targetLang: readString(card.target_lang, "card.target_lang"),
     updatedAt: readDateTime(card.updated_at, "card.updated_at"),
+  };
+}
+
+export function parseEditableLibraryDeck(value: unknown): EditableLibraryDeck {
+  const deck = readRecord(value, "deck");
+  const totalWordsCount = readInteger(deck.words_count, "deck.words_count");
+
+  if (totalWordsCount < 0) {
+    return invalidLibraryResponse("deck.words_count");
+  }
+
+  return {
+    uuid: readUuid(deck.uuid, "deck.uuid"),
+    title: readString(deck.title, "deck.title"),
+    description: readNullableString(deck.description, "deck.description"),
+    totalWordsCount,
+    isPublic: readBoolean(deck.is_public, "deck.is_public"),
+    updatedAt: readNullableDateTime(deck.updated_at, "deck.updated_at"),
+  };
+}
+
+export function parseDeckCardPage(value: unknown, offset: number, limit: number): DeckCardPage {
+  if (!Array.isArray(value) || value.length > limit) {
+    return invalidLibraryResponse("deckCards");
+  }
+
+  const cards = value.map(parseDeckCard);
+
+  return {
+    cards,
+    nextOffset: offset + cards.length,
+    hasMore: cards.length === limit,
   };
 }
 
@@ -243,6 +293,28 @@ function parseFavouriteDeck(value: unknown, index: number): FavouriteLibraryDeck
       parsePreviewCard(card, `${path}.cards[${cardIndex}]`),
     ),
   };
+}
+
+export function parseLibraryDeckOptions(value: unknown): readonly LibraryDeckOption[] {
+  if (!Array.isArray(value)) {
+    return invalidLibraryResponse("deckOptions");
+  }
+
+  return value.map((item, index) => {
+    const path = `deckOptions[${index}]`;
+    const deck = readRecord(item, path);
+    const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
+
+    if (totalWordsCount < 0) {
+      return invalidLibraryResponse(`${path}.words_count`);
+    }
+
+    return {
+      uuid: readUuid(deck.uuid, `${path}.uuid`),
+      title: readString(deck.title, `${path}.title`),
+      totalWordsCount,
+    };
+  });
 }
 
 export function parseLibraryDeckPage(value: unknown): LibraryDeckPage {

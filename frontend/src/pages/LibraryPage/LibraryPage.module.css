@@ -775,13 +775,6 @@ a.navigationItem:hover {
   white-space: nowrap;
 }
 
-.cardActionsMenu button small {
-  margin-left: auto;
-  color: #858585;
-  font-size: 0.55rem;
-  font-weight: 500;
-}
-
 .cardActionsMenu button svg {
   width: 15px;
   height: 15px;
@@ -805,6 +798,10 @@ a.navigationItem:hover {
 
 .cardActionsMenu .cardEditAction svg {
   color: #90d0d0;
+}
+
+.cardActionsMenu .cardAddAction svg {
+  color: #8fc8b8;
 }
 
 .cardMutationError {
@@ -1329,6 +1326,248 @@ a.navigationItem:hover {
   animation: cardEditorSpin 680ms linear infinite;
 }
 
+.cardDeckDialog {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.cardDeckCardName {
+  display: inline-block;
+  max-width: min(240px, 42vw);
+  overflow: hidden;
+  color: #d8efed;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.cardDeckPicker {
+  display: grid;
+  min-height: 246px;
+}
+
+.cardDeckOptions {
+  display: grid;
+  min-width: 0;
+  max-height: min(390px, 46vh);
+  max-height: min(390px, 46dvh);
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 3px 5px 3px 3px;
+  overflow-y: auto;
+  border: 0;
+  scrollbar-color: #626262 transparent;
+  scrollbar-width: thin;
+}
+
+.cardDeckOption {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 54px;
+  grid-template-columns: 26px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 13px;
+  color: #dededb;
+  cursor: pointer;
+  background: #343434;
+  border: 1px solid #505050;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.cardDeckOption input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cardDeckCheck {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: transparent;
+  background: #292929;
+  border: 1px solid #686868;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 18%);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    scale 180ms var(--spring);
+}
+
+.cardDeckCheck svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+  scale: 0.55;
+  transition:
+    opacity 140ms ease,
+    scale 180ms var(--spring);
+}
+
+.cardDeckOption:hover {
+  color: #f6f6f2;
+  background: #393939;
+  border-color: #686868;
+  transform: translateY(-1px);
+}
+
+.cardDeckOption:has(input:focus-visible) {
+  border-color: #82c4c2;
+  box-shadow: 0 0 0 3px rgb(130 196 194 / 16%);
+}
+
+.cardDeckOption:has(input:checked) {
+  color: #f7fffd;
+  background: #354342;
+  border-color: #75aaa7;
+  box-shadow: inset 0 0 0 1px rgb(143 208 205 / 9%);
+}
+
+.cardDeckOption input:checked + .cardDeckCheck {
+  color: #234744;
+  background: #94d2cf;
+  border-color: #afe4e1;
+  box-shadow: 0 0 0 3px rgb(143 208 205 / 11%);
+  scale: 1.03;
+}
+
+.cardDeckOption input:checked + .cardDeckCheck svg {
+  opacity: 1;
+  scale: 1;
+}
+
+.cardDeckOption[data-assignment-state="completed"] {
+  cursor: default;
+}
+
+.cardDeckOption[data-assignment-state="failed"] {
+  background: rgb(94 50 47 / 35%);
+  border-color: rgb(218 129 129 / 58%);
+}
+
+.cardDeckTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardDeckMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.cardDeckCount {
+  color: #a1a19d;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardDeckRetryLabel {
+  padding: 3px 5px;
+  color: #f2bab4;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 1;
+  text-transform: uppercase;
+  background: rgb(126 54 48 / 28%);
+  border: 1px solid rgb(218 129 129 / 44%);
+  border-radius: 6px;
+}
+
+.cardDeckOption:has(input:checked) .cardDeckCount {
+  color: #b7d3d0;
+}
+
+.cardDeckSkeletons {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.cardDeckSkeletons > span {
+  display: block;
+  height: 54px;
+  background: linear-gradient(100deg, #333 25%, #464646 43%, #333 61%);
+  background-size: 300% 100%;
+  border: 1px solid #494949;
+  border-radius: 14px;
+  animation: skeleton 1.35s ease-in-out infinite;
+}
+
+.cardDeckState {
+  display: grid;
+  min-height: 246px;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px;
+  text-align: center;
+  background: #323232;
+  border: 1px dashed #555;
+  border-radius: 16px;
+}
+
+.cardDeckState strong {
+  color: #eeeeea;
+  font-size: 0.94rem;
+  font-weight: 650;
+}
+
+.cardDeckState p {
+  max-width: 360px;
+  margin: 0;
+  color: #9c9c98;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.cardDeckState button {
+  min-height: 36px;
+  margin-top: 7px;
+  padding: 0 13px;
+  color: #dff4f2;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 650;
+  cursor: pointer;
+  background: #3a4b4a;
+  border: 1px solid #638b88;
+  border-radius: 10px;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.cardDeckState button:hover:not(:disabled),
+.cardDeckState button:focus-visible {
+  background: #435957;
+  border-color: #86bbb7;
+}
+
 .cardFace {
   display: grid;
   min-width: 0;
@@ -1770,10 +2009,36 @@ a.navigationItem:hover {
   min-height: 38px;
   padding: 0;
   color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
   background: #faf7f1;
   border: 1px solid #d8d1c7;
   border-radius: 12px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.editButton:hover {
+  color: var(--teal-dark);
+  background: #edf5f2;
+  border-color: #bdd6d1;
+  transform: translateY(-1px);
+}
+
+.editButton:disabled {
+  color: #78817e;
+  cursor: not-allowed;
+  background: #f3efe8;
+  border-color: #ddd5ca;
+  opacity: 0.62;
+}
+
+.editButton:disabled:hover {
+  transform: none;
 }
 
 .editButton span {
@@ -2240,6 +2505,13 @@ a.navigationItem:hover {
     gap: 17px;
     padding: 20px;
   }
+  .cardDeckPicker,
+  .cardDeckState {
+    min-height: 220px;
+  }
+  .cardDeckOptions {
+    max-height: min(360px, 42dvh);
+  }
   .cardEditorTextGrid {
     grid-template-columns: 1fr;
   }
@@ -2329,6 +2601,34 @@ a.navigationItem:hover {
   }
   .cardEditorForm {
     padding: 17px 16px 18px;
+  }
+  .cardDeckCardName {
+    max-width: 42vw;
+  }
+  .cardDeckOption {
+    min-height: 50px;
+    grid-template-columns: 23px minmax(0, 1fr) max-content;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+  .cardDeckCheck {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+  }
+  .cardDeckTitle {
+    font-size: 0.76rem;
+  }
+  .cardDeckCount {
+    font-size: 0.61rem;
+  }
+  .cardDeckMeta {
+    gap: 5px;
+  }
+  .cardDeckRetryLabel {
+    padding-inline: 4px;
+    font-size: 0.46rem;
   }
   .cardEditorLanguageGrid {
     grid-template-columns: 1fr;

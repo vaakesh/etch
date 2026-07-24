@@ -3,6 +3,11 @@ class InvalidTokenError(Exception):
         super().__init__(message)
 
 
+class InvalidRefreshTokenError(Exception):
+    def __init__(self, message: str = "Invalid refresh token"):
+        super().__init__(message)
+
+
 class InvalidTokenTypeError(InvalidTokenError):
     def __init__(self, message: str = "Invalid token type"):
         super().__init__(message)

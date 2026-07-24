@@ -26,6 +26,14 @@ describe("app route configuration", () => {
     expect(libraryRoute?.Component).toBeDefined();
   });
 
+  it("registers the deck editor as a protected library route", () => {
+    const deckEditorRoute = appRoutes.find(({ path }) => path === "/library/:deck_uuid/edit");
+
+    expect(deckEditorRoute).toBeDefined();
+    expect(deckEditorRoute?.access).toBe("protected");
+    expect(deckEditorRoute?.Component).toBeDefined();
+  });
+
   it("renders unmatched routes as a public 404 page", () => {
     const fallbackRoute = appRoutes.find(({ path }) => path === "*");
 
