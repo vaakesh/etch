@@ -61,7 +61,10 @@ describe("HomePage", () => {
     expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
-    expect(markup).toContain('href="/library"');
+    expect(markup.match(/href="\/library"/g)).toHaveLength(2);
+    expect(markup).toContain('aria-haspopup="dialog"');
+    expect(markup).toContain('title="Создать новую колоду в библиотеке"');
+    expect(markup).not.toContain("Создание колоды не входит в данные /bff/home");
     expect(markup).not.toContain('viewBox="0 0 160 140"');
     expect(markup.match(/role="meter"/g)).toHaveLength(2);
     expect(markup).toContain('aria-valuenow="72"');

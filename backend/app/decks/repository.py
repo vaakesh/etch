@@ -23,6 +23,14 @@ class DeckRepository:
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_by_id(
+            self,
+            deck_id: int,
+    ) -> Deck | None:
+        stmt = select(Deck).where(Deck.id == deck_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
     
     async def get_by_uuid_and_is_public(self, deck_uuid: UUID) -> Deck | None:
         stmt = (
@@ -121,6 +129,40 @@ class DeckCardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def get_all_decks_by_card_id(
+            self,
+            card_id: int,
+    ) -> list[int]:
+        stmt = (
+            select(DeckCard.deck_id)
+            .where(DeckCard.card_id == card_id)
+            .distinct()
+        )
+        result = await self.session.execute(stmt)
+        deck_ids = result.scalars().all()
+
+        return deck_ids
+
+    async def update_cards_count(
+            self,
+            deck_ids: list[int],
+    ) -> None:
+        if deck_ids:
+            stmt = (
+                update(Deck)
+                .values(
+                    words_count=(
+                        select(func.count(DeckCard.id))
+                        .where(
+                            DeckCard.deck_id == Deck.id,
+                        )
+                        .scalar_subquery()
+                    )
+                )
+                .where(Deck.id.in_(deck_ids))
+            )
+            await self.session.execute(stmt)
+
 
     async def delete(self, deck_card: DeckCard) -> None:
         await self.session.delete(deck_card)
@@ -192,6 +234,18 @@ class DeckCardRepository:
             .order_by(DeckCard.position.asc(), DeckCard.id.asc())
             .offset(offset)
             .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_all_deck_cards_by_deck_id(
+        self,
+        deck_id: int,
+    ) -> list[DeckCard]:
+        stmt = (
+            select(DeckCard)
+            .where(DeckCard.deck_id == deck_id)
+            .order_by(DeckCard.position.asc())
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -326,6 +380,7 @@ class UserDeckRepository:
             self,
             user_id: int,
             deck_id: int,
+            for_update: bool = False,
     ) -> UserDeck | None:
         stmt = (
             select(UserDeck)
@@ -334,6 +389,9 @@ class UserDeckRepository:
                 UserDeck.deck_id == deck_id,
             )
         )
+        if for_update:
+            stmt = stmt.with_for_update()
+        
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

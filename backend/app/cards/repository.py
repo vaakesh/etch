@@ -5,7 +5,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cards.models import Card
-from app.bff.home.schemas import CardsLibraryPage
+from app.bff.schemas import CardsLibraryPage
 
 
 class CardRepository:

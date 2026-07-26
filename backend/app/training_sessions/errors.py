@@ -2,6 +2,18 @@ class TrainingSessionNotFoundError(Exception):
     def __init__(self, message: str = "Training session not found"):
         super().__init__(message)
 
+class TrainingSessionItemNotFoundError(Exception):
+    def __init__(self, message: str = "Training session item not found"):
+        super().__init__(message)
+
+
+class CardAlreadyAnsweredError(Exception):
+    def __init__(self, message: str = "Card already answered"):
+        super().__init__(message)
+
+class TrainingSessionAlreadyFinishedError(Exception):
+    def __init__(self, message: str = "Training session already finished"):
+            super().__init__(message)
 
 class TrainingSessionAlreadyExistsError(Exception):
     def __init__(self, message: str = "Training session already exists"):

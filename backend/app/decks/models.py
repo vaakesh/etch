@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.database import Base
@@ -14,7 +14,7 @@ class Deck(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     uuid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        default=uuid.uuid4,
+        server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
         index=True
@@ -67,7 +67,7 @@ class DeckCard(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     uuid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        default=uuid.uuid4,
+        server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
         index=True
@@ -85,7 +85,7 @@ class DeckCard(Base):
         index=True,
     )
 
-    position: Mapped[int] = mapped_column(Integer, default=0)
+    position: Mapped[int] = mapped_column(Integer)
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -104,6 +104,17 @@ class DeckCard(Base):
 
     __table_args__ = (
         UniqueConstraint("deck_id", "card_id", name="uq_deck_card"),
+        CheckConstraint(
+            "position >= 1",
+            name="ck_deck_cards_position_ge_1",
+        ),
+        UniqueConstraint(
+            "deck_id",
+            "position",
+            name="uq_deck_cards_deck_position",
+            deferrable=True,
+            initially="DEFERRED",
+        )
     )
 
 

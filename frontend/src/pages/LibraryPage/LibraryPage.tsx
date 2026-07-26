@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { isApiError } from "../../api";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon } from "../../components/DashboardVisuals";
+import { shouldOpenDeckCreator } from "../../features/library/model/library-navigation";
 import type {
   LibraryCard,
   LibraryDeckItem,
@@ -839,13 +840,34 @@ export function LibraryCreateButton({
 }
 
 export function LibraryPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openDeckCreatorFromNavigation = shouldOpenDeckCreator(location.state);
   const [activeView, setActiveView] = useState<LibraryView>("decks");
   const [hasOpenedCards, setHasOpenedCards] = useState(false);
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
-  const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false);
+  const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(openDeckCreatorFromNavigation);
   const { user } = useAuth();
   const library = useLibraryDecks();
-  const cardLibrary = useLibraryCards({ enabled: hasOpenedCards });
+  const cardLibrary = useLibraryCards({
+    enabled: hasOpenedCards,
+    onDeleteSuccess: library.retry,
+  });
+
+  useEffect(() => {
+    if (!openDeckCreatorFromNavigation) {
+      return;
+    }
+
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      },
+      { replace: true, state: null },
+    );
+  }, [location.hash, location.pathname, location.search, navigate, openDeckCreatorFromNavigation]);
 
   function handleViewChange(view: LibraryView): void {
     setActiveView(view);

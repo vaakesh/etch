@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.cards.errors import CardNotFoundError, PermissionDeniedError
 from app.cards.schemas import CardSchema
 from app.service import UnitOfWork
+from app.training_sessions.models import TrainingSession
 
 from .errors import (
     CannotFollowOwnDeckError,
@@ -14,6 +15,7 @@ from .errors import (
     DeckCardNotFoundError,
     DeckIsNotFollowedError,
     DeckNotFoundError,
+    InvalidDeckCardPositionError,
 )
 from .models import Deck, DeckCard, UserDeck
 from .schemas import (
@@ -200,7 +202,6 @@ class DeckService:
                 )
 
                 card = await self._get_card_by_uuid(uow, card_uuid)
-                print(deck, card)
 
                 if deck.user_id != user_id or card.user_id != user_id:
                     raise PermissionDeniedError()
@@ -208,13 +209,18 @@ class DeckService:
                 deck_card = await uow.deck_card_repo.get_by_deck_id_and_card_id(
                     deck_id=deck.id,
                     card_id=card.id,
-                ) # todo: надо сделать, чтобы можно было добавлять одну карточку в колоду несколько раз
+                )
+
+                if deck_card is not None:
+                    raise DeckCardAlreadyExistsError()
+
+                deck.words_count += 1
 
                 max_position = await uow.deck_card_repo.get_max_position(
                     deck_id=deck.id,
                 )
                 if max_position is None:
-                    next_position = 0
+                    next_position = 1
                 else:
                     next_position = max_position + 1
 
@@ -272,6 +278,8 @@ class DeckService:
                     f"Card with uuid={card_uuid} not found in deck uuid={deck_uuid}"
                 )
 
+            deck.words_count -= 1
+
             await uow.deck_card_repo.delete(deck_card)
             await uow.commit()
 
@@ -296,10 +304,18 @@ class DeckService:
             )
             if card.user_id != user_id or deck.user_id != user_id:
                 raise PermissionDeniedError()
+
+            if not 1 <= to_position <= deck.words_count:
+                raise InvalidDeckCardPositionError()
+            
             deck_card = await uow.deck_card_repo.get_by_deck_id_and_card_id(
                 deck_id=deck.id,
                 card_id=card.id,
             )
+
+            if deck_card is None:
+                raise DeckCardNotFoundError()
+            
             from_position = deck_card.position
             if from_position >= to_position:
                 start, end, add_to_position = to_position, from_position, 1

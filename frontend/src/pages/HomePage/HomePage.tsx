@@ -15,6 +15,10 @@ import {
   formatStreak,
   formatStudyTime,
 } from "../../features/home/model/home-formatters";
+import {
+  LIBRARY_CREATE_DECK_NAVIGATION_STATE,
+  LIBRARY_PATH,
+} from "../../features/library/model/library-navigation";
 import type {
   HomeDashboard,
   HomeDeck,
@@ -51,15 +55,16 @@ function DashboardHeader() {
       <h1>Главная</h1>
 
       <div className={styles.headerActions}>
-        <button
+        <Link
+          aria-haspopup="dialog"
           className={styles.newDeckButton}
-          disabled
-          title="Создание колоды не входит в данные /bff/home"
-          type="button"
+          state={LIBRARY_CREATE_DECK_NAVIGATION_STATE}
+          title="Создать новую колоду в библиотеке"
+          to={LIBRARY_PATH}
         >
           <DashboardIcon name="plus" />
           <span>Новая колода</span>
-        </button>
+        </Link>
       </div>
     </header>
   );

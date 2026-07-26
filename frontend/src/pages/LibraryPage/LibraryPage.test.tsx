@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LIBRARY_CREATE_DECK_NAVIGATION_STATE } from "../../features/library/model/library-navigation";
 import type { UseCardDeckAssignmentResult } from "../../features/library/model/useCardDeckAssignment";
 import type { UseLibraryCardsResult } from "../../features/library/model/useLibraryCards";
 
@@ -146,9 +147,9 @@ import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { LibraryCardsPanel, LibraryCreateButton, LibraryPage } from "./LibraryPage";
 
-function renderLibraryPage(): string {
+function renderLibraryPage(state?: unknown): string {
   return renderToStaticMarkup(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[{ pathname: "/library", state }]}>
       <LibraryPage />
     </MemoryRouter>,
   );
@@ -213,9 +214,33 @@ describe("LibraryPage", () => {
     expect(markup).toContain("2</strong> колод загружено");
     expect(markup).toMatch(/<section[^>]*hidden=""[^>]*id="library-cards-panel"[^>]*><\/section>/);
     expect(markup).not.toContain('data-card-uuid="8f449a33-87ff-4cf8-a371-43c681623f61"');
-    expect(useLibraryCardsMock).toHaveBeenCalledWith({ enabled: false });
+    expect(useLibraryCardsMock).toHaveBeenCalledWith({
+      enabled: false,
+      onDeleteSuccess: expect.any(Function),
+    });
     expect(markup).toContain("Новая колода");
+    expect(markup).not.toContain('data-deck-creator="new"');
     expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens the existing deck creator after navigation from the home action", () => {
+    const markup = renderLibraryPage(LIBRARY_CREATE_DECK_NAVIGATION_STATE);
+
+    expect(markup).toContain('data-deck-creator="new"');
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain("Новая колода");
+  });
+
+  it("refreshes deck counts after a card is deleted successfully", () => {
+    const retryDecks = vi.fn();
+    useLibraryDecksMock.mockReturnValue(createLibraryResult({ retry: retryDecks }));
+
+    renderLibraryPage();
+
+    expect(useLibraryCardsMock).toHaveBeenCalledWith({
+      enabled: false,
+      onDeleteSuccess: retryDecks,
+    });
   });
 
   it("changes the create button label with the active library view", () => {

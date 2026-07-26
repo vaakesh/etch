@@ -104,7 +104,10 @@ class CardService:
         async with self.uow_factory() as uow:
             card = await self._get_by_uuid(uow, card_uuid)
 
+            deck_ids = await uow.deck_card_repo.get_all_decks_by_card_id(card.id)
             await uow.card_repo.delete(card)
+            await uow.flush()
+            await uow.deck_card_repo.update_cards_count(deck_ids=deck_ids)
             await uow.commit()
 
             return None

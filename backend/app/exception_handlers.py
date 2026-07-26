@@ -28,12 +28,17 @@ from app.decks.errors import (
     DeckCardNotFoundError,
     DeckNotFoundError,
     PermissionDeniedError as DeckPermissionDeniedError,
+    DeckIsEmptyError,
+    InvalidDeckCardPositionError,
 )
 
 from app.training_sessions.errors import (
+    CardAlreadyAnsweredError,
     PermissionDeniedError as TrainingSessionPermissionDeniedError,
     TrainingSessionAlreadyExistsError,
     TrainingSessionNotFoundError,
+    TrainingSessionItemNotFoundError,
+    TrainingSessionAlreadyFinishedError,
 )
 from app.auth.cookies import clear_tokens_cookie
 
@@ -195,12 +200,35 @@ async def deck_already_exists_handler(
     )
 
 
+async def deck_is_empty_handler(
+    request: Request,
+    exc: DeckIsEmptyError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
 async def deck_card_not_found_handler(
     request: Request,
     exc: DeckCardNotFoundError,
 ):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def invalid_deck_card_position_handler(
+    request: Request,
+    exc: InvalidDeckCardPositionError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
         content={
             "message": str(exc),
         },
@@ -243,9 +271,45 @@ async def training_session_not_found_handler(
     )
 
 
+async def training_session_item_not_found_handler(
+    request: Request,
+    exc: TrainingSessionItemNotFoundError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def card_already_answered_handler(
+    request: Request,
+    exc: CardAlreadyAnsweredError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
 async def training_session_already_exists_handler(
     request: Request,
     exc: TrainingSessionAlreadyExistsError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def training_session_already_finished_handler(
+    request: Request,
+    exc: TrainingSessionAlreadyFinishedError,
 ):
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
@@ -315,7 +379,9 @@ def register_exception_handlers(app: FastAPI):
 
     app.add_exception_handler(DeckNotFoundError, deck_not_found_handler)
     app.add_exception_handler(DeckAlreadyExistsError, deck_already_exists_handler)
+    app.add_exception_handler(DeckIsEmptyError, deck_is_empty_handler)
     app.add_exception_handler(DeckCardNotFoundError, deck_card_not_found_handler)
+    app.add_exception_handler(InvalidDeckCardPositionError, invalid_deck_card_position_handler)
     app.add_exception_handler(DeckCardAlreadyExistsError, deck_card_already_exists_handler)
     app.add_exception_handler(DeckPermissionDeniedError, deck_permission_denied_handler)
 
@@ -328,9 +394,21 @@ def register_exception_handlers(app: FastAPI):
         training_session_already_exists_handler,
     )
     app.add_exception_handler(
-        TrainingSessionPermissionDeniedError,
-        training_session_permission_denied_handler,
+            TrainingSessionAlreadyFinishedError,
+            training_session_already_finished_handler,
+        )
+    app.add_exception_handler(
+        TrainingSessionItemNotFoundError,
+        training_session_item_not_found_handler,
     )
+    app.add_exception_handler(
+            CardAlreadyAnsweredError,
+            card_already_answered_handler,
+        )
+    app.add_exception_handler(
+            TrainingSessionPermissionDeniedError,
+            training_session_permission_denied_handler,
+        )
 
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

@@ -48,7 +48,8 @@ function appendUniqueCards(
 
 export function useLibraryCards({
   enabled = true,
-}: { enabled?: boolean } = {}): UseLibraryCardsResult {
+  onDeleteSuccess,
+}: { enabled?: boolean; onDeleteSuccess?: () => void } = {}): UseLibraryCardsResult {
   const [state, setState] = useState<LibraryCardsState>(INITIAL_STATE);
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
@@ -219,30 +220,35 @@ export function useLibraryCards({
     [],
   );
 
-  const deleteCard = useCallback(async (cardUuid: string): Promise<void> => {
-    deleteControllersRef.current.get(cardUuid)?.abort();
+  const deleteCard = useCallback(
+    async (cardUuid: string): Promise<void> => {
+      deleteControllersRef.current.get(cardUuid)?.abort();
 
-    const controller = new AbortController();
-    const requestRevision = requestRevisionRef.current;
-    deleteControllersRef.current.set(cardUuid, controller);
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current;
+      deleteControllersRef.current.set(cardUuid, controller);
 
-    try {
-      await deleteLibraryCard(cardUuid, controller.signal);
+      try {
+        await deleteLibraryCard(cardUuid, controller.signal);
 
-      if (controller.signal.aborted || requestRevisionRef.current !== requestRevision) {
-        return;
+        if (controller.signal.aborted || requestRevisionRef.current !== requestRevision) {
+          return;
+        }
+
+        setState((currentState) => ({
+          ...currentState,
+          cards: currentState.cards.filter((card) => card.uuid !== cardUuid),
+        }));
+
+        onDeleteSuccess?.();
+      } finally {
+        if (deleteControllersRef.current.get(cardUuid) === controller) {
+          deleteControllersRef.current.delete(cardUuid);
+        }
       }
-
-      setState((currentState) => ({
-        ...currentState,
-        cards: currentState.cards.filter((card) => card.uuid !== cardUuid),
-      }));
-    } finally {
-      if (deleteControllersRef.current.get(cardUuid) === controller) {
-        deleteControllersRef.current.delete(cardUuid);
-      }
-    }
-  }, []);
+    },
+    [onDeleteSuccess],
+  );
 
   useEffect(() => {
     const updateControllers = updateControllersRef.current;

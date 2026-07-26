@@ -420,6 +420,7 @@ a.navigationItem:hover {
   border: 1px solid #cedfda;
   border-radius: 17px;
   box-shadow: 0 8px 18px rgb(48 106 100 / 10%);
+  text-decoration: none;
   animation: actionReveal 520ms var(--motion-spring) 300ms both;
 }
 

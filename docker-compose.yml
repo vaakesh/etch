@@ -18,7 +18,7 @@ services:
     restart: on-failure:10
 
   postgres:
-    image: postgres:16
+    image: postgres:18.4
     container_name: etch-postgres
     restart: unless-stopped
     environment:
@@ -26,7 +26,7 @@ services:
       POSTGRES_USER: ${db_user}
       POSTGRES_PASSWORD: ${db_password}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata18:/var/lib/postgresql
     ports:
       - "${db_port}:${db_port}"
 
@@ -70,7 +70,7 @@ services:
 #       - redisinsight:/data
 
 volumes:
-  pgdata:
+  pgdata18:
   cloudbeaver_data:
 #   redis_data:
 #   redisinsight:

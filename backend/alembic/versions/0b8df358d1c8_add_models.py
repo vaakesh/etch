@@ -1,8 +1,8 @@
-"""first models
+"""add models
 
-Revision ID: 0f15b492e3fc
+Revision ID: 0b8df358d1c8
 Revises: 
-Create Date: 2026-07-04 13:59:26.149425
+Create Date: 2026-07-26 23:55:00.970177
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0f15b492e3fc'
+revision: str = '0b8df358d1c8'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -51,41 +51,67 @@ def upgrade() -> None:
     op.create_index(op.f('ix_cards_uuid'), 'cards', ['uuid'], unique=True)
     op.create_table('decks',
     sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('uuid', sa.UUID(), nullable=False),
+    sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
     sa.Column('user_id', sa.BigInteger(), nullable=True),
+    sa.Column('source_deck_id', sa.BigInteger(), nullable=True),
     sa.Column('title', sa.String(length=150), nullable=True),
     sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('words_count', sa.Integer(), nullable=True),
     sa.Column('is_public', sa.Boolean(), nullable=True),
+    sa.Column('version', sa.Integer(), server_default=sa.text('1'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['source_deck_id'], ['decks.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_decks_source_deck_id'), 'decks', ['source_deck_id'], unique=False)
     op.create_index(op.f('ix_decks_user_id'), 'decks', ['user_id'], unique=False)
     op.create_index(op.f('ix_decks_uuid'), 'decks', ['uuid'], unique=True)
-    op.create_table('deck_cards',
+    op.create_table('user_sessions',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('uuid', sa.UUID(), nullable=False),
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('refresh_token_hash', sa.String(length=64), nullable=False),
+    sa.Column('user_agent', sa.String(), nullable=True),
+    sa.Column('ip', sa.String(length=64), nullable=True),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('revoked_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('replaced_by_session_id', sa.BigInteger(), nullable=True),
+    sa.ForeignKeyConstraint(['replaced_by_session_id'], ['user_sessions.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('uuid')
+    )
+    op.create_index(op.f('ix_user_sessions_refresh_token_hash'), 'user_sessions', ['refresh_token_hash'], unique=True)
+    op.create_index(op.f('ix_user_sessions_user_id'), 'user_sessions', ['user_id'], unique=False)
+    op.create_table('deck_cards',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
     sa.Column('deck_id', sa.BigInteger(), nullable=True),
     sa.Column('card_id', sa.BigInteger(), nullable=True),
     sa.Column('position', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.CheckConstraint('position >= 1', name='ck_deck_cards_position_ge_1'),
     sa.ForeignKeyConstraint(['card_id'], ['cards.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['deck_id'], ['decks.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('deck_id', 'card_id', name='uq_deck_card')
+    sa.UniqueConstraint('deck_id', 'card_id', name='uq_deck_card'),
+    sa.UniqueConstraint('deck_id', 'position', deferrable=True, initially='DEFERRED', name='uq_deck_cards_deck_position')
     )
     op.create_index(op.f('ix_deck_cards_card_id'), 'deck_cards', ['card_id'], unique=False)
     op.create_index(op.f('ix_deck_cards_deck_id'), 'deck_cards', ['deck_id'], unique=False)
     op.create_index(op.f('ix_deck_cards_uuid'), 'deck_cards', ['uuid'], unique=True)
     op.create_table('training_sessions',
     sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('uuid', sa.UUID(), nullable=False),
+    sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
     sa.Column('user_id', sa.BigInteger(), nullable=True),
     sa.Column('deck_id', sa.BigInteger(), nullable=True),
     sa.Column('requested_count', sa.Integer(), nullable=True),
-    sa.Column('actual_count', sa.Integer(), nullable=True),
+    sa.Column('actual_count', sa.Integer(), server_default=sa.text('0'), nullable=True),
     sa.Column('correct_count', sa.Integer(), nullable=True),
     sa.Column('wrong_count', sa.Integer(), nullable=True),
     sa.Column('score', sa.Integer(), nullable=True),
@@ -100,12 +126,53 @@ def upgrade() -> None:
     op.create_index(op.f('ix_training_sessions_deck_id'), 'training_sessions', ['deck_id'], unique=False)
     op.create_index(op.f('ix_training_sessions_user_id'), 'training_sessions', ['user_id'], unique=False)
     op.create_index(op.f('ix_training_sessions_uuid'), 'training_sessions', ['uuid'], unique=True)
+    op.create_table('user_decks',
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('deck_id', sa.BigInteger(), nullable=False),
+    sa.Column('sessions_count', sa.Integer(), nullable=False),
+    sa.Column('correct_count', sa.Integer(), nullable=False),
+    sa.Column('wrong_count', sa.Integer(), nullable=False),
+    sa.Column('last_studied_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('is_favourite', sa.Boolean(), nullable=False),
+    sa.Column('is_following', sa.Boolean(), server_default=sa.text('false'), nullable=False),
+    sa.Column('last_seen_version', sa.Integer(), nullable=True),
+    sa.Column('added_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['deck_id'], ['decks.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('user_id', 'deck_id')
+    )
+    op.create_table('training_session_items',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
+    sa.Column('training_session_id', sa.BigInteger(), nullable=False),
+    sa.Column('sequence_number', sa.Integer(), nullable=False),
+    sa.Column('original_card_uuid', sa.UUID(), nullable=False),
+    sa.Column('prompt_text', sa.Text(), nullable=False),
+    sa.Column('answer_text', sa.Text(), nullable=False),
+    sa.Column('prompt_lang', sa.String(length=10), nullable=False),
+    sa.Column('answer_lang', sa.String(length=10), nullable=False),
+    sa.Column('is_answered', sa.Boolean(), server_default=sa.text('false'), nullable=False),
+    sa.Column('is_correct', sa.Boolean(), nullable=True),
+    sa.Column('answered_at', sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint('sequence_number >= 1', name='ck_training_session_items_sequence_ge_1'),
+    sa.ForeignKeyConstraint(['training_session_id'], ['training_sessions.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('training_session_id', 'sequence_number', name='uq_training_session_item_sequence')
+    )
+    op.create_index(op.f('ix_training_session_items_original_card_uuid'), 'training_session_items', ['original_card_uuid'], unique=False)
+    op.create_index(op.f('ix_training_session_items_training_session_id'), 'training_session_items', ['training_session_id'], unique=False)
+    op.create_index(op.f('ix_training_session_items_uuid'), 'training_session_items', ['uuid'], unique=True)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_training_session_items_uuid'), table_name='training_session_items')
+    op.drop_index(op.f('ix_training_session_items_training_session_id'), table_name='training_session_items')
+    op.drop_index(op.f('ix_training_session_items_original_card_uuid'), table_name='training_session_items')
+    op.drop_table('training_session_items')
+    op.drop_table('user_decks')
     op.drop_index(op.f('ix_training_sessions_uuid'), table_name='training_sessions')
     op.drop_index(op.f('ix_training_sessions_user_id'), table_name='training_sessions')
     op.drop_index(op.f('ix_training_sessions_deck_id'), table_name='training_sessions')
@@ -114,8 +181,12 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_deck_cards_deck_id'), table_name='deck_cards')
     op.drop_index(op.f('ix_deck_cards_card_id'), table_name='deck_cards')
     op.drop_table('deck_cards')
+    op.drop_index(op.f('ix_user_sessions_user_id'), table_name='user_sessions')
+    op.drop_index(op.f('ix_user_sessions_refresh_token_hash'), table_name='user_sessions')
+    op.drop_table('user_sessions')
     op.drop_index(op.f('ix_decks_uuid'), table_name='decks')
     op.drop_index(op.f('ix_decks_user_id'), table_name='decks')
+    op.drop_index(op.f('ix_decks_source_deck_id'), table_name='decks')
     op.drop_table('decks')
     op.drop_index(op.f('ix_cards_uuid'), table_name='cards')
     op.drop_index(op.f('ix_cards_user_id'), table_name='cards')

@@ -1,13 +1,17 @@
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Literal
 from uuid import UUID
 from datetime import datetime
 from app.service import UnitOfWork
-from app.bff.home.schemas import CardsLibraryPage, DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, ResponseCardsLibraryPage, UserProgress
+from app.bff.schemas import CreateTrainingSession, DeckDashboard, DeckForDeckPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, PracticeCard, PracticeSessionResponse, ResponseCardsLibraryPage, UserProgress
 from app.decks.models import UserDeck
 from app.cards.models import Card
 from app.decks.schemas import DeckWithUserData
 from app.bff.utils import calculate_accuracy, decode_cursor, encode_cursor
+from app.cards.errors import PermissionDeniedError
+from app.decks.errors import DeckIsEmptyError, DeckNotFoundError
+from app.training_sessions.models import TrainingSession, TrainingSessionItem
+from app.training_sessions.errors import TrainingSessionAlreadyFinishedError, TrainingSessionNotFoundError
 
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
@@ -187,3 +191,133 @@ class BffService:
                 has_more=has_more,
             )
             return result
+
+
+    async def start_practice_session(
+            self,
+            user_id: int,
+            deck_uuid: UUID,
+            prompt_side: Literal["front", "back"],
+    ) -> PracticeSessionResponse:
+        async with self.uow_factory() as uow:
+            deck = await uow.deck_repo.get_by_uuid(
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
+
+            if deck is None:
+                raise DeckNotFoundError()
+
+            if deck.user_id != user_id and not deck.is_public:
+                raise PermissionDeniedError()
+
+
+            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
+                user_id=user_id,
+                deck_id=deck.id,
+            )
+            if user_deck is None:
+                user_deck = UserDeck(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                    sessions_count=0,
+                    correct_count=0,
+                    wrong_count=0,
+                )
+                uow.user_deck_repo.add(user_deck)
+
+            answer_side = "back" if prompt_side == "front" else "front"
+
+            training_session = TrainingSession(
+                user_id=user_id,
+                deck_id=deck.id,
+                requested_count=0,
+                actual_count=0,
+                correct_count=0,
+                wrong_count=0,
+                score=0,
+                prompt_side=prompt_side,
+                answer_side=answer_side,
+            )
+
+
+            uow.training_session_repo.add(training_session)
+            await uow.flush()
+
+            training_session_items = await uow.training_session_item_repo.create_snapshot(
+                training_session_id=training_session.id,
+                deck_id=deck.id,
+                prompt_side=prompt_side,
+                answer_side=answer_side,
+            )
+            if not training_session_items:
+                raise DeckIsEmptyError()
+            
+            training_session.requested_count = len(training_session_items)
+
+            response = PracticeSessionResponse(
+                training_session_uuid=training_session.uuid,
+                deck_uuid=deck.uuid,
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+                total_count=training_session.requested_count,
+                answered_count=training_session.actual_count,
+                correct_count=training_session.correct_count,
+                wrong_count=training_session.wrong_count,
+                started_at=training_session.started_at,
+                cards=[PracticeCard(
+                    sequence_number=item.sequence_number,
+                    prompt_text=item.prompt_text,
+                    prompt_language=item.prompt_lang,
+                    answer_language=item.answer_lang,
+                ) for item in training_session_items]
+            )
+
+            await uow.commit()
+
+            return response
+
+            
+
+    async def continue_practice_session(
+            self,
+            user_id: int,
+            training_session_uuid: UUID,
+    ) -> PracticeSessionResponse:
+        async with self.uow_factory() as uow:
+            training_session = await uow.training_session_repo.get_by_uuid(
+                training_session_uuid,
+            )
+
+            if training_session is None or training_session.user_id != user_id:
+                raise TrainingSessionNotFoundError()
+
+            if training_session.finished_at is not None:
+                raise TrainingSessionAlreadyFinishedError()
+
+            deck = await uow.deck_repo.get_by_id(training_session.deck_id)
+
+            if deck is None:
+                raise DeckNotFoundError()
+
+            training_session_next_cards = await uow.training_session_item_repo.get_next_cards(
+                training_session_id=training_session.id,
+            )
+
+            return PracticeSessionResponse(
+                training_session_uuid=training_session.uuid,
+                deck_uuid=deck.uuid,
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+                total_count=training_session.requested_count,
+                answered_count=training_session.actual_count,
+                correct_count=training_session.correct_count,
+                wrong_count=training_session.wrong_count,
+                started_at=training_session.started_at,
+                cards=[PracticeCard(
+                    sequence_number=item.sequence_number,
+                    prompt_text=item.prompt_text,
+                    prompt_language=item.prompt_lang,
+                    answer_language=item.answer_lang,
+                ) for item in training_session_next_cards]
+            )

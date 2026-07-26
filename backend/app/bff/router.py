@@ -1,10 +1,13 @@
+from typing import Literal
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.deps import get_current_user
-from app.bff.home.schemas import CardsLibraryPage, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, ResponseCardsLibraryPage
+from app.bff.schemas import CreateTrainingSession, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, PracticeSessionResponse, ResponseCardsLibraryPage
 from app.users.models import User
-from app.bff.home.deps import get_bff_service
-from app.bff.home.service import BffService
+from app.bff.deps import get_bff_service
+from app.bff.service import BffService
 
 
 router = APIRouter(prefix="/bff")
@@ -52,3 +55,33 @@ async def get_cards_library_page(
         cursor=cursor,
     )
     return result
+
+@router.post(
+    "/practice/{deck_uuid}/start",
+    response_model=PracticeSessionResponse,
+)
+async def start_practice_session(
+    deck_uuid: UUID,
+    payload: CreateTrainingSession,
+    current_user: User = Depends(get_current_user),
+    bff_service: BffService = Depends(get_bff_service),
+):
+    return await bff_service.start_practice_session(
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        prompt_side=payload.prompt_side,
+    )
+
+@router.post(
+    "/practice/{training_session_uuid}/continue",
+    response_model=PracticeSessionResponse,
+)
+async def continue_practice_session(
+    training_session_uuid: UUID,
+    current_user: User = Depends(get_current_user),
+    bff_service: BffService = Depends(get_bff_service),
+):
+    return await bff_service.continue_practice_session(
+        user_id=current_user.id,
+        training_session_uuid=training_session_uuid,
+    )

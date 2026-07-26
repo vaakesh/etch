@@ -68,7 +68,7 @@ class DeckCardSchema(BaseModel):
     deck_id: int
     card_id: int
 
-    position: int = 0
+    position: int = Field(ge=1)
 
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -76,16 +76,16 @@ class DeckCardSchema(BaseModel):
 class DeckCardCreate(BaseModel):
     deck_id: int
     card_id: int
-    position: int = Field(default=0, ge=0)
+    position: int = Field(default=1, ge=1)
 
 
 class DeckCardUpdate(BaseModel):
-    position: int | None = Field(default=None, ge=0)
+    position: int = Field(ge=1)
 
 
 class ReorderCards(BaseModel):
     card_uuid: UUID
-    to_position: int = Field(ge=0)
+    to_position: int = Field(ge=1)
 
 
 class DeckCardOut(DeckCardSchema):

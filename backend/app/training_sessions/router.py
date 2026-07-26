@@ -1,16 +1,20 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.training_sessions.deps import get_training_session_service
 from app.training_sessions.schemas import (
+    SubmitAnswerResponse,
     TrainingSessionCreate,
     TrainingSessionFinish,
     TrainingSessionOut,
     TrainingSessionSchema,
     TrainingSessionUpdate,
+    UserAnswer,
 )
 from app.training_sessions.service import TrainingSessionService
+from app.auth.deps import get_current_user
+from app.users.models import User
 
 
 router = APIRouter(prefix="/training-sessions")
@@ -36,44 +40,6 @@ async def get_training_session(
     return await training_session_service.get_by_uuid(session_uuid)
 
 
-@router.post("/", response_model=TrainingSessionOut)
-async def create_training_session(
-    payload: TrainingSessionCreate,
-    training_session_service: TrainingSessionService = Depends(
-        get_training_session_service
-    ),
-):
-    return await training_session_service.create_training_session(payload)
-
-
-@router.patch("/{session_uuid}", response_model=TrainingSessionSchema)
-async def update_training_session(
-    session_uuid: UUID,
-    payload: TrainingSessionUpdate,
-    training_session_service: TrainingSessionService = Depends(
-        get_training_session_service
-    ),
-):
-    return await training_session_service.update_training_session(
-        session_uuid,
-        payload,
-    )
-
-
-@router.patch("/{session_uuid}/finish", response_model=TrainingSessionSchema)
-async def finish_training_session(
-    session_uuid: UUID,
-    payload: TrainingSessionFinish,
-    training_session_service: TrainingSessionService = Depends(
-        get_training_session_service
-    ),
-):
-    return await training_session_service.finish_training_session(
-        session_uuid,
-        payload,
-    )
-
-
 @router.delete("/{session_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_training_session(
     session_uuid: UUID,
@@ -83,3 +49,23 @@ async def delete_training_session(
 ):
     await training_session_service.delete_training_session(session_uuid)
     return None
+
+@router.put(
+        "/{training_session_uuid}/items/{sequence_number}/submit",
+        response_model=SubmitAnswerResponse,
+)
+async def submit_answer(
+    training_session_uuid: UUID,
+    user_answer: UserAnswer,
+    sequence_number: int = Path(ge=1),
+    current_user: User = Depends(get_current_user),
+    training_session_service: TrainingSessionService = Depends(
+        get_training_session_service
+    ),
+):
+    return await training_session_service.submit_answer(
+        user_id=current_user.id,
+        training_session_uuid=training_session_uuid,
+        sequence_number=sequence_number,
+        user_answer=user_answer,
+    )

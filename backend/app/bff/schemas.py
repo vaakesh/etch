@@ -6,6 +6,7 @@
 
 from datetime import date as Date
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -91,3 +92,40 @@ class ResponseCardsLibraryPage(BaseModel):
     cards: list[CardsLibraryPage]
     cursor: str | None
     has_more: bool
+
+class CardPracticeSession(BaseModel):
+
+    card_uuid: UUID
+
+    card_front_text: str
+    card_back_text: str
+    card_source_lang: str
+    card_target_lang: str
+
+
+class CreateTrainingSession(BaseModel):
+    prompt_side: Literal["front", "back"]
+
+class PracticeCard(BaseModel):
+    sequence_number: int = Field(ge=1)
+
+    prompt_text: str
+    prompt_language: str
+    answer_language: str
+
+class PracticeSessionResponse(BaseModel):
+    training_session_uuid: UUID
+
+    deck_uuid: UUID
+
+    prompt_side: Literal["front", "back"]
+    answer_side: Literal["front", "back"]
+
+    total_count: int
+    answered_count: int
+    correct_count: int
+    wrong_count: int
+
+    started_at: datetime
+    cards: list[PracticeCard]
+
