@@ -1,12 +1,13 @@
+from collections.abc import Sequence
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import false, insert, literal, null, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.training_sessions.models import TrainingSession, TrainingSessionItem
 from app.cards.models import Card
 from app.decks.models import DeckCard
+from app.training_sessions.models import TrainingSession, TrainingSessionItem
+from sqlalchemy import and_, false, insert, literal, null, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TrainingSessionItemRepository:
@@ -31,23 +32,6 @@ class TrainingSessionItemRepository:
         )
         if for_update:
             stmt = stmt.with_for_update()
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_item_by_uuid(
-            self,
-            item_uuid: UUID,
-            for_update: bool = False,
-    ) -> TrainingSessionItem | None:
-        stmt = (
-            select(TrainingSessionItem)
-            .where(
-                TrainingSessionItem.uuid == item_uuid,
-            )
-        )
-        if for_update:
-            stmt = stmt.with_for_update()
-
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -151,36 +135,106 @@ class TrainingSessionRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_all_by_limit(self, limit: int = 10) -> list[TrainingSession]:
-        stmt = select(TrainingSession).limit(limit)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-    
-    async def get_all_by_user_id(
+    async def get_all_sessions_by_user_id(
         self,
         user_id: int,
+        cursor_started_at: datetime | None = None,
+        cursor_id: int | None = None,
         limit: int = 10,
-    ) -> list[TrainingSession]:
+    ) -> tuple[Sequence[TrainingSession], bool]:
         stmt = (
             select(TrainingSession)
-            .where(TrainingSession.user_id == user_id)
-            .limit(limit)
+            .where(
+                TrainingSession.user_id == user_id,
+            )
         )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
 
-    async def get_all_by_deck_id(
+        if cursor_started_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    TrainingSession.started_at < cursor_started_at,
+                    and_(
+                        TrainingSession.started_at == cursor_started_at,
+                        TrainingSession.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(TrainingSession.started_at.desc(), TrainingSession.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_all_unfinished_sessions_by_user_id(
         self,
-        deck_id: int,
+        user_id: int,
+        cursor_started_at: datetime | None = None,
+        cursor_id: int | None = None,
         limit: int = 10,
-    ) -> list[TrainingSession]:
+    ) -> tuple[Sequence[TrainingSession], bool]:
         stmt = (
             select(TrainingSession)
-            .where(TrainingSession.deck_id == deck_id)
-            .limit(limit)
+            .where(
+                TrainingSession.user_id == user_id,
+                TrainingSession.finished_at.is_(None),
+            )
         )
+
+        if cursor_started_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    TrainingSession.started_at < cursor_started_at,
+                    and_(
+                        TrainingSession.started_at == cursor_started_at,
+                        TrainingSession.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(TrainingSession.started_at.desc(), TrainingSession.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_all_finished_sessions_by_user_id(
+        self,
+        user_id: int,
+        cursor_finished_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 10,
+    ) -> tuple[Sequence[TrainingSession], bool]:
+        stmt = (
+            select(TrainingSession)
+            .where(
+                TrainingSession.user_id == user_id,
+                TrainingSession.finished_at.is_not(None),
+            )
+        )
+
+        if cursor_finished_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    TrainingSession.finished_at < cursor_finished_at,
+                    and_(
+                        TrainingSession.finished_at == cursor_finished_at,
+                        TrainingSession.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(TrainingSession.finished_at.desc(), TrainingSession.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
 
     def add(self, training_session: TrainingSession) -> None:
         self.session.add(training_session)
@@ -190,3 +244,6 @@ class TrainingSessionRepository:
 
     async def refresh(self, training_session: TrainingSession) -> None:
         await self.session.refresh(training_session)
+
+    async def get(self, training_session_id: int) -> TrainingSession | None:
+        return await self.session.get(TrainingSession, training_session_id)

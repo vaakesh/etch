@@ -1,58 +1,64 @@
-from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-
-from app.auth.deps import get_current_user
-from app.bff.schemas import CreateTrainingSession, DeckPageData, DeckPageFavouritesDecks, HomeDashboard, PracticeSessionResponse, ResponseCardsLibraryPage
-from app.users.models import User
+from app.auth.deps import CurrentUser, get_current_user
 from app.bff.deps import get_bff_service
+from app.bff.schemas import (
+    CardLibraryPage,
+    CreateTrainingSession,
+    DeckLibraryPage,
+    HomeDashboard,
+    PracticeSessionResponse,
+)
 from app.bff.service import BffService
-
+from app.decks.schemas import CursorPage
+from app.users.models import User
+from fastapi import APIRouter, Depends, Query
 
 router = APIRouter(prefix="/bff")
 
 
 @router.get("/home", response_model=HomeDashboard)
 async def get_home_dashboard(
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser,
     bff_service: BffService = Depends(get_bff_service),
 ):
-    result = await bff_service.get_home_dashboard(current_user.id)
-    return result
-
-
-@router.get("/decks", response_model=DeckPageData)
-async def get_deck_page_data(
-    cursor: str | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
-    bff_service: BffService = Depends(get_bff_service),
-):
-    result = await bff_service.get_deck_page_data(current_user.id, cursor=cursor)
-    return result
-
-@router.get("/decks/favourite", response_model=DeckPageFavouritesDecks)
-async def get_deck_page_favourite_decks(
-    cursor: str | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
-    bff_service: BffService = Depends(get_bff_service),
-):
-    result = await bff_service.get_favourite_decks_by_user_id(
-        user_id = current_user.id,
-        cursor=cursor,
+    result = await bff_service.get_home_dashboard(
+        user_id=current_user.id,
+        user_uuid=current_user.uuid,
     )
     return result
 
-@router.get("/library/cards", response_model=ResponseCardsLibraryPage)
-async def get_cards_library_page(
+
+@router.get("/library/decks", response_model=CursorPage[DeckLibraryPage])
+async def get_decks_library_page(
+    current_user: CurrentUser,
     cursor: str | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    is_favourite: bool | None = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=100),
     bff_service: BffService = Depends(get_bff_service),
-) -> ResponseCardsLibraryPage:
-    result = await bff_service.get_cards_library_page_by_user_id(
+):
+    result = await bff_service.get_decks_library_page(
+        user_id=current_user.id,
+        user_uuid=current_user.uuid,
+        is_favourite=is_favourite,
+        cursor=cursor,
+        limit=limit,
+    )
+    return result
+
+
+@router.get("/library/cards", response_model=CursorPage[CardLibraryPage])
+async def get_cards_library_page(
+    current_user: CurrentUser,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=50),
+    bff_service: BffService = Depends(get_bff_service),
+) -> CursorPage[CardLibraryPage]:
+    result = await bff_service.get_cards_library_page(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
         cursor=cursor,
+        limit=limit,
     )
     return result
 
@@ -72,16 +78,16 @@ async def start_practice_session(
         prompt_side=payload.prompt_side,
     )
 
-@router.post(
-    "/practice/{training_session_uuid}/continue",
+@router.get(
+    "/practice/{training_session_uuid}/resume",
     response_model=PracticeSessionResponse,
 )
-async def continue_practice_session(
+async def resume_practice_session(
     training_session_uuid: UUID,
     current_user: User = Depends(get_current_user),
     bff_service: BffService = Depends(get_bff_service),
 ):
-    return await bff_service.continue_practice_session(
+    return await bff_service.resume_practice_session(
         user_id=current_user.id,
         training_session_uuid=training_session_uuid,
     )

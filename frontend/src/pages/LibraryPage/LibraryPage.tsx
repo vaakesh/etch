@@ -14,26 +14,56 @@ import {
   type UseLibraryCardsResult,
 } from "../../features/library/model/useLibraryCards";
 import { useLibraryDecks } from "../../features/library/model/useLibraryDecks";
+import {
+  CARDS_LOADED_COUNT_FORMS,
+  DECKS_LOADED_COUNT_FORMS,
+  FAVOURITE_DECKS_LOADED_COUNT_FORMS,
+  WORD_COUNT_FORMS,
+  localizeCount,
+  useLocale,
+  type AppLocale,
+} from "../../i18n";
 import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
+import { DeckDeleteDialog } from "./DeckDeleteDialog";
 import styles from "./LibraryPage.module.css";
 
 type LibraryView = "decks" | "cards";
 
-const numberFormatter = new Intl.NumberFormat("ru-RU");
-const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
+interface LibraryUiState {
+  currentUserUuid: string | null;
+  activeView: LibraryView;
+  hasOpenedCards: boolean;
+}
 
-function formatUpdatedAt(value: string | null): string {
-  if (value === null) {
-    return "Не обновлялась";
+let cachedLibraryUiState: LibraryUiState | null = null;
+
+const dateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
+
+function getDateFormatter(locale: AppLocale): Intl.DateTimeFormat {
+  const cachedFormatter = dateFormatters.get(locale);
+  if (cachedFormatter !== undefined) {
+    return cachedFormatter;
   }
 
-  return dateFormatter.format(new Date(value));
+  const formatter = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  dateFormatters.set(locale, formatter);
+  return formatter;
+}
+
+function formatUpdatedAt(value: string | null, locale: AppLocale): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : getDateFormatter(locale).format(date);
 }
 
 function getLibraryErrorMessage(error: unknown): string {
@@ -109,7 +139,27 @@ function getFavouriteErrorMessage(error: unknown): string {
   return "Не удалось изменить избранное. Попробуйте ещё раз.";
 }
 
-function Glyph({ name }: { name: "heart" | "pencil" | "play" | "sparkles" }) {
+function getDeckDeleteErrorMessage(error: unknown): string {
+  if (!isApiError(error)) {
+    return "Не удалось удалить колоду. Попробуйте ещё раз.";
+  }
+  if (error.status === 403) {
+    return "У вас нет доступа к удалению этой колоды.";
+  }
+  if (error.status === 404) {
+    return "Колода уже удалена или больше не существует.";
+  }
+  if (error.status === 0) {
+    return "Не удалось связаться с сервером. Проверьте подключение.";
+  }
+  if (error.status >= 500) {
+    return "Сервер временно не может удалить колоду.";
+  }
+
+  return "Не удалось удалить колоду. Попробуйте ещё раз.";
+}
+
+function Glyph({ name }: { name: "delete" | "heart" | "pencil" | "play" | "sparkles" }) {
   if (name === "heart") {
     return (
       <svg
@@ -146,6 +196,21 @@ function Glyph({ name }: { name: "heart" | "pencil" | "play" | "sparkles" }) {
       </svg>
     );
   }
+  if (name === "delete") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <path d="M5 7h14M9 7V4.8h6V7M7.2 7l.8 13h8l.8-13M10 11v5M14 11v5" />
+      </svg>
+    );
+  }
 
   return (
     <svg
@@ -161,14 +226,22 @@ function Glyph({ name }: { name: "heart" | "pencil" | "play" | "sparkles" }) {
   );
 }
 
-function getAccuracyTone(value: number): "green" | "yellow" | "orange" | "red" {
-  if (value >= 85) {
+function getAccuracyTone(
+  value: number,
+): "red" | "orange" | "yellow" | "green" | "turquoise" | "purple" {
+  if (value >= 91) {
+    return "purple";
+  }
+  if (value >= 81) {
+    return "turquoise";
+  }
+  if (value >= 71) {
     return "green";
   }
-  if (value >= 70) {
+  if (value >= 61) {
     return "yellow";
   }
-  if (value >= 50) {
+  if (value >= 51) {
     return "orange";
   }
   return "red";
@@ -223,42 +296,100 @@ function AccuracyStat({ value }: { value: number }) {
 interface DeckCardProps {
   canEdit: boolean;
   deck: LibraryDeckItem;
+  deleteError: unknown | null;
   favouriteError: unknown | null;
+  isDeleting: boolean;
   isFavouriteUpdating: boolean;
+  onDelete: (deckUuid: string) => void;
   onFavouriteChange: (deckUuid: string, value: boolean) => void;
 }
 
 function DeckCard({
   canEdit,
   deck,
+  deleteError,
   favouriteError,
+  isDeleting,
   isFavouriteUpdating,
+  onDelete,
   onFavouriteChange,
 }: DeckCardProps) {
+  const { locale } = useLocale();
   const previewCards = deck.cards.slice(0, 2);
+  const hasMoreCards = deck.totalWordsCount > previewCards.length;
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const updatedAtLabel = formatUpdatedAt(deck.updatedAt ?? null, locale);
+  const wordCount = localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
   const favouriteErrorId = `favourite-error-${deck.uuid}`;
+  const deleteErrorId = `delete-error-${deck.uuid}`;
   const favouriteAction = deck.isFavourite ? "Удалить из избранного" : "Добавить в избранное";
+  const canUseManagementActions = canEdit && !isDeleting;
 
   return (
-    <article className={styles.deckCard} data-deck-uuid={deck.uuid}>
+    <article
+      className={isDeleting ? `${styles.deckCard} ${styles.deckCardDeleting}` : styles.deckCard}
+      data-deck-uuid={deck.uuid}
+    >
       <div className={styles.deckTopline}>
         <AccuracyStat value={deck.accuracy} />
-        <button
-          aria-describedby={favouriteError === null ? undefined : favouriteErrorId}
-          aria-label={`${favouriteAction}: «${deck.title}»`}
-          aria-pressed={deck.isFavourite}
-          className={deck.isFavourite ? styles.favouriteActive : styles.favourite}
-          disabled={isFavouriteUpdating}
-          onClick={() => onFavouriteChange(deck.uuid, !deck.isFavourite)}
-          title={isFavouriteUpdating ? "Сохраняем…" : favouriteAction}
-          type="button"
-        >
-          <Glyph name="heart" />
-        </button>
+        <div className={styles.deckManagement}>
+          <button
+            aria-describedby={favouriteError === null ? undefined : favouriteErrorId}
+            aria-label={`${favouriteAction}: «${deck.title}»`}
+            aria-pressed={deck.isFavourite}
+            className={deck.isFavourite ? styles.favouriteActive : styles.favourite}
+            disabled={isFavouriteUpdating || isDeleting}
+            onClick={() => onFavouriteChange(deck.uuid, !deck.isFavourite)}
+            title={isFavouriteUpdating ? "Сохраняем…" : favouriteAction}
+            type="button"
+          >
+            <Glyph name="heart" />
+          </button>
+          {canEdit ? (
+            <>
+              {canUseManagementActions ? (
+                <Link
+                  aria-label={`Редактировать колоду «${deck.title}»`}
+                  className={styles.editButton}
+                  title={`Редактировать колоду «${deck.title}»`}
+                  to={`/library/${deck.uuid}/edit`}
+                >
+                  <Glyph name="pencil" />
+                </Link>
+              ) : (
+                <button
+                  aria-label={`Колода «${deck.title}» удаляется`}
+                  className={styles.editButton}
+                  disabled
+                  title="Колода удаляется…"
+                  type="button"
+                >
+                  <Glyph name="pencil" />
+                </button>
+              )}
+              <button
+                aria-describedby={deleteError === null ? undefined : deleteErrorId}
+                aria-label={`Удалить колоду «${deck.title}»`}
+                className={styles.deleteButton}
+                disabled={!canUseManagementActions}
+                onClick={() => setIsDeleteDialogOpen(true)}
+                title={isDeleting ? "Удаляем…" : `Удалить колоду «${deck.title}»`}
+                type="button"
+              >
+                <Glyph name="delete" />
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
       {favouriteError === null ? null : (
         <p className={styles.favouriteError} id={favouriteErrorId} role="alert">
           {getFavouriteErrorMessage(favouriteError)}
+        </p>
+      )}
+      {deleteError === null ? null : (
+        <p className={styles.deckDeleteError} id={deleteErrorId} role="alert">
+          {getDeckDeleteErrorMessage(deleteError)}
         </p>
       )}
 
@@ -275,17 +406,29 @@ function DeckCard({
             {previewCards.map((card) => (
               <li data-card-uuid={card.uuid} key={card.uuid}>
                 <span className={styles.previewAccent} />
-                <span className={styles.previewFront} title={card.frontText}>
+                <span className={styles.previewFront} lang={card.sourceLang} title={card.frontText}>
                   {card.frontText}
                 </span>
                 <span aria-hidden="true" className={styles.previewDivider}>
                   —
                 </span>
-                <span className={styles.previewBack} title={card.backText}>
+                <span className={styles.previewBack} lang={card.targetLang} title={card.backText}>
                   {card.backText}
                 </span>
               </li>
             ))}
+            {previewCards.length === 1 ? (
+              <li
+                aria-hidden="true"
+                className={
+                  hasMoreCards
+                    ? styles.previewPlaceholder
+                    : `${styles.previewPlaceholder} ${styles.previewPlaceholderEnd}`
+                }
+              >
+                <span>{hasMoreCards ? "•••" : "× Больше нет"}</span>
+              </li>
+            ) : null}
           </ul>
         ) : (
           <div className={styles.emptyPreview} role="status">
@@ -293,57 +436,63 @@ function DeckCard({
             <span>Добавьте первую карточку в колоду</span>
           </div>
         )}
+        <div
+          aria-hidden="true"
+          className={
+            previewCards.length === 2
+              ? `${styles.previewContinuation} ${styles.previewContinuationVisible} ${
+                  hasMoreCards ? "" : styles.previewContinuationEnd
+                }`
+              : styles.previewContinuation
+          }
+        >
+          <span>{hasMoreCards ? "•••" : "× Больше нет"}</span>
+        </div>
       </section>
 
-      <div className={styles.deckActions}>
-        {canEdit ? (
-          <Link
-            aria-label={`Редактировать колоду «${deck.title}»`}
-            className={styles.editButton}
-            title={`Редактировать колоду «${deck.title}»`}
-            to={`/library/${deck.uuid}/edit`}
-          >
-            <Glyph name="pencil" />
-            <span>Редактировать</span>
-          </Link>
-        ) : (
+      <div className={styles.deckBottom}>
+        <footer className={styles.deckMeta}>
+          <p className={styles.deckWordCount}>{wordCount.text}</p>
+          {deck.updatedAt !== null && updatedAtLabel !== null ? (
+            <time
+              className={styles.deckUpdatedAt}
+              dateTime={deck.updatedAt}
+              title={`Последнее обновление: ${updatedAtLabel}`}
+            >
+              <span className={styles.deckUpdatedLabel}>Обновлено</span>
+              <span className={styles.deckUpdatedValue}>{updatedAtLabel}</span>
+            </time>
+          ) : null}
+        </footer>
+        {isDeleting ? (
           <button
-            aria-label={`Колоду «${deck.title}» может редактировать только владелец`}
-            className={styles.editButton}
+            aria-label={`Колода «${deck.title}» удаляется`}
+            className={styles.startButton}
             disabled
-            title="Редактировать эту колоду может только владелец"
+            title="Колода удаляется…"
             type="button"
           >
-            <Glyph name="pencil" />
-            <span>Редактировать</span>
+            <span>Удаляем…</span>
           </button>
+        ) : (
+          <Link
+            aria-label={`Настроить тренировку по колоде «${deck.title}»`}
+            className={styles.startButton}
+            title={`Начать тренировку по колоде «${deck.title}»`}
+            to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
+          >
+            <Glyph name="play" />
+            <span>Начать</span>
+          </Link>
         )}
-        <button
-          aria-label={`Начать колоду «${deck.title}» — пока недоступно`}
-          className={styles.startButton}
-          disabled
-          title="Практика колоды пока не подключена"
-          type="button"
-        >
-          <Glyph name="play" />
-          <span>Начать</span>
-        </button>
       </div>
-
-      <footer className={styles.deckMeta}>
-        <span>
-          <DashboardIcon name="book" />
-          <span>Всего слов: {numberFormatter.format(deck.totalWordsCount)}</span>
-        </span>
-        <span className={styles.metaDivider} aria-hidden="true" />
-        <span>
-          <DashboardIcon name="clock" />
-          <span>Последнее обновление: </span>
-          <time dateTime={deck.updatedAt ?? undefined}>
-            {formatUpdatedAt(deck.updatedAt ?? null)}
-          </time>
-        </span>
-      </footer>
+      {isDeleteDialogOpen ? (
+        <DeckDeleteDialog
+          deckTitle={deck.title}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={() => onDelete(deck.uuid)}
+        />
+      ) : null}
     </article>
   );
 }
@@ -539,6 +688,75 @@ interface LibraryCardRowProps {
   onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
 }
 
+interface OverflowingCardTextProps {
+  className: string;
+  label: string;
+  language: string;
+  text: string;
+}
+
+function OverflowingCardText({ className, label, language, text }: OverflowingCardTextProps) {
+  const textRef = useRef<HTMLParagraphElement | null>(null);
+  const tooltipId = useId();
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    const element = textRef.current;
+
+    if (element === null) {
+      return;
+    }
+
+    const updateOverflow = (): void => {
+      const nextIsOverflowing =
+        element.scrollHeight > element.clientHeight + 1 ||
+        element.scrollWidth > element.clientWidth + 1;
+
+      setIsOverflowing((currentValue) =>
+        currentValue === nextIsOverflowing ? currentValue : nextIsOverflowing,
+      );
+    };
+
+    updateOverflow();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateOverflow);
+      return () => window.removeEventListener("resize", updateOverflow);
+    }
+
+    const observer = new ResizeObserver(updateOverflow);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [text]);
+
+  return (
+    <div className={styles.cardTextOverflow}>
+      <p
+        aria-describedby={isOverflowing ? tooltipId : undefined}
+        className={className}
+        data-overflowing={isOverflowing}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.currentTarget.blur();
+          }
+        }}
+        ref={textRef}
+        tabIndex={isOverflowing ? 0 : undefined}
+      >
+        <span className={styles.visuallyHidden}>{label}: </span>
+        <span lang={language}>{text}</span>
+      </p>
+      {isOverflowing ? (
+        <span className={styles.cardTextTooltip} id={tooltipId} role="tooltip">
+          <span className={styles.cardTextTooltipLabel}>Полный текст</span>
+          <span lang={language}>{text}</span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCardRowProps) {
   const isMountedRef = useRef(true);
   const deleteInFlightRef = useRef(false);
@@ -586,20 +804,24 @@ function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCar
       <div className={`${styles.cardFace} ${styles.cardFaceSource}`}>
         <span className={styles.languageBadge}>{card.targetLang.toUpperCase()}</span>
         <div className={styles.cardFaceCopy}>
-          <p className={styles.cardWord} title={card.backText}>
-            <span className={styles.visuallyHidden}>Слово: </span>
-            <span lang={card.targetLang}>{card.backText}</span>
-          </p>
+          <OverflowingCardText
+            className={styles.cardWord}
+            label="Слово"
+            language={card.targetLang}
+            text={card.backText}
+          />
         </div>
       </div>
 
       <div className={`${styles.cardFace} ${styles.cardFaceTarget}`}>
         <span className={styles.languageBadge}>{card.sourceLang.toUpperCase()}</span>
         <div className={styles.cardFaceCopy}>
-          <p className={styles.cardTranslation} title={card.frontText}>
-            <span className={styles.visuallyHidden}>Перевод: </span>
-            <span lang={card.sourceLang}>{card.frontText}</span>
-          </p>
+          <OverflowingCardText
+            className={styles.cardTranslation}
+            label="Перевод"
+            language={card.sourceLang}
+            text={card.frontText}
+          />
         </div>
       </div>
 
@@ -696,9 +918,18 @@ function LibraryTabs({ activeView, onChange }: LibraryTabsProps) {
 function DeckSkeletons() {
   return (
     <div aria-label="Загрузка колод" className={styles.decksGrid} role="status">
-      {Array.from({ length: 8 }, (_, index) => (
+      {Array.from({ length: 3 }, (_, index) => (
         <div aria-hidden="true" className={styles.skeleton} key={index} />
       ))}
+    </div>
+  );
+}
+
+function DeckFilterLoading({ onlyFavourites }: { onlyFavourites: boolean }) {
+  return (
+    <div className={styles.deckFilterLoading} role="status">
+      <span aria-hidden="true" className={styles.deckFilterSpinner} />
+      <span>{onlyFavourites ? "Собираем любимые колоды…" : "Возвращаем все колоды…"}</span>
     </div>
   );
 }
@@ -706,7 +937,7 @@ function DeckSkeletons() {
 function CardSkeletons() {
   return (
     <div aria-label="Загрузка карточек" className={styles.cardSkeletons} role="status">
-      {Array.from({ length: 5 }, (_, index) => (
+      {Array.from({ length: 3 }, (_, index) => (
         <div aria-hidden="true" className={styles.cardSkeleton} key={index} />
       ))}
     </div>
@@ -775,12 +1006,6 @@ export function LibraryCardsPanel({
       ) : null}
       {cardLibrary.status === "success" && (cardLibrary.cards.length > 0 || cardLibrary.hasMore) ? (
         <>
-          <div aria-live="polite" className={styles.cardsSummary}>
-            <Glyph name="sparkles" />
-            <span>
-              Загружено карточек: <strong>{cardLibrary.cards.length}</strong>
-            </span>
-          </div>
           <ul className={styles.cardsList}>
             {cardLibrary.cards.map((card) => (
               <LibraryCardRow
@@ -842,17 +1067,33 @@ export function LibraryCreateButton({
 export function LibraryPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { locale } = useLocale();
+  const currentUserUuid = user?.uuid ?? null;
   const openDeckCreatorFromNavigation = shouldOpenDeckCreator(location.state);
-  const [activeView, setActiveView] = useState<LibraryView>("decks");
-  const [hasOpenedCards, setHasOpenedCards] = useState(false);
+  const cachedUiStateAtMountRef = useRef(
+    cachedLibraryUiState?.currentUserUuid === currentUserUuid ? cachedLibraryUiState : null,
+  );
+  const [activeView, setActiveView] = useState<LibraryView>(
+    cachedUiStateAtMountRef.current?.activeView ?? "decks",
+  );
+  const [hasOpenedCards, setHasOpenedCards] = useState(
+    cachedUiStateAtMountRef.current?.hasOpenedCards ?? false,
+  );
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(openDeckCreatorFromNavigation);
-  const { user } = useAuth();
-  const library = useLibraryDecks();
+  const [useCompactDeckLoading, setUseCompactDeckLoading] = useState(false);
+  const library = useLibraryDecks(currentUserUuid);
   const cardLibrary = useLibraryCards({
     enabled: hasOpenedCards,
     onDeleteSuccess: library.retry,
   });
+  const loadedDeckCount = localizeCount(
+    library.decks.length,
+    library.onlyFavourites ? FAVOURITE_DECKS_LOADED_COUNT_FORMS : DECKS_LOADED_COUNT_FORMS,
+    locale,
+  );
+  const loadedCardCount = localizeCount(cardLibrary.cards.length, CARDS_LOADED_COUNT_FORMS, locale);
 
   useEffect(() => {
     if (!openDeckCreatorFromNavigation) {
@@ -870,10 +1111,14 @@ export function LibraryPage() {
   }, [location.hash, location.pathname, location.search, navigate, openDeckCreatorFromNavigation]);
 
   function handleViewChange(view: LibraryView): void {
+    const nextHasOpenedCards = hasOpenedCards || view === "cards";
+    cachedLibraryUiState = {
+      currentUserUuid,
+      activeView: view,
+      hasOpenedCards: nextHasOpenedCards,
+    };
     setActiveView(view);
-    if (view === "cards") {
-      setHasOpenedCards(true);
-    }
+    setHasOpenedCards(nextHasOpenedCards);
   }
 
   return (
@@ -901,7 +1146,11 @@ export function LibraryPage() {
                 className={
                   library.onlyFavourites ? styles.favouritesFilterActive : styles.favouritesFilter
                 }
-                onClick={() => library.setOnlyFavourites(!library.onlyFavourites)}
+                disabled={library.status === "loading"}
+                onClick={() => {
+                  setUseCompactDeckLoading(true);
+                  library.setOnlyFavourites(!library.onlyFavourites);
+                }}
                 type="button"
               >
                 <Glyph name="heart" />
@@ -911,13 +1160,23 @@ export function LibraryPage() {
                 <div aria-live="polite" className={styles.summary}>
                   <Glyph name="sparkles" />
                   <span>
-                    <strong>{library.decks.length}</strong>{" "}
-                    {library.onlyFavourites ? "любимых колод" : "колод"} загружено
+                    <strong>{loadedDeckCount.formattedValue}</strong> {loadedDeckCount.unit}
                   </span>
                 </div>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className={`${styles.toolbarDetails} ${styles.cardsToolbarDetails}`}>
+              {cardLibrary.status === "success" ? (
+                <div aria-live="polite" className={styles.cardsSummary}>
+                  <Glyph name="sparkles" />
+                  <span>
+                    <strong>{loadedCardCount.formattedValue}</strong> {loadedCardCount.unit}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
 
         <section
@@ -928,7 +1187,13 @@ export function LibraryPage() {
           id="library-decks-panel"
           role="tabpanel"
         >
-          {library.status === "loading" ? <DeckSkeletons /> : null}
+          {library.status === "loading" ? (
+            useCompactDeckLoading ? (
+              <DeckFilterLoading onlyFavourites={library.onlyFavourites} />
+            ) : (
+              <DeckSkeletons />
+            )
+          ) : null}
           {library.status === "error" ? (
             <StateMessage
               actionLabel="Попробовать снова"
@@ -956,11 +1221,14 @@ export function LibraryPage() {
               <div className={styles.decksGrid}>
                 {library.decks.map((deck) => (
                   <DeckCard
-                    canEdit={!("ownerUuid" in deck) || deck.ownerUuid === user?.uuid}
+                    canEdit={deck.ownerUuid === user?.uuid}
                     deck={deck}
+                    deleteError={library.deleteErrors[deck.uuid] ?? null}
                     favouriteError={library.favouriteErrors[deck.uuid] ?? null}
+                    isDeleting={library.deletingDeckUuids.includes(deck.uuid)}
                     isFavouriteUpdating={library.favouriteUpdatingDeckUuids.includes(deck.uuid)}
                     key={deck.uuid}
+                    onDelete={library.deleteDeck}
                     onFavouriteChange={library.setFavourite}
                   />
                 ))}

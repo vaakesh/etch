@@ -1,10 +1,9 @@
-from datetime import datetime
 import uuid
-
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
 
 from app.database import Base
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -14,7 +13,7 @@ class Card(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     uuid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        default=uuid.uuid4,
+        server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
         index=True
@@ -24,13 +23,30 @@ class Card(Base):
         BigInteger,
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
+        nullable=False,
     )
 
-    front_text: Mapped[str] = mapped_column(String(255))
-    back_text: Mapped[str] = mapped_column(String(255))
+    front_text: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    back_text: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
-    source_lang: Mapped[str] = mapped_column(String(10), default="ru")
-    target_lang: Mapped[str] = mapped_column(String(10), default="en")
+    source_lang: Mapped[str] = mapped_column(
+        String(3),
+        default="ru",
+        server_default="ru",
+        nullable=False,
+        )
+    target_lang: Mapped[str] = mapped_column(
+        String(3), 
+        default="en",
+        server_default="en",
+        nullable=False,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -45,4 +61,8 @@ class Card(Base):
     )
 
     user = relationship("User", back_populates="cards")
-    deck_links = relationship("DeckCard", back_populates="card", cascade="all, delete-orphan")
+    deck_links = relationship(
+        "DeckCard",
+        back_populates="card", 
+        cascade="all, delete-orphan",
+    )

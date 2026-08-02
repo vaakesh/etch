@@ -1,13 +1,8 @@
 from datetime import datetime
-from uuid import UUID
-
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import UserSession
-
-
-
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AuthRepository:
@@ -72,3 +67,20 @@ class AuthRepository:
         )
         result = await self.session.execute(stmt)
         return bool(result.rowcount)
+
+    async def revoke_all_active_sessions_by_user_id(
+        self,
+        user_id: int,
+        revoked_at: datetime,
+    ) -> None:
+        stmt = (
+            update(UserSession)
+            .where(
+                UserSession.user_id == user_id,
+                UserSession.revoked_at.is_(None),
+                UserSession.replaced_by_session_id.is_(None),
+                UserSession.expires_at > revoked_at,
+            )
+            .values(revoked_at=revoked_at)
+        )
+        await self.session.execute(stmt)

@@ -4,9 +4,8 @@ import {
   parseCreatedLibraryDeck,
   parseDeckCardPage,
   parseEditableLibraryDeck,
-  parseFavouriteLibraryDeckPage,
   parseLibraryCardPage,
-  parseLibraryDeckOptions,
+  parseLibraryDeckOptionPage,
   parseLibraryDeckPage,
   parseUpdatedLibraryCard,
 } from "../model/library-contract";
@@ -17,7 +16,6 @@ import type {
   CreateLibraryDeckInput,
   DeckCardPage,
   EditableLibraryDeck,
-  FavouriteLibraryDeckPage,
   LibraryCardDeckAddStatus,
   LibraryCardPage,
   LibraryDeckOption,
@@ -28,10 +26,11 @@ import type {
   UpdateLibraryDeckInput,
 } from "../model/library-types";
 
-const LIBRARY_DECKS_PATH = "/bff/decks";
-const FAVOURITE_LIBRARY_DECKS_PATH = "/bff/decks/favourite";
+const LIBRARY_DECKS_PATH = "/bff/library/decks";
 const LIBRARY_CARDS_PATH = "/bff/library/cards";
 export const DECK_CARD_PAGE_SIZE = 50;
+const LIBRARY_PAGE_SIZE = 50;
+const DECK_OPTIONS_PAGE_SIZE = 100;
 
 function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: string): void {
   if (actualUuid !== expectedUuid) {
@@ -64,6 +63,7 @@ export async function updateEditableLibraryDeck(
     body: {
       title: input.title,
       description: input.description,
+      is_public: input.isPublic,
     },
     signal,
   });
@@ -100,9 +100,37 @@ export async function removeLibraryCardFromDeck(
 export async function getLibraryDeckOptions(
   signal?: AbortSignal,
 ): Promise<readonly LibraryDeckOption[]> {
-  const payload = await apiFetch<unknown>("/users/me/decks", { signal });
+  const decks: LibraryDeckOption[] = [];
+  const knownDeckUuids = new Set<string>();
+  const requestedCursors = new Set<string | null>();
+  let cursor: string | null = null;
 
-  return parseLibraryDeckOptions(payload);
+  do {
+    if (requestedCursors.has(cursor)) {
+      throw new ApiError({
+        status: 0,
+        code: "INVALID_LIBRARY_RESPONSE",
+        message: "The backend repeated a deck-options pagination cursor.",
+      });
+    }
+    requestedCursors.add(cursor);
+
+    const payload = await apiFetch<unknown>("/users/me/decks", {
+      query: { cursor, limit: DECK_OPTIONS_PAGE_SIZE },
+      signal,
+    });
+    const page = parseLibraryDeckOptionPage(payload);
+
+    page.decks.forEach((deck) => {
+      if (!knownDeckUuids.has(deck.uuid)) {
+        knownDeckUuids.add(deck.uuid);
+        decks.push(deck);
+      }
+    });
+    cursor = page.hasMore ? page.nextCursor : null;
+  } while (cursor !== null);
+
+  return decks;
 }
 
 export async function addLibraryCardToDeck(
@@ -129,7 +157,7 @@ export async function createLibraryDeck(
   input: CreateLibraryDeckInput,
   signal?: AbortSignal,
 ): Promise<CreatedLibraryDeck> {
-  const payload = await apiFetch<unknown>("/decks/", {
+  const payload = await apiFetch<unknown>("/decks/create", {
     method: "POST",
     body: {
       title: input.title,
@@ -165,7 +193,7 @@ export async function getLibraryDeckPage(
   signal?: AbortSignal,
 ): Promise<LibraryDeckPage> {
   const payload = await apiFetch<unknown>(LIBRARY_DECKS_PATH, {
-    query: { cursor },
+    query: { cursor, is_favourite: false, limit: LIBRARY_PAGE_SIZE },
     signal,
   });
 
@@ -175,13 +203,13 @@ export async function getLibraryDeckPage(
 export async function getFavouriteLibraryDeckPage(
   cursor: string | null,
   signal?: AbortSignal,
-): Promise<FavouriteLibraryDeckPage> {
-  const payload = await apiFetch<unknown>(FAVOURITE_LIBRARY_DECKS_PATH, {
-    query: { cursor },
+): Promise<LibraryDeckPage> {
+  const payload = await apiFetch<unknown>(LIBRARY_DECKS_PATH, {
+    query: { cursor, is_favourite: true, limit: LIBRARY_PAGE_SIZE },
     signal,
   });
 
-  return parseFavouriteLibraryDeckPage(payload);
+  return parseLibraryDeckPage(payload);
 }
 
 export async function getLibraryCardPage(
@@ -189,7 +217,7 @@ export async function getLibraryCardPage(
   signal?: AbortSignal,
 ): Promise<LibraryCardPage> {
   const payload = await apiFetch<unknown>(LIBRARY_CARDS_PATH, {
-    query: { cursor },
+    query: { cursor, limit: LIBRARY_PAGE_SIZE },
     signal,
   });
 
@@ -226,6 +254,13 @@ export async function deleteLibraryCard(cardUuid: string, signal?: AbortSignal):
   });
 }
 
+export async function deleteLibraryDeck(deckUuid: string, signal?: AbortSignal): Promise<void> {
+  await apiFetch<void>(`/decks/${deckUuid}`, {
+    method: "DELETE",
+    signal,
+  });
+}
+
 export async function setLibraryDeckFavourite(
   deckUuid: string,
   value: boolean,
@@ -237,12 +272,7 @@ export async function setLibraryDeckFavourite(
     signal,
   });
 
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("is_favourite" in payload) ||
-    typeof payload.is_favourite !== "boolean"
-  ) {
+  if (typeof payload !== "boolean") {
     throw new ApiError({
       status: 0,
       code: "INVALID_FAVOURITE_RESPONSE",
@@ -250,5 +280,5 @@ export async function setLibraryDeckFavourite(
     });
   }
 
-  return { isFavourite: payload.is_favourite };
+  return { isFavourite: payload };
 }

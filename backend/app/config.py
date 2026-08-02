@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Self
+
 from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
 
     auth_jwt: AuthJWT
     
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()
 

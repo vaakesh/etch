@@ -11,11 +11,19 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import styles from "./LoginPage.module.css";
 
 const INVALID_CREDENTIALS_STATUSES = new Set([401, 403, 404]);
+const USERNAME_MIN_LENGTH = 3;
+const USERNAME_MAX_LENGTH = 18;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
 
 function getLoginErrorMessage(error: unknown): string {
   if (isApiError(error)) {
     if (INVALID_CREDENTIALS_STATUSES.has(error.status)) {
       return "Неверное имя пользователя или пароль.";
+    }
+
+    if (error.status === 422) {
+      return "Имя пользователя — 3–18 символов без пробелов, пароль — 8–128 символов без пробелов.";
     }
 
     if (error.status === 0) {
@@ -177,11 +185,14 @@ export function LoginPage() {
                 className={styles.input}
                 disabled={isSubmitting}
                 id="username"
+                maxLength={USERNAME_MAX_LENGTH}
+                minLength={USERNAME_MIN_LENGTH}
                 name="username"
                 onAnimationStart={handleAutofillDetected}
                 onChange={(event) => setUsername(event.target.value)}
                 onFocus={enableFormInput}
                 onPointerDown={enableFormInput}
+                pattern="\S+"
                 readOnly={!isAcceptingInput}
                 ref={usernameInputRef}
                 required
@@ -202,11 +213,14 @@ export function LoginPage() {
                 className={styles.input}
                 disabled={isSubmitting}
                 id="password"
+                maxLength={PASSWORD_MAX_LENGTH}
+                minLength={PASSWORD_MIN_LENGTH}
                 name="password"
                 onAnimationStart={handleAutofillDetected}
                 onChange={(event) => setPassword(event.target.value)}
                 onFocus={enableFormInput}
                 onPointerDown={enableFormInput}
+                pattern="\S+"
                 readOnly={!isAcceptingInput}
                 ref={passwordInputRef}
                 required

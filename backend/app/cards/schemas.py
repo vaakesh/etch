@@ -1,49 +1,52 @@
-from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
+type CardText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=1,
+        max_length=255,
+    )
+]
 
-class CardSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    uuid: UUID
-    user_id: int
-
-    front_text: str = Field(..., max_length=255)
-    back_text: str = Field(..., max_length=255)
-
-    source_lang: str = Field(default="ru", max_length=10)
-    target_lang: str = Field(default="en", max_length=10)
-
-    created_at: datetime
-    updated_at: datetime
+type CardLang = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=2,
+        max_length=3,
+    )
+]
 
 class CardCreate(BaseModel):
 
-    front_text: str = Field(..., max_length=255)
-    back_text: str = Field(..., max_length=255)
+    front_text: CardText
+    back_text: CardText
 
-    source_lang: str = Field(default="ru", max_length=10)
-    target_lang: str = Field(default="en", max_length=10)
+    source_lang: CardLang = "ru"
+    target_lang: CardLang = "en"
 
 
 class CardUpdate(BaseModel):
-    front_text: str | None = Field(default=None, max_length=255)
-    back_text: str | None = Field(default=None, max_length=255)
+    front_text: CardText | None = None
+    back_text: CardText | None = None
 
-    source_lang: str | None = Field(default=None, max_length=10)
-    target_lang: str | None = Field(default=None, max_length=10)
+    source_lang: CardLang | None = None
+    target_lang: CardLang | None = None
 
 
-class CardOut(BaseModel):
+class CardDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
 
-    front_text: str
-    back_text: str
+    front_text: CardText
+    back_text: CardText
 
-    source_lang: str
-    target_lang: str
+    source_lang: CardLang
+    target_lang: CardLang

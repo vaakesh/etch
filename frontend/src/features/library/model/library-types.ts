@@ -2,6 +2,9 @@ export interface LibraryPreviewCard {
   uuid: string;
   frontText: string;
   backText: string;
+  sourceLang: string;
+  targetLang: string;
+  updatedAt: string;
 }
 
 export interface EditableLibraryCard {
@@ -10,11 +13,10 @@ export interface EditableLibraryCard {
   backText: string;
   sourceLang: string;
   targetLang: string;
-  updatedAt: string;
 }
 
 export interface LibraryCard extends EditableLibraryCard {
-  ownerUuid: string;
+  updatedAt: string;
 }
 
 export interface LibraryCardPage {
@@ -44,7 +46,6 @@ export interface CreatedLibraryCard extends CreateLibraryCardInput {
 
 export interface UpdatedLibraryCard extends UpdateLibraryCardInput {
   uuid: string;
-  updatedAt: string;
 }
 
 export interface EditableLibraryDeck {
@@ -59,10 +60,12 @@ export interface EditableLibraryDeck {
 export interface UpdateLibraryDeckInput {
   title: string;
   description: string | null;
+  isPublic: boolean;
 }
 
 export interface LibraryDeck {
   uuid: string;
+  ownerUuid: string;
   title: string;
   description: string | null;
   totalWordsCount: number;
@@ -76,6 +79,12 @@ export interface LibraryDeckOption {
   uuid: string;
   title: string;
   totalWordsCount: number;
+}
+
+export interface LibraryDeckOptionPage {
+  decks: readonly LibraryDeckOption[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export type LibraryCardDeckAddStatus = "added" | "already-present";
@@ -101,26 +110,7 @@ export interface LibraryDeckPage {
   hasMore: boolean;
 }
 
-export interface FavouriteLibraryDeck {
-  uuid: string;
-  ownerUuid: string;
-  title: string;
-  description?: string | null;
-  totalWordsCount: number;
-  accuracy: number;
-  updatedAt?: string | null;
-  isFavourite: boolean;
-  isFollowing: boolean;
-  cards: readonly LibraryPreviewCard[];
-}
-
-export interface FavouriteLibraryDeckPage {
-  decks: readonly FavouriteLibraryDeck[];
-  nextCursor: string | null;
-  hasMore: boolean;
-}
-
-export type LibraryDeckItem = LibraryDeck | FavouriteLibraryDeck;
+export type LibraryDeckItem = LibraryDeck;
 
 export interface LibraryFavouriteResult {
   isFavourite: boolean;

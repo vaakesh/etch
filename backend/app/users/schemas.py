@@ -1,36 +1,84 @@
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from fastapi import Query
+from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints
+
+# TYPES
+
+type Username = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=3,
+        max_length=18,
+        pattern=r"^\S+$",
+    ),
+    
+]
+
+type Password = Annotated[
+    str,
+    StringConstraints(
+        min_length=8,
+        max_length=128,
+        pattern=r"^\S+$",
+    ),
+]
+
+type NormalizedEmail = Annotated[
+    EmailStr,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+    )
+]
+
+type NormalizedSearch = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=1,
+        max_length=150,
+    ),
+]
+
+type SearchQuery = Annotated[
+    NormalizedSearch | None,
+    Query(alias="q"),
+]
 
 
-class UserSchema(BaseModel):
+# SCHEMAS
+
+class PublicUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    uuid: UUID
+    username: str
+    created_at: datetime
+
+class PrivateUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     uuid: UUID
     username: str
     email: EmailStr
-    hashed_password: str
     created_at: datetime
     updated_at: datetime
 
 class UserCreate(BaseModel):
-    username: str = Field(min_lenght=3, max_length=18)
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    username: Username
+    email: NormalizedEmail
+    password: Password
 
 class UserUpdate(BaseModel):
-    username: str | None = None
-    email: EmailStr | None = None
-    password: str | None = None
+    username: Username | None = None
+    email: NormalizedEmail | None = None
 
-class UserOut(UserSchema):
-    pass
-
-class UserMe(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    uuid: UUID
-    username: str
-    email: EmailStr
+class ChangePassword(BaseModel):
+    current_password: Password
+    new_password: Password

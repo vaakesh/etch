@@ -1,101 +1,96 @@
 from datetime import datetime
+from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from app.cards.schemas import CardDetail
+from app.errors import RequestValueError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.cards.schemas import CardOut
+type DeckTitle = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=3,
+        max_length=50,
+    ),
+]
 
-
-class DeckSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int | None = None
-    uuid: UUID | None = None
-    user_id: int | None = None
-
-    source_deck_id: int | None = None
-
-    title: str = Field(..., max_length=150)
-    description: str | None = None
-    words_count: int
-    is_public: bool = False
-    version: int
-
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+type DeckDescription = (
+    Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            max_length=3000,
+        ),
+    ]
+    | None
+)
 
 class DeckCreate(BaseModel):
-    
-    title: str = Field(..., max_length=150)
-    description: str | None = None
+    title: DeckTitle
+    description: DeckDescription = None
     is_public: bool = False
 
 
 class DeckUpdate(BaseModel):
-    title: str | None = Field(default=None, max_length=150)
-    description: str | None = None
+    title: DeckTitle | None = None
+    description: DeckDescription = None
     is_public: bool | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_not_nullable_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for field in ("title", "is_public"):
+                if field in data and data[field] is None:
+                    raise RequestValueError(
+                        message=f"{field} value cannot be null",
+                        failed_field=field,
+                    )
 
-class DeckOut(BaseModel):
+        return data
+
+
+class DeckDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    uuid: UUID | None = None
+    uuid: UUID
+    # owner_uuid: UUID | None = Field(
+    #     default=None,
+    #     validation_alias="__external_owner_uuid",
+    # )
 
-    title: str = Field(..., max_length=150)
+    title: str
     description: str | None = None
     words_count: int
     is_public: bool = False
-    version: int
 
-    created_at: datetime | None = None
     updated_at: datetime | None = None
 
-class ShortDeckOut(BaseModel):
+class DeckCompact(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
     title: str
     words_count: int
 
-
-class DeckCardSchema(BaseModel):
+class DeckSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int | None = None
-    uuid: UUID | None = None
-
-    deck_id: int
-    card_id: int
-
-    position: int = Field(ge=1)
-
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-class DeckCardCreate(BaseModel):
-    deck_id: int
-    card_id: int
-    position: int = Field(default=1, ge=1)
+    uuid: UUID
+    title: str
+    description: str | None = None
+    words_count: int
 
 
-class DeckCardUpdate(BaseModel):
-    position: int = Field(ge=1)
+class DeckWithUserState(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    deck: DeckSummary
+    user_deck: UserDeckDetails
 
 
-class ReorderCards(BaseModel):
-    card_uuid: UUID
-    to_position: int = Field(ge=1)
-
-
-class DeckCardOut(DeckCardSchema):
-    pass
-
-
-class UserDeckSchema(BaseModel):
-    user_id: int
-    deck_id: int
-
+class UserDeckDetails(BaseModel):
     sessions_count: int
     correct_count: int
     wrong_count: int
@@ -103,43 +98,23 @@ class UserDeckSchema(BaseModel):
     is_favourite: bool
     is_following: bool
 
-    last_seen_version: int | None
-    added_at: datetime
 
-
-class DeckWithUserDataInternal(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    deck_id: int
-    deck_uuid: UUID
-    owner_id: int
-    owner_uuid: UUID
-    user_id: int
-
-    title: str
-    description: str | None = None
-    words_count: int
-    updated_at: datetime | None = None
-
-    user_accuracy: int
-    is_favourite: bool
-    is_following: bool
-
-    cards: list[CardOut]
-
-class DeckWithUserData(BaseModel):
+class DeckCardDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     deck_uuid: UUID
-    owner_uuid: UUID
+    card_uuid: UUID
 
-    title: str
-    description: str | None = None
-    words_count: int
-    updated_at: datetime | None = None
+    position: int
 
-    user_accuracy: int
-    is_favourite: bool
-    is_following: bool
 
-    cards: list[CardOut]
+class ReorderCards(BaseModel):
+    card_uuid: UUID
+    to_position: int = Field(ge=1)
+
+
+class CursorPage[T](BaseModel):
+
+    items: list[T]
+    next_cursor: str | None
+    has_more: bool

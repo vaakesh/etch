@@ -1,7 +1,6 @@
-from fastapi import Request, Response
-
 from app.auth.deps import get_auth_tokens_service
 from app.auth.errors import RefreshTokenNotFoundError
+from fastapi import Request, Response
 
 
 def set_tokens_cookie(access_token: str, refresh_token: str, response: Response) -> None:

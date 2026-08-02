@@ -1,28 +1,33 @@
-from typing import Callable
+from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
-
-from app.cards.errors import CardNotFoundError, PermissionDeniedError
-from app.cards.schemas import CardSchema
+from app.cards.errors import CardNotFoundError
+from app.cards.models import Card
 from app.service import UnitOfWork
-from app.training_sessions.models import TrainingSession
+from app.users.errors import UserNotFoundError
+from app.utils import decode_cursor, encode_cursor
+from sqlalchemy.exc import IntegrityError
 
 from .errors import (
     CannotFollowOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
+    DeckIsNotFavouriteError,
     DeckIsNotFollowedError,
     DeckNotFoundError,
     InvalidDeckCardPositionError,
+    PermissionDeniedError,
 )
 from .models import Deck, DeckCard, UserDeck
 from .schemas import (
-    DeckCardSchema,
+    DeckCardDetail,
     DeckCreate,
-    DeckSchema,
+    DeckDetail,
+    DeckSummary,
     DeckUpdate,
+    DeckWithUserState,
+    UserDeckDetails,
 )
 
 
@@ -30,10 +35,18 @@ class DeckService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
         self.uow_factory = uow_factory
 
-    async def get_by_uuid(self, deck_uuid: UUID) -> DeckSchema:
+    async def get_by_uuid(
+            self, 
+            deck_uuid: UUID,
+            current_user_id: int | None = None,
+        ) -> Deck:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
-            return DeckSchema.model_validate(deck)
+            if not deck.is_public:
+                if current_user_id is None or current_user_id != deck.user_id:
+                    raise DeckNotFoundError()
+            # deck.owner_uuid = owner_uuid
+            return deck
 
     async def _get_by_uuid(
         self,
@@ -55,8 +68,12 @@ class DeckService:
         self,
         uow: UnitOfWork,
         card_uuid: UUID,
+        for_update: bool = False,
     ):
-        card = await uow.card_repo.get_by_uuid(card_uuid)
+        card = await uow.card_repo.get_by_uuid(
+            card_uuid,
+            for_update=for_update,
+        )
 
         if card is None:
             raise CardNotFoundError(f"Card with uuid={card_uuid} not found")
@@ -77,40 +94,51 @@ class DeckService:
 
         return deck_card
 
-    async def get_all_decks_by_limit(
-        self,
-        limit: int = 10,
-    ) -> list[DeckSchema]:
-        async with self.uow_factory() as uow:
-            decks = await uow.deck_repo.get_all_by_limit(limit)
-            return [DeckSchema.model_validate(deck) for deck in decks]
-
     async def get_all_by_user_uuid(
         self,
-        user_uuid: int,
+        user_uuid: UUID,
+        search_query: str | None = None,
+        cursor: str | None = None,
         limit: int = 10,
-    ) -> list[DeckSchema]:
+        public_only: bool = True,
+        current_user_id: int | None = None,
+    ) -> tuple[list[Deck], str | None, bool]:
         async with self.uow_factory() as uow:
             user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
-            decks = await uow.deck_repo.get_all_by_user_id(
-                user_id=user.id,
-                limit=limit,
-            )
-            return [DeckSchema.model_validate(deck) for deck in decks]
+            if user is None:
+                raise UserNotFoundError()
 
-    async def get_public_decks_by_limit(
-        self,
-        limit: int = 10,
-    ) -> list[DeckSchema]:
-        async with self.uow_factory() as uow:
-            decks = await uow.deck_repo.get_public_by_limit(limit)
-            return [DeckSchema.model_validate(deck) for deck in decks]
+            if not public_only:
+                if current_user_id is None or current_user_id != user.id:
+                    raise PermissionDeniedError()
+
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+            decks, has_more = await uow.deck_repo.get_all_by_user_id(
+                user_id=user.id,
+                search_query=search_query,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
+                limit=limit,
+                public_only=public_only,
+            )
+
+            next_cursor = None
+            if decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=decks[-1].updated_at,
+                    entity_id=decks[-1].id,
+                )
+
+            return decks, next_cursor, has_more
 
     async def create_deck(
         self,
         payload: DeckCreate,
         user_id: int,
-    ) -> Deck:
+        user_uuid: UUID,
+    ) -> DeckDetail:
         try:
             async with self.uow_factory() as uow:
                 deck = Deck(
@@ -120,8 +148,14 @@ class DeckService:
 
                 uow.deck_repo.add(deck)
 
+                await uow.flush()
+                user_deck = UserDeck(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                    last_seen_version=deck.version,
+                )
+                uow.user_deck_repo.add(user_deck)
                 await uow.commit()
-                await uow.deck_repo.refresh(deck)
 
                 return deck
 
@@ -133,7 +167,7 @@ class DeckService:
         user_id: int,
         deck_uuid: UUID,
         payload: DeckUpdate,
-    ) -> DeckSchema:
+    ) -> Deck:
         try:
             async with self.uow_factory() as uow:
                 deck = await self._get_by_uuid(uow, deck_uuid)
@@ -149,14 +183,20 @@ class DeckService:
                 await uow.commit()
                 await uow.deck_repo.refresh(deck)
 
-                return DeckSchema.model_validate(deck)
+                return deck
 
         except IntegrityError as e:
             raise DeckAlreadyExistsError() from e
 
-    async def delete_deck(self, deck_uuid: UUID) -> None:
+    async def delete_deck(
+            self, 
+            deck_uuid: UUID,
+            user_id: int,
+        ) -> None:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
+            if deck.user_id != user_id:
+                raise PermissionDeniedError()
 
             await uow.deck_repo.delete(deck)
             await uow.commit()
@@ -165,16 +205,17 @@ class DeckService:
 
     async def get_deck_cards(
         self,
-        user_id: int,
+        user_id: int | None,
         deck_uuid: UUID,
         offset: int = 0,
         limit: int = 50,
-    ) -> list[CardSchema]:
+    ) -> list[Card]:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
 
-            if deck.user_id != user_id and not deck.is_public:
-                raise PermissionDeniedError()
+            if not deck.is_public:
+                if user_id is None or user_id != deck.user_id:
+                    raise DeckNotFoundError()
 
             cards = await uow.deck_card_repo.get_all_by_deck_id(
                 deck_id=deck.id,
@@ -182,17 +223,29 @@ class DeckService:
                 limit=limit,
             )
 
-            return [
-                CardSchema.model_validate(card)
-                for card in cards
-            ]
+            return cards
+
+    async def get_all_cards_by_deck_ids(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+        offset: int = 0,
+        limit: int = 2,
+    ) -> list[tuple[int, Card]]:
+        async with self.uow_factory() as uow:
+            cards = await uow.deck_card_repo.get_all_cards_by_deck_ids(
+                deck_ids=deck_ids,
+                limit=limit,
+            )
+            return cards
+
 
     async def add_card_to_deck(
         self,
         user_id: int,
         deck_uuid: UUID,
         card_uuid: UUID,
-    ) -> DeckCardSchema:
+    ) -> DeckCardDetail:
         try:
             async with self.uow_factory() as uow:
                 deck = await self._get_by_uuid(
@@ -201,7 +254,11 @@ class DeckService:
                     for_update=True,
                 )
 
-                card = await self._get_card_by_uuid(uow, card_uuid)
+                card = await self._get_card_by_uuid(
+                    uow, 
+                    card_uuid,
+                    for_update=True,
+                )
 
                 if deck.user_id != user_id or card.user_id != user_id:
                     raise PermissionDeniedError()
@@ -233,27 +290,14 @@ class DeckService:
                 uow.deck_card_repo.add(deck_card)
 
                 await uow.commit()
-                await uow.deck_card_repo.refresh(deck_card)
 
-                return DeckCardSchema.model_validate(deck_card)
-
+                return DeckCardDetail(
+                    deck_uuid=deck.uuid,
+                    card_uuid=card.uuid,
+                    position=deck_card.position,
+                )
         except IntegrityError as e:
             raise DeckCardAlreadyExistsError() from e
-
-    async def update_deck_card(
-        self,
-        deck_card_uuid: UUID,
-        position: int,
-    ) -> DeckCardSchema:
-        async with self.uow_factory() as uow:
-            deck_card = await self._get_deck_card_by_uuid(uow, deck_card_uuid)
-
-            deck_card.position = position
-
-            await uow.commit()
-            await uow.deck_card_repo.refresh(deck_card)
-
-            return DeckCardSchema.model_validate(deck_card)
 
     async def remove_card_from_deck(
         self,
@@ -262,8 +306,17 @@ class DeckService:
         card_uuid: UUID,
     ) -> None:
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(uow, deck_uuid)
-            card = await self._get_card_by_uuid(uow, card_uuid)
+            deck = await self._get_by_uuid(
+                uow=uow, 
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
+
+            card = await self._get_card_by_uuid(
+                uow=uow, 
+                card_uuid=card_uuid,
+                for_update=True,
+            )
 
             if deck.user_id != user_id or card.user_id != user_id:
                 raise PermissionDeniedError()
@@ -278,9 +331,15 @@ class DeckService:
                     f"Card with uuid={card_uuid} not found in deck uuid={deck_uuid}"
                 )
 
+
             deck.words_count -= 1
 
             await uow.deck_card_repo.delete(deck_card)
+            await uow.flush()
+            await uow.deck_card_repo.update_deck_cards_positions_after_deleting(
+                deck_id=deck.id,
+                deleted_position=deck_card.position,
+            )
             await uow.commit()
 
             return None
@@ -343,10 +402,10 @@ class UserDeckService:
     ) -> UserDeck:
         async with self.uow_factory() as uow:
             deck = await uow.deck_repo.get_by_uuid_and_is_public(deck_uuid=deck_uuid)
-            if deck.user_id == user_id:
-                raise CannotFollowOwnDeckError()
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
+            if deck.user_id == user_id:
+                raise CannotFollowOwnDeckError()
             
             user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
@@ -366,10 +425,10 @@ class UserDeckService:
     ) -> UserDeck:
         async with self.uow_factory() as uow:
             deck = await uow.deck_repo.get_by_uuid(deck_uuid=deck_uuid)
-            if deck.user_id == user_id:
-                raise CannotFollowOwnDeckError()
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
+            if deck.user_id == user_id:
+                raise CannotFollowOwnDeckError()
             
             user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
@@ -388,17 +447,44 @@ class UserDeckService:
             await uow.commit()
             return user_deck
         
-    async def get_followed_decks_by_user_id(
+    async def get_page_of_followed_decks_by_user_id(
             self,
             user_id: int,
-            limit: int = 10,
-    ) -> list[UserDeck]:
+            page: int,
+            page_size: int,
+    ) -> list[DeckWithUserState]:
         async with self.uow_factory() as uow:
-            user_decks = await uow.user_deck_repo.get_followed_decks_by_user_id(
-                user_id=user_id,
-                limit=limit,
+            offset = (page - 1) * page_size
+            rows = (
+                await uow.user_deck_repo.
+                get_followed_decks_by_user_id(
+                    user_id=user_id,
+                    offset=offset,
+                    limit=page_size,
+                )
             )
-            return user_decks
+            result = []
+            for (user_deck,
+                deck_uuid, deck_title, deck_description, deck_words_count) in rows:
+                result.append(
+                    DeckWithUserState(
+                        deck=DeckSummary(
+                            uuid=deck_uuid,
+                            title=deck_title,
+                            description=deck_description,
+                            words_count=deck_words_count,
+                        ),
+                        user_deck=UserDeckDetails(
+                            sessions_count=user_deck.sessions_count,
+                            correct_count=user_deck.correct_count,
+                            wrong_count=user_deck.wrong_count,
+                            last_studied_at=user_deck.last_studied_at,
+                            is_favourite=user_deck.is_favourite,
+                            is_following=user_deck.is_following,
+                        )
+                    )
+                )
+            return result
         
 
     async def set_favourite_deck(
@@ -409,10 +495,67 @@ class UserDeckService:
     ):
         async with self.uow_factory() as uow:
             deck = await uow.deck_repo.get_by_uuid(deck_uuid=deck_uuid)
-            user_deck = await uow.user_deck_repo.set_favourite(
+
+            if deck is None or (deck.user_id != user_id and not deck.is_public):
+                raise DeckNotFoundError()
+            
+            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
                 deck_id=deck.id,
-                value=value
             )
+            if user_deck is None:
+                if value is True:
+                    user_deck = UserDeck(
+                        user_id=user_id,
+                        deck_id=deck.id,
+                        last_seen_version=deck.version,
+                        is_favourite=True,
+                        is_following=True,
+                    )
+                else:
+                    raise DeckIsNotFavouriteError()
+
+            user_deck.is_favourite = value
+            
             await uow.commit()
             return user_deck
+
+    async def get_user_decks_by_deck_ids(
+        self,
+        deck_ids: list[int],
+        user_id: int,
+    ) -> list[UserDeck]:
+        async with self.uow_factory() as uow:
+            user_decks = await uow.user_deck_repo.get_user_decks_by_deck_ids(
+                deck_ids=deck_ids,
+                user_id=user_id,
+            )
+            return user_decks
+
+    async def get_favourite_decks(
+        self,
+        user_id: int,
+        cursor: str | None,
+        limit: int = 50,
+    ) -> tuple[list[Deck], str | None, bool]:
+        async with self.uow_factory() as uow:
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None
+                else (None, None)
+            )
+            favourite_decks, has_more = (
+                await uow.user_deck_repo.get_favourite_decks_by_user_id(
+                    user_id=user_id,
+                    cursor_updated_at=cursor_updated_at,
+                    cursor_id=cursor_id,
+                    limit=limit,
+                )
+            )
+            next_cursor = None
+            if favourite_decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=favourite_decks[-1].updated_at,
+                    entity_id=favourite_decks[-1].id,
+                )
+
+            return favourite_decks, next_cursor, has_more

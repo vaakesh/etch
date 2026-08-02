@@ -1,23 +1,30 @@
-from typing import Callable
+from collections.abc import Callable
 from uuid import UUID
 
+from app.cards.errors import (
+    CardAlreadyExistsError,
+    CardNotFoundError,
+    PermissionDeniedError,
+)
+from app.service import UnitOfWork
+from app.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
-from app.service import UnitOfWork
-
-from app.cards.errors import CardAlreadyExistsError, CardNotFoundError, PermissionDeniedError
 from .models import Card
-from .schemas import CardCreate, CardSchema, CardUpdate
+from .schemas import CardCreate, CardUpdate
 
 
 class CardService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
         self.uow_factory = uow_factory
 
-    async def get_by_uuid(self, card_uuid: UUID) -> CardSchema:
+    async def get_by_uuid(
+            self, 
+            card_uuid: UUID,
+        ) -> Card:
         async with self.uow_factory() as uow:
             card = await self._get_by_uuid(uow, card_uuid)
-            return CardSchema.model_validate(card)
+            return card
 
     async def _get_by_uuid(
         self,
@@ -31,33 +38,37 @@ class CardService:
 
         return card
 
-    async def get_all_cards_by_limit(
+    async def get_all_by_user_id(
         self,
-        limit: int = 10,
-    ) -> list[CardSchema]:
+        user_id: int,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> tuple[list[Card], str | None, bool]:
         async with self.uow_factory() as uow:
-            cards = await uow.card_repo.get_all_by_limit(limit)
-            return [CardSchema.model_validate(card) for card in cards]
-
-    async def get_all_by_user_uuid(
-        self,
-        user_uuid: UUID,
-        limit: int = 10,
-    ) -> list[CardSchema]:
-        async with self.uow_factory() as uow:
-            user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
-
-            cards = await uow.card_repo.get_all_by_user_id(
-                user_id=user.id,
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+            cards, has_more = await uow.card_repo.get_all_by_user_id(
+                user_id=user_id,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
                 limit=limit,
             )
-            return [CardSchema.model_validate(card) for card in cards]
+
+            next_cursor = None
+            if cards and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=cards[-1].updated_at,
+                    entity_id=cards[-1].id,
+                )
+
+            return cards, next_cursor, has_more
 
     async def create_card(
         self,
         payload: CardCreate,
         user_id: int,
-    ) -> CardSchema:
+    ) -> Card:
         try:
             async with self.uow_factory() as uow:
                 card = Card(
@@ -70,7 +81,7 @@ class CardService:
                 await uow.commit()
                 await uow.card_repo.refresh(card)
 
-                return CardSchema.model_validate(card)
+                return card
 
         except IntegrityError as e:
             raise CardAlreadyExistsError() from e
@@ -80,14 +91,17 @@ class CardService:
         card_uuid: UUID,
         user_id: int,
         payload: CardUpdate,
-    ) -> CardSchema:
+    ) -> Card:
         try:
             async with self.uow_factory() as uow:
                 card = await self._get_by_uuid(uow, card_uuid)
                 if card.user_id != user_id:
                     raise PermissionDeniedError()
 
-                update_data = payload.model_dump(exclude_unset=True)
+                update_data = payload.model_dump(
+                    exclude_unset=True,
+                    exclude_none=True,
+                )
 
                 for field, value in update_data.items():
                     setattr(card, field, value)
@@ -95,14 +109,20 @@ class CardService:
                 await uow.commit()
                 await uow.card_repo.refresh(card)
 
-                return CardSchema.model_validate(card)
+                return card
 
         except IntegrityError as e:
             raise CardAlreadyExistsError() from e
 
-    async def delete_card(self, card_uuid: UUID) -> None:
+    async def delete_card(
+            self, 
+            user_id: int,
+            card_uuid: UUID,
+        ) -> None:
         async with self.uow_factory() as uow:
             card = await self._get_by_uuid(uow, card_uuid)
+            if card.user_id != user_id:
+                raise CardNotFoundError(f"Card with uuid={card_uuid} not found")
 
             deck_ids = await uow.deck_card_repo.get_all_decks_by_card_id(card.id)
             await uow.card_repo.delete(card)

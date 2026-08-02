@@ -5,29 +5,19 @@ import type {
   LibraryCard,
 } from "../../features/library/model/library-types";
 import { useCardDeckAssignment } from "../../features/library/model/useCardDeckAssignment";
+import {
+  DECKS_LEFT_TO_SAVE_COUNT_FORMS,
+  SELECTED_DECK_COUNT_FORMS,
+  WORD_COUNT_FORMS,
+  localizeCount,
+  useLocale,
+} from "../../i18n";
 import styles from "./LibraryPage.module.css";
 
 interface AddCardToDeckDialogProps {
   card: LibraryCard;
   onAssigned?: () => void;
   onClose: () => void;
-}
-
-const numberFormatter = new Intl.NumberFormat("ru-RU");
-
-function formatWordsCount(value: number): string {
-  const remainder100 = value % 100;
-  const remainder10 = value % 10;
-  const word =
-    remainder100 >= 11 && remainder100 <= 14
-      ? "слов"
-      : remainder10 === 1
-        ? "слово"
-        : remainder10 >= 2 && remainder10 <= 4
-          ? "слова"
-          : "слов";
-
-  return `${numberFormatter.format(value)} ${word}`;
 }
 
 function getDeckLoadErrorMessage(error: unknown): string {
@@ -115,6 +105,7 @@ function DeckAssignmentGlyph({ name }: { name: "check" | "close" | "deck" | "sav
 }
 
 export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeckDialogProps) {
+  const { locale } = useLocale();
   const assignment = useCardDeckAssignment(card.uuid);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const isMountedRef = useRef(true);
@@ -132,6 +123,8 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
     (deckUuid) => completedDecks[deckUuid] === undefined,
   ).length;
   const completedCount = Object.keys(completedDecks).length;
+  const selectedDeckCount = localizeCount(pendingCount, SELECTED_DECK_COUNT_FORMS, locale);
+  const decksLeftToSaveCount = localizeCount(pendingCount, DECKS_LEFT_TO_SAVE_COUNT_FORMS, locale);
   const firstSaveFailure = Object.values(saveFailures)[0] ?? null;
   const canSave = assignment.status === "success" && pendingCount > 0;
 
@@ -347,7 +340,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                       </strong>
                       <span className={styles.cardDeckMeta}>
                         <span className={styles.cardDeckCount}>
-                          {formatWordsCount(deck.totalWordsCount)}
+                          {localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale).text}
                         </span>
                         {hasFailed ? (
                           <small className={styles.cardDeckRetryLabel}>повторить</small>
@@ -377,8 +370,8 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
             <p aria-live="polite">
               {assignment.status === "success" && assignment.decks.length > 0
                 ? completedCount > 0
-                  ? `Осталось сохранить: ${pendingCount}`
-                  : `Выбрано колод: ${pendingCount}`
+                  ? decksLeftToSaveCount.text
+                  : selectedDeckCount.text
                 : "Можно добавить карточку сразу в несколько колод."}
             </p>
             <div className={styles.cardEditorButtons}>

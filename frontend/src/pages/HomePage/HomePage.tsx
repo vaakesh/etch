@@ -1,11 +1,7 @@
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { isApiError } from "../../api";
-import {
-  DashboardIcon,
-  DeckIllustration,
-  type DashboardIconName,
-} from "../../components/DashboardVisuals";
+import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
 import {
   clampPercent,
   formatCount,
@@ -19,6 +15,7 @@ import {
   LIBRARY_CREATE_DECK_NAVIGATION_STATE,
   LIBRARY_PATH,
 } from "../../features/library/model/library-navigation";
+import { WORD_COUNT_FORMS, localizeCount, useLocale } from "../../i18n";
 import type {
   HomeDashboard,
   HomeDeck,
@@ -75,13 +72,19 @@ interface DeckCardProps {
 }
 
 function getAccuracyToneClassName(accuracy: number): string {
-  if (accuracy >= 85) {
+  if (accuracy >= 91) {
+    return styles.deckAccuracyPurple;
+  }
+  if (accuracy >= 81) {
+    return styles.deckAccuracyTurquoise;
+  }
+  if (accuracy >= 71) {
     return styles.deckAccuracyGreen;
   }
-  if (accuracy >= 70) {
+  if (accuracy >= 61) {
     return styles.deckAccuracyYellow;
   }
-  if (accuracy >= 50) {
+  if (accuracy >= 51) {
     return styles.deckAccuracyOrange;
   }
 
@@ -89,10 +92,12 @@ function getAccuracyToneClassName(accuracy: number): string {
 }
 
 function DeckCard({ deck }: DeckCardProps) {
+  const { locale } = useLocale();
   const accuracy = clampPercent(deck.accuracy);
   const accuracyTooltipId = useId();
   const [isAccuracyTooltipOpen, setIsAccuracyTooltipOpen] = useState(false);
-  const updatedAtLabel = formatDeckUpdatedAt(deck.updatedAt);
+  const updatedAtLabel = formatDeckUpdatedAt(deck.updatedAt, locale);
+  const wordCount = localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
   const accuracyHintClassName = isAccuracyTooltipOpen
     ? `${styles.deckAccuracyHint} ${styles.deckAccuracyHintOpen}`
     : styles.deckAccuracyHint;
@@ -109,7 +114,7 @@ function DeckCard({ deck }: DeckCardProps) {
               aria-valuemax={100}
               aria-valuemin={0}
               aria-valuenow={accuracy}
-              aria-valuetext={formatPercent(accuracy)}
+              aria-valuetext={formatPercent(accuracy, locale)}
               className={`${styles.deckAccuracy} ${getAccuracyToneClassName(accuracy)}`}
               onBlur={() => setIsAccuracyTooltipOpen(false)}
               onKeyDown={(event) => {
@@ -129,11 +134,11 @@ function DeckCard({ deck }: DeckCardProps) {
               role="meter"
               tabIndex={0}
             >
-              {formatCount(accuracy)}
+              {formatCount(accuracy, locale)}
             </span>
             <span className={styles.deckAccuracyTooltip} id={accuracyTooltipId} role="tooltip">
               <strong>Точность колоды</strong>
-              <span>Правильных ответов — {formatPercent(accuracy)}</span>
+              <span>Правильных ответов — {formatPercent(accuracy, locale)}</span>
             </span>
           </span>
         </div>
@@ -143,7 +148,7 @@ function DeckCard({ deck }: DeckCardProps) {
       <div className={styles.deckBody}>
         <div className={styles.deckStats}>
           <p>
-            <strong>{formatCount(deck.totalWordsCount)}</strong> слов
+            <strong>{wordCount.formattedValue}</strong> {wordCount.unit}
           </p>
           {deck.updatedAt !== null && updatedAtLabel !== null ? (
             <time
@@ -158,15 +163,14 @@ function DeckCard({ deck }: DeckCardProps) {
         </div>
       </div>
 
-      <button
-        aria-label={`Начать колоду «${deck.title}» — пока недоступно`}
+      <Link
+        aria-label={`Настроить тренировку по колоде «${deck.title}»`}
         className={styles.startButton}
-        disabled
-        title="BFF пока не возвращает идентификатор колоды"
-        type="button"
+        title={`Начать тренировку по колоде «${deck.title}»`}
+        to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
       >
         Начать
-      </button>
+      </Link>
     </article>
   );
 }
@@ -174,7 +178,13 @@ function DeckCard({ deck }: DeckCardProps) {
 function EmptyDecks() {
   return (
     <div className={styles.emptyDecks}>
-      <DeckIllustration className={styles.emptyIllustration} variant={0} />
+      <div aria-hidden="true" className={styles.emptyIllustration}>
+        <span />
+        <span />
+        <span>
+          <DashboardIcon name="book" />
+        </span>
+      </div>
       <div>
         <h3>Здесь появятся ваши колоды</h3>
         <p>Когда колоды будут добавлены, главная страница покажет их прогресс.</p>
@@ -198,8 +208,8 @@ function DecksSection({ decks }: { decks: readonly HomeDeck[] }) {
 
       {decks.length > 0 ? (
         <div className={styles.decksGrid}>
-          {decks.map((deck, index) => (
-            <DeckCard deck={deck} key={`${deck.title}-${index}`} />
+          {decks.map((deck) => (
+            <DeckCard deck={deck} key={deck.uuid} />
           ))}
         </div>
       ) : (
@@ -238,42 +248,49 @@ interface ProgressPanelProps {
 }
 
 function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
+  const { locale } = useLocale();
   const chartValues = [...weeklyActivity]
     .sort((first, second) => first.date.localeCompare(second.date))
     .slice(-7);
+  const studiedWordsCount = localizeCount(progress.wordsExplored, WORD_COUNT_FORMS, locale);
 
   return (
     <aside aria-labelledby="progress-heading" className={styles.progressPanel}>
-      <h2 id="progress-heading">Ваш прогресс</h2>
+      <header className={styles.progressHeading}>
+        <span aria-hidden="true" className={styles.progressHeadingIcon}>
+          <DashboardIcon name="chart" />
+        </span>
+        <h2 id="progress-heading">Ваш прогресс</h2>
+      </header>
 
       <div className={styles.metricsList}>
         <ProgressMetric
           detail="Всего"
           icon="book"
-          label="Изучено слов"
+          label="Изучено"
           tone="teal"
-          value={formatCount(progress.wordsExplored)}
+          value={studiedWordsCount.text}
         />
         <ProgressMetric
           detail="За неделю"
-          icon="target"
+          icon="gauge"
           label="Точность"
           tone="mint"
-          value={formatPercent(progress.weeklyAccuracy)}
+          value={formatPercent(progress.weeklyAccuracy, locale)}
         />
         <ProgressMetric
           detail="Продолжайте!"
-          icon="flame"
+          icon="calendar"
           label="Текущая серия"
           tone="coral"
-          value={formatStreak(progress.currentStreakDays)}
+          value={formatStreak(progress.currentStreakDays, locale)}
         />
         <ProgressMetric
           detail="Всего"
           icon="clock"
           label="Время занятий"
           tone="sand"
-          value={formatStudyTime(progress.totalStudyTimeSeconds)}
+          value={formatStudyTime(progress.totalStudyTimeSeconds, locale)}
         />
       </div>
 
@@ -283,13 +300,13 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
           <div className={styles.weeklyChart}>
             {chartValues.map((activityDay) => {
               const percent = clampPercent(activityDay.percent);
-              const weekday = formatShortWeekday(activityDay.date);
+              const weekday = formatShortWeekday(activityDay.date, locale);
 
               return (
                 <div className={styles.weeklyBar} key={activityDay.date}>
                   <div className={styles.barTrack}>
                     <span
-                      aria-label={`${weekday}, ${activityDay.date}: ${formatPercent(percent)}`}
+                      aria-label={`${weekday}, ${activityDay.date}: ${formatPercent(percent, locale)}`}
                       className={styles.barFill}
                       role="img"
                       style={{ height: `${Math.max(4, percent)}%` }}
@@ -311,10 +328,10 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
 function DashboardContent({ dashboard }: { dashboard: HomeDashboard }) {
   return (
     <div className={styles.contentGrid}>
+      <ProgressPanel progress={dashboard.progress} weeklyActivity={dashboard.weeklyActivity} />
       <div className={styles.mainColumn}>
         <DecksSection decks={dashboard.decks} />
       </div>
-      <ProgressPanel progress={dashboard.progress} weeklyActivity={dashboard.weeklyActivity} />
     </div>
   );
 }
@@ -323,11 +340,20 @@ function DashboardSkeleton() {
   return (
     <div aria-label="Загрузка данных главной страницы" className={styles.contentGrid} role="status">
       <span className={styles.srOnly}>Загружаем данные…</span>
+      <aside className={styles.skeletonPanel}>
+        <span className={styles.skeletonLineWide} />
+        <div className={styles.skeletonMetrics}>
+          {Array.from({ length: 4 }, (_, index) => (
+            <span className={styles.skeletonMetric} key={index} />
+          ))}
+        </div>
+        <span className={styles.skeletonChart} />
+      </aside>
       <div className={styles.mainColumn}>
         <section className={styles.decksSection}>
           <div className={styles.skeletonHeading} />
           <div className={styles.decksGrid}>
-            {Array.from({ length: 6 }, (_, index) => (
+            {Array.from({ length: 3 }, (_, index) => (
               <div className={styles.skeletonCard} key={index}>
                 <span className={styles.skeletonLineWide} />
                 <span className={styles.skeletonLine} />
@@ -338,12 +364,6 @@ function DashboardSkeleton() {
           </div>
         </section>
       </div>
-      <aside className={styles.skeletonPanel}>
-        <span className={styles.skeletonLineWide} />
-        {Array.from({ length: 4 }, (_, index) => (
-          <span className={styles.skeletonMetric} key={index} />
-        ))}
-      </aside>
     </div>
   );
 }

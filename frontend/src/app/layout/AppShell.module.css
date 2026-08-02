@@ -35,6 +35,18 @@
   --sidebar-width: 78px;
 }
 
+.shellLibrary {
+  --canvas: #c3b8f5;
+  --surface: #eeeaff;
+  --surface-muted: rgb(255 255 255 / 42%);
+  --ink: #291e49;
+  --muted: #685e7e;
+  --line: rgb(64 43 103 / 18%);
+  --teal: #7358ba;
+  --teal-dark: #493873;
+  --teal-soft: #ddf8f5;
+}
+
 .shell button,
 .shell a {
   font: inherit;
@@ -310,6 +322,83 @@ a.navigationItem:not(.navigationItemActive):hover {
     radial-gradient(circle at 70% 0%, rgb(255 255 255 / 75%), transparent 38rem), var(--canvas);
 }
 
+.shell .sidebar {
+  color: #291e49;
+  background: linear-gradient(
+    165deg,
+    rgb(246 243 255 / 96%) 0%,
+    rgb(211 201 250 / 94%) 52%,
+    rgb(177 239 232 / 92%) 100%
+  );
+  border-right-color: rgb(73 56 115 / 20%);
+  box-shadow:
+    10px 0 32px rgb(73 56 115 / 11%),
+    inset -1px 0 0 rgb(255 255 255 / 34%);
+}
+
+.shell .brandName {
+  color: #493873;
+  text-shadow: 0 4px 16px rgb(73 56 115 / 12%);
+}
+
+.shell .navigationThumb {
+  background: linear-gradient(135deg, #493873, #7358ba 72%, #8b6bc9);
+  border-color: rgb(255 255 255 / 26%);
+  box-shadow:
+    0 10px 24px rgb(73 56 115 / 26%),
+    inset 0 1px 0 rgb(255 255 255 / 20%);
+}
+
+.shell .navigationItem {
+  color: #291e49;
+}
+
+.shell .navigationItemActive {
+  color: #fff;
+}
+
+.shell a.navigationItem:not(.navigationItemActive):hover {
+  color: #493873;
+  background: rgb(255 255 255 / 44%);
+  border-color: rgb(255 255 255 / 48%);
+  box-shadow: 0 7px 18px rgb(73 56 115 / 8%);
+}
+
+.shell .sidebarToggle {
+  color: #493873;
+  background: linear-gradient(135deg, #f5c6e8, #b8f2ec);
+  border-color: rgb(255 255 255 / 52%);
+  box-shadow:
+    0 9px 22px rgb(73 56 115 / 22%),
+    inset 0 1px 0 rgb(255 255 255 / 48%);
+}
+
+.shell .sidebarToggle:hover {
+  color: #fff;
+  background: linear-gradient(135deg, #493873, #7358ba);
+  box-shadow: 0 12px 28px rgb(73 56 115 / 30%);
+}
+
+.shell .sidebarToggle:focus-visible,
+.shell .navigationItem:focus-visible {
+  outline-color: rgb(73 56 115 / 36%);
+}
+
+.shell .artBook {
+  background: #f2acd5;
+  border-color: #493873;
+  box-shadow: inset -9px 0 #f8e5f2;
+}
+
+.shell .artBookSecondary {
+  background: #7ee1d7;
+  border-color: #493873;
+}
+
+.shellLibrary .content {
+  background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
+}
+
 .shellCollapsed .sidebar {
   padding-inline: 9px;
 }
@@ -460,6 +549,21 @@ a.navigationItem:not(.navigationItemActive):hover {
     box-shadow:
       0 7px 16px rgb(63 118 112 / 9%),
       inset 0 1px 0 rgb(255 255 255 / 72%);
+  }
+
+  .shell .sidebar {
+    background: linear-gradient(100deg, #d4cafa 0%, #b5eee8 52%, #f3c8e6 100%);
+    border-bottom-color: rgb(73 56 115 / 20%);
+    box-shadow: 0 8px 24px rgb(73 56 115 / 12%);
+  }
+
+  .shell .navigationItemActive {
+    color: #fff;
+    background: linear-gradient(135deg, #493873, #7358ba);
+    border-color: rgb(255 255 255 / 24%);
+    box-shadow:
+      0 7px 16px rgb(73 56 115 / 24%),
+      inset 0 1px 0 rgb(255 255 255 / 18%);
   }
 
   .navigationIcon {

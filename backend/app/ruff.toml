@@ -1,0 +1,13 @@
+target-version = "py314"
+line-length = 92
+
+[lint]
+extend-select = [
+    "UP", # pyupgrade
+    "I", # isort
+    "E501", # line too long
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"

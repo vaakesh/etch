@@ -8,6 +8,8 @@ describe("auth contract", () => {
         uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
         username: "alice",
         email: "alice@example.com",
+        created_at: "2026-07-31T10:15:00Z",
+        updated_at: "2026-08-01T08:30:00Z",
       }),
     ).toEqual({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
@@ -16,15 +18,17 @@ describe("auth contract", () => {
     });
   });
 
-  it("does not expose extra backend fields through the user model", () => {
-    expect(
-      parseCurrentUser({
-        uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
-        username: "alice",
-        email: "alice@example.com",
-        hashed_password: "must-not-leak-into-ui-state",
-      }),
-    ).not.toHaveProperty("hashed_password");
+  it("keeps /users/me timestamps outside the narrower auth user model", () => {
+    const user = parseCurrentUser({
+      uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
+      username: "alice",
+      email: "alice@example.com",
+      created_at: "2026-07-31T10:15:00Z",
+      updated_at: "2026-08-01T08:30:00Z",
+    });
+
+    expect(user).not.toHaveProperty("created_at");
+    expect(user).not.toHaveProperty("updated_at");
   });
 
   it("rejects an invalid /users/me response", () => {

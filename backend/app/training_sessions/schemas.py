@@ -1,63 +1,32 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi.exceptions import RequestValidationError
+from app.errors import RequestValueError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class TrainingSessionSchema(BaseModel):
+class TrainingSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int | None = None
-    uuid: UUID | None = None
+    uuid: UUID
 
-    user_id: int | None = None
-    deck_id: int
+    requested_count: int
+    actual_count: int
 
-    requested_count: int = Field(..., ge=0)
-    actual_count: int = Field(..., ge=0)
+    correct_count: int
+    wrong_count: int
 
-    correct_count: int = Field(default=0, ge=0)
-    wrong_count: int = Field(default=0, ge=0)
-    score: int = Field(default=0, ge=0)
+    prompt_side: str
+    answer_side: str
 
-    prompt_side: str = Field(default="front", max_length=20)
-    answer_side: str = Field(default="back", max_length=20)
+    started_at: datetime
+    finished_at: datetime | None
 
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-
-class TrainingSessionCreate(BaseModel):
-    deck_id: int
-
-    requested_count: int = Field(..., ge=0)
-
-    prompt_side: str = Field(default="front", max_length=20)
-    answer_side: str = Field(default="back", max_length=20)
-
-
-class TrainingSessionUpdate(BaseModel):
-    actual_count: int | None = Field(default=None, ge=0)
-
-    correct_count: int | None = Field(default=None, ge=0)
-    wrong_count: int | None = Field(default=None, ge=0)
-    score: int | None = Field(default=None, ge=0)
-
-    prompt_side: str | None = Field(default=None, max_length=20)
-    answer_side: str | None = Field(default=None, max_length=20)
-
-    finished_at: datetime | None = None
-
-
-class TrainingSessionFinish(BaseModel):
-    correct_count: int = Field(..., ge=0)
-    wrong_count: int = Field(..., ge=0)
-    score: int = Field(..., ge=0)
-
-
-class TrainingSessionOut(TrainingSessionSchema):
-    pass
+class TrainingSessionStatus(StrEnum):
+    FINISHED = "finished"
+    UNFINISHED = "unfinished"
 
 class SkipAnswer(BaseModel):
     action: Literal["skip"]
@@ -72,11 +41,13 @@ class SubmittedAnswer(BaseModel):
     def validate_answer(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise RequestValidationError("Answer must not be empty")
+            raise RequestValueError(
+                "Answer must not be empty", 
+                failed_field="answer",
+            )
         return value
 
-
-UserAnswer = Annotated[
+type UserAnswer = Annotated[
     SkipAnswer | SubmittedAnswer,
     Field(discriminator="action"),
 ]

@@ -88,10 +88,12 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
     backText !== card.backText ||
     sourceLang !== card.sourceLang ||
     targetLang !== card.targetLang;
-  const hasRequiredValues = [frontText, backText, sourceLang, targetLang].every(
-    (value) => value.trim().length > 0,
-  );
-  const canSave = hasChanges && hasRequiredValues;
+  const hasRequiredTexts = [frontText, backText].every((value) => value.trim().length > 0);
+  const hasValidLanguages = [sourceLang, targetLang].every((value) => {
+    const length = value.trim().length;
+    return length >= 2 && length <= 3;
+  });
+  const canSave = hasChanges && hasRequiredTexts && hasValidLanguages;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -238,7 +240,8 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 autoCapitalize="none"
                 autoComplete="off"
                 id={targetLangId}
-                maxLength={10}
+                maxLength={3}
+                minLength={2}
                 name="target_lang"
                 onChange={(event) => setTargetLang(event.currentTarget.value)}
                 required
@@ -256,7 +259,8 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 autoCapitalize="none"
                 autoComplete="off"
                 id={sourceLangId}
-                maxLength={10}
+                maxLength={3}
+                minLength={2}
                 name="source_lang"
                 onChange={(event) => setSourceLang(event.currentTarget.value)}
                 required

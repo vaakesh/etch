@@ -10,6 +10,8 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
     data: {
       decks: [
         {
+          uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+          ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
           title: "Daily Words",
           description: "Core vocabulary",
           totalWordsCount: 48,
@@ -17,6 +19,8 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
           updatedAt: "2026-07-17T10:30:00Z",
         },
         {
+          uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+          ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
           title: "Travel Essentials",
           description: null,
           totalWordsCount: 36,
@@ -46,6 +50,7 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
 }));
 
 import { HomePage } from "./HomePage";
+import styles from "./HomePage.module.css";
 
 describe("HomePage", () => {
   it("renders BFF dashboard content without duplicating the app navigation", () => {
@@ -61,6 +66,8 @@ describe("HomePage", () => {
     expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/practice?deck=f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup.match(/href="\/library"/g)).toHaveLength(2);
     expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).toContain('title="Создать новую колоду в библиотеке"');
@@ -71,6 +78,8 @@ describe("HomePage", () => {
     expect(markup).toContain('aria-valuetext="72%"');
     expect(markup).toMatch(/<span[^>]*role="meter"[^>]*tabindex="0">72<\/span>/);
     expect(markup).toMatch(/<span[^>]*role="meter"[^>]*tabindex="0">64<\/span>/);
+    expect(markup).toContain(`${styles.deckAccuracy} ${styles.deckAccuracyGreen}`);
+    expect(markup).toContain(`${styles.deckAccuracy} ${styles.deckAccuracyYellow}`);
     expect(markup.match(/role="tooltip"/g)).toHaveLength(2);
     expect(new Set(accuracyTooltipIds).size).toBe(2);
     accuracyTooltipIds.forEach((id) => expect(markup).toContain(`id="${id}"`));

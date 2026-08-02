@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from app.users.schemas import Password, Username
 from pydantic import BaseModel, ConfigDict
 
 
@@ -26,3 +27,9 @@ class SessionOut(BaseModel):
     ip: str | None
     revoked_at: datetime | None
     replaced_by_session_id: int | None
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    username: Username
+    password: Password

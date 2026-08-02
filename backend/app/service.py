@@ -1,12 +1,13 @@
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from app.users.repository import UserRepository
-from collections.abc import Callable
-
-from app.training_sessions.repository import TrainingSessionItemRepository, TrainingSessionRepository
+from app.auth.repository import AuthRepository
 from app.cards.repository import CardRepository
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
-from app.auth.repository import AuthRepository
+from app.training_sessions.repository import (
+    TrainingSessionItemRepository,
+    TrainingSessionRepository,
+)
+from app.users.repository import UserRepository
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 class UnitOfWork:

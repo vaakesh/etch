@@ -10,6 +10,7 @@ import {
   useDeckEditor,
   type UseDeckEditorResult,
 } from "../../features/library/model/useDeckEditor";
+import { CARD_COUNT_FORMS, localizeCount, useLocale } from "../../i18n";
 import libraryStyles from "../LibraryPage/LibraryPage.module.css";
 import styles from "./LibraryDeckEditPage.module.css";
 import { LibraryDeckEditCardRow } from "./LibraryDeckEditCardRow";
@@ -108,6 +109,40 @@ function BackGlyph() {
   );
 }
 
+function VisibilityGlyph({ isPublic }: { isPublic: boolean }) {
+  if (isPublic) {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M3.8 12h16.4M12 3.5c2.2 2.3 3.3 5.1 3.3 8.5S14.2 18.2 12 20.5C9.8 18.2 8.7 15.4 8.7 12S9.8 5.8 12 3.5Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <rect height="9" rx="2.4" width="14" x="5" y="10.5" />
+      <path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5M12 14.2v2.2" />
+    </svg>
+  );
+}
+
 function DeckDetailsForm({
   deck,
   onSave,
@@ -119,14 +154,16 @@ function DeckDetailsForm({
   const isSavingRef = useRef(false);
   const [title, setTitle] = useState(deck.title);
   const [description, setDescription] = useState(deck.description ?? "");
+  const [isPublic, setIsPublic] = useState(deck.isPublic);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown | null>(null);
   const [showSavedNotice, setShowSavedNotice] = useState(false);
   const normalizedTitle = title.trim();
   const normalizedDescription = description.trim();
   const descriptionValue = normalizedDescription.length === 0 ? null : normalizedDescription;
-  const hasChanges = title !== deck.title || description !== (deck.description ?? "");
-  const canSave = normalizedTitle.length > 0 && hasChanges;
+  const hasChanges =
+    title !== deck.title || description !== (deck.description ?? "") || isPublic !== deck.isPublic;
+  const canSave = normalizedTitle.length >= 3 && normalizedTitle.length <= 50 && hasChanges;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -151,6 +188,7 @@ function DeckDetailsForm({
       await onSave({
         title: normalizedTitle,
         description: descriptionValue,
+        isPublic,
       });
       if (isMountedRef.current) {
         setTitle(normalizedTitle);
@@ -169,6 +207,15 @@ function DeckDetailsForm({
     }
   }
 
+  function handlePrivacyChange(nextIsPublic: boolean): void {
+    if (nextIsPublic === isPublic) {
+      return;
+    }
+
+    setIsPublic(nextIsPublic);
+    setShowSavedNotice(false);
+  }
+
   return (
     <form
       aria-busy={isSaving}
@@ -177,22 +224,39 @@ function DeckDetailsForm({
       onSubmit={(event) => void handleSubmit(event)}
     >
       <div className={styles.formHeading}>
-        <div>
-          <span>Основные данные</span>
-          <h2>О колоде</h2>
+        <div aria-hidden="true" className={styles.abstractVisual} data-deck-abstract-visual>
+          <span className={styles.abstractGlow} />
+          <span className={styles.abstractOrbit}>
+            <i />
+          </span>
+          <span className={`${styles.abstractCard} ${styles.abstractCardBack}`}>
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className={`${styles.abstractCard} ${styles.abstractCardFront}`}>
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className={styles.abstractSpark} />
         </div>
-        <span className={styles.visibilityBadge}>{deck.isPublic ? "Публичная" : "Приватная"}</span>
+        <span className={styles.visibilityBadge} data-public={isPublic}>
+          <VisibilityGlyph isPublic={isPublic} />
+          <span>{isPublic ? "Публичная" : "Приватная"}</span>
+        </span>
       </div>
 
       <div className={styles.fields}>
         <label className={styles.field}>
           <span>
             <strong>Название</strong>
-            <small>{title.length}/150</small>
+            <small>{title.length}/50</small>
           </span>
           <input
             autoComplete="off"
-            maxLength={150}
+            maxLength={50}
+            minLength={3}
             name="title"
             onChange={(event) => {
               setTitle(event.currentTarget.value);
@@ -209,6 +273,7 @@ function DeckDetailsForm({
             <small>необязательно</small>
           </span>
           <textarea
+            maxLength={3000}
             name="description"
             onChange={(event) => {
               setDescription(event.currentTarget.value);
@@ -219,6 +284,45 @@ function DeckDetailsForm({
             value={description}
           />
         </label>
+
+        <div className={styles.privacyControl}>
+          <div className={styles.privacyControlCopy} id="deck-visibility-label">
+            <strong>Доступ к колоде</strong>
+            <small>
+              {isPublic
+                ? "Другие пользователи смогут видеть эту колоду."
+                : "Колода доступна только вам."}
+            </small>
+          </div>
+          <div
+            aria-labelledby="deck-visibility-label"
+            className={styles.privacyToggle}
+            data-public={isPublic}
+            role="group"
+          >
+            <div className={styles.privacyTrack}>
+              <button
+                aria-pressed={!isPublic}
+                className={styles.privacyChoice}
+                onClick={() => handlePrivacyChange(false)}
+                type="button"
+              >
+                <VisibilityGlyph isPublic={false} />
+                <span>Приватная</span>
+              </button>
+              <button
+                aria-pressed={isPublic}
+                className={styles.privacyChoice}
+                onClick={() => handlePrivacyChange(true)}
+                type="button"
+              >
+                <VisibilityGlyph isPublic />
+                <span>Публичная</span>
+              </button>
+              <span aria-hidden="true" className={styles.privacyThumb} />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className={styles.formFooter}>
@@ -293,12 +397,6 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
             Карточки
           </h2>
         </div>
-        <div aria-live="polite" className={styles.cardCount}>
-          <DashboardIcon name="book" />
-          <span>
-            Загружено: <strong>{editor.cards.length}</strong>
-          </span>
-        </div>
       </div>
 
       {editor.cards.length === 0 && !editor.hasMore ? (
@@ -346,10 +444,12 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
 
 export function LibraryDeckEditPage() {
   const { deck_uuid: deckUuid = "" } = useParams<{ deck_uuid: string }>();
+  const { locale } = useLocale();
   const editor = useDeckEditor(deckUuid);
+  const deckCardCount = localizeCount(editor.deck?.totalWordsCount ?? 0, CARD_COUNT_FORMS, locale);
 
   return (
-    <main className={styles.page}>
+    <main className={`${libraryStyles.page} ${styles.page}`}>
       <div className={styles.editor}>
         {editor.status === "loading" ? <PageLoadingState /> : null}
         {editor.status === "error" ? <PageErrorState editor={editor} /> : null}
@@ -360,13 +460,21 @@ export function LibraryDeckEditPage() {
                 <BackGlyph />
               </Link>
               <div className={styles.headerCopy}>
-                <span className={styles.eyebrow}>Редактор колоды</span>
+                <div className={styles.headerTopline}>
+                  <span className={styles.eyebrow}>Редактор колоды</span>
+                  <div
+                    aria-live="polite"
+                    aria-label={deckCardCount.text}
+                    className={styles.headerMetric}
+                  >
+                    <DashboardIcon name="book" />
+                    <span>
+                      <strong>{deckCardCount.formattedValue}</strong> {deckCardCount.unit}
+                    </span>
+                  </div>
+                </div>
                 <h1 title={editor.deck.title}>{editor.deck.title}</h1>
                 <p>Изменяйте данные колоды и управляйте карточками в одном месте.</p>
-              </div>
-              <div className={styles.headerMetric}>
-                <span>{editor.deck.totalWordsCount}</span>
-                <small>карточек в колоде</small>
               </div>
             </header>
 

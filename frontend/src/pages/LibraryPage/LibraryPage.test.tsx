@@ -41,6 +41,7 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
     decks: [
       {
         uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+        ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
         title: "Daily Words",
         description: "Core vocabulary",
         totalWordsCount: 48,
@@ -52,16 +53,23 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
             uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
             frontText: "hello",
             backText: "привет",
+            sourceLang: "en",
+            targetLang: "ru",
+            updatedAt: "2026-07-20T09:15:00Z",
           },
           {
             uuid: "28dd615b-a6cb-4471-8238-b41c25556bb0",
             frontText: "journey",
             backText: "путешествие",
+            sourceLang: "en",
+            targetLang: "ru",
+            updatedAt: "2026-07-20T09:15:00Z",
           },
         ],
       },
       {
         uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+        ownerUuid: "aaa61c35-11d0-489e-837d-3845418ba39e",
         title: "Travel Essentials",
         description: null,
         totalWordsCount: 36,
@@ -78,10 +86,13 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
     loadMoreError: null,
     favouriteUpdatingDeckUuids: [],
     favouriteErrors: {},
+    deletingDeckUuids: [],
+    deleteErrors: {},
     onlyFavourites: false,
     retry: vi.fn(),
     loadMore: vi.fn(),
     createDeck: vi.fn(async () => undefined),
+    deleteDeck: vi.fn(),
     setOnlyFavourites: vi.fn(),
     setFavourite: vi.fn(),
     ...overrides,
@@ -96,7 +107,6 @@ function createCardLibraryResult(
     cards: [
       {
         uuid: "8f449a33-87ff-4cf8-a371-43c681623f61",
-        ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
         frontText: "indelible",
         backText: "неизгладимый",
         sourceLang: "en",
@@ -207,11 +217,13 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Редактировать");
     expect(markup).toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
     expect(markup).toContain("Начать");
-    expect(markup).toContain("Всего слов: 48");
-    expect(markup).toContain("Последнее обновление:");
+    expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/practice?deck=f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
+    expect(markup).toContain("48 слов");
+    expect(markup).toContain("Обновлено");
     expect(markup).not.toContain("Открыть");
     expect(markup).not.toContain('viewBox="0 0 160 140"');
-    expect(markup).toContain("2</strong> колод загружено");
+    expect(markup).toContain("2</strong> колоды загружены");
     expect(markup).toMatch(/<section[^>]*hidden=""[^>]*id="library-cards-panel"[^>]*><\/section>/);
     expect(markup).not.toContain('data-card-uuid="8f449a33-87ff-4cf8-a371-43c681623f61"');
     expect(useLibraryCardsMock).toHaveBeenCalledWith({
@@ -220,7 +232,6 @@ describe("LibraryPage", () => {
     });
     expect(markup).toContain("Новая колода");
     expect(markup).not.toContain('data-deck-creator="new"');
-    expect(markup.match(/ disabled=""/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it("opens the existing deck creator after navigation from the home action", () => {
@@ -300,7 +311,7 @@ describe("LibraryPage", () => {
     expect(markup).not.toContain("Поменять слово и перевод местами");
     expect(markup).not.toContain('dateTime="2026-07-20T09:15:00Z"');
     expect(markup).not.toContain("Обновлено");
-    expect(markup).toContain("Загружено карточек: <strong>1</strong>");
+    expect(markup).not.toContain("карточка загружена");
     expect(markup).toContain("Показать ещё");
     expect(actionsTrigger).not.toBeNull();
     expect(markup).toContain(`aria-labelledby="${actionsTrigger?.[1]}"`);
@@ -337,7 +348,8 @@ describe("LibraryPage", () => {
     expect(markup).toContain('name="source_lang"');
     expect(markup).toContain('name="target_lang"');
     expect(markup.match(/maxLength="255"/g)).toHaveLength(2);
-    expect(markup.match(/maxLength="10"/g)).toHaveLength(2);
+    expect(markup.match(/maxLength="3"/g)).toHaveLength(2);
+    expect(markup.match(/minLength="2"/g)).toHaveLength(2);
     expect(markup).toContain("indelible");
     expect(markup).toContain("неизгладимый");
     expect(markup).toContain("Сохранить");
@@ -363,7 +375,7 @@ describe("LibraryPage", () => {
     expect(markup).toContain("1 слово");
     expect(markup.match(/name="deck_uuid"/g)).toHaveLength(2);
     expect(markup.match(/type="checkbox"/g)).toHaveLength(2);
-    expect(markup).toContain("Выбрано колод: 0");
+    expect(markup).toContain("0 колод выбрано");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"[^>]*>/);
     expect(markup).toContain("Сохранить");
     expect(markup).toContain("Отмена");
@@ -424,7 +436,8 @@ describe("LibraryPage", () => {
     expect(markup).toContain('data-deck-creator="new"');
     expect(markup).toContain("Новая колода");
     expect(markup).toContain('name="title"');
-    expect(markup).toContain('maxLength="150"');
+    expect(markup).toContain('maxLength="50"');
+    expect(markup).toContain('minLength="3"');
     expect(markup).toContain('name="description"');
     expect(markup).toContain("необязательно");
     expect(markup.match(/name="is_public"/g)).toHaveLength(2);
@@ -473,12 +486,14 @@ describe("LibraryPage", () => {
             accuracy: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,
-            isFollowing: false,
             cards: [
               {
                 uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
                 frontText: "etch",
                 backText: "гравировать",
+                sourceLang: "en",
+                targetLang: "ru",
+                updatedAt: "2026-07-20T09:15:00Z",
               },
             ],
           },
@@ -497,24 +512,23 @@ describe("LibraryPage", () => {
     expect(markup).toMatch(/<span[^>]*role="meter"[^>]*tabindex="0">91<\/span>/);
     expect(markup).toContain('aria-label="Удалить из избранного: «Backend favourites»"');
     expect(markup).toContain('aria-pressed="true"');
-    expect(markup).toContain("1</strong> любимых колод загружено");
+    expect(markup).toContain("1</strong> любимая колода загружена");
   });
 
-  it("does not link a favourite deck owned by another user to the editor", () => {
+  it("does not expose deck management for another user's favourite deck", () => {
     useLibraryDecksMock.mockReturnValue(
       createLibraryResult({
         onlyFavourites: true,
         decks: [
           {
             uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
-            ownerUuid: "ed81133b-9f71-487c-89de-70bf643bf086",
+            ownerUuid: "aaa61c35-11d0-489e-837d-3845418ba39e",
             title: "Чужая публичная колода",
             description: null,
             totalWordsCount: 12,
             accuracy: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,
-            isFollowing: true,
             cards: [],
           },
         ],
@@ -524,8 +538,7 @@ describe("LibraryPage", () => {
     const markup = renderLibraryPage();
 
     expect(markup).not.toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
-    expect(markup).toContain("может редактировать только владелец");
-    expect(markup).toMatch(/<button[^>]*class="[^"]+"[^>]*disabled=""[^>]*>/);
+    expect(markup).not.toContain('aria-label="Удалить колоду «Чужая публичная колода»"');
   });
 
   it("shows a dedicated empty state for the favourite filter", () => {

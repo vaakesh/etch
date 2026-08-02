@@ -1,8 +1,8 @@
-from fastapi import Depends
-
-from app.deps import get_uow_factory, UoWFactory
+from typing import Annotated
 
 from app.decks.service import DeckService, UserDeckService
+from app.deps import UoWFactory, get_uow_factory
+from fastapi import Depends
 
 
 def get_deck_service(
@@ -18,3 +18,12 @@ def get_user_deck_service(
     return UserDeckService(
         uow_factory=uow_factory,
     )
+
+DeckServiceDeps = Annotated[
+    DeckService,
+    Depends(get_deck_service),
+]
+UserDeckServiceDeps = Annotated[
+    UserDeckService,
+    Depends(get_user_deck_service),
+]

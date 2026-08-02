@@ -79,7 +79,8 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
   const [isPublic, setIsPublic] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown | null>(null);
-  const canSave = title.trim().length > 0;
+  const normalizedTitleLength = title.trim().length;
+  const canSave = normalizedTitleLength >= 3 && normalizedTitleLength <= 50;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -190,13 +191,14 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
               autoComplete="off"
               autoFocus
               id={deckTitleId}
-              maxLength={150}
+              maxLength={50}
+              minLength={3}
               name="title"
               onChange={(event) => setTitle(event.currentTarget.value)}
               required
               value={title}
             />
-            <small>{title.length}/150</small>
+            <small>{title.length}/50</small>
           </label>
 
           <label className={styles.cardEditorField} htmlFor={deckDescriptionId}>
@@ -207,6 +209,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
             </span>
             <textarea
               id={deckDescriptionId}
+              maxLength={3000}
               name="description"
               onChange={(event) => setDescription(event.currentTarget.value)}
               placeholder="О чём эта колода?"

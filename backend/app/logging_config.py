@@ -1,7 +1,9 @@
 import logging
 import sys
 
-LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(filename)s:%(lineno)d | %(message)s"
+LOG_FORMAT = (
+    "%(asctime)s | %(levelname)s | %(name)s | "
+    "%(filename)s:%(lineno)d | %(message)s")
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 RESET = "\x1b[0m"
@@ -42,7 +44,14 @@ def setup_logging(sql_debug: bool = False) -> None:
     root.setLevel(logging.INFO)
     root.handlers = [handler]
 
-    for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi", "sqlalchemy.engine", "sqlalchemy.pool"):
+    for name in (
+        "uvicorn", 
+        "uvicorn.access", 
+        "uvicorn.error", 
+        "fastapi", 
+        "sqlalchemy.engine", 
+        "sqlalchemy.pool"
+    ):
         logger = logging.getLogger(name)
         logger.handlers = []
         logger.propagate = True

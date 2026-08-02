@@ -8,7 +8,8 @@
       const usesLightBootPalette =
         window.location.pathname === "/" ||
         window.location.pathname === "/library" ||
-        window.location.pathname.startsWith("/library/");
+        window.location.pathname.startsWith("/library/") ||
+        window.location.pathname === "/practice";
 
       document.documentElement.dataset.bootPalette = usesLightBootPalette ? "light" : "dark";
       if (usesLightBootPalette) {

@@ -21,3 +21,7 @@ class RefreshTokenNotFoundError(InvalidTokenError):
 class AccessTokenNotFoundError(InvalidTokenError):
     def __init__(self, message: str = "Not authorized"):
         super().__init__(message)
+
+class InvalidLoginCredentials(Exception):
+    def __init__(self, message: str = "Invalid username or password"):
+        super().__init__(message)

@@ -1,22 +1,25 @@
 
 
 from datetime import datetime
-import uuid
-
-from sqlalchemy import BigInteger, DateTime, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from uuid import UUID
 
 from app.database import Base
+from sqlalchemy import BigInteger, DateTime, String, func, text
+from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        default=uuid.uuid4,
+    id: Mapped[int] = mapped_column(
+        BigInteger, 
+        primary_key=True,
+        nullable=False,
+    )
+    uuid: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
+        server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
         index=True
@@ -38,11 +41,16 @@ class User(Base):
         nullable=False,
     )
 
-    cards = relationship("Card", back_populates="user")
-    decks = relationship("Deck", back_populates="user")
-    training_sessions = relationship("TrainingSession", back_populates="user")
+    cards = relationship("Card", back_populates="user", passive_deletes=True)
+    decks = relationship("Deck", back_populates="user", passive_deletes=True)
+    training_sessions = relationship(
+        "TrainingSession", 
+        back_populates="user", 
+        passive_deletes=True,
+    )
     user_sessions = relationship(
         "UserSession", 
         foreign_keys="UserSession.user_id", 
-        back_populates="user"
+        back_populates="user",
+        passive_deletes=True,
     )

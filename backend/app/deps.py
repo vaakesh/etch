@@ -1,13 +1,9 @@
-from collections.abc import AsyncGenerator
-import logging
-from typing import Callable
+from collections.abc import Callable
 
+from app.database import get_async_session_maker
+from app.service import UnitOfWork
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from app.service import UnitOfWork
-from app.database import get_async_session_maker
-
 
 UoWFactory = Callable[[], UnitOfWork]
 

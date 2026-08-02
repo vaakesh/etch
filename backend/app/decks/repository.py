@@ -1,13 +1,11 @@
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
+from app.cards.models import Card
+from app.users.schemas import SearchQuery
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.cards.models import Card
-from app.decks.schemas import DeckWithUserDataInternal
-from app.users.models import User
-from app.bff.utils import calculate_accuracy
 
 from .models import Deck, DeckCard, UserDeck
 
@@ -16,13 +14,34 @@ class DeckRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_uuid(self, deck_uuid: UUID, for_update: bool = False) -> Deck | None:
-        stmt = select(Deck).where(Deck.uuid == deck_uuid)
+    async def get_by_uuid(
+            self, 
+            deck_uuid: UUID, 
+            for_update: bool = False
+        ) -> Deck | None:
+        # stmt = (
+        #     select(Deck, User.uuid.label("owner_uuid"))
+        #     .join(User, Deck.user_id == User.id)
+        #     .where(Deck.uuid == deck_uuid)
+        # )
+        # stmt = (
+        #     select(Deck)
+        #     .join(User, Deck.user_id == User.id)
+        #     .where(Deck.uuid == deck_uuid)
+        #     .options(
+        #         contains_eager(Deck.user).load_only(User.uuid)
+        #     )
+        # )
+        stmt = (
+            select(Deck)
+            .where(Deck.uuid == deck_uuid)
+        )
         if for_update:
             stmt = stmt.with_for_update()
 
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        rows = result.scalar_one_or_none()
+        return rows
 
     async def get_by_id(
             self,
@@ -37,7 +56,7 @@ class DeckRepository:
             select(Deck)
             .where(
                 Deck.uuid == deck_uuid,
-                Deck.is_public == True,    
+                Deck.is_public.is_(True),    
             )
         )
         result = await self.session.execute(stmt)
@@ -51,16 +70,49 @@ class DeckRepository:
     async def get_all_by_user_id(
         self,
         user_id: int,
-        limit: int = 10,
-    ) -> list[Deck]:
+        search_query: SearchQuery,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+        public_only: bool = True,
+    ) -> tuple[list[Deck], bool]:
         stmt = (
             select(Deck)
-            .where(Deck.user_id == user_id)
-            .limit(limit)
-            .order_by(Deck.updated_at.desc())
+            .where(
+                Deck.user_id == user_id,
+            )
         )
+        if public_only:
+            stmt = stmt.where(Deck.is_public.is_(True))
+
+        if search_query:
+            terms = search_query.split()
+
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
 
     async def get_page_by_user_id(
         self,
@@ -87,33 +139,7 @@ class DeckRepository:
         decks = list(result.scalars().all())
         has_more = len(decks) > limit
         return decks[:limit], has_more
-    
-    async def get_user_statistics_by_decks(
-            self,
-            deck_ids: list[int],
-            user_id: int,
-    ) -> list[UserDeck]:
-        if not deck_ids:
-            return []
-        
-        stmt = (
-            select(UserDeck)
-            .where(
-                UserDeck.user_id == user_id,
-                UserDeck.deck_id.in_(deck_ids),
-            )
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
 
-    async def get_public_by_limit(self, limit: int = 10) -> list[Deck]:
-        stmt = (
-            select(Deck)
-            .where(Deck.is_public.is_(True))
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
 
     def add(self, deck: Deck) -> None:
         self.session.add(deck)
@@ -123,6 +149,9 @@ class DeckRepository:
 
     async def refresh(self, deck: Deck) -> None:
         await self.session.refresh(deck)
+
+    async def get(self, deck_id: int) -> Deck:
+        return await self.session.get(Deck, deck_id)
 
 
 class DeckCardRepository:
@@ -176,7 +205,7 @@ class DeckCardRepository:
     async def get_max_position(
             self,
             deck_id: int,
-    ) -> int:
+    ) -> int | None:
         stmt = (
             select(DeckCard.position)
             .where(DeckCard.deck_id == deck_id)
@@ -250,7 +279,7 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
     
-    async def get_all_by_deck_ids(
+    async def get_all_cards_by_deck_ids(
         self,
         deck_ids: list[int],
         limit: int = 100,
@@ -297,6 +326,25 @@ class DeckCardRepository:
     async def refresh(self, deck_card: DeckCard) -> None:
         await self.session.refresh(deck_card)
 
+    async def update_deck_cards_positions_after_deleting(
+        self,
+        deck_id: int,
+        deleted_position: int,
+    ) -> None:
+        stmt = (
+            update(DeckCard)
+            .where(
+                DeckCard.deck_id == deck_id,
+                DeckCard.position > deleted_position,
+            )
+            .values(
+                position = DeckCard.position - 1,
+            )
+        )
+
+        await self.session.execute(stmt)
+        return None
+
 
 class UserDeckRepository:
     def __init__(self, session: AsyncSession):
@@ -305,21 +353,20 @@ class UserDeckRepository:
     async def get_favourite_decks_by_user_id(
             self,
             user_id: int,
+            cursor_updated_at: datetime | None,
+            cursor_id: int | None,
             limit: int = 16,
-            cursor: tuple[datetime, int] | None = None
-    ) -> tuple[list[DeckWithUserDataInternal], bool]:
+    ) -> tuple[list[Deck], bool]:
         stmt = (
-            select(UserDeck, Deck, User)
-            .join(Deck, UserDeck.deck_id == Deck.id)
-            .join(User, User.id == Deck.user_id)
+            select(Deck)
+            .join(UserDeck, UserDeck.deck_id == Deck.id)
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_favourite.is_(True),
             )
         )
 
-        if cursor is not None:
-            cursor_updated_at, cursor_id = cursor
+        if cursor_updated_at is not None and cursor_id is not None:
             stmt = stmt.where(
                 or_(
                     Deck.updated_at < cursor_updated_at,
@@ -335,46 +382,35 @@ class UserDeckRepository:
             Deck.id.desc(),
         ).limit(limit + 1)
         result = await self.session.execute(stmt)
-        rows = list(result.all())
+        rows = list(result.scalars().all())
         has_more = len(rows) > limit
         
-        decks_with_user_data = []
-        for user_deck, deck, owner_deck in rows[:limit]:
-            decks_with_user_data.append(
-                DeckWithUserDataInternal(
-                    deck_id=deck.id,
-                    deck_uuid=deck.uuid,
-                    owner_id=deck.user_id,
-                    owner_uuid=owner_deck.uuid,
-                    user_id=user_deck.user_id,
-                    title=deck.title,
-                    description=deck.description,
-                    words_count=deck.words_count,
-                    updated_at=deck.updated_at,
-                    is_favourite=user_deck.is_favourite,
-                    is_following=user_deck.is_following,
-                    user_accuracy=calculate_accuracy(user_deck),
-                    cards=[],
-                )
-            )
-
-        return decks_with_user_data[:limit], has_more
+        return rows[:limit], has_more
 
     async def get_followed_decks_by_user_id(
             self,
             user_id: int,
+            offset: int,
             limit: int,
-    ) -> list[UserDeck]:
+    ) -> Sequence[tuple[UserDeck, UUID, str, str | None, int]]:
         stmt = (
-            select(UserDeck)
+            select(UserDeck, Deck.uuid, Deck.title, Deck.description, Deck.words_count)
             .join(Deck, UserDeck.deck_id == Deck.id)
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_following.is_(True),
             )
+            .order_by(
+                Deck.updated_at.desc(),
+                Deck.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
         )
+        
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        rows = result.all()
+        return rows
 
     async def get_by_user_id_and_deck_id(
             self,
@@ -394,37 +430,24 @@ class UserDeckRepository:
         
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+    
+    def add(self, user_deck: UserDeck):
+        self.session.add(user_deck)
 
-    async def set_favourite(
-            self,
-            user_id: int,
-            deck_id: int,
-            value: bool,
-    ) -> UserDeck:
+    async def get_user_decks_by_deck_ids(
+        self,
+        deck_ids: list[int],
+        user_id: int,
+    ) -> list[UserDeck]:
+        if not deck_ids:
+            return []
+        
         stmt = (
             select(UserDeck)
             .where(
                 UserDeck.user_id == user_id,
-                UserDeck.deck_id == deck_id,
+                UserDeck.deck_id.in_(deck_ids),
             )
-            .with_for_update()
         )
         result = await self.session.execute(stmt)
-        user_deck = result.scalar_one_or_none()
-
-        if user_deck is None:
-            user_deck = UserDeck(
-                user_id=user_id,
-                deck_id=deck_id,
-                is_favourite=value,
-            )
-            self.add(user_deck=user_deck)
-        else:
-            user_deck.is_favourite = value
-
-        await self.session.flush()
-        
-        return user_deck
-    
-    def add(self, user_deck: UserDeck):
-        self.session.add(user_deck)
+        return list(result.scalars().all())

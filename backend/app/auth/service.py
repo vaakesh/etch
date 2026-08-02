@@ -1,24 +1,29 @@
 
 
 
-from datetime import timedelta
 import hashlib
 import hmac
 import secrets
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 import jwt
-
-from app.config import AuthTokensConfig
-from app.utils import utcnow
-from app.auth.errors import InvalidRefreshTokenError, InvalidTokenError, InvalidTokenTypeError
-from app.auth.schemas import IssuedTokens, TokenPair
-from app.service import UnitOfWork
+from app.auth.errors import (
+    InvalidLoginCredentials,
+    InvalidRefreshTokenError,
+    InvalidTokenError,
+    InvalidTokenTypeError,
+)
 from app.auth.models import UserSession
-from app.auth.utils import verify_password
+from app.auth.schemas import IssuedTokens, TokenPair
+from app.auth.utils import hash_password, verify_password
+from app.config import AuthTokensConfig
+from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
+from app.utils import utcnow
 
 
 class AuthTokensService:
@@ -81,9 +86,43 @@ class AuthTokensService:
     
 
 class AuthService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork], auth_tokens_service: AuthTokensService):
+    def __init__(
+            self, 
+            uow_factory: Callable[[], UnitOfWork], 
+            auth_tokens_service: AuthTokensService
+        ):
         self.uow_factory = uow_factory
         self.auth_tokens_service = auth_tokens_service
+
+    async def change_password(
+        self,
+        user_id: int,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        async with self.uow_factory() as uow:
+            user = await uow.user_repo.get_by_id(
+                user_id=user_id,
+                for_update=True,
+            )
+
+
+            if not verify_password(
+                password=current_password,
+                password_hash=user.hashed_password,
+            ):
+                raise InvalidLoginCredentials()
+
+            user.hashed_password = hash_password(
+                password=new_password,
+            )
+
+            await uow.auth_repo.revoke_all_active_sessions_by_user_id(
+                user_id=user_id,
+                revoked_at=utcnow(),
+            )
+
+            await uow.commit()
 
     async def login(
         self,
@@ -114,7 +153,10 @@ class AuthService:
         revoked_at = utcnow()
         async with self.uow_factory() as uow:
             refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
-            is_updated = await uow.auth_repo.revoke_active_session_by_refresh_token_hash(refresh_token_hash, revoked_at)
+            is_updated = await uow.auth_repo.revoke_active_session_by_refresh_token_hash(
+                refresh_token_hash=refresh_token_hash,
+                revoked_at=revoked_at,
+            )
             if is_updated:
                 await uow.commit()
     
@@ -144,7 +186,10 @@ class AuthService:
         self, refresh_token: str, uow: UnitOfWork
     ) -> UserSession:
         refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
-        user_session = await uow.auth_repo.get_user_session_by_refresh(refresh_token_hash, for_update=True)
+        user_session = await uow.auth_repo.get_user_session_by_refresh(
+            refresh_token_hash, 
+            for_update=True,
+        )
 
         if (
             user_session is None
@@ -164,10 +209,8 @@ class AuthService:
             uow: UnitOfWork,
     ) -> User:
         user = await uow.user_repo.get_by_username(username=username)
-        if user is None:
-            user = await uow.user_repo.get_by_username(username=username)
-        if not user or not verify_password(password, user.hashed_password):
-            raise UserNotFoundError("Invalid username or password")
+        if user is None or not verify_password(password, user.hashed_password):
+            raise InvalidLoginCredentials("Invalid username or password")
         
         return user
     
@@ -179,7 +222,9 @@ class AuthService:
         user_session = UserSession(
             user_id=user.id,
             refresh_token_hash=refresh_token_hash,
-            expires_at=utcnow() + timedelta(days=self.auth_tokens_service.config.refresh_token_expire_days),
+            expires_at=utcnow() + timedelta(
+                days=self.auth_tokens_service.config.refresh_token_expire_days
+            ),
         )
         return user_session
     

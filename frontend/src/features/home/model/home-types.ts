@@ -1,4 +1,6 @@
 export interface HomeDeck {
+  uuid: string;
+  ownerUuid: string;
   title: string;
   description: string | null;
   totalWordsCount: number;

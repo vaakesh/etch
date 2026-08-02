@@ -20,13 +20,21 @@ const INITIAL_STATE: HomeDashboardState = {
   error: null,
 };
 
+let cachedHomeDashboardState: HomeDashboardState | null = null;
+
 export function useHomeDashboard(): UseHomeDashboardResult {
-  const [state, setState] = useState<HomeDashboardState>(INITIAL_STATE);
+  const cachedStateAtMountRef = useRef(cachedHomeDashboardState);
+  const shouldLoadOnMountRef = useRef(cachedStateAtMountRef.current === null);
+  const [state, setState] = useState<HomeDashboardState>(
+    cachedStateAtMountRef.current ?? INITIAL_STATE,
+  );
   const activeControllerRef = useRef<AbortController | null>(null);
+  const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);
 
   const load = useCallback((): void => {
     activeControllerRef.current?.abort();
+    cachedHomeDashboardState = null;
 
     const controller = new AbortController();
     const requestRevision = requestRevisionRef.current + 1;
@@ -41,12 +49,16 @@ export function useHomeDashboard(): UseHomeDashboardResult {
     void getHomeDashboard(controller.signal)
       .then((data) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState({ status: "success", data, error: null });
+          const nextState: HomeDashboardState = { status: "success", data, error: null };
+          cachedHomeDashboardState = nextState;
+          setState(nextState);
         }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState({ status: "error", data: null, error });
+          const nextState: HomeDashboardState = { status: "error", data: null, error };
+          cachedHomeDashboardState = nextState;
+          setState(nextState);
         }
       })
       .finally(() => {
@@ -57,12 +69,23 @@ export function useHomeDashboard(): UseHomeDashboardResult {
   }, []);
 
   useEffect(() => {
-    load();
+    if (cleanupTimerRef.current !== null) {
+      window.clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
+    }
+
+    if (shouldLoadOnMountRef.current) {
+      shouldLoadOnMountRef.current = false;
+      load();
+    }
 
     return () => {
-      requestRevisionRef.current += 1;
-      activeControllerRef.current?.abort();
-      activeControllerRef.current = null;
+      cleanupTimerRef.current = window.setTimeout(() => {
+        requestRevisionRef.current += 1;
+        activeControllerRef.current?.abort();
+        activeControllerRef.current = null;
+        cleanupTimerRef.current = null;
+      }, 0);
     };
   }, [load]);
 

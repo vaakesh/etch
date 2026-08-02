@@ -34,6 +34,14 @@ describe("app route configuration", () => {
     expect(deckEditorRoute?.Component).toBeDefined();
   });
 
+  it("registers /practice as a protected route", () => {
+    const practiceRoute = appRoutes.find(({ path }) => path === "/practice");
+
+    expect(practiceRoute).toBeDefined();
+    expect(practiceRoute?.access).toBe("protected");
+    expect(practiceRoute?.Component).toBeDefined();
+  });
+
   it("renders unmatched routes as a public 404 page", () => {
     const fallbackRoute = appRoutes.find(({ path }) => path === "*");
 

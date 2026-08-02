@@ -3,11 +3,9 @@
 
 
 
-from fastapi import Depends
-
 from app.bff.service import BffService
-from app.decks.service import DeckService
 from app.deps import UoWFactory, get_uow_factory
+from fastapi import Depends
 
 
 def get_bff_service(

@@ -1,14 +1,9 @@
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
-
+from app.decks.errors import UserDeckNotFoundError
 from app.service import UnitOfWork
-
 from app.training_sessions.errors import (
-    CardAlreadyAnsweredError,
-    TrainingSessionAlreadyExistsError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFoundError,
@@ -16,13 +11,11 @@ from app.training_sessions.errors import (
 from app.training_sessions.models import TrainingSession
 from app.training_sessions.schemas import (
     SubmitAnswerResponse,
-    TrainingSessionCreate,
-    TrainingSessionFinish,
-    TrainingSessionSchema,
-    TrainingSessionUpdate,
+    TrainingSessionStatus,
     UserAnswer,
 )
-from app.utils import utcnow
+from app.users.errors import UserNotFoundError
+from app.utils import decode_cursor, encode_cursor, utcnow
 
 
 class TrainingSessionService:
@@ -45,10 +38,13 @@ class TrainingSessionService:
             if training_session is None or training_session.user_id != user_id:
                 raise TrainingSessionNotFoundError()
 
-            item = await uow.training_session_item_repo.get_item_by_sequence_number_and_session_id(
-                training_session_id=training_session.id,
-                sequence_number=sequence_number,
-                for_update=True,
+            item = (
+                await uow.training_session_item_repo
+                .get_item_by_sequence_number_and_session_id(
+                    training_session_id=training_session.id,
+                    sequence_number=sequence_number,
+                    for_update=True,
+                )
             )
 
             if item is None:
@@ -63,7 +59,8 @@ class TrainingSessionService:
                     total_count=training_session.requested_count,
                     is_finished=True if training_session.finished_at else False,
                     time_to_complete=(
-                        int((training_session.finished_at - training_session.started_at).total_seconds())
+                        int((training_session.finished_at - training_session.started_at)
+                            .total_seconds())
                         if training_session.finished_at
                         else None
                     ),
@@ -77,14 +74,22 @@ class TrainingSessionService:
             item.answered_at = utcnow()
             training_session.actual_count += 1
         
-            if user_answer.action == "answer" and user_answer.answer.lower().strip() == item.answer_text.lower().strip():
+            if (
+                user_answer.action == "answer" 
+                and 
+                user_answer.answer.lower().strip() == item.answer_text.lower().strip()
+            ):
                 training_session.correct_count += 1
                 item.is_correct = True
             else:
                 item.is_correct = False
                 training_session.wrong_count += 1
 
-            if training_session.actual_count == training_session.requested_count and training_session.finished_at is None:
+            if (
+                training_session.actual_count == training_session.requested_count 
+                and 
+                training_session.finished_at is None
+            ):
                 training_session.finished_at = utcnow()
                 await self._update_user_deck_after_session(
                         uow=uow,
@@ -100,7 +105,8 @@ class TrainingSessionService:
                     total_count=training_session.requested_count,
                     is_finished=True if training_session.finished_at else False,
                     time_to_complete=(
-                        int((training_session.finished_at - training_session.started_at).total_seconds())
+                        int((training_session.finished_at - training_session.started_at)
+                            .total_seconds())
                         if training_session.finished_at
                         else None
                     ),
@@ -121,16 +127,29 @@ class TrainingSessionService:
             deck_id=training_session.deck_id,
             for_update=True,
         )
+        if user_deck is None:
+            raise UserDeckNotFoundError()
 
-        user_deck.sessions_count += 1
-        user_deck.correct_count += training_session.correct_count
-        user_deck.wrong_count += training_session.wrong_count
-        user_deck.last_studied_at = training_session.finished_at
+        if training_session.finished_at:
+            user_deck.sessions_count += 1
+            user_deck.correct_count += training_session.correct_count
+            user_deck.wrong_count += training_session.wrong_count
+            user_deck.last_studied_at = training_session.finished_at
 
-    async def get_by_uuid(self, session_uuid: UUID) -> TrainingSessionSchema:
+    async def get_by_uuid(
+            self, 
+            session_uuid: UUID,
+            current_user_id: int | None = None,
+        ) -> TrainingSession:
         async with self.uow_factory() as uow:
             training_session = await self._get_by_uuid(uow, session_uuid)
-            return TrainingSessionSchema.model_validate(training_session)
+
+            # незавершенную сессию в публичный доступ не отдаем
+            if training_session.finished_at is None:
+                if current_user_id is None or current_user_id != training_session.user_id:
+                    raise TrainingSessionNotFoundError()
+            
+            return training_session
 
     async def _get_by_uuid(
         self,
@@ -145,54 +164,80 @@ class TrainingSessionService:
             )
 
         return training_session
-
-    async def get_all_training_sessions_by_limit(
-        self,
-        limit: int = 10,
-    ) -> list[TrainingSessionSchema]:
-        async with self.uow_factory() as uow:
-            training_sessions = await uow.training_session_repo.get_all_by_limit(limit)
-            return [
-                TrainingSessionSchema.model_validate(training_session)
-                for training_session in training_sessions
-            ]
         
     async def get_all_by_user_uuid(
         self,
         user_uuid: UUID,
+        status: TrainingSessionStatus | None = None,
+        cursor: str | None = None,
         limit: int = 10,
-    ) -> list[TrainingSessionSchema]:
+    ) -> tuple[list[TrainingSession], str | None, bool]:
         async with self.uow_factory() as uow:
-            user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
-            training_sessions = await uow.training_session_repo.get_all_by_user_id(
-                user_id=user.id,
-                limit=limit,
+            user = await uow.user_repo.get_by_uuid(
+                user_uuid=user_uuid,
+                for_update=False,
             )
-            return [
-                TrainingSessionSchema.model_validate(training_session)
-                for training_session in training_sessions
-            ]
+            if user is None:
+                raise UserNotFoundError()
 
-    async def get_all_by_deck_id(
-        self,
-        deck_id: int,
-        limit: int = 10,
-    ) -> list[TrainingSessionSchema]:
-        async with self.uow_factory() as uow:
-            training_sessions = await uow.training_session_repo.get_all_by_deck_id(
-                deck_id=deck_id,
-                limit=limit,
-            )
-            return [
-                TrainingSessionSchema.model_validate(training_session)
-                for training_session in training_sessions
-            ]
+            next_cursor = None
 
-    async def delete_training_session(self, session_uuid: UUID) -> None:
-        async with self.uow_factory() as uow:
-            training_session = await self._get_by_uuid(uow, session_uuid)
-
-            await uow.training_session_repo.delete(training_session)
-            await uow.commit()
-
-            return None
+            match status:
+                case TrainingSessionStatus.FINISHED:
+                    cursor_finished_at, cursor_id = (
+                        decode_cursor(cursor) if cursor is not None 
+                        else (None, None)
+                    )
+                    training_sessions, has_more = (
+                        await uow.training_session_repo
+                        .get_all_finished_sessions_by_user_id(
+                            user_id=user.id,
+                            cursor_finished_at=cursor_finished_at,
+                            cursor_id=cursor_id,
+                            limit=limit,
+                        )
+                    )
+                    if has_more and training_sessions:
+                        next_cursor = encode_cursor(
+                            training_sessions[-1].finished_at,
+                            training_sessions[-1].id,
+                        )
+                case TrainingSessionStatus.UNFINISHED:
+                    cursor_started_at, cursor_id = (
+                        decode_cursor(cursor) if cursor is not None 
+                        else (None, None)
+                    )
+                    training_sessions, has_more = (
+                        await uow.training_session_repo
+                        .get_all_unfinished_sessions_by_user_id(
+                            user_id=user.id,
+                            cursor_started_at=cursor_started_at,
+                            cursor_id=cursor_id,
+                            limit=limit,
+                        )
+                    )
+                    if has_more and training_sessions:
+                        next_cursor = encode_cursor(
+                            training_sessions[-1].started_at,
+                            training_sessions[-1].id,
+                        )
+                case None:
+                    cursor_started_at, cursor_id = (
+                        decode_cursor(cursor) if cursor is not None 
+                        else (None, None)
+                    )
+                    training_sessions, has_more = (
+                        await uow.training_session_repo.get_all_sessions_by_user_id(
+                            user_id=user.id,
+                            cursor_started_at=cursor_started_at,
+                            cursor_id=cursor_id,
+                            limit=limit,
+                        )
+                    )
+                    if has_more and training_sessions:
+                        next_cursor = encode_cursor(
+                            training_sessions[-1].started_at,
+                            training_sessions[-1].id,
+                        )
+            
+            return training_sessions, next_cursor, has_more

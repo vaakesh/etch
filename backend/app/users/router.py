@@ -1,116 +1,224 @@
-from fastapi import APIRouter, Depends, Query, Request, Response, status
-
+from typing import Annotated
 from uuid import UUID
 
-from app.users.service import UserService
-from app.users.deps import get_user_service
-from app.users.schemas import UserCreate, UserMe, UserOut, UserSchema, UserUpdate
-from app.training_sessions.schemas import TrainingSessionSchema
-from app.cards.deps import get_card_service
-from app.cards.schemas import CardSchema
-from app.cards.service import CardService
-from app.decks.deps import get_deck_service
-from app.decks.schemas import DeckOut, DeckSchema, ShortDeckOut
-from app.decks.service import DeckService
-from app.training_sessions.deps import get_training_session_service
-from app.training_sessions.service import TrainingSessionService
-from app.auth.deps import get_current_user
-from app.users.models import User
-
+from app.auth.cookies import clear_tokens_cookie
+from app.auth.deps import AuthServiceDeps, CurrentUser
+from app.cards.deps import CardServiceDeps
+from app.cards.schemas import CardDetail
+from app.decks.deps import DeckServiceDeps, UserDeckServiceDeps
+from app.decks.schemas import CursorPage, DeckDetail, DeckWithUserState
+from app.training_sessions.deps import (
+    TrainingSessionServiceDeps,
+)
+from app.training_sessions.schemas import (
+    TrainingSessionOut,
+    TrainingSessionStatus,
+)
+from app.users.deps import UserServiceDeps
+from app.users.schemas import (
+    ChangePassword,
+    PrivateUserOut,
+    PublicUserOut,
+    SearchQuery,
+    UserCreate,
+    UserUpdate,
+)
+from fastapi import APIRouter, Query, Response, status
 
 router = APIRouter(prefix="/users")
 
-@router.get("/me", response_model=UserMe)
+@router.get("/me", response_model=PrivateUserOut)
 async def get_me(
-    request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser,
 ):
-    return UserMe.model_validate(current_user)
+    return current_user
 
-@router.get("/me/decks", response_model=list[ShortDeckOut])
-async def get_my_decks(
-    current_user: User = Depends(get_current_user),
-    user_service: UserService = Depends(get_user_service),
+@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    payload: ChangePassword,
+    current_user: CurrentUser,
+    auth_service: AuthServiceDeps,
 ):
-    result = await user_service.get_user_decks(
+    await auth_service.change_password(
         user_id=current_user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
     )
-    return result
-    
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_tokens_cookie(response=response)
+    return response
 
-@router.get("/", response_model=list[UserSchema])
-async def get_all_users_by_limit(
-    limit: int = 10,
-    user_service: UserService = Depends(get_user_service),
+@router.get("/me/decks", response_model=CursorPage[DeckDetail])
+async def get_my_decks(
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    search_query: SearchQuery = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ):
-    return await user_service.get_all_users_by_limit(limit)
+    decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
+        user_uuid=current_user.uuid,
+        search_query=search_query,
+        cursor=cursor,
+        limit=limit,
+        public_only=False,
+        current_user_id=current_user.id,
+    )
 
-@router.get("/{user_uuid}", response_model=UserSchema)
+    return CursorPage[DeckDetail](
+        items=decks,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
+
+@router.get("/me/cards", response_model=CursorPage[CardDetail])
+async def get_my_cards(
+    current_user: CurrentUser,
+    card_service: CardServiceDeps,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+):
+    cards, next_cursor, has_more = await card_service.get_all_by_user_id(
+        user_id=current_user.id,
+        cursor=cursor,
+        limit=limit,
+    )
+
+    return CursorPage[CardDetail](
+        items=cards,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
+
+@router.get("/me/training-sessions", response_model=CursorPage[TrainingSessionOut])
+async def get_my_training_sessions(
+    current_user: CurrentUser,
+    training_session_service: TrainingSessionServiceDeps,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    status: TrainingSessionStatus | None = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+):
+    training_sessions, next_cursor, has_more = (
+        await training_session_service.get_all_by_user_uuid(
+            user_uuid=current_user.uuid,
+            status=status,
+            cursor=cursor,
+            limit=limit,
+        )
+    )
+    return CursorPage[TrainingSessionOut](
+        items=training_sessions,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
+
+@router.get("/me/decks/followed", response_model=list[DeckWithUserState])
+async def get_my_followed_decks(
+    current_user: CurrentUser,
+    user_deck_service: UserDeckServiceDeps,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> list[DeckWithUserState]:
+    followed_decks = await user_deck_service.get_page_of_followed_decks_by_user_id(
+        user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+    )
+
+    return followed_decks
+
+@router.get("/{user_uuid}", response_model=PublicUserOut)
 async def get_public_user(
     user_uuid: UUID,
-    user_service: UserService = Depends(get_user_service),
+    user_service: UserServiceDeps,
 ):
-    return await user_service.get_by_uuid(user_uuid)
-
-@router.post("/", response_model=UserOut)
-async def create_user(
-    payload: UserCreate,
-    user_service: UserService = Depends(get_user_service),
-):
-    user = await user_service.create_user(payload)
+    user = await user_service.get_by_uuid(
+        user_uuid=user_uuid,
+        for_update=False,
+    )
     return user
 
-@router.patch("/{user_uuid}", response_model=UserSchema)
+@router.post(
+    "/create", 
+    response_model=PrivateUserOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_user(
+    payload: UserCreate,
+    user_service: UserServiceDeps,
+):
+    new_user = await user_service.create_user(payload)
+    return new_user
+
+@router.patch("/me", response_model=PrivateUserOut)
 async def update_user(
-    user_uuid: UUID,
     payload: UserUpdate,
-    user_service: UserService = Depends(get_user_service),
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
 ):
-    return await user_service.update_user(user_uuid, payload)
+    updated_user = await user_service.update_user(
+        target_user_uuid=current_user.uuid,
+        current_user_id=current_user.id,
+        payload=payload,
+    )
+    return updated_user
 
-@router.delete("/{user_uuid}", )
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_uuid: UUID,
-    user_service: UserService = Depends(get_user_service),
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
 ):
-    return await user_service.delete_user(user_uuid)
+    await user_service.delete_user(
+        current_user_id=current_user.id,
+        target_user_uuid=current_user.uuid,
+    )
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_tokens_cookie(response=response)
+    return response
 
-
-# ----
-
-
-
-
-@router.get("/{user_uuid}/training-sessions", response_model=list[TrainingSessionSchema])
-async def get_training_sessions_by_user(
+@router.get(
+    "/{user_uuid}/training-sessions", 
+    response_model=CursorPage[TrainingSessionOut]
+)
+async def get_public_training_sessions_by_user(
     user_uuid: UUID,
-    limit: int = Query(default=10, ge=1, le=100),
-    training_session_service: TrainingSessionService = Depends(get_training_session_service),
+    training_session_service: TrainingSessionServiceDeps,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
-    return await training_session_service.get_all_by_user_uuid(
-        user_uuid=user_uuid,
-        limit=limit,
+    training_sessions, next_cursor, has_more = (
+        await training_session_service.get_all_by_user_uuid(
+            user_uuid=user_uuid,
+            status=TrainingSessionStatus.FINISHED,
+            cursor=cursor,
+            limit=limit,
+        )
+    )
+    return CursorPage[TrainingSessionOut](
+        items=training_sessions,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
-
-@router.get("/{user_uuid}/decks", response_model=list[DeckSchema])
-async def get_decks_by_user(
+@router.get("/{user_uuid}/decks", response_model=CursorPage[DeckDetail])
+async def get_public_decks_by_user(
     user_uuid: UUID,
-    limit: int = 10,
-    deck_service: DeckService = Depends(get_deck_service),
+    deck_service: DeckServiceDeps,
+    search_query: SearchQuery = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ):
-    return await deck_service.get_all_by_user_uuid(
+    decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
         user_uuid=user_uuid,
+        search_query=search_query,
+        cursor=cursor,
         limit=limit,
+        public_only=True,
+        current_user_id=None,
     )
 
-@router.get("/{user_uuid}/cards", response_model=list[CardSchema])
-async def get_cards_by_user(
-    user_uuid: UUID,
-    limit: int = 10,
-    card_service: CardService = Depends(get_card_service),
-):
-    return await card_service.get_all_by_user_uuid(
-        user_uuid=user_uuid,
-        limit=limit,
+    return CursorPage[DeckDetail](
+        items=decks,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )

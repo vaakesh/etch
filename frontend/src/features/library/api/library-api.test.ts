@@ -22,7 +22,7 @@ vi.mock("../../../api", async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 
-const RESPONSE = { decks: [], next_cursor: null, has_more: false };
+const RESPONSE = { items: [], next_cursor: null, has_more: false };
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const CARD_UUID = "413b1910-5d07-4c67-93a0-6b8946c59b15";
 const EDITABLE_DECK_RESPONSE = {
@@ -39,15 +39,11 @@ const EDITABLE_DECK_RESPONSE = {
   updated_at: "2026-07-21T18:30:00Z",
 };
 const DECK_CARD_RESPONSE = {
-  id: 17,
   uuid: CARD_UUID,
-  user_id: 4,
   front_text: "привет",
   back_text: "hello",
   source_lang: "ru",
   target_lang: "en",
-  created_at: "2026-07-19T09:15:00Z",
-  updated_at: "2026-07-21T18:30:00Z",
 };
 
 describe("getEditableLibraryDeck", () => {
@@ -93,17 +89,18 @@ describe("updateEditableLibraryDeck", () => {
       ...EDITABLE_DECK_RESPONSE,
       title: "Daily phrases",
       description: null,
+      is_public: true,
       updated_at: "2026-07-22T10:45:00Z",
     });
   });
 
-  it("patches only title and description on the exact deck route", async () => {
+  it("patches title, description, and visibility on the exact deck route", async () => {
     const controller = new AbortController();
 
     await expect(
       updateEditableLibraryDeck(
         DECK_UUID,
-        { title: "Daily phrases", description: null },
+        { title: "Daily phrases", description: null, isPublic: true },
         controller.signal,
       ),
     ).resolves.toEqual({
@@ -111,7 +108,7 @@ describe("updateEditableLibraryDeck", () => {
       title: "Daily phrases",
       description: null,
       totalWordsCount: 48,
-      isPublic: false,
+      isPublic: true,
       updatedAt: "2026-07-22T10:45:00Z",
     });
 
@@ -120,6 +117,7 @@ describe("updateEditableLibraryDeck", () => {
       body: {
         title: "Daily phrases",
         description: null,
+        is_public: true,
       },
       signal: controller.signal,
     });
@@ -135,6 +133,7 @@ describe("updateEditableLibraryDeck", () => {
       updateEditableLibraryDeck(DECK_UUID, {
         title: "Daily phrases",
         description: null,
+        isPublic: false,
       }),
     ).rejects.toMatchObject({
       status: 0,
@@ -160,7 +159,6 @@ describe("getLibraryDeckCardPage", () => {
           backText: "hello",
           sourceLang: "ru",
           targetLang: "en",
-          updatedAt: "2026-07-21T18:30:00Z",
         },
       ],
       nextOffset: 51,
@@ -197,13 +195,20 @@ describe("removeLibraryCardFromDeck", () => {
 describe("getLibraryDeckOptions", () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
-    vi.mocked(apiFetch).mockResolvedValue([
-      {
-        uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
-        title: "Daily Words",
-        words_count: 48,
-      },
-    ]);
+    vi.mocked(apiFetch).mockResolvedValue({
+      items: [
+        {
+          uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+          title: "Daily Words",
+          description: null,
+          words_count: 48,
+          is_public: false,
+          updated_at: null,
+        },
+      ],
+      next_cursor: null,
+      has_more: false,
+    });
   });
 
   it("loads and maps the exact current-user deck route", async () => {
@@ -218,7 +223,52 @@ describe("getLibraryDeckOptions", () => {
     ]);
 
     expect(apiFetch).toHaveBeenCalledWith("/users/me/decks", {
+      query: { cursor: null, limit: 100 },
       signal: controller.signal,
+    });
+  });
+
+  it("collects every cursor page for the deck picker", async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            uuid: DECK_UUID,
+            title: "Daily Words",
+            words_count: 48,
+          },
+        ],
+        next_cursor: "next-options-page",
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+            title: "Travel Essentials",
+            words_count: 12,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+    await expect(getLibraryDeckOptions()).resolves.toEqual([
+      { uuid: DECK_UUID, title: "Daily Words", totalWordsCount: 48 },
+      {
+        uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+        title: "Travel Essentials",
+        totalWordsCount: 12,
+      },
+    ]);
+
+    expect(apiFetch).toHaveBeenNthCalledWith(1, "/users/me/decks", {
+      query: { cursor: null, limit: 100 },
+      signal: undefined,
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(2, "/users/me/decks", {
+      query: { cursor: "next-options-page", limit: 100 },
+      signal: undefined,
     });
   });
 });
@@ -311,7 +361,7 @@ describe("createLibraryDeck", () => {
       updatedAt: "2026-07-21T18:30:00Z",
     });
 
-    expect(apiFetch).toHaveBeenCalledWith("/decks/", {
+    expect(apiFetch).toHaveBeenCalledWith("/decks/create", {
       method: "POST",
       body: {
         title: "Испанский в путешествии",
@@ -356,8 +406,8 @@ describe("getLibraryDeckPage", () => {
       hasMore: false,
     });
 
-    expect(apiFetch).toHaveBeenCalledWith("/bff/decks", {
-      query: { cursor: null },
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: { cursor: null, is_favourite: false, limit: 50 },
       signal: controller.signal,
     });
   });
@@ -365,14 +415,14 @@ describe("getLibraryDeckPage", () => {
   it("forwards the opaque pagination cursor", async () => {
     await getLibraryDeckPage("opaque-cursor");
 
-    expect(apiFetch).toHaveBeenCalledWith("/bff/decks", {
-      query: { cursor: "opaque-cursor" },
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: { cursor: "opaque-cursor", is_favourite: false, limit: 50 },
       signal: undefined,
     });
   });
 
   it.each([true, false])("sets favourite=%s through the deck PATCH route query", async (value) => {
-    vi.mocked(apiFetch).mockResolvedValue({ is_favourite: value });
+    vi.mocked(apiFetch).mockResolvedValue(value);
     const controller = new AbortController();
 
     await expect(
@@ -390,7 +440,7 @@ describe("getLibraryDeckPage", () => {
   });
 
   it("rejects a favourite response without the boolean state", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({ is_favourite: "yes" });
+    vi.mocked(apiFetch).mockResolvedValue({ is_favourite: true });
 
     await expect(
       setLibraryDeckFavourite("714d882d-726e-4dcb-9303-a8bf4638429c", true),
@@ -407,7 +457,7 @@ describe("getFavouriteLibraryDeckPage", () => {
     vi.mocked(apiFetch).mockResolvedValue(RESPONSE);
   });
 
-  it("loads the exact favourite BFF route without a trailing slash", async () => {
+  it("loads favourites through the unified library route", async () => {
     const controller = new AbortController();
 
     await expect(getFavouriteLibraryDeckPage(null, controller.signal)).resolves.toEqual({
@@ -416,8 +466,8 @@ describe("getFavouriteLibraryDeckPage", () => {
       hasMore: false,
     });
 
-    expect(apiFetch).toHaveBeenCalledWith("/bff/decks/favourite", {
-      query: { cursor: null },
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: { cursor: null, is_favourite: true, limit: 50 },
       signal: controller.signal,
     });
   });
@@ -425,8 +475,8 @@ describe("getFavouriteLibraryDeckPage", () => {
   it("forwards the opaque favourite-page cursor", async () => {
     await getFavouriteLibraryDeckPage("opaque-favourite-cursor");
 
-    expect(apiFetch).toHaveBeenCalledWith("/bff/decks/favourite", {
-      query: { cursor: "opaque-favourite-cursor" },
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: { cursor: "opaque-favourite-cursor", is_favourite: true, limit: 50 },
       signal: undefined,
     });
   });
@@ -435,7 +485,7 @@ describe("getFavouriteLibraryDeckPage", () => {
 describe("getLibraryCardPage", () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
-    vi.mocked(apiFetch).mockResolvedValue({ cards: [], cursor: null, has_more: false });
+    vi.mocked(apiFetch).mockResolvedValue({ items: [], next_cursor: null, has_more: false });
   });
 
   it("loads the exact card library route without a trailing slash or first-page cursor", async () => {
@@ -448,7 +498,7 @@ describe("getLibraryCardPage", () => {
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/bff/library/cards", {
-      query: { cursor: null },
+      query: { cursor: null, limit: 50 },
       signal: controller.signal,
     });
   });
@@ -457,7 +507,7 @@ describe("getLibraryCardPage", () => {
     await getLibraryCardPage("opaque-card-cursor");
 
     expect(apiFetch).toHaveBeenCalledWith("/bff/library/cards", {
-      query: { cursor: "opaque-card-cursor" },
+      query: { cursor: "opaque-card-cursor", limit: 50 },
       signal: undefined,
     });
   });
@@ -532,15 +582,11 @@ describe("updateLibraryCard", () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
     vi.mocked(apiFetch).mockResolvedValue({
-      id: 17,
       uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
-      user_id: 4,
       front_text: "неизгладимый",
       back_text: "indelible",
       source_lang: "ru",
       target_lang: "en",
-      created_at: "2026-07-19T09:15:00Z",
-      updated_at: "2026-07-21T18:30:00Z",
     });
   });
 
@@ -564,7 +610,6 @@ describe("updateLibraryCard", () => {
       backText: "indelible",
       sourceLang: "ru",
       targetLang: "en",
-      updatedAt: "2026-07-21T18:30:00Z",
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/cards/413b1910-5d07-4c67-93a0-6b8946c59b15", {

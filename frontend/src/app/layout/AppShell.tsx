@@ -23,7 +23,7 @@ const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { label: "Главная", icon: "home", to: "/", end: true },
   { label: "Библиотека", icon: "book", to: "/library" },
   { label: "Каталог", icon: "decks" },
-  { label: "Практика", icon: "practice" },
+  { label: "Практика", icon: "practice", to: "/practice" },
   { label: "Статистика", icon: "chart" },
   { label: "Настройки", icon: "settings" },
 ];
@@ -103,10 +103,16 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
 }
 
 export function AppShell() {
+  const { pathname } = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const shellClassName = isSidebarCollapsed
-    ? `${styles.shell} ${styles.shellCollapsed}`
-    : styles.shell;
+  const isLibraryRoute = pathname === "/library" || pathname.startsWith("/library/");
+  const shellClassName = [
+    styles.shell,
+    isSidebarCollapsed ? styles.shellCollapsed : null,
+    isLibraryRoute ? styles.shellLibrary : null,
+  ]
+    .filter((className) => className !== null)
+    .join(" ");
 
   return (
     <div className={shellClassName}>

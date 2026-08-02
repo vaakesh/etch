@@ -11,6 +11,7 @@ describe("page loader palette", () => {
     expect(indexHtml).toContain("--loader-accent: #4d9892");
     expect(indexHtml).toContain('window.location.pathname === "/library"');
     expect(indexHtml).toContain('window.location.pathname.startsWith("/library/")');
+    expect(indexHtml).toContain('window.location.pathname === "/practice"');
   });
 
   it("renders a contained light loader for route content", () => {

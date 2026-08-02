@@ -5,12 +5,11 @@ import type {
   DeckCardPage,
   EditableLibraryCard,
   EditableLibraryDeck,
-  FavouriteLibraryDeck,
-  FavouriteLibraryDeckPage,
   LibraryCard,
   LibraryCardPage,
   LibraryDeck,
   LibraryDeckOption,
+  LibraryDeckOptionPage,
   LibraryDeckPage,
   LibraryPreviewCard,
   UpdatedLibraryCard,
@@ -48,14 +47,6 @@ function readNullableString(value: unknown, path: string): string | null {
   }
 
   return readString(value, path);
-}
-
-function readOptionalNullableString(value: unknown, path: string): string | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return readNullableString(value, path);
 }
 
 function readBoolean(value: unknown, path: string): boolean {
@@ -104,21 +95,16 @@ function readDateTime(value: unknown, path: string): string {
   return dateTime;
 }
 
-function readOptionalNullableDateTime(value: unknown, path: string): string | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return readNullableDateTime(value, path);
-}
-
 function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
   const card = readRecord(value, path);
 
   return {
-    uuid: readUuid(card.uuid, `${path}.uuid`),
+    uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
+    sourceLang: readString(card.source_lang, `${path}.source_lang`),
+    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
   };
 }
 
@@ -128,12 +114,11 @@ function parseLibraryCard(value: unknown, index: number): LibraryCard {
 
   return {
     uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
-    ownerUuid: readUuid(card.card_owner_uuid, `${path}.card_owner_uuid`),
-    frontText: readString(card.card_front_text, `${path}.card_front_text`),
-    backText: readString(card.card_back_text, `${path}.card_back_text`),
-    sourceLang: readString(card.card_source_lang, `${path}.card_source_lang`),
-    targetLang: readString(card.card_target_lang, `${path}.card_target_lang`),
-    updatedAt: readDateTime(card.card_updated_at, `${path}.card_updated_at`),
+    frontText: readString(card.front_text, `${path}.front_text`),
+    backText: readString(card.back_text, `${path}.back_text`),
+    sourceLang: readString(card.source_lang, `${path}.source_lang`),
+    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
   };
 }
 
@@ -147,7 +132,6 @@ function parseDeckCard(value: unknown, index: number): EditableLibraryCard {
     backText: readString(card.back_text, `${path}.back_text`),
     sourceLang: readString(card.source_lang, `${path}.source_lang`),
     targetLang: readString(card.target_lang, `${path}.target_lang`),
-    updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
   };
 }
 
@@ -160,7 +144,6 @@ export function parseUpdatedLibraryCard(value: unknown): UpdatedLibraryCard {
     backText: readString(card.back_text, "card.back_text"),
     sourceLang: readString(card.source_lang, "card.source_lang"),
     targetLang: readString(card.target_lang, "card.target_lang"),
-    updatedAt: readDateTime(card.updated_at, "card.updated_at"),
   };
 }
 
@@ -229,10 +212,7 @@ export function parseCreatedLibraryDeck(value: unknown): CreatedLibraryDeck {
 function parseDeck(value: unknown, index: number): LibraryDeck {
   const path = `decks[${index}]`;
   const deck = readRecord(value, path);
-  const totalWordsCount = readInteger(
-    deck.deck_total_words_count,
-    `${path}.deck_total_words_count`,
-  );
+  const totalWordsCount = readInteger(deck.deck_words_count, `${path}.deck_words_count`);
   const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
 
   if (!Array.isArray(deck.cards)) {
@@ -240,14 +220,15 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   }
 
   if (totalWordsCount < 0) {
-    return invalidLibraryResponse(`${path}.deck_total_words_count`);
+    return invalidLibraryResponse(`${path}.deck_words_count`);
   }
   if (accuracy < 0 || accuracy > 100) {
     return invalidLibraryResponse(`${path}.user_accuracy`);
   }
 
   return {
-    uuid: readUuid(deck.uuid, `${path}.uuid`),
+    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
+    ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
     title: readString(deck.title, `${path}.title`),
     description: readNullableString(deck.description, `${path}.description`),
     totalWordsCount,
@@ -260,47 +241,34 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   };
 }
 
-function parseFavouriteDeck(value: unknown, index: number): FavouriteLibraryDeck {
-  const path = `decks[${index}]`;
-  const deck = readRecord(value, path);
-  const description = readOptionalNullableString(deck.description, `${path}.description`);
-  const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
-  const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
-  const updatedAt = readOptionalNullableDateTime(deck.updated_at, `${path}.updated_at`);
+function readCursorPage(
+  value: unknown,
+  path: string,
+): { items: readonly unknown[]; nextCursor: string | null; hasMore: boolean } {
+  const page = readRecord(value, path);
+  const items = page.items;
 
-  if (!Array.isArray(deck.cards)) {
-    return invalidLibraryResponse(`${path}.cards`);
+  if (!Array.isArray(items)) {
+    return invalidLibraryResponse(`${path}.items`);
   }
 
-  if (totalWordsCount < 0) {
-    return invalidLibraryResponse(`${path}.words_count`);
+  const nextCursor = readNullableString(page.next_cursor, `${path}.next_cursor`);
+  const hasMore = readBoolean(page.has_more, `${path}.has_more`);
+
+  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
+    return invalidLibraryResponse(`${path}.next_cursor`);
   }
-  if (accuracy < 0 || accuracy > 100) {
-    return invalidLibraryResponse(`${path}.user_accuracy`);
+  if (!hasMore && nextCursor !== null) {
+    return invalidLibraryResponse(`${path}.next_cursor`);
   }
 
-  return {
-    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
-    ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
-    title: readString(deck.title, `${path}.title`),
-    ...(description === undefined ? {} : { description }),
-    totalWordsCount,
-    accuracy,
-    ...(updatedAt === undefined ? {} : { updatedAt }),
-    isFavourite: readBoolean(deck.is_favourite, `${path}.is_favourite`),
-    isFollowing: readBoolean(deck.is_following, `${path}.is_following`),
-    cards: deck.cards.map((card, cardIndex) =>
-      parsePreviewCard(card, `${path}.cards[${cardIndex}]`),
-    ),
-  };
+  return { items, nextCursor, hasMore };
 }
 
-export function parseLibraryDeckOptions(value: unknown): readonly LibraryDeckOption[] {
-  if (!Array.isArray(value)) {
-    return invalidLibraryResponse("deckOptions");
-  }
+export function parseLibraryDeckOptionPage(value: unknown): LibraryDeckOptionPage {
+  const page = readCursorPage(value, "deckOptions");
 
-  return value.map((item, index) => {
+  const decks: readonly LibraryDeckOption[] = page.items.map((item, index) => {
     const path = `deckOptions[${index}]`;
     const deck = readRecord(item, path);
     const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
@@ -315,76 +283,26 @@ export function parseLibraryDeckOptions(value: unknown): readonly LibraryDeckOpt
       totalWordsCount,
     };
   });
+
+  return { decks, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 export function parseLibraryDeckPage(value: unknown): LibraryDeckPage {
-  const page = readRecord(value, "library");
-
-  if (!Array.isArray(page.decks)) {
-    return invalidLibraryResponse("decks");
-  }
-
-  const nextCursor = readNullableString(page.next_cursor, "next_cursor");
-  const hasMore = readBoolean(page.has_more, "has_more");
-
-  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
-    return invalidLibraryResponse("next_cursor");
-  }
-  if (!hasMore && nextCursor !== null) {
-    return invalidLibraryResponse("next_cursor");
-  }
+  const page = readCursorPage(value, "library");
 
   return {
-    decks: page.decks.map(parseDeck),
-    nextCursor,
-    hasMore,
-  };
-}
-
-export function parseFavouriteLibraryDeckPage(value: unknown): FavouriteLibraryDeckPage {
-  const page = readRecord(value, "favouriteLibrary");
-
-  if (!Array.isArray(page.decks)) {
-    return invalidLibraryResponse("decks");
-  }
-
-  const nextCursor = readNullableString(page.next_cursor, "next_cursor");
-  const hasMore = readBoolean(page.has_more, "has_more");
-
-  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
-    return invalidLibraryResponse("next_cursor");
-  }
-  if (!hasMore && nextCursor !== null) {
-    return invalidLibraryResponse("next_cursor");
-  }
-
-  return {
-    decks: page.decks.map(parseFavouriteDeck),
-    nextCursor,
-    hasMore,
+    decks: page.items.map(parseDeck),
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
   };
 }
 
 export function parseLibraryCardPage(value: unknown): LibraryCardPage {
-  const page = readRecord(value, "cardLibrary");
-
-  if (!Array.isArray(page.cards)) {
-    return invalidLibraryResponse("cards");
-  }
-
-  const nextCursor = readNullableString(page.cursor, "cursor");
-  const hasMore = readBoolean(page.has_more, "has_more");
-
-  if (hasMore && (nextCursor === null || nextCursor.length === 0)) {
-    return invalidLibraryResponse("cursor");
-  }
-  if (!hasMore && nextCursor !== null) {
-    return invalidLibraryResponse("cursor");
-  }
+  const page = readCursorPage(value, "cardLibrary");
 
   return {
-    cards: page.cards.map(parseLibraryCard),
-    nextCursor,
-    hasMore,
+    cards: page.items.map(parseLibraryCard),
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
   };
 }

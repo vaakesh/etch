@@ -10,7 +10,7 @@ function SuspendedPage(): never {
 }
 
 function renderShell(
-  pathname: "/" | "/library" | "/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit",
+  pathname: "/" | "/library" | "/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit" | "/practice",
   suspendContent = false,
 ): string {
   const page = suspendContent ? <SuspendedPage /> : <main>Правая часть: {pathname}</main>;
@@ -31,6 +31,7 @@ describe("AppShell", () => {
     ["/", "0", "Главная"],
     ["/library", "1", "Библиотека"],
     ["/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit", "1", "Библиотека"],
+    ["/practice", "3", "Практика"],
   ] as const)("selects the navigation row for %s", (pathname, activeIndex, activeLabel) => {
     const markup = renderShell(pathname);
 
@@ -40,6 +41,7 @@ describe("AppShell", () => {
     expect(markup).toContain(`aria-label="${activeLabel}" aria-current="page"`);
     expect(markup).toContain('href="/"');
     expect(markup).toContain('href="/library"');
+    expect(markup).toContain('href="/practice"');
     expect(markup).toContain('aria-controls="app-sidebar"');
     expect(markup).toContain("Правая часть:");
   });

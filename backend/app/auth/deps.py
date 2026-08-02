@@ -2,17 +2,17 @@
 
 
 from functools import lru_cache
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Request
-
+from app.auth.errors import AccessTokenNotFoundError
 from app.auth.service import AuthService, AuthTokensService
 from app.config import get_auth_tokens_config
 from app.deps import UoWFactory, get_uow_factory
-from app.auth.errors import AccessTokenNotFoundError
-from app.users.deps import get_user_service
+from app.users.deps import UserServiceDeps, get_user_service
 from app.users.models import User
 from app.users.service import UserService
+from fastapi import Depends, Request
 
 
 @lru_cache
@@ -43,3 +43,32 @@ async def get_current_user(
 
     user = await user_service.get_by_uuid(user_uuid)
     return user
+
+async def get_optional_current_user(
+    request: Request,
+    user_service: UserServiceDeps,
+    auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
+) -> User | None:
+    if request.cookies.get("access_token") is None:
+        return None
+
+    return await get_current_user(
+        request=request,
+        user_service=user_service,
+        auth_tokens_service=auth_tokens_service,
+    )
+
+type AuthServiceDeps = Annotated[
+    AuthService,
+    Depends(get_auth_service),
+]
+
+type CurrentUser = Annotated[
+    User,
+    Depends(get_current_user),
+]
+
+type OptionalCurrentUser = Annotated[
+    User | None,
+    Depends(get_optional_current_user),
+]

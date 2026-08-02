@@ -1,46 +1,69 @@
-from fastapi import FastAPI, Request, status
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-
+from app.auth.cookies import clear_tokens_cookie
 from app.auth.errors import (
     AccessTokenNotFoundError,
+    InvalidLoginCredentials,
     InvalidRefreshTokenError,
     InvalidTokenError,
     InvalidTokenTypeError,
     RefreshTokenNotFoundError,
 )
-
-from app.users.errors import (
-    PermissionDeniedError as UserPermissionDeniedError,
-    UserAlreadyExistsError,
-    UserNotFoundError,
-)
-
 from app.cards.errors import (
     CardAlreadyExistsError,
     CardNotFoundError,
+)
+from app.cards.errors import (
     PermissionDeniedError as CardPermissionDeniedError,
 )
-
 from app.decks.errors import (
+    CannotFollowOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
-    DeckNotFoundError,
-    PermissionDeniedError as DeckPermissionDeniedError,
     DeckIsEmptyError,
+    DeckIsNotFavouriteError,
+    DeckIsNotFollowedError,
+    DeckNotFoundError,
     InvalidDeckCardPositionError,
+    UserDeckNotFoundError,
 )
-
+from app.decks.errors import (
+    PermissionDeniedError as DeckPermissionDeniedError,
+)
+from app.errors import (
+    RequestValueError,
+)
 from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
-    PermissionDeniedError as TrainingSessionPermissionDeniedError,
     TrainingSessionAlreadyExistsError,
-    TrainingSessionNotFoundError,
-    TrainingSessionItemNotFoundError,
     TrainingSessionAlreadyFinishedError,
+    TrainingSessionItemNotFoundError,
+    TrainingSessionNotFoundError,
 )
-from app.auth.cookies import clear_tokens_cookie
+from app.training_sessions.errors import (
+    PermissionDeniedError as TrainingSessionPermissionDeniedError,
+)
+from app.users.errors import (
+    PermissionDeniedError as UserPermissionDeniedError,
+)
+from app.users.errors import (
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+async def invalid_login_credentials_handler(
+    request: Request,
+    exc: InvalidLoginCredentials,
+):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "message": str(exc),
+        },
+    )
 
 
 async def invalid_token_handler(
@@ -259,6 +282,54 @@ async def deck_permission_denied_handler(
     )
 
 
+async def user_deck_not_found_handler(
+    request: Request,
+    exc: UserDeckNotFoundError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def deck_is_not_followed_handler(
+    request: Request,
+    exc: DeckIsNotFollowedError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def deck_is_not_favourite_handler(
+    request: Request,
+    exc: DeckIsNotFavouriteError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
+async def cannot_follow_own_deck_handler(
+    request: Request,
+    exc: CannotFollowOwnDeckError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
 async def training_session_not_found_handler(
     request: Request,
     exc: TrainingSessionNotFoundError,
@@ -356,7 +427,28 @@ async def request_validation_handler(
     )
 
 
+async def request_value_error_handler(
+    request: Request,
+    exc: RequestValueError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            "message": "Validation error",
+            "details": [
+                {
+                    "type": "value_error",
+                    "loc": ["body", exc.failed_field],
+                    "msg": str(exc),
+                    "input": None,
+                }
+            ],
+        },
+    )
+
+
 def register_exception_handlers(app: FastAPI):
+    app.add_exception_handler(InvalidLoginCredentials, invalid_login_credentials_handler)
     app.add_exception_handler(InvalidTokenError, invalid_token_handler)
     app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
     app.add_exception_handler(InvalidTokenTypeError, invalid_token_type_handler)
@@ -381,9 +473,16 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(DeckAlreadyExistsError, deck_already_exists_handler)
     app.add_exception_handler(DeckIsEmptyError, deck_is_empty_handler)
     app.add_exception_handler(DeckCardNotFoundError, deck_card_not_found_handler)
-    app.add_exception_handler(InvalidDeckCardPositionError, invalid_deck_card_position_handler)
+    app.add_exception_handler(
+        InvalidDeckCardPositionError,
+        invalid_deck_card_position_handler,
+    )
     app.add_exception_handler(DeckCardAlreadyExistsError, deck_card_already_exists_handler)
     app.add_exception_handler(DeckPermissionDeniedError, deck_permission_denied_handler)
+    app.add_exception_handler(UserDeckNotFoundError, user_deck_not_found_handler)
+    app.add_exception_handler(DeckIsNotFollowedError, deck_is_not_followed_handler)
+    app.add_exception_handler(DeckIsNotFavouriteError, deck_is_not_favourite_handler)
+    app.add_exception_handler(CannotFollowOwnDeckError, cannot_follow_own_deck_handler)
 
     app.add_exception_handler(
         TrainingSessionNotFoundError,
@@ -410,5 +509,6 @@ def register_exception_handlers(app: FastAPI):
             training_session_permission_denied_handler,
         )
 
+    app.add_exception_handler(RequestValueError, request_value_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

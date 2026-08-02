@@ -1,8 +1,8 @@
-from fastapi import Depends
+from typing import Annotated
 
 from app.deps import UoWFactory, get_uow_factory
 from app.users.service import UserService
-
+from fastapi import Depends
 
 
 def get_user_service(
@@ -11,3 +11,8 @@ def get_user_service(
     return UserService(
         uow_factory=uow_factory,
     )
+
+UserServiceDeps = Annotated[
+    UserService,
+    Depends(get_user_service),
+]

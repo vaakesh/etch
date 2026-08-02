@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from app.database import Base
+from app.config import get_settings
+import app.models # noqa: F401 # sqlalchemy models registration
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,12 +25,6 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
-from app.config import get_settings
-from app.users.models import User
-from app.cards.models import Card
-from app.decks.models import Deck, DeckCard
-from app.training_sessions.models import TrainingSession, TrainingSessionItem
-from app.auth.models import UserSession
 
 
 # other values from the config, defined by the needs of env.py,

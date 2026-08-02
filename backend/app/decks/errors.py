@@ -3,6 +3,11 @@ class DeckNotFoundError(Exception):
         super().__init__(message)
 
 
+class UserDeckNotFoundError(Exception):
+    def __init__(self, message: str = "User deck progress not found"):
+        super().__init__(message)
+
+
 class DeckAlreadyExistsError(Exception):
     def __init__(self, message: str = "Deck already exists"):
         super().__init__(message)
@@ -28,8 +33,13 @@ class DeckIsNotFollowedError(Exception):
         super().__init__(message)
 
 
+class DeckIsNotFavouriteError(Exception):
+    def __init__(self, message: str = "Deck is not in favourites"):
+        super().__init__(message)
+
+
 class CannotFollowOwnDeckError(Exception):
-    def __init__(self, message: str = "Your own deck can't be followed"):
+    def __init__(self, message: str = "You cannot follow your own deck"):
         super().__init__(message)
 
 
@@ -37,6 +47,7 @@ class DeckIsEmptyError(Exception):
     def __init__(self, message: str = "Deck is empty"):
         super().__init__(message)
 
+
 class InvalidDeckCardPositionError(Exception):
     def __init__(self, message: str = "Invalid card position in deck"):
-            super().__init__(message)
+        super().__init__(message)

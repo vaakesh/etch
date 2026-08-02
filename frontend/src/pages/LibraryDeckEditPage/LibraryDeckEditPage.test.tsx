@@ -10,6 +10,8 @@ vi.mock("../../features/library/model/useDeckEditor", () => ({
 }));
 
 import { LibraryDeckEditPage } from "./LibraryDeckEditPage";
+import libraryStyles from "../LibraryPage/LibraryPage.module.css";
+import styles from "./LibraryDeckEditPage.module.css";
 
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const CARD_UUID = "413b1910-5d07-4c67-93a0-6b8946c59b15";
@@ -32,7 +34,6 @@ function createEditorResult(overrides: Partial<UseDeckEditorResult> = {}): UseDe
         backText: "viaje",
         sourceLang: "ru",
         targetLang: "es",
-        updatedAt: "2026-07-24T18:30:00Z",
       },
     ],
     nextOffset: 50,
@@ -107,22 +108,33 @@ describe("LibraryDeckEditPage", () => {
 
   it("renders editable deck fields, a compact card row, scoped actions, and load more", () => {
     const markup = renderEditor();
+    const page = markup.match(/<main[^>]*>/)?.[0];
     const backLink = markup.match(/<a[^>]*aria-label="Вернуться в библиотеку"[^>]*>/)?.[0];
+    const privacyChoices = markup.match(/<button[^>]*aria-pressed="(?:true|false)"[^>]*>/g) ?? [];
     const cardRow = markup.match(
       new RegExp(`<li[^>]*data-card-uuid="${CARD_UUID}"[^>]*>[\\s\\S]*?</li>`),
     )?.[0];
 
     expect(markup).toContain("Редактор колоды");
+    expect(page).toContain(libraryStyles.page);
+    expect(page).toContain(styles.page);
     expect(markup).toContain("<h1");
     expect(markup).toContain("Испанский в путешествии");
     expect(markup).toContain(`data-deck-details-form="${DECK_UUID}"`);
     expect(markup).toMatch(
-      /<input[^>]*maxLength="150"[^>]*name="title"[^>]*value="Испанский в путешествии"/,
+      /<input[^>]*maxLength="50"[^>]*minLength="3"[^>]*name="title"[^>]*value="Испанский в путешествии"/,
     );
     expect(markup).toMatch(
       /<textarea[^>]*name="description"[^>]*>Слова для летней поездки<\/textarea>/,
     );
     expect(markup).toContain("Приватная");
+    expect(markup).toContain('role="group"');
+    expect(privacyChoices).toHaveLength(2);
+    expect(privacyChoices[0]).toContain('aria-pressed="true"');
+    expect(privacyChoices[1]).toContain('aria-pressed="false"');
+    expect(markup).toContain("data-deck-abstract-visual");
+    expect(markup).not.toContain("Основные данные");
+    expect(markup).not.toContain("О колоде");
     expect(markup).toContain("Сохранить изменения");
 
     expect(backLink).toBeDefined();
@@ -162,8 +174,12 @@ describe("LibraryDeckEditPage", () => {
     );
 
     const markup = renderEditor();
+    const privacyChoices = markup.match(/<button[^>]*aria-pressed="(?:true|false)"[^>]*>/g) ?? [];
 
     expect(markup).toContain("В этой колоде пока нет карточек");
+    expect(privacyChoices).toHaveLength(2);
+    expect(privacyChoices[0]).toContain('aria-pressed="false"');
+    expect(privacyChoices[1]).toContain('aria-pressed="true"');
     expect(markup).toContain("Добавить карточки можно из вкладки «Карточки» в библиотеке.");
     expect(markup).toMatch(/<a[^>]*href="\/library"[^>]*>Открыть библиотеку<\/a>/);
     expect(markup).not.toContain("data-card-uuid");

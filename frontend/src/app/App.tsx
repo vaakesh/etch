@@ -1,13 +1,16 @@
 import { AuthProvider } from "../auth/model/AuthProvider";
+import { LocaleProvider } from "../i18n";
 import { InitialBootComplete } from "./InitialBootComplete";
 import { AppRouter } from "./router/AppRouter";
 
 export function App() {
   return (
-    <AuthProvider>
-      <InitialBootComplete />
-      <AppRouter />
-    </AuthProvider>
+    <LocaleProvider>
+      <AuthProvider>
+        <InitialBootComplete />
+        <AppRouter />
+      </AuthProvider>
+    </LocaleProvider>
   );
 }
 

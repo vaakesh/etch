@@ -2,12 +2,17 @@ import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
 import { parseHomeDashboard } from "./home-contract";
 
+const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
+const OWNER_UUID = "d2f61c35-11d0-489e-837d-3845418ba39e";
+
 const VALID_RESPONSE = {
   decks: [
     {
+      deck_uuid: DECK_UUID,
+      owner_uuid: OWNER_UUID,
       title: "Daily Words",
       description: null,
-      deck_total_words_count: 48,
+      deck_words_count: 48,
       user_accuracy: 75,
       updated_at: "2026-07-17T10:30:00Z",
     },
@@ -34,6 +39,8 @@ describe("parseHomeDashboard", () => {
     expect(parseHomeDashboard(VALID_RESPONSE)).toEqual({
       decks: [
         {
+          uuid: DECK_UUID,
+          ownerUuid: OWNER_UUID,
           title: "Daily Words",
           description: null,
           totalWordsCount: 48,

@@ -37,7 +37,7 @@ describe("auth API", () => {
     });
   });
 
-  it("sends login credentials as an OAuth2 form for the cookie session", async () => {
+  it("sends login credentials as the JSON request expected by LoginRequest", async () => {
     apiFetch.mockResolvedValue(undefined);
 
     await loginRequest({ username: "alice", password: "password" });
@@ -49,8 +49,7 @@ describe("auth API", () => {
       auth: false,
       retryOnUnauthorized: false,
     });
-    expect(options.body).toBeInstanceOf(URLSearchParams);
-    expect(options.body.toString()).toBe("username=alice&password=password");
+    expect(options.body).toEqual({ username: "alice", password: "password" });
   });
 
   it("refreshes the cookie session without exposing response tokens", async () => {

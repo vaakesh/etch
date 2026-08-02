@@ -2,6 +2,7 @@ import { ApiError } from "../../../api";
 import type { HomeDashboard, HomeDeck, HomeProgress, HomeWeeklyActivityDay } from "./home-types";
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function invalidHomeResponse(path: string): never {
   throw new ApiError({
@@ -25,6 +26,16 @@ function readString(value: unknown, path: string): string {
   }
 
   return value;
+}
+
+function readUuid(value: unknown, path: string): string {
+  const uuid = readString(value, path);
+
+  if (!UUID_PATTERN.test(uuid)) {
+    return invalidHomeResponse(path);
+  }
+
+  return uuid;
 }
 
 function readNullableString(value: unknown, path: string): string | null {
@@ -103,12 +114,23 @@ function parseWeeklyActivityDay(value: unknown, index: number): HomeWeeklyActivi
 function parseDeck(value: unknown, index: number): HomeDeck {
   const path = `decks[${index}]`;
   const deck = readRecord(value, path);
+  const totalWordsCount = readInteger(deck.deck_words_count, `${path}.deck_words_count`);
+  const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
+
+  if (totalWordsCount < 0) {
+    return invalidHomeResponse(`${path}.deck_words_count`);
+  }
+  if (accuracy < 0 || accuracy > 100) {
+    return invalidHomeResponse(`${path}.user_accuracy`);
+  }
 
   return {
+    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
+    ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
     title: readString(deck.title, `${path}.title`),
     description: readNullableString(deck.description, `${path}.description`),
-    totalWordsCount: readInteger(deck.deck_total_words_count, `${path}.deck_total_words_count`),
-    accuracy: readInteger(deck.user_accuracy, `${path}.user_accuracy`),
+    totalWordsCount,
+    accuracy,
     updatedAt: readNullableDateTime(deck.updated_at, `${path}.updated_at`),
   };
 }

@@ -9,6 +9,8 @@ export type DashboardIconName =
   | "chevron"
   | "target"
   | "flame"
+  | "gauge"
+  | "calendar"
   | "clock";
 
 interface DashboardIconProps {
@@ -90,6 +92,25 @@ export function DashboardIcon({ name, className }: DashboardIconProps) {
     case "flame":
       content = (
         <path d="M13.2 2.8c.4 3.8-2.6 4.8-2.6 7.4 0 1.3.8 2.2 1.9 2.6-.3-2.5 1.4-3.6 2.2-5.7 2.9 2.4 4.3 5.1 4.3 7.9a7 7 0 0 1-14 0c0-3.8 2.1-7.1 6.3-10.2 0 2.1.6 3.5 1.9 4.2.7-1.7.7-3.8 0-6.2Z" />
+      );
+      break;
+    case "gauge":
+      content = (
+        <>
+          <path d="M4 16a8 8 0 0 1 16 0" />
+          <path d="M7 16h10M12 14l4.2-4.2" />
+          <circle cx="12" cy="14" r="1.4" />
+          <path d="M6.4 11.2 5 10.5M9 8.4l-.7-1.3M15 8.4l.7-1.3M17.6 11.2l1.4-.7" />
+        </>
+      );
+      break;
+    case "calendar":
+      content = (
+        <>
+          <rect height="15.5" rx="3" width="17" x="3.5" y="5.5" />
+          <path d="M8 3.5v4M16 3.5v4M3.5 10h17" />
+          <path d="m8.3 15.4 2.1 2.1 4.4-4.5" />
+        </>
       );
       break;
     case "clock":

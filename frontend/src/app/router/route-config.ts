@@ -12,6 +12,7 @@ const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const HomePage = lazy(() => import("../../pages/HomePage"));
 const LibraryPage = lazy(() => import("../../pages/LibraryPage"));
 const LibraryDeckEditPage = lazy(() => import("../../pages/LibraryDeckEditPage"));
+const PracticePage = lazy(() => import("../../pages/PracticePage"));
 const NotFoundPage = lazy(() => import("../../pages/NotFoundPage"));
 
 export const appRoutes: readonly AppRouteDefinition[] = [
@@ -34,6 +35,11 @@ export const appRoutes: readonly AppRouteDefinition[] = [
     path: "/library/:deck_uuid/edit",
     access: "protected",
     Component: LibraryDeckEditPage,
+  },
+  {
+    path: "/practice",
+    access: "protected",
+    Component: PracticePage,
   },
   {
     path: "*",

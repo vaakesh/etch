@@ -6,13 +6,9 @@ export async function loginRequest(
   credentials: LoginCredentials,
   signal?: AbortSignal,
 ): Promise<void> {
-  const form = new URLSearchParams({
-    username: credentials.username,
-    password: credentials.password,
-  });
-  await apiFetch<unknown, URLSearchParams>(AUTH_ENDPOINTS.login, {
+  await apiFetch<void, LoginCredentials>(AUTH_ENDPOINTS.login, {
     method: "POST",
-    body: form,
+    body: credentials,
     auth: false,
     retryOnUnauthorized: false,
     signal,
@@ -20,7 +16,7 @@ export async function loginRequest(
 }
 
 export async function refreshSessionRequest(signal: AbortSignal): Promise<void> {
-  await apiFetch<unknown>(AUTH_ENDPOINTS.refresh, {
+  await apiFetch<void>(AUTH_ENDPOINTS.refresh, {
     method: "POST",
     auth: false,
     retryOnUnauthorized: false,

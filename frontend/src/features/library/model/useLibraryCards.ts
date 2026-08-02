@@ -37,6 +37,12 @@ const INITIAL_STATE: LibraryCardsState = {
   loadMoreError: null,
 };
 
+type LibraryCardsStateUpdate =
+  | LibraryCardsState
+  | ((currentState: LibraryCardsState) => LibraryCardsState);
+
+let cachedLibraryCards: LibraryCardsState | null = null;
+
 function appendUniqueCards(
   currentCards: readonly LibraryCard[],
   nextCards: readonly LibraryCard[],
@@ -50,13 +56,26 @@ export function useLibraryCards({
   enabled = true,
   onDeleteSuccess,
 }: { enabled?: boolean; onDeleteSuccess?: () => void } = {}): UseLibraryCardsResult {
-  const [state, setState] = useState<LibraryCardsState>(INITIAL_STATE);
+  const cachedStateAtMountRef = useRef(cachedLibraryCards);
+  const hasLoadedOrStartedRef = useRef(cachedStateAtMountRef.current !== null);
+  const [state, setState] = useState<LibraryCardsState>(
+    cachedStateAtMountRef.current ?? INITIAL_STATE,
+  );
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);
   const updateControllersRef = useRef(new Map<string, AbortController>());
   const deleteControllersRef = useRef(new Map<string, AbortController>());
+  const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);
+
+  const setCachedState = useCallback((update: LibraryCardsStateUpdate): void => {
+    setState((currentState) => {
+      const nextState = typeof update === "function" ? update(currentState) : update;
+      cachedLibraryCards = nextState;
+      return nextState;
+    });
+  }, []);
 
   const loadFirstPage = useCallback((): void => {
     initialControllerRef.current?.abort();
@@ -70,6 +89,7 @@ export function useLibraryCards({
     const controller = new AbortController();
     const requestRevision = requestRevisionRef.current + 1;
     requestRevisionRef.current = requestRevision;
+    cachedLibraryCards = null;
     initialControllerRef.current = controller;
     loadMoreControllerRef.current = null;
 
@@ -82,7 +102,7 @@ export function useLibraryCards({
     void getLibraryCardPage(null, controller.signal)
       .then((page) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState({
+          setCachedState({
             status: "success",
             cards: page.cards,
             nextCursor: page.nextCursor,
@@ -95,7 +115,7 @@ export function useLibraryCards({
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState({
+          setCachedState({
             ...INITIAL_STATE,
             status: "error",
             error,
@@ -107,7 +127,7 @@ export function useLibraryCards({
           initialControllerRef.current = null;
         }
       });
-  }, []);
+  }, [setCachedState]);
 
   const loadMore = useCallback((): void => {
     if (
@@ -134,7 +154,7 @@ export function useLibraryCards({
     void getLibraryCardPage(cursor, controller.signal)
       .then((page) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState((currentState) => ({
+          setCachedState((currentState) => ({
             ...currentState,
             cards: appendUniqueCards(currentState.cards, page.cards),
             nextCursor: page.nextCursor,
@@ -146,7 +166,7 @@ export function useLibraryCards({
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState((currentState) => ({
+          setCachedState((currentState) => ({
             ...currentState,
             isLoadingMore: false,
             loadMoreError: error,
@@ -158,7 +178,7 @@ export function useLibraryCards({
           loadMoreControllerRef.current = null;
         }
       });
-  }, [state.hasMore, state.isLoadingMore, state.nextCursor, state.status]);
+  }, [setCachedState, state.hasMore, state.isLoadingMore, state.nextCursor, state.status]);
 
   const retry = useCallback((): void => {
     loadFirstPage();
@@ -205,7 +225,7 @@ export function useLibraryCards({
           return;
         }
 
-        setState((currentState) => ({
+        setCachedState((currentState) => ({
           ...currentState,
           cards: currentState.cards.map((card) =>
             card.uuid === cardUuid ? { ...card, ...updatedCard } : card,
@@ -217,7 +237,7 @@ export function useLibraryCards({
         }
       }
     },
-    [],
+    [setCachedState],
   );
 
   const deleteCard = useCallback(
@@ -235,7 +255,7 @@ export function useLibraryCards({
           return;
         }
 
-        setState((currentState) => ({
+        setCachedState((currentState) => ({
           ...currentState,
           cards: currentState.cards.filter((card) => card.uuid !== cardUuid),
         }));
@@ -247,29 +267,36 @@ export function useLibraryCards({
         }
       }
     },
-    [onDeleteSuccess],
+    [onDeleteSuccess, setCachedState],
   );
 
   useEffect(() => {
     const updateControllers = updateControllersRef.current;
     const deleteControllers = deleteControllersRef.current;
-    if (!enabled) {
-      return;
+    if (cleanupTimerRef.current !== null) {
+      window.clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
     }
 
-    loadFirstPage();
+    if (enabled && !hasLoadedOrStartedRef.current) {
+      hasLoadedOrStartedRef.current = true;
+      loadFirstPage();
+    }
 
     return () => {
-      requestRevisionRef.current += 1;
-      initialControllerRef.current?.abort();
-      loadMoreControllerRef.current?.abort();
-      createControllerRef.current?.abort();
-      updateControllers.forEach((controller) => controller.abort());
-      updateControllers.clear();
-      deleteControllers.forEach((controller) => controller.abort());
-      deleteControllers.clear();
-      initialControllerRef.current = null;
-      loadMoreControllerRef.current = null;
+      cleanupTimerRef.current = window.setTimeout(() => {
+        requestRevisionRef.current += 1;
+        initialControllerRef.current?.abort();
+        loadMoreControllerRef.current?.abort();
+        createControllerRef.current?.abort();
+        updateControllers.forEach((controller) => controller.abort());
+        updateControllers.clear();
+        deleteControllers.forEach((controller) => controller.abort());
+        deleteControllers.clear();
+        initialControllerRef.current = null;
+        loadMoreControllerRef.current = null;
+        cleanupTimerRef.current = null;
+      }, 0);
     };
   }, [enabled, loadFirstPage]);
 
