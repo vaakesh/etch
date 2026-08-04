@@ -42,6 +42,7 @@ describe("AppShell", () => {
     expect(markup).toContain('href="/"');
     expect(markup).toContain('href="/library"');
     expect(markup).toContain('href="/practice"');
+    expect(markup).toMatch(/<a[^>]*aria-label="На главную"[^>]*href="\/"[^>]*>.*Etch.*<\/a>/);
     expect(markup).toContain('aria-controls="app-sidebar"');
     expect(markup).toContain("Правая часть:");
   });

@@ -4,13 +4,14 @@ import {
   startPracticeSession,
   submitPracticeAnswer,
 } from "../api/practice-api";
+import { invalidatePracticeHistory } from "./practice-history-cache";
+import { applyPracticeAnswerResult } from "./practice-session-state";
 import type {
   CardSide,
   PracticeSession,
   SubmitPracticeAnswerInput,
   SubmitPracticeAnswerResult,
 } from "./practice-types";
-import { applyPracticeAnswerResult } from "./practice-session-state";
 
 export interface PracticeCardFeedback {
   action: SubmitPracticeAnswerInput["action"];
@@ -58,6 +59,7 @@ export interface UsePracticeSessionResult {
 }
 
 const IDLE_STATE: IdlePracticeState = { status: "idle" };
+const cachedPracticeSessions = new Map<string, PracticeSessionState>();
 
 function createReadyState(session: PracticeSession): ReadyPracticeState {
   return {
@@ -75,28 +77,68 @@ export function usePracticeSession(
   sessionUuid: string | null,
   setupDeckUuid: string | null,
 ): UsePracticeSessionResult {
-  const [state, setState] = useState<PracticeSessionState>(IDLE_STATE);
+  const cachedStateAtMount =
+    sessionUuid === null ? undefined : cachedPracticeSessions.get(sessionUuid);
+  const [state, setState] = useState<PracticeSessionState>(cachedStateAtMount ?? IDLE_STATE);
   const [resumeAttempt, setResumeAttempt] = useState(0);
   const loadControllerRef = useRef<AbortController | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
+  const activeResumeSessionUuidRef = useRef<string | null>(null);
+  const cleanupTimerRef = useRef<number | null>(null);
   const loadRevisionRef = useRef(0);
-  const sessionRef = useRef<PracticeSession | null>(null);
+  const sessionRef = useRef<PracticeSession | null>(
+    cachedStateAtMount?.status === "ready" ? cachedStateAtMount.session : null,
+  );
   const setupDeckUuidRef = useRef(setupDeckUuid);
   setupDeckUuidRef.current = setupDeckUuid;
 
   useEffect(() => {
+    if (cleanupTimerRef.current !== null) {
+      window.clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
+    }
+
+    const scheduleCleanup = (): void => {
+      cleanupTimerRef.current = window.setTimeout(() => {
+        loadRevisionRef.current += 1;
+        loadControllerRef.current?.abort();
+        submitControllerRef.current?.abort();
+        loadControllerRef.current = null;
+        submitControllerRef.current = null;
+        activeResumeSessionUuidRef.current = null;
+        cleanupTimerRef.current = null;
+      }, 0);
+    };
+
     if (sessionUuid === null) {
+      loadRevisionRef.current += 1;
       loadControllerRef.current?.abort();
       submitControllerRef.current?.abort();
       loadControllerRef.current = null;
-      loadRevisionRef.current += 1;
+      submitControllerRef.current = null;
+      activeResumeSessionUuidRef.current = null;
       sessionRef.current = null;
       setState(IDLE_STATE);
-      return;
+      return scheduleCleanup;
     }
 
-    if (sessionRef.current?.uuid === sessionUuid) {
-      return;
+    const cachedState = cachedPracticeSessions.get(sessionUuid);
+    if (cachedState !== undefined) {
+      loadRevisionRef.current += 1;
+      loadControllerRef.current?.abort();
+      loadControllerRef.current = null;
+      activeResumeSessionUuidRef.current = null;
+      if (sessionRef.current?.uuid !== sessionUuid) {
+        submitControllerRef.current?.abort();
+        submitControllerRef.current = null;
+      }
+      sessionRef.current = cachedState.status === "ready" ? cachedState.session : null;
+      setState(cachedState);
+      return scheduleCleanup;
+    }
+
+    if (loadControllerRef.current !== null && activeResumeSessionUuidRef.current === sessionUuid) {
+      return scheduleCleanup;
     }
 
     loadControllerRef.current?.abort();
@@ -106,6 +148,7 @@ export function usePracticeSession(
     const revision = loadRevisionRef.current + 1;
     loadRevisionRef.current = revision;
     loadControllerRef.current = controller;
+    activeResumeSessionUuidRef.current = sessionUuid;
     setState({ status: "loading", operation: "resume" });
 
     void resumePracticeSession(sessionUuid, controller.signal)
@@ -115,7 +158,9 @@ export function usePracticeSession(
         }
 
         sessionRef.current = session;
-        setState(createReadyState(session));
+        const nextState = createReadyState(session);
+        cachedPracticeSessions.set(sessionUuid, nextState);
+        setState(nextState);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || loadRevisionRef.current !== revision) {
@@ -123,36 +168,33 @@ export function usePracticeSession(
         }
 
         sessionRef.current = null;
-        setState({ status: "error", operation: "resume", error });
+        const nextState: PracticeSessionState = { status: "error", operation: "resume", error };
+        cachedPracticeSessions.set(sessionUuid, nextState);
+        setState(nextState);
       })
       .finally(() => {
         if (loadControllerRef.current === controller) {
           loadControllerRef.current = null;
+          activeResumeSessionUuidRef.current = null;
         }
       });
 
-    return () => {
-      controller.abort();
-    };
+    return scheduleCleanup;
   }, [resumeAttempt, sessionUuid, setupDeckUuid]);
-
-  useEffect(
-    () => () => {
-      loadControllerRef.current?.abort();
-      submitControllerRef.current?.abort();
-    },
-    [],
-  );
 
   const start = useCallback(
     async (deckUuid: string, promptSide: CardSide): Promise<PracticeSession | null> => {
       const normalizedDeckUuid = deckUuid.toLowerCase();
-      if (setupDeckUuidRef.current?.toLowerCase() !== normalizedDeckUuid) {
+      if (
+        setupDeckUuidRef.current !== null &&
+        setupDeckUuidRef.current.toLowerCase() !== normalizedDeckUuid
+      ) {
         return null;
       }
 
       loadControllerRef.current?.abort();
       submitControllerRef.current?.abort();
+      activeResumeSessionUuidRef.current = null;
 
       const controller = new AbortController();
       const revision = loadRevisionRef.current + 1;
@@ -166,19 +208,24 @@ export function usePracticeSession(
         if (
           controller.signal.aborted ||
           loadRevisionRef.current !== revision ||
-          setupDeckUuidRef.current?.toLowerCase() !== normalizedDeckUuid
+          (setupDeckUuidRef.current !== null &&
+            setupDeckUuidRef.current.toLowerCase() !== normalizedDeckUuid)
         ) {
           return null;
         }
 
         sessionRef.current = session;
-        setState(createReadyState(session));
+        const nextState = createReadyState(session);
+        cachedPracticeSessions.set(session.uuid, nextState);
+        invalidatePracticeHistory(["all", "in_progress"]);
+        setState(nextState);
         return session;
       } catch (error: unknown) {
         if (
           controller.signal.aborted ||
           loadRevisionRef.current !== revision ||
-          setupDeckUuidRef.current?.toLowerCase() !== normalizedDeckUuid
+          (setupDeckUuidRef.current !== null &&
+            setupDeckUuidRef.current.toLowerCase() !== normalizedDeckUuid)
         ) {
           return null;
         }
@@ -238,12 +285,15 @@ export function usePracticeSession(
         };
 
         sessionRef.current = nextSession;
+        invalidatePracticeHistory(
+          result.isFinished ? ["all", "in_progress", "completed"] : ["all", "in_progress"],
+        );
         setState((currentState) => {
           if (currentState.status !== "ready" || currentState.session.uuid !== activeSession.uuid) {
             return currentState;
           }
 
-          return {
+          const nextState: ReadyPracticeState = {
             ...currentState,
             session: nextSession,
             feedbackBySequence: {
@@ -255,6 +305,8 @@ export function usePracticeSession(
             submittingSequenceNumber: null,
             submitError: null,
           };
+          cachedPracticeSessions.set(activeSession.uuid, nextState);
+          return nextState;
         });
         return result;
       } catch (error: unknown) {
@@ -262,15 +314,19 @@ export function usePracticeSession(
           return null;
         }
 
-        setState((currentState) =>
-          currentState.status === "ready"
-            ? {
-                ...currentState,
-                submittingSequenceNumber: null,
-                submitError: { sequenceNumber, error },
-              }
-            : currentState,
-        );
+        setState((currentState) => {
+          if (currentState.status !== "ready") {
+            return currentState;
+          }
+
+          const nextState: ReadyPracticeState = {
+            ...currentState,
+            submittingSequenceNumber: null,
+            submitError: { sequenceNumber, error },
+          };
+          cachedPracticeSessions.set(activeSession.uuid, nextState);
+          return nextState;
+        });
         return null;
       } finally {
         if (submitControllerRef.current === controller) {
@@ -282,9 +338,12 @@ export function usePracticeSession(
   );
 
   const retryResume = useCallback(() => {
+    if (sessionUuid !== null) {
+      cachedPracticeSessions.delete(sessionUuid);
+    }
     sessionRef.current = null;
     setResumeAttempt((attempt) => attempt + 1);
-  }, []);
+  }, [sessionUuid]);
 
   return { state, retryResume, start, submit };
 }

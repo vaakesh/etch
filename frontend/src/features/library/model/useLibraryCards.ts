@@ -38,8 +38,7 @@ const INITIAL_STATE: LibraryCardsState = {
 };
 
 type LibraryCardsStateUpdate =
-  | LibraryCardsState
-  | ((currentState: LibraryCardsState) => LibraryCardsState);
+  LibraryCardsState | ((currentState: LibraryCardsState) => LibraryCardsState);
 
 let cachedLibraryCards: LibraryCardsState | null = null;
 
@@ -56,11 +55,9 @@ export function useLibraryCards({
   enabled = true,
   onDeleteSuccess,
 }: { enabled?: boolean; onDeleteSuccess?: () => void } = {}): UseLibraryCardsResult {
-  const cachedStateAtMountRef = useRef(cachedLibraryCards);
-  const hasLoadedOrStartedRef = useRef(cachedStateAtMountRef.current !== null);
-  const [state, setState] = useState<LibraryCardsState>(
-    cachedStateAtMountRef.current ?? INITIAL_STATE,
-  );
+  const cachedStateAtMount = cachedLibraryCards;
+  const hasLoadedOrStartedRef = useRef(cachedStateAtMount !== null);
+  const [state, setState] = useState<LibraryCardsState>(cachedStateAtMount ?? INITIAL_STATE);
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);

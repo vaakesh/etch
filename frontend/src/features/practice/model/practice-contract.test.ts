@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
-import { parsePracticeSession, parseSubmitPracticeAnswerResult } from "./practice-contract";
+import {
+  parsePracticeDeckUuid,
+  parsePracticeHistoryPage,
+  parsePracticeSession,
+  parsePracticeSessionHistory,
+  parseSubmitPracticeAnswerResult,
+} from "./practice-contract";
 
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const SESSION_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac10";
@@ -39,6 +45,32 @@ const VALID_ANSWER_RESULT = {
   total_count: 3,
   is_finished: false,
   time_to_complete: null,
+};
+
+const VALID_HISTORY_SESSION = {
+  uuid: SESSION_UUID,
+  deck_uuid: DECK_UUID,
+  status: "completed",
+  requested_count: 3,
+  actual_count: 3,
+  correct_count: 2,
+  wrong_count: 1,
+  prompt_side: "front",
+  answer_side: "back",
+  started_at: "2026-08-01T10:15:30Z",
+  finished_at: "2026-08-01T10:18:30Z",
+};
+
+const VALID_SESSION_HISTORY_ITEM = {
+  item_uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+  sequence_number: 2,
+  prompt_text: "bonjour",
+  answer_text: "привет",
+  prompt_lang: "fr",
+  answer_lang: "ru",
+  user_typed_text: "привет",
+  is_answered: true,
+  is_correct: true,
 };
 
 function expectInvalidPracticeResponse(run: () => unknown): void {
@@ -138,6 +170,149 @@ describe("parsePracticeSession", () => {
           { ...VALID_SESSION.cards[1], sequence_number: 2 },
         ],
       }),
+    );
+  });
+});
+
+describe("parsePracticeDeckUuid", () => {
+  it("reads the canonical UUID from a deck detail response", () => {
+    expect(parsePracticeDeckUuid({ uuid: DECK_UUID, title: "French" })).toBe(DECK_UUID);
+  });
+
+  it.each([null, {}, { uuid: "not-a-uuid" }])("rejects an invalid deck response", (payload) => {
+    expectInvalidPracticeResponse(() => parsePracticeDeckUuid(payload));
+  });
+});
+
+describe("parsePracticeHistoryPage", () => {
+  it("maps the training-session cursor page", () => {
+    expect(
+      parsePracticeHistoryPage({
+        items: [VALID_HISTORY_SESSION],
+        next_cursor: null,
+        has_more: false,
+      }),
+    ).toEqual({
+      sessions: [
+        {
+          uuid: SESSION_UUID,
+          deckUuid: DECK_UUID,
+          status: "completed",
+          requestedCount: 3,
+          actualCount: 3,
+          correctCount: 2,
+          wrongCount: 1,
+          promptSide: "front",
+          answerSide: "back",
+          startedAt: "2026-08-01T10:15:30Z",
+          finishedAt: "2026-08-01T10:18:30Z",
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+  });
+
+  it("preserves the status returned by the backend", () => {
+    expect(
+      parsePracticeHistoryPage({
+        items: [{ ...VALID_HISTORY_SESSION, status: "in_progress" }],
+        next_cursor: null,
+        has_more: false,
+      }).sessions[0],
+    ).toMatchObject({ status: "in_progress" });
+  });
+
+  it.each([
+    ["unknown status", { items: [{ ...VALID_HISTORY_SESSION, status: "finished" }] }],
+    ["invalid counters", { items: [{ ...VALID_HISTORY_SESSION, correct_count: 3 }] }],
+    ["same card side", { items: [{ ...VALID_HISTORY_SESSION, answer_side: "front" }] }],
+    ["missing cursor", { has_more: true }],
+  ])("rejects %s", (_caseName, override) => {
+    expectInvalidPracticeResponse(() =>
+      parsePracticeHistoryPage({
+        items: [VALID_HISTORY_SESSION],
+        next_cursor: null,
+        has_more: false,
+        ...override,
+      }),
+    );
+  });
+});
+
+describe("parsePracticeSessionHistory", () => {
+  it("maps the session item snapshot contract", () => {
+    expect(parsePracticeSessionHistory([VALID_SESSION_HISTORY_ITEM])).toEqual([
+      {
+        itemUuid: VALID_SESSION_HISTORY_ITEM.item_uuid,
+        sequenceNumber: 2,
+        promptText: "bonjour",
+        answerText: "привет",
+        promptLanguage: "fr",
+        answerLanguage: "ru",
+        userTypedText: "привет",
+        isAnswered: true,
+        isCorrect: true,
+      },
+    ]);
+  });
+
+  it("accepts a not-yet-answered item only with a null result", () => {
+    expect(
+      parsePracticeSessionHistory([
+        {
+          ...VALID_SESSION_HISTORY_ITEM,
+          user_typed_text: null,
+          is_answered: false,
+          is_correct: null,
+        },
+      ]),
+    ).toMatchObject([{ userTypedText: null, isAnswered: false, isCorrect: null }]);
+
+    expectInvalidPracticeResponse(() =>
+      parsePracticeSessionHistory([
+        {
+          ...VALID_SESSION_HISTORY_ITEM,
+          user_typed_text: null,
+          is_answered: false,
+          is_correct: false,
+        },
+      ]),
+    );
+  });
+
+  it("distinguishes a skipped item from a typed answer", () => {
+    expect(
+      parsePracticeSessionHistory([
+        {
+          ...VALID_SESSION_HISTORY_ITEM,
+          user_typed_text: null,
+          is_correct: false,
+        },
+      ]),
+    ).toMatchObject([{ userTypedText: null, isAnswered: true, isCorrect: false }]);
+
+    expectInvalidPracticeResponse(() =>
+      parsePracticeSessionHistory([
+        {
+          ...VALID_SESSION_HISTORY_ITEM,
+          user_typed_text: null,
+          is_correct: true,
+        },
+      ]),
+    );
+  });
+
+  it("rejects malformed lists and duplicate sequence numbers", () => {
+    expectInvalidPracticeResponse(() => parsePracticeSessionHistory({ items: [] }));
+    expectInvalidPracticeResponse(() =>
+      parsePracticeSessionHistory([
+        VALID_SESSION_HISTORY_ITEM,
+        {
+          ...VALID_SESSION_HISTORY_ITEM,
+          item_uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac11",
+        },
+      ]),
     );
   });
 });

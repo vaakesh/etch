@@ -102,8 +102,8 @@ function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
     uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
-    sourceLang: readString(card.source_lang, `${path}.source_lang`),
-    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    frontLang: readString(card.front_lang, `${path}.front_lang`),
+    backLang: readString(card.back_lang, `${path}.back_lang`),
     updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
   };
 }
@@ -116,8 +116,8 @@ function parseLibraryCard(value: unknown, index: number): LibraryCard {
     uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
-    sourceLang: readString(card.source_lang, `${path}.source_lang`),
-    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    frontLang: readString(card.front_lang, `${path}.front_lang`),
+    backLang: readString(card.back_lang, `${path}.back_lang`),
     updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
   };
 }
@@ -130,8 +130,8 @@ function parseDeckCard(value: unknown, index: number): EditableLibraryCard {
     uuid: readUuid(card.uuid, `${path}.uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
-    sourceLang: readString(card.source_lang, `${path}.source_lang`),
-    targetLang: readString(card.target_lang, `${path}.target_lang`),
+    frontLang: readString(card.front_lang, `${path}.front_lang`),
+    backLang: readString(card.back_lang, `${path}.back_lang`),
   };
 }
 
@@ -142,8 +142,8 @@ export function parseUpdatedLibraryCard(value: unknown): UpdatedLibraryCard {
     uuid: readUuid(card.uuid, "card.uuid"),
     frontText: readString(card.front_text, "card.front_text"),
     backText: readString(card.back_text, "card.back_text"),
-    sourceLang: readString(card.source_lang, "card.source_lang"),
-    targetLang: readString(card.target_lang, "card.target_lang"),
+    frontLang: readString(card.front_lang, "card.front_lang"),
+    backLang: readString(card.back_lang, "card.back_lang"),
   };
 }
 
@@ -186,8 +186,8 @@ export function parseCreatedLibraryCard(value: unknown): CreatedLibraryCard {
     uuid: readUuid(card.uuid, "card.uuid"),
     frontText: readString(card.front_text, "card.front_text"),
     backText: readString(card.back_text, "card.back_text"),
-    sourceLang: readString(card.source_lang, "card.source_lang"),
-    targetLang: readString(card.target_lang, "card.target_lang"),
+    frontLang: readString(card.front_lang, "card.front_lang"),
+    backLang: readString(card.back_lang, "card.back_lang"),
   };
 }
 

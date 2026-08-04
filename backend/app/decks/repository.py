@@ -6,6 +6,8 @@ from app.cards.models import Card
 from app.users.schemas import SearchQuery
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
+from app.users.models import User
 
 from .models import Deck, DeckCard, UserDeck
 
@@ -78,6 +80,7 @@ class DeckRepository:
     ) -> tuple[list[Deck], bool]:
         stmt = (
             select(Deck)
+            .options(joinedload(Deck.user).load_only(User.uuid))
             .where(
                 Deck.user_id == user_id,
             )
@@ -359,6 +362,7 @@ class UserDeckRepository:
     ) -> tuple[list[Deck], bool]:
         stmt = (
             select(Deck)
+            .options(joinedload(Deck.user).load_only(User.uuid))
             .join(UserDeck, UserDeck.deck_id == Deck.id)
             .where(
                 UserDeck.user_id == user_id,

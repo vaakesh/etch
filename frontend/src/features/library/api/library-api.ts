@@ -179,8 +179,8 @@ export async function createLibraryCard(
     body: {
       front_text: input.frontText,
       back_text: input.backText,
-      source_lang: input.sourceLang,
-      target_lang: input.targetLang,
+      front_lang: input.frontLang,
+      back_lang: input.backLang,
     },
     signal,
   });
@@ -191,9 +191,15 @@ export async function createLibraryCard(
 export async function getLibraryDeckPage(
   cursor: string | null,
   signal?: AbortSignal,
+  searchQuery: string | null = null,
 ): Promise<LibraryDeckPage> {
   const payload = await apiFetch<unknown>(LIBRARY_DECKS_PATH, {
-    query: { cursor, is_favourite: false, limit: LIBRARY_PAGE_SIZE },
+    query: {
+      cursor,
+      is_favourite: false,
+      limit: LIBRARY_PAGE_SIZE,
+      ...(searchQuery === null ? {} : { q: searchQuery.trim() }),
+    },
     signal,
   });
 
@@ -234,8 +240,8 @@ export async function updateLibraryCard(
     body: {
       front_text: input.frontText,
       back_text: input.backText,
-      source_lang: input.sourceLang,
-      target_lang: input.targetLang,
+      front_lang: input.frontLang,
+      back_lang: input.backLang,
     },
     signal,
   });

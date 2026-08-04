@@ -28,16 +28,16 @@ class CardCreate(BaseModel):
     front_text: CardText
     back_text: CardText
 
-    source_lang: CardLang = "ru"
-    target_lang: CardLang = "en"
+    front_lang: CardLang = "ru"
+    back_lang: CardLang = "en"
 
 
 class CardUpdate(BaseModel):
     front_text: CardText | None = None
     back_text: CardText | None = None
 
-    source_lang: CardLang | None = None
-    target_lang: CardLang | None = None
+    front_lang: CardLang | None = None
+    back_lang: CardLang | None = None
 
 
 class CardDetail(BaseModel):
@@ -48,5 +48,5 @@ class CardDetail(BaseModel):
     front_text: CardText
     back_text: CardText
 
-    source_lang: CardLang
-    target_lang: CardLang
+    front_lang: CardLang
+    back_lang: CardLang

@@ -2,16 +2,32 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api";
-import type { PracticeSession } from "../../features/practice/model/practice-types";
+import type {
+  PracticeHistorySession,
+  PracticeSession,
+} from "../../features/practice/model/practice-types";
+import type { UsePracticeHistoryResult } from "../../features/practice/model/usePracticeHistory";
 import type {
   ReadyPracticeState,
   UsePracticeSessionResult,
 } from "../../features/practice/model/usePracticeSession";
 
 const usePracticeSessionMock = vi.hoisted(() => vi.fn());
+const usePracticeDeckAvailabilityMock = vi.hoisted(() => vi.fn());
+const usePracticeHistoryMock = vi.hoisted(() => vi.fn());
+const resetPracticeHistoryCacheMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../features/practice/model/usePracticeSession", () => ({
   usePracticeSession: usePracticeSessionMock,
+}));
+
+vi.mock("../../features/practice/model/usePracticeDeckAvailability", () => ({
+  usePracticeDeckAvailability: usePracticeDeckAvailabilityMock,
+}));
+
+vi.mock("../../features/practice/model/usePracticeHistory", () => ({
+  resetPracticeHistoryCache: resetPracticeHistoryCacheMock,
+  usePracticeHistory: usePracticeHistoryMock,
 }));
 
 import { ActivePracticeSessionView, PracticeCompletionView, PracticePage } from "./PracticePage";
@@ -64,6 +80,31 @@ function createPracticeResult(
   };
 }
 
+function createHistorySession(
+  overrides: Partial<PracticeHistorySession> = {},
+): PracticeHistorySession {
+  return {
+    uuid: SESSION_UUID,
+    deckUuid: DECK_UUID,
+    status: "completed",
+    requestedCount: 12,
+    actualCount: 12,
+    correctCount: 9,
+    wrongCount: 3,
+    promptSide: "front",
+    answerSide: "back",
+    startedAt: "2026-08-01T12:00:00Z",
+    finishedAt: "2026-08-01T12:04:00Z",
+    ...overrides,
+  };
+}
+
+function createHistoryResult(
+  state: UsePracticeHistoryResult["state"] = { status: "ready", sessions: [] },
+): UsePracticeHistoryResult {
+  return { state, retry: vi.fn() };
+}
+
 function renderPractice(pathname: string, state?: unknown): string {
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[state === undefined ? pathname : { pathname, state }]}>
@@ -76,29 +117,129 @@ describe("PracticePage", () => {
   beforeEach(() => {
     usePracticeSessionMock.mockReset();
     usePracticeSessionMock.mockReturnValue(createPracticeResult());
+    usePracticeDeckAvailabilityMock.mockReset();
+    usePracticeDeckAvailabilityMock.mockImplementation((deckUuid: string | null) => ({
+      state: deckUuid === null ? { status: "idle" } : { status: "ready", deckUuid },
+      retry: vi.fn(),
+    }));
+    usePracticeHistoryMock.mockReset();
+    usePracticeHistoryMock.mockReturnValue(createHistoryResult());
+    resetPracticeHistoryCacheMock.mockReset();
   });
 
-  it("directs a bare practice route to deck selection", () => {
+  it("shows training history and filters on the bare practice route", () => {
     const markup = renderPractice("/practice");
 
-    expect(markup).toContain("Сначала выберите колоду");
-    expect(markup).toContain('href="/library"');
+    expect(markup).toContain("Тренировочные сессии");
+    expect(markup).toContain("Завершённые");
+    expect(markup).toContain("Незавершённые");
+    expect(markup).toContain("Брошенные");
+    expect(markup).toContain("Здесь появятся ваши тренировки");
     expect(markup).toContain('data-practice-mode="setup"');
+    expect(markup).not.toContain('aria-label="На главную"');
+    expect(markup).not.toContain('aria-label="Выйти из практики в библиотеку"');
     expect(usePracticeSessionMock).toHaveBeenCalledWith(null, null);
+    expect(usePracticeHistoryMock).toHaveBeenCalledWith("all");
   });
 
-  it("renders the backend-supported setup choices without unavailable card limits", () => {
+  it("renders session setup with disabled future card limits", () => {
     const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
 
-    expect(markup).toContain("Как будем тренироваться?");
+    expect(markup).toContain("Настройка сессии");
     expect(markup).toContain('name="prompt_side"');
     expect(markup).toContain('value="front"');
     expect(markup).toContain('value="back"');
+    expect(markup).toContain('aria-label="Перевод в слово"');
+    expect(markup).toContain('aria-label="Слово в перевод"');
+    expect(markup).not.toContain("→");
     expect(markup).toContain("Вся колода");
-    expect(markup).not.toContain(">50<");
-    expect(markup).not.toContain(">100<");
+    expect(markup).toContain("50 карточек");
+    expect(markup).toContain("100 карточек");
+    expect(markup).toContain("Своё значение");
     expect(markup).toContain("Начать");
     expect(usePracticeSessionMock).toHaveBeenCalledWith(null, DECK_UUID);
+    expect(usePracticeDeckAvailabilityMock).toHaveBeenCalledWith(DECK_UUID);
+  });
+
+  it.each([403, 404])("renders a private deck-safe not-found state for status %s", (status) => {
+    usePracticeDeckAvailabilityMock.mockReturnValue({
+      state: {
+        status: "error",
+        deckUuid: DECK_UUID,
+        error: new ApiError({ status, message: "Internal backend detail" }),
+      },
+      retry: vi.fn(),
+    });
+
+    const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
+
+    expect(markup).toContain("Колода не найдена");
+    expect(markup).toContain("Возможно, она была удалена или ссылка больше недоступна");
+    expect(markup).not.toContain("Internal backend detail");
+    expect(markup).not.toContain("нет доступа");
+    expect(markup).not.toContain("Настройка сессии");
+  });
+
+  it("checks deck availability before showing practice setup", () => {
+    usePracticeDeckAvailabilityMock.mockReturnValue({
+      state: { status: "loading", deckUuid: DECK_UUID },
+      retry: vi.fn(),
+    });
+
+    const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
+
+    expect(markup).toContain("Проверяем колоду");
+    expect(markup).not.toContain("Настройка сессии");
+  });
+
+  it("renders previous sessions with their status, direction, counters, and repeat action", () => {
+    usePracticeHistoryMock.mockReturnValue(
+      createHistoryResult({
+        status: "ready",
+        sessions: [
+          createHistorySession(),
+          createHistorySession({
+            uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac11",
+            status: "in_progress",
+            actualCount: 4,
+            correctCount: 3,
+            wrongCount: 1,
+            promptSide: "back",
+            answerSide: "front",
+            finishedAt: null,
+          }),
+          createHistorySession({
+            uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac12",
+            status: "abandoned",
+            actualCount: 2,
+            correctCount: 1,
+            wrongCount: 1,
+            finishedAt: null,
+          }),
+        ],
+      }),
+    );
+
+    const markup = renderPractice("/practice");
+
+    expect(markup).toContain("Завершена");
+    expect(markup).toContain("Не завершена");
+    expect(markup).toContain("Брошена");
+    expect(markup).toContain('aria-label="Слово в перевод"');
+    expect(markup).toContain('aria-label="Перевод в слово"');
+    expect(markup).not.toContain("→");
+    expect(markup.match(/Повторить/g)).toHaveLength(2);
+    expect(markup.match(/Продолжить/g)).toHaveLength(1);
+    expect(markup.match(/aria-label="Точность сессии"/g)).toHaveLength(3);
+    expect(markup.match(/aria-describedby=/g)).toHaveLength(3);
+    expect(markup.match(/role="meter"/g)).toHaveLength(3);
+    expect(markup.match(/role="tooltip"/g)).toHaveLength(3);
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(3);
+    expect(markup).toContain("Правильных ответов — 75%");
+    expect(markup.match(/aria-label="Открыть историю сессии"/g)).toHaveLength(2);
+    expect(markup).toContain(`/practice/sessions/${SESSION_UUID}/history`);
+    expect(markup).toContain("/practice/sessions/019c05e5-bc86-70e6-8f5c-d31bfa1aac12/history");
+    expect(markup).not.toContain("/practice/sessions/019c05e5-bc86-70e6-8f5c-d31bfa1aac11/history");
   });
 
   it("loads resume mode from the session query and renders the active card", () => {
@@ -135,6 +276,46 @@ describe("PracticePage", () => {
     expect(markup).toContain("Выбрать новую тренировку");
     expect(markup).toContain('role="alert"');
   });
+
+  it.each([403, 404])("does not reveal a hidden session for resume status %s", (status) => {
+    usePracticeSessionMock.mockReturnValue(
+      createPracticeResult({
+        status: "error",
+        operation: "resume",
+        error: new ApiError({ status, message: "Internal backend detail" }),
+      }),
+    );
+
+    const markup = renderPractice(`/practice?session=${SESSION_UUID}`);
+
+    expect(markup).toContain("Тренировка не найдена");
+    expect(markup).toContain("Тренировочная сессия не найдена или больше недоступна");
+    expect(markup).not.toContain("Internal backend detail");
+    expect(markup).not.toContain("нет доступа");
+    expect(markup).not.toContain("Попробовать снова");
+  });
+
+  it.each([403, 404])(
+    "leaves the card UI when a submit reports missing session status %s",
+    (status) => {
+      usePracticeSessionMock.mockReturnValue(
+        createPracticeResult(
+          createReadyState({
+            submitError: {
+              sequenceNumber: 1,
+              error: new ApiError({ status, message: "Internal backend detail" }),
+            },
+          }),
+        ),
+      );
+
+      const markup = renderPractice(`/practice?session=${SESSION_UUID}`);
+
+      expect(markup).toContain("Тренировка не найдена");
+      expect(markup).not.toContain("Internal backend detail");
+      expect(markup).not.toContain('placeholder="Ваш ответ"');
+    },
+  );
 
   it("rejects conflicting deck and session query values without a backend request", () => {
     const markup = renderPractice(`/practice?deck=${DECK_UUID}&session=${SESSION_UUID}`);
@@ -178,7 +359,7 @@ describe("PracticePage", () => {
     expect(markup).toContain("Колода пройдена");
     expect(markup).toContain("75%");
     expect(markup).toContain("2 мин 34 сек");
-    expect(markup).not.toContain("Сначала выберите колоду");
+    expect(markup).not.toContain("Тренировочные сессии");
   });
 
   it("restores a persisted result when reload confirms that the session is finished", () => {

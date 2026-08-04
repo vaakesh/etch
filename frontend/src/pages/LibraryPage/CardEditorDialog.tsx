@@ -74,22 +74,22 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
   const descriptionId = useId();
   const frontTextId = useId();
   const backTextId = useId();
-  const sourceLangId = useId();
-  const targetLangId = useId();
+  const frontLangId = useId();
+  const backLangId = useId();
   const [frontText, setFrontText] = useState(card?.frontText ?? "");
   const [backText, setBackText] = useState(card?.backText ?? "");
-  const [sourceLang, setSourceLang] = useState(card?.sourceLang ?? "");
-  const [targetLang, setTargetLang] = useState(card?.targetLang ?? "");
+  const [frontLang, setFrontLang] = useState(card?.frontLang ?? "");
+  const [backLang, setBackLang] = useState(card?.backLang ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown | null>(null);
   const hasChanges =
     card === null ||
     frontText !== card.frontText ||
     backText !== card.backText ||
-    sourceLang !== card.sourceLang ||
-    targetLang !== card.targetLang;
+    frontLang !== card.frontLang ||
+    backLang !== card.backLang;
   const hasRequiredTexts = [frontText, backText].every((value) => value.trim().length > 0);
-  const hasValidLanguages = [sourceLang, targetLang].every((value) => {
+  const hasValidLanguages = [frontLang, backLang].every((value) => {
     const length = value.trim().length;
     return length >= 2 && length <= 3;
   });
@@ -131,7 +131,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
     setIsSaving(true);
 
     try {
-      await onSave({ frontText, backText, sourceLang, targetLang });
+      await onSave({ frontText, backText, frontLang, backLang });
       if (isMountedRef.current) {
         dialogRef.current?.close();
       }
@@ -196,7 +196,9 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
           <div className={styles.cardEditorTextGrid}>
             <label className={styles.cardEditorField} htmlFor={backTextId}>
               <span className={styles.cardEditorLabel}>
-                <strong>Иностранное слово</strong>
+                <strong>
+                  Иностранное слово <span aria-hidden="true">*</span>
+                </strong>
                 <code>back_text</code>
               </span>
               <textarea
@@ -214,7 +216,9 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
 
             <label className={styles.cardEditorField} htmlFor={frontTextId}>
               <span className={styles.cardEditorLabel}>
-                <strong>Перевод</strong>
+                <strong>
+                  Перевод <span aria-hidden="true">*</span>
+                </strong>
                 <code>front_text</code>
               </span>
               <textarea
@@ -231,41 +235,45 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
           </div>
 
           <div className={styles.cardEditorLanguageGrid}>
-            <label className={styles.cardEditorField} htmlFor={targetLangId}>
+            <label className={styles.cardEditorField} htmlFor={backLangId}>
               <span className={styles.cardEditorLabel}>
-                <strong>Язык слова</strong>
-                <code>target_lang</code>
+                <strong>
+                  Язык слова <span aria-hidden="true">*</span>
+                </strong>
+                <code>back_lang</code>
               </span>
               <input
                 autoCapitalize="none"
                 autoComplete="off"
-                id={targetLangId}
+                id={backLangId}
                 maxLength={3}
                 minLength={2}
-                name="target_lang"
-                onChange={(event) => setTargetLang(event.currentTarget.value)}
+                name="back_lang"
+                onChange={(event) => setBackLang(event.currentTarget.value)}
                 required
                 spellCheck={false}
-                value={targetLang}
+                value={backLang}
               />
             </label>
 
-            <label className={styles.cardEditorField} htmlFor={sourceLangId}>
+            <label className={styles.cardEditorField} htmlFor={frontLangId}>
               <span className={styles.cardEditorLabel}>
-                <strong>Язык перевода</strong>
-                <code>source_lang</code>
+                <strong>
+                  Язык перевода <span aria-hidden="true">*</span>
+                </strong>
+                <code>front_lang</code>
               </span>
               <input
                 autoCapitalize="none"
                 autoComplete="off"
-                id={sourceLangId}
+                id={frontLangId}
                 maxLength={3}
                 minLength={2}
-                name="source_lang"
-                onChange={(event) => setSourceLang(event.currentTarget.value)}
+                name="front_lang"
+                onChange={(event) => setFrontLang(event.currentTarget.value)}
                 required
                 spellCheck={false}
-                value={sourceLang}
+                value={frontLang}
               />
             </label>
           </div>

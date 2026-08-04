@@ -1,24 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { LocaleContext, type LocaleContextValue } from "./locale-context";
 import { DEFAULT_LOCALE, isSupportedLocale, type AppLocale } from "./localization";
 
 const LOCALE_STORAGE_KEY = "etch.locale";
-
-interface LocaleContextValue {
-  locale: AppLocale;
-  setLocale: (locale: AppLocale) => void;
-}
 
 interface LocaleProviderProps {
   children: ReactNode;
   initialLocale?: AppLocale;
 }
-
-const defaultContextValue: LocaleContextValue = {
-  locale: DEFAULT_LOCALE,
-  setLocale: () => undefined,
-};
-
-const LocaleContext = createContext<LocaleContextValue>(defaultContextValue);
 
 function readStoredLocale(): AppLocale {
   if (typeof window === "undefined") {
@@ -49,8 +38,4 @@ export function LocaleProvider({ children, initialLocale }: LocaleProviderProps)
   const contextValue = useMemo<LocaleContextValue>(() => ({ locale, setLocale }), [locale]);
 
   return <LocaleContext.Provider value={contextValue}>{children}</LocaleContext.Provider>;
-}
-
-export function useLocale(): LocaleContextValue {
-  return useContext(LocaleContext);
 }

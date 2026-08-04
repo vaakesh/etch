@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch } from "../../../api";
-import { resumePracticeSession, startPracticeSession, submitPracticeAnswer } from "./practice-api";
+import {
+  getPracticeSessionItemsHistory,
+  getPracticeSessionHistory,
+  resumePracticeSession,
+  startPracticeSession,
+  submitPracticeAnswer,
+  validatePracticeDeck,
+} from "./practice-api";
 
 vi.mock("../../../api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../api")>();
@@ -46,6 +53,207 @@ const ANSWER_RESPONSE = {
   is_finished: false,
   time_to_complete: null,
 };
+
+const HISTORY_SESSION_RESPONSE = {
+  uuid: SESSION_UUID,
+  deck_uuid: DECK_UUID,
+  status: "completed",
+  requested_count: 2,
+  actual_count: 2,
+  correct_count: 1,
+  wrong_count: 1,
+  prompt_side: "front",
+  answer_side: "back",
+  started_at: "2026-08-01T10:15:30Z",
+  finished_at: "2026-08-01T10:16:30Z",
+};
+
+const SESSION_HISTORY_ITEM_RESPONSE = {
+  item_uuid: OTHER_UUID,
+  sequence_number: 2,
+  prompt_text: "bonjour",
+  answer_text: "привет",
+  prompt_lang: "fr",
+  answer_lang: "ru",
+  user_typed_text: "привет",
+  is_answered: true,
+  is_correct: true,
+};
+
+describe("getPracticeSessionHistory", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+  });
+
+  it("loads every cursor page from the exact current-user sessions path", async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({
+        items: [HISTORY_SESSION_RESPONSE],
+        next_cursor: "next-page",
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            ...HISTORY_SESSION_RESPONSE,
+            uuid: OTHER_UUID,
+            status: "in_progress",
+            actual_count: 0,
+            correct_count: 0,
+            wrong_count: 0,
+            finished_at: null,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+    await expect(getPracticeSessionHistory("all")).resolves.toMatchObject([
+      { uuid: SESSION_UUID, status: "completed" },
+      { uuid: OTHER_UUID, status: "in_progress" },
+    ]);
+
+    expect(apiFetch).toHaveBeenNthCalledWith(1, "/users/me/training-sessions", {
+      query: { cursor: null, limit: 100, status: null },
+      signal: undefined,
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(2, "/users/me/training-sessions", {
+      query: { cursor: "next-page", limit: 100, status: null },
+      signal: undefined,
+    });
+  });
+
+  it("rejects a repeated backend cursor", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({
+      items: [],
+      next_cursor: "same-page",
+      has_more: true,
+    });
+
+    await expect(getPracticeSessionHistory("all")).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
+    });
+  });
+
+  it.each(["completed", "in_progress", "abandoned"] as const)(
+    "requests the %s filter from the backend",
+    async (status) => {
+      vi.mocked(apiFetch).mockResolvedValue({
+        items: [
+          {
+            ...HISTORY_SESSION_RESPONSE,
+            status,
+            finished_at: status === "completed" ? HISTORY_SESSION_RESPONSE.finished_at : null,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      });
+
+      await expect(getPracticeSessionHistory(status)).resolves.toMatchObject([{ status }]);
+      expect(apiFetch).toHaveBeenCalledWith("/users/me/training-sessions", {
+        query: { cursor: null, limit: 100, status },
+        signal: undefined,
+      });
+    },
+  );
+
+  it("rejects a session outside the backend filter", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({
+      items: [HISTORY_SESSION_RESPONSE],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    await expect(getPracticeSessionHistory("in_progress")).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
+    });
+  });
+});
+
+describe("getPracticeSessionItemsHistory", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+  });
+
+  it("loads and maps the exact session history endpoint", async () => {
+    const controller = new AbortController();
+    vi.mocked(apiFetch).mockResolvedValue([SESSION_HISTORY_ITEM_RESPONSE]);
+
+    await expect(getPracticeSessionItemsHistory(SESSION_UUID, controller.signal)).resolves.toEqual([
+      {
+        itemUuid: OTHER_UUID,
+        sequenceNumber: 2,
+        promptText: "bonjour",
+        answerText: "привет",
+        promptLanguage: "fr",
+        answerLanguage: "ru",
+        userTypedText: "привет",
+        isAnswered: true,
+        isCorrect: true,
+      },
+    ]);
+
+    expect(apiFetch).toHaveBeenCalledWith(`/training-sessions/${SESSION_UUID}/history`, {
+      query: { ps: 100, pn: 1 },
+      signal: controller.signal,
+    });
+  });
+
+  it("loads every numbered page and sorts the resulting snapshots", async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...SESSION_HISTORY_ITEM_RESPONSE,
+      item_uuid: `019c05e5-bc86-70e6-8f5c-${String(index + 1).padStart(12, "0")}`,
+      sequence_number: 100 - index,
+    }));
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([
+        {
+          ...SESSION_HISTORY_ITEM_RESPONSE,
+          item_uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac11",
+          sequence_number: 101,
+        },
+      ]);
+
+    const items = await getPracticeSessionItemsHistory(SESSION_UUID);
+
+    expect(items).toHaveLength(101);
+    expect(items[0]?.sequenceNumber).toBe(1);
+    expect(items[100]?.sequenceNumber).toBe(101);
+    expect(apiFetch).toHaveBeenNthCalledWith(2, `/training-sessions/${SESSION_UUID}/history`, {
+      query: { ps: 100, pn: 2 },
+      signal: undefined,
+    });
+  });
+});
+
+describe("validatePracticeDeck", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetch).mockResolvedValue({ uuid: DECK_UUID });
+  });
+
+  it("checks the exact backend deck path before rendering practice setup", async () => {
+    const controller = new AbortController();
+
+    await expect(validatePracticeDeck(DECK_UUID, controller.signal)).resolves.toBeUndefined();
+    expect(apiFetch).toHaveBeenCalledWith(`/decks/${DECK_UUID}`, {
+      signal: controller.signal,
+    });
+  });
+
+  it("rejects a response for a different deck", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ uuid: OTHER_UUID });
+
+    await expect(validatePracticeDeck(DECK_UUID)).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
+    });
+  });
+});
 
 describe("startPracticeSession", () => {
   beforeEach(() => {

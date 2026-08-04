@@ -35,13 +35,13 @@ class Card(Base):
         nullable=False,
     )
 
-    source_lang: Mapped[str] = mapped_column(
+    front_lang: Mapped[str] = mapped_column(
         String(3),
         default="ru",
         server_default="ru",
         nullable=False,
         )
-    target_lang: Mapped[str] = mapped_column(
+    back_lang: Mapped[str] = mapped_column(
         String(3), 
         default="en",
         server_default="en",

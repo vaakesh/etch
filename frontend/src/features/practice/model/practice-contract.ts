@@ -2,8 +2,12 @@ import { ApiError } from "../../../api";
 import type {
   CardSide,
   PracticeCard,
+  PracticeHistoryPage,
+  PracticeHistorySession,
   PracticeSession,
+  PracticeSessionHistoryItem,
   SubmitPracticeAnswerResult,
+  TrainingSessionStatus,
 } from "./practice-types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,6 +46,14 @@ function readBoolean(value: unknown, path: string): boolean {
   return value;
 }
 
+function readNullableBoolean(value: unknown, path: string): boolean | null {
+  if (value === null) {
+    return null;
+  }
+
+  return readBoolean(value, path);
+}
+
 function readInteger(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) {
     return invalidPracticeResponse(path);
@@ -58,6 +70,14 @@ function readNullableInteger(value: unknown, path: string): number | null {
   return readInteger(value, path);
 }
 
+function readNullableString(value: unknown, path: string): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  return readString(value, path);
+}
+
 function readUuid(value: unknown, path: string): string {
   const uuid = readString(value, path);
 
@@ -70,6 +90,14 @@ function readUuid(value: unknown, path: string): string {
 
 function readCardSide(value: unknown, path: string): CardSide {
   if (value !== "front" && value !== "back") {
+    return invalidPracticeResponse(path);
+  }
+
+  return value;
+}
+
+function readTrainingSessionStatus(value: unknown, path: string): TrainingSessionStatus {
+  if (value !== "completed" && value !== "in_progress" && value !== "abandoned") {
     return invalidPracticeResponse(path);
   }
 
@@ -203,6 +231,136 @@ export function parsePracticeSession(value: unknown): PracticeSession {
     startedAt: readDateTime(session.started_at, "practice.started_at"),
     cards,
   };
+}
+
+export function parsePracticeDeckUuid(value: unknown): string {
+  const deck = readRecord(value, "practiceDeck");
+  return readUuid(deck.uuid, "practiceDeck.uuid");
+}
+
+function parsePracticeHistorySession(value: unknown, index: number): PracticeHistorySession {
+  const path = `practiceHistory.items[${index}]`;
+  const session = readRecord(value, path);
+  const requestedCount = readInteger(session.requested_count, `${path}.requested_count`);
+  const actualCount = readInteger(session.actual_count, `${path}.actual_count`);
+  const correctCount = readInteger(session.correct_count, `${path}.correct_count`);
+  const wrongCount = readInteger(session.wrong_count, `${path}.wrong_count`);
+  const promptSide = readCardSide(session.prompt_side, `${path}.prompt_side`);
+  const answerSide = readCardSide(session.answer_side, `${path}.answer_side`);
+  const finishedAtValue = readNullableString(session.finished_at, `${path}.finished_at`);
+  const finishedAt =
+    finishedAtValue === null ? null : readDateTime(finishedAtValue, `${path}.finished_at`);
+  const status = readTrainingSessionStatus(session.status, `${path}.status`);
+
+  if (
+    requestedCount < 0 ||
+    actualCount < 0 ||
+    actualCount > requestedCount ||
+    correctCount < 0 ||
+    wrongCount < 0 ||
+    correctCount + wrongCount !== actualCount
+  ) {
+    return invalidPracticeResponse(`${path}.counts`);
+  }
+  if (promptSide === answerSide) {
+    return invalidPracticeResponse(`${path}.answer_side`);
+  }
+
+  return {
+    uuid: readUuid(session.uuid, `${path}.uuid`),
+    deckUuid: readUuid(session.deck_uuid, `${path}.deck_uuid`),
+    status,
+    requestedCount,
+    actualCount,
+    correctCount,
+    wrongCount,
+    promptSide,
+    answerSide,
+    startedAt: readDateTime(session.started_at, `${path}.started_at`),
+    finishedAt,
+  };
+}
+
+export function parsePracticeHistoryPage(value: unknown): PracticeHistoryPage {
+  const page = readRecord(value, "practiceHistory");
+  if (!Array.isArray(page.items)) {
+    return invalidPracticeResponse("practiceHistory.items");
+  }
+
+  const sessions = page.items.map(parsePracticeHistorySession);
+  const knownSessionUuids = new Set<string>();
+  sessions.forEach((session, index) => {
+    if (knownSessionUuids.has(session.uuid)) {
+      return invalidPracticeResponse(`practiceHistory.items[${index}].uuid`);
+    }
+    knownSessionUuids.add(session.uuid);
+  });
+
+  const nextCursor = readNullableString(page.next_cursor, "practiceHistory.next_cursor");
+  const hasMore = readBoolean(page.has_more, "practiceHistory.has_more");
+  if (hasMore !== (nextCursor !== null) || nextCursor === "") {
+    return invalidPracticeResponse("practiceHistory.next_cursor");
+  }
+
+  return { sessions, nextCursor, hasMore };
+}
+
+function parsePracticeSessionHistoryItem(
+  value: unknown,
+  index: number,
+): PracticeSessionHistoryItem {
+  const path = `practiceSessionHistory[${index}]`;
+  const item = readRecord(value, path);
+  const sequenceNumber = readInteger(item.sequence_number, `${path}.sequence_number`);
+  const isAnswered = readBoolean(item.is_answered, `${path}.is_answered`);
+  const isCorrect = readNullableBoolean(item.is_correct, `${path}.is_correct`);
+  const userTypedText = readNullableString(item.user_typed_text, `${path}.user_typed_text`);
+
+  if (sequenceNumber < 1) {
+    return invalidPracticeResponse(`${path}.sequence_number`);
+  }
+  if (isAnswered !== (isCorrect !== null)) {
+    return invalidPracticeResponse(`${path}.is_correct`);
+  }
+  if ((!isAnswered && userTypedText !== null) || (userTypedText === null && isCorrect === true)) {
+    return invalidPracticeResponse(`${path}.user_typed_text`);
+  }
+
+  return {
+    itemUuid: readUuid(item.item_uuid, `${path}.item_uuid`),
+    sequenceNumber,
+    promptText: readString(item.prompt_text, `${path}.prompt_text`),
+    answerText: readString(item.answer_text, `${path}.answer_text`),
+    promptLanguage: readString(item.prompt_lang, `${path}.prompt_lang`),
+    answerLanguage: readString(item.answer_lang, `${path}.answer_lang`),
+    userTypedText,
+    isAnswered,
+    isCorrect,
+  };
+}
+
+export function parsePracticeSessionHistory(value: unknown): readonly PracticeSessionHistoryItem[] {
+  if (!Array.isArray(value)) {
+    return invalidPracticeResponse("practiceSessionHistory");
+  }
+
+  const items = value.map(parsePracticeSessionHistoryItem);
+  const knownItemUuids = new Set<string>();
+  const knownSequenceNumbers = new Set<number>();
+
+  items.forEach((item, index) => {
+    if (knownItemUuids.has(item.itemUuid)) {
+      return invalidPracticeResponse(`practiceSessionHistory[${index}].item_uuid`);
+    }
+    if (knownSequenceNumbers.has(item.sequenceNumber)) {
+      return invalidPracticeResponse(`practiceSessionHistory[${index}].sequence_number`);
+    }
+
+    knownItemUuids.add(item.itemUuid);
+    knownSequenceNumbers.add(item.sequenceNumber);
+  });
+
+  return items;
 }
 
 export function parseSubmitPracticeAnswerResult(value: unknown): SubmitPracticeAnswerResult {

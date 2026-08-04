@@ -7,6 +7,7 @@ describe("app route configuration", () => {
 
     expect(loginRoute).toBeDefined();
     expect(loginRoute?.access).toBe("guest");
+    expect(loginRoute?.title).toBe("Вход — Etch");
     expect(loginRoute?.Component).toBeDefined();
   });
 
@@ -15,6 +16,7 @@ describe("app route configuration", () => {
 
     expect(homeRoute).toBeDefined();
     expect(homeRoute?.access).toBe("protected");
+    expect(homeRoute?.title).toBe("Главная — Etch");
     expect(homeRoute?.Component).toBeDefined();
   });
 
@@ -23,6 +25,7 @@ describe("app route configuration", () => {
 
     expect(libraryRoute).toBeDefined();
     expect(libraryRoute?.access).toBe("protected");
+    expect(libraryRoute?.title).toBe("Библиотека — Etch");
     expect(libraryRoute?.Component).toBeDefined();
   });
 
@@ -31,6 +34,7 @@ describe("app route configuration", () => {
 
     expect(deckEditorRoute).toBeDefined();
     expect(deckEditorRoute?.access).toBe("protected");
+    expect(deckEditorRoute?.title).toBe("Редактор колоды — Etch");
     expect(deckEditorRoute?.Component).toBeDefined();
   });
 
@@ -39,7 +43,19 @@ describe("app route configuration", () => {
 
     expect(practiceRoute).toBeDefined();
     expect(practiceRoute?.access).toBe("protected");
+    expect(practiceRoute?.title).toBe("Практика — Etch");
     expect(practiceRoute?.Component).toBeDefined();
+  });
+
+  it("registers the session history as a protected practice route", () => {
+    const historyRoute = appRoutes.find(
+      ({ path }) => path === "/practice/sessions/:session_uuid/history",
+    );
+
+    expect(historyRoute).toBeDefined();
+    expect(historyRoute?.access).toBe("protected");
+    expect(historyRoute?.title).toBe("История сессии — Etch");
+    expect(historyRoute?.Component).toBeDefined();
   });
 
   it("renders unmatched routes as a public 404 page", () => {
@@ -47,6 +63,7 @@ describe("app route configuration", () => {
 
     expect(fallbackRoute).toBeDefined();
     expect(fallbackRoute?.access).toBe("public");
+    expect(fallbackRoute?.title).toBe("Страница не найдена — Etch");
     expect(fallbackRoute?.Component).toBeDefined();
   });
 });

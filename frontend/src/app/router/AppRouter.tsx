@@ -1,9 +1,17 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "../layout/AppShell";
 import { PageLoader } from "../PageLoader";
 import { RouteGuard } from "./RouteGuard";
 import { appRoutes } from "./route-config";
+
+function RouteDocumentTitle({ children, title }: { children: ReactNode; title: string }) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+
+  return children;
+}
 
 function AppRoutes() {
   const protectedRoutes = appRoutes.filter(({ access }) => access === "protected");
@@ -18,18 +26,28 @@ function AppRoutes() {
           </RouteGuard>
         }
       >
-        {protectedRoutes.map(({ Component, path }) => (
-          <Route element={<Component />} key={path} path={path} />
+        {protectedRoutes.map(({ Component, path, title }) => (
+          <Route
+            element={
+              <RouteDocumentTitle title={title}>
+                <Component />
+              </RouteDocumentTitle>
+            }
+            key={path}
+            path={path}
+          />
         ))}
       </Route>
 
-      {standaloneRoutes.map(({ Component, access, path }) => (
+      {standaloneRoutes.map(({ Component, access, path, title }) => (
         <Route
           element={
             <RouteGuard access={access}>
-              <Suspense fallback={<PageLoader tone="dark" />}>
-                <Component />
-              </Suspense>
+              <RouteDocumentTitle title={title}>
+                <Suspense fallback={<PageLoader tone="dark" />}>
+                  <Component />
+                </Suspense>
+              </RouteDocumentTitle>
             </RouteGuard>
           }
           key={path}

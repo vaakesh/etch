@@ -2,11 +2,16 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { isApiError } from "../../api";
 import { getPracticePaginationTokens } from "../../features/practice/model/practice-pagination";
+import { usePracticeDeckAvailability } from "../../features/practice/model/usePracticeDeckAvailability";
 import type {
   CardSide,
   PracticeCard,
+  PracticeHistoryFilter,
+  PracticeHistorySession,
   PracticeSession,
+  TrainingSessionStatus,
 } from "../../features/practice/model/practice-types";
+import { usePracticeHistory } from "../../features/practice/model/usePracticeHistory";
 import {
   usePracticeSession,
   type PracticeCardFeedback,
@@ -26,16 +31,121 @@ import {
 import styles from "./PracticePage.module.css";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const practiceHistoryDateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
+
+type PracticeTextSize = "regular" | "medium" | "compact" | "dense";
+
+function getPracticeTextSize(text: string): PracticeTextSize {
+  const normalizedText = text.trim();
+  const characterCount = Array.from(normalizedText).length;
+  const longestWordLength = normalizedText
+    .split(/\s+/u)
+    .reduce((longestLength, word) => Math.max(longestLength, Array.from(word).length), 0);
+
+  if (characterCount > 110 || longestWordLength > 42) {
+    return "dense";
+  }
+  if (characterCount > 64 || longestWordLength > 28) {
+    return "compact";
+  }
+  if (characterCount > 30 || longestWordLength > 18) {
+    return "medium";
+  }
+
+  return "regular";
+}
+
+const PRACTICE_HISTORY_FILTERS: readonly {
+  value: PracticeHistoryFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "Все" },
+  { value: "completed", label: "Завершённые" },
+  { value: "in_progress", label: "Незавершённые" },
+  { value: "abandoned", label: "Брошенные" },
+];
+
+const PRACTICE_STATUS_LABELS: Readonly<Record<TrainingSessionStatus, string>> = {
+  completed: "Завершена",
+  in_progress: "Не завершена",
+  abandoned: "Брошена",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function ArrowIcon({ direction = "right" }: { direction?: "left" | "right" }) {
+function ChevronIcon({ direction }: { direction: "left" | "right" }) {
   return (
     <svg
       aria-hidden="true"
-      className={direction === "left" ? styles.iconReversed : undefined}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d={direction === "left" ? "m14.5 6-6 6 6 6" : "m9.5 6 6 6-6 6"} />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="m5.5 12.5 4 4 9-9" />
+    </svg>
+  );
+}
+
+function DirectionArrowIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="3"
+      viewBox="0 0 28 20"
+    >
+      <path d="M3 10h21" />
+      <path d="m18 4 6 6-6 6" />
+    </svg>
+  );
+}
+
+function DirectionMark() {
+  return (
+    <span aria-hidden="true" className={styles.directionMark}>
+      <DirectionArrowIcon />
+    </span>
+  );
+}
+
+function DirectionLabel({ from, to }: { from: string; to: string }) {
+  return (
+    <span aria-label={`${from} в ${to}`} className={styles.directionLabel}>
+      <span>{from}</span>
+      <DirectionMark />
+      <span>{to}</span>
+    </span>
+  );
+}
+
+function RepeatIcon() {
+  return (
+    <svg
+      aria-hidden="true"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
@@ -43,22 +153,25 @@ function ArrowIcon({ direction = "right" }: { direction?: "left" | "right" }) {
       strokeWidth="1.8"
       viewBox="0 0 24 24"
     >
-      <path d="M5 12h14M14 7l5 5-5 5" />
+      <path d="M4.5 9A8 8 0 1 1 4 14" />
+      <path d="M4.5 4v5h5" />
     </svg>
   );
 }
 
-function CloseIcon() {
+function HistoryIcon() {
   return (
     <svg
       aria-hidden="true"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
-      strokeWidth="1.8"
+      strokeLinejoin="round"
+      strokeWidth="2.15"
       viewBox="0 0 24 24"
     >
-      <path d="m6 6 12 12M18 6 6 18" />
+      <path d="M5.2 8.5A7.5 7.5 0 1 1 4.7 14" />
+      <path d="M5.2 4.5v4h4M12 8.2v4.2l2.8 1.7" />
     </svg>
   );
 }
@@ -76,29 +189,6 @@ function ResultIcon({ isCorrect }: { isCorrect: boolean }) {
     >
       {isCorrect ? <path d="m5 12 4.2 4.2L19 6.5" /> : <path d="m7 7 10 10M17 7 7 17" />}
     </svg>
-  );
-}
-
-function PracticeHeader({ compact = false }: { compact?: boolean }) {
-  return (
-    <header className={compact ? `${styles.header} ${styles.headerCompact}` : styles.header}>
-      <Link aria-label="На главную" className={styles.brand} to="/">
-        <ArrowIcon direction="left" />
-      </Link>
-
-      <div className={styles.headerMode}>
-        <span>Практика</span>
-      </div>
-
-      <Link
-        aria-label="Выйти из практики в библиотеку"
-        className={styles.closeButton}
-        to="/library"
-      >
-        <span>В библиотеку</span>
-        <CloseIcon />
-      </Link>
-    </header>
   );
 }
 
@@ -120,10 +210,7 @@ function getPracticeErrorMessage(error: unknown, operation: "resume" | "start" |
   if (error.code === "INVALID_PRACTICE_RESPONSE") {
     return "Сервер вернул данные тренировки в неожиданном формате.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к этой колоде.";
-  }
-  if (error.status === 404) {
+  if (error.status === 403 || error.status === 404) {
     return operation === "start"
       ? "Колода не найдена или больше недоступна."
       : "Тренировочная сессия не найдена или больше недоступна.";
@@ -151,21 +238,339 @@ function getPracticeErrorMessage(error: unknown, operation: "resume" | "start" |
   return "Не удалось продолжить тренировку. Попробуйте ещё раз.";
 }
 
-function LandingView() {
+function getPracticeDeckLoadErrorMessage(error: unknown): string {
+  if (isApiError(error) && error.code === "INVALID_PRACTICE_RESPONSE") {
+    return "Сервер вернул данные колоды в неожиданном формате.";
+  }
+
+  return getPracticeErrorMessage(error, "start");
+}
+
+function getPracticeHistoryErrorMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.code === "INVALID_PRACTICE_RESPONSE") {
+      return "Сервер вернул историю тренировок в неожиданном формате.";
+    }
+    if (error.status === 0) {
+      return "Не удалось связаться с сервером. Проверьте подключение.";
+    }
+    if (error.status >= 500) {
+      return "Сервер временно не может загрузить историю тренировок.";
+    }
+  }
+
+  return "Не удалось загрузить историю тренировок.";
+}
+
+function getPracticeHistoryDateFormatter(locale: AppLocale): Intl.DateTimeFormat {
+  const cachedFormatter = practiceHistoryDateFormatters.get(locale);
+  if (cachedFormatter !== undefined) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  practiceHistoryDateFormatters.set(locale, formatter);
+  return formatter;
+}
+
+function formatPracticeHistoryDate(value: string, locale: AppLocale): string {
+  return getPracticeHistoryDateFormatter(locale).format(new Date(value));
+}
+
+function getPracticeAccuracyToneClassName(accuracy: number): string {
+  if (accuracy >= 91) {
+    return styles.historyAccuracyPurple;
+  }
+  if (accuracy >= 81) {
+    return styles.historyAccuracyTurquoise;
+  }
+  if (accuracy >= 71) {
+    return styles.historyAccuracyGreen;
+  }
+  if (accuracy >= 61) {
+    return styles.historyAccuracyYellow;
+  }
+  if (accuracy >= 51) {
+    return styles.historyAccuracyOrange;
+  }
+
+  return styles.historyAccuracyRed;
+}
+
+function SessionAccuracyStat({ accuracy, locale }: { accuracy: number; locale: AppLocale }) {
+  const tooltipId = useId();
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const formattedAccuracy = formatNumber(accuracy, locale);
+  const hintClassName = isTooltipOpen
+    ? `${styles.historyAccuracyHint} ${styles.historyAccuracyHintOpen}`
+    : styles.historyAccuracyHint;
+
   return (
-    <main className={styles.centeredMain}>
-      <section className={`${styles.paperPanel} ${styles.landingPanel}`}>
-        <div aria-hidden="true" className={styles.deckPreview}>
-          <span />
-          <span />
-          <span />
+    <span className={hintClassName}>
+      <span
+        aria-describedby={tooltipId}
+        aria-label="Точность сессии"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={accuracy}
+        aria-valuetext={`${formattedAccuracy}%`}
+        className={`${styles.historyAccuracy} ${getPracticeAccuracyToneClassName(accuracy)}`}
+        onBlur={() => setIsTooltipOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setIsTooltipOpen(false);
+            event.currentTarget.blur();
+          } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        onPointerDown={(event) => {
+          if (event.button === 0) {
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        role="meter"
+        tabIndex={0}
+      >
+        {formattedAccuracy}
+      </span>
+      <span className={styles.historyAccuracyTooltip} id={tooltipId} role="tooltip">
+        <strong>Точность сессии</strong>
+        <span>Правильных ответов — {formattedAccuracy}%</span>
+      </span>
+    </span>
+  );
+}
+
+function PracticeHistoryCard({
+  isActionDisabled,
+  isRepeating,
+  locale,
+  onContinue,
+  onRepeat,
+  session,
+}: {
+  isActionDisabled: boolean;
+  isRepeating: boolean;
+  locale: AppLocale;
+  onContinue: (session: PracticeHistorySession) => void;
+  onRepeat: (session: PracticeHistorySession) => void;
+  session: PracticeHistorySession;
+}) {
+  const canContinue = session.status === "in_progress";
+  const canViewHistory = session.status === "completed" || session.status === "abandoned";
+  const accuracy =
+    session.actualCount === 0
+      ? 0
+      : Math.min(100, Math.round((session.correctCount / session.actualCount) * 100));
+
+  return (
+    <article className={styles.historyCard}>
+      <header className={styles.historyCardHeader}>
+        <time dateTime={session.startedAt}>
+          {formatPracticeHistoryDate(session.startedAt, locale)}
+        </time>
+        <span className={styles[`historyStatus_${session.status}`]}>
+          {PRACTICE_STATUS_LABELS[session.status]}
+        </span>
+      </header>
+
+      <div className={styles.historyDirection}>
+        <strong>
+          {session.promptSide === "front" ? (
+            <DirectionLabel from="Перевод" to="слово" />
+          ) : (
+            <DirectionLabel from="Слово" to="перевод" />
+          )}
+        </strong>
+        <span>
+          {formatNumber(session.actualCount, locale)} /{" "}
+          {formatNumber(session.requestedCount, locale)}
+          &nbsp;карточек
+        </span>
+      </div>
+
+      <dl className={styles.historyStats}>
+        <div>
+          <dt>Верно</dt>
+          <dd>{formatNumber(session.correctCount, locale)}</dd>
         </div>
-        <h1>Сначала выберите колоду</h1>
-        <p>Откройте библиотеку и выберите колоду.</p>
-        <Link className={styles.primaryAction} to="/library">
-          Выбрать колоду
-          <ArrowIcon />
-        </Link>
+        <div>
+          <dt>Ошибки</dt>
+          <dd>{formatNumber(session.wrongCount, locale)}</dd>
+        </div>
+      </dl>
+
+      <SessionAccuracyStat accuracy={accuracy} locale={locale} />
+
+      <div
+        className={
+          canViewHistory
+            ? styles.historyCardActions
+            : `${styles.historyCardActions} ${styles.historyCardActionsSingle}`
+        }
+      >
+        {canViewHistory ? (
+          <Link
+            aria-label="Открыть историю сессии"
+            className={styles.historyDetailsButton}
+            title="История сессии"
+            to={`/practice/sessions/${session.uuid}/history`}
+          >
+            <HistoryIcon />
+          </Link>
+        ) : null}
+        <button
+          className={
+            canContinue
+              ? styles.historyRepeatButton
+              : `${styles.historyRepeatButton} ${styles.historyRepeatButtonAccent}`
+          }
+          disabled={isActionDisabled}
+          onClick={() => (canContinue ? onContinue(session) : onRepeat(session))}
+          type="button"
+        >
+          {isRepeating ? <span className={styles.buttonSpinner} /> : null}
+          {isRepeating ? "Запускаем…" : canContinue ? "Продолжить" : "Повторить"}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PracticeHistoryView({
+  onContinue,
+  onRepeat,
+  startError,
+}: {
+  onContinue: (session: PracticeHistorySession) => void;
+  onRepeat: (session: PracticeHistorySession) => Promise<void>;
+  startError: unknown | null;
+}) {
+  const { locale } = useLocale();
+  const [activeFilter, setActiveFilter] = useState<PracticeHistoryFilter>("all");
+  const history = usePracticeHistory(activeFilter);
+  const [repeatingSessionUuid, setRepeatingSessionUuid] = useState<string | null>(null);
+
+  const sessions = history.state.status === "ready" ? history.state.sessions : [];
+
+  const handleRepeat = async (session: PracticeHistorySession) => {
+    if (repeatingSessionUuid !== null) {
+      return;
+    }
+
+    setRepeatingSessionUuid(session.uuid);
+    try {
+      await onRepeat(session);
+    } finally {
+      setRepeatingSessionUuid(null);
+    }
+  };
+
+  let historyContent;
+  if (history.state.status === "loading") {
+    historyContent = (
+      <div
+        aria-label="Загружаем историю тренировок"
+        className={styles.historySkeletons}
+        role="status"
+      >
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  } else if (history.state.status === "error") {
+    historyContent = (
+      <div className={styles.historyMessage} role="alert">
+        <strong>История пока недоступна</strong>
+        <p>{getPracticeHistoryErrorMessage(history.state.error)}</p>
+        <button className={styles.secondaryAction} onClick={history.retry} type="button">
+          Попробовать снова
+        </button>
+      </div>
+    );
+  } else if (sessions.length === 0) {
+    historyContent = (
+      <div className={styles.historyMessage}>
+        <div aria-hidden="true" className={styles.historyEmptyVisual}>
+          <span>Aa</span>
+          <span>Бб</span>
+        </div>
+        <strong>
+          {activeFilter === "all" ? "Здесь появятся ваши тренировки" : "Таких сессий пока нет"}
+        </strong>
+        {activeFilter === "all" ? (
+          <Link className={styles.primaryAction} to="/library">
+            Выбрать колоду
+          </Link>
+        ) : null}
+      </div>
+    );
+  } else {
+    historyContent = (
+      <div className={styles.historyGrid}>
+        {sessions.map((session) => (
+          <PracticeHistoryCard
+            isActionDisabled={repeatingSessionUuid !== null}
+            isRepeating={repeatingSessionUuid === session.uuid}
+            key={session.uuid}
+            locale={locale}
+            onContinue={onContinue}
+            onRepeat={(selectedSession) => void handleRepeat(selectedSession)}
+            session={session}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <main className={styles.historyMain}>
+      <section className={styles.historyPanel}>
+        <header className={styles.historyIntro}>
+          <div>
+            <h1>Тренировочные сессии</h1>
+            <p>Продолжайте в своём темпе или повторите знакомую колоду.</p>
+          </div>
+          <Link className={styles.primaryAction} to="/library">
+            Новая сессия
+          </Link>
+        </header>
+
+        <div aria-label="Фильтр тренировочных сессий" className={styles.historyFilters}>
+          {PRACTICE_HISTORY_FILTERS.map((filter) => (
+            <button
+              aria-pressed={activeFilter === filter.value}
+              className={
+                activeFilter === filter.value
+                  ? `${styles.historyFilter} ${styles.historyFilterActive}`
+                  : styles.historyFilter
+              }
+              key={filter.value}
+              onClick={() => setActiveFilter(filter.value)}
+              type="button"
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        {startError === null ? null : (
+          <p className={styles.historyStartError} role="alert">
+            {getPracticeErrorMessage(startError, "start")}
+          </p>
+        )}
+
+        <div aria-live="polite" className={styles.historyContent}>
+          {historyContent}
+        </div>
       </section>
     </main>
   );
@@ -179,7 +584,6 @@ interface SetupViewProps {
 
 export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewProps) {
   const [promptSide, setPromptSide] = useState<CardSide>("front");
-  const promptSideHintId = useId();
   const isStarting = practice.state.status === "loading" && practice.state.operation === "start";
   const startError =
     practice.state.status === "error" && practice.state.operation === "start"
@@ -196,74 +600,110 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
   return (
     <main className={styles.centeredMain}>
       <section aria-busy={isStarting} className={styles.setupPanel}>
-        <div className={styles.setupHeading}>
-          <div aria-hidden="true" className={styles.setupLetters}>
-            <span>A</span>
-            <span>B</span>
+        <header className={styles.setupIntro}>
+          <h1>Настройка сессии</h1>
+        </header>
+
+        <div className={styles.setupWorkspace}>
+          <div className={styles.settingsCard}>
+            <fieldset className={styles.settingGroup} disabled={isStarting}>
+              <legend>Направление</legend>
+              <div className={styles.sideOptions} data-active={promptSide}>
+                <span aria-hidden="true" className={styles.sideOptionThumb} />
+                <label
+                  className={
+                    promptSide === "front"
+                      ? `${styles.sideOption} ${styles.sideOptionSelected}`
+                      : styles.sideOption
+                  }
+                >
+                  <input
+                    checked={promptSide === "front"}
+                    name="prompt_side"
+                    onChange={() => setPromptSide("front")}
+                    type="radio"
+                    value="front"
+                  />
+                  <DirectionLabel from="Перевод" to="слово" />
+                </label>
+
+                <label
+                  className={
+                    promptSide === "back"
+                      ? `${styles.sideOption} ${styles.sideOptionSelected}`
+                      : styles.sideOption
+                  }
+                >
+                  <input
+                    checked={promptSide === "back"}
+                    name="prompt_side"
+                    onChange={() => setPromptSide("back")}
+                    type="radio"
+                    value="back"
+                  />
+                  <DirectionLabel from="Слово" to="перевод" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className={`${styles.settingGroup} ${styles.scopeGroup}`}>
+              <legend>Объём</legend>
+              <div className={styles.scopeOptions}>
+                <label className={`${styles.scopeOption} ${styles.scopeOptionSelected}`}>
+                  <input checked name="session_scope" readOnly type="radio" value="all" />
+                  <span>Вся колода</span>
+                </label>
+                <label className={styles.scopeOption}>
+                  <input disabled name="session_scope" type="radio" value="50" />
+                  <span>50 карточек</span>
+                </label>
+                <label className={styles.scopeOption}>
+                  <input disabled name="session_scope" type="radio" value="100" />
+                  <span>100 карточек</span>
+                </label>
+                <label className={`${styles.scopeOption} ${styles.customScopeOption}`}>
+                  <input disabled name="session_scope" type="radio" value="custom" />
+                  <span>Своё значение</span>
+                  <input
+                    aria-label="Количество карточек"
+                    className={styles.scopeInput}
+                    disabled
+                    min="1"
+                    placeholder="—"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </fieldset>
           </div>
-          <h1>Как будем тренироваться?</h1>
+
+          <section aria-atomic="true" aria-live="polite" className={styles.setupPreview}>
+            <h2>Пример</h2>
+
+            <div className={styles.previewCard}>
+              <div className={styles.previewStage}>
+                <span className={styles.previewLabel}>Вы увидите</span>
+                <strong className={styles.previewWord}>
+                  {promptSide === "front" ? "язык" : "language"}
+                </strong>
+              </div>
+
+              <div aria-hidden="true" className={styles.previewFlow}>
+                <DirectionMark />
+              </div>
+
+              <div className={`${styles.previewStage} ${styles.previewAnswer}`}>
+                <span className={styles.previewLabel}>Вы напечатаете</span>
+                <div className={styles.previewInput}>
+                  <span>{promptSide === "front" ? "language" : "язык"}</span>
+                  <i aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className={styles.setupControls}>
-          <fieldset
-            aria-describedby={promptSideHintId}
-            className={styles.optionGroup}
-            disabled={isStarting}
-          >
-            <legend>Что показывать сначала?</legend>
-            <div className={styles.sideOptions}>
-              <label
-                className={
-                  promptSide === "front"
-                    ? `${styles.sideOption} ${styles.sideOptionSelected}`
-                    : styles.sideOption
-                }
-              >
-                <input
-                  checked={promptSide === "front"}
-                  name="prompt_side"
-                  onChange={() => setPromptSide("front")}
-                  type="radio"
-                  value="front"
-                />
-                <span className={styles.optionCopy}>
-                  <strong>Слово → перевод</strong>
-                  <small>Показываем исходное слово — вы вводите перевод</small>
-                </span>
-                <span aria-hidden="true" className={styles.optionCheck} />
-              </label>
-
-              <label
-                className={
-                  promptSide === "back"
-                    ? `${styles.sideOption} ${styles.sideOptionSelected}`
-                    : styles.sideOption
-                }
-              >
-                <input
-                  checked={promptSide === "back"}
-                  name="prompt_side"
-                  onChange={() => setPromptSide("back")}
-                  type="radio"
-                  value="back"
-                />
-                <span className={styles.optionCopy}>
-                  <strong>Перевод → слово</strong>
-                  <small>Показываем перевод — вы вводите исходное слово</small>
-                </span>
-                <span aria-hidden="true" className={styles.optionCheck} />
-              </label>
-            </div>
-            <p className={styles.visuallyHidden} id={promptSideHintId}>
-              Направление можно будет изменить перед следующей сессией.
-            </p>
-          </fieldset>
-
-          <div aria-label="Количество карточек" className={styles.sessionScope}>
-            <span>Объём</span>
-            <strong>Вся колода</strong>
-          </div>
-
+        <div className={styles.setupBottom}>
           {startError === null ? null : (
             <p className={styles.inlineError} role="alert">
               {getPracticeErrorMessage(startError, "start")}
@@ -282,7 +722,6 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
             >
               {isStarting ? <span className={styles.buttonSpinner} /> : null}
               {isStarting ? "Готовим…" : "Начать"}
-              {isStarting ? null : <ArrowIcon />}
             </button>
           </div>
         </div>
@@ -291,16 +730,18 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
   );
 }
 
-function SessionLoadingView() {
+function SessionLoadingView({
+  ariaLabel = "Загружаем тренировочную сессию",
+  message = "Загружаем…",
+}: {
+  ariaLabel?: string;
+  message?: string;
+}) {
   return (
     <main className={styles.sessionMain}>
-      <div
-        aria-label="Загружаем тренировочную сессию"
-        className={styles.sessionLoader}
-        role="status"
-      >
+      <div aria-label={ariaLabel} className={styles.sessionLoader} role="status">
         <span className={styles.loaderCore} />
-        <p>Загружаем…</p>
+        <p>{message}</p>
       </div>
     </main>
   );
@@ -308,20 +749,68 @@ function SessionLoadingView() {
 
 function SessionErrorView({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   const isFinishedSession = isApiError(error) && error.status === 409;
+  const isMissingSession = isApiError(error) && (error.status === 403 || error.status === 404);
+  const isInvalidSessionLink = isApiError(error) && error.status === 422;
+  const canRetry = !isFinishedSession && !isMissingSession && !isInvalidSessionLink;
+  const title = isMissingSession
+    ? "Тренировка не найдена"
+    : isFinishedSession
+      ? "Тренировка завершена"
+      : isInvalidSessionLink
+        ? "Некорректная ссылка"
+        : "Не получилось продолжить";
 
   return (
     <main className={styles.centeredMain}>
       <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
-        <h1>Не получилось продолжить</h1>
+        <h1>{title}</h1>
         <p>{getPracticeErrorMessage(error, "resume")}</p>
         <div className={styles.errorActions}>
-          {isFinishedSession ? null : (
+          {canRetry ? (
             <button className={styles.primaryAction} onClick={onRetry} type="button">
               Попробовать снова
             </button>
-          )}
+          ) : null}
           <Link className={styles.secondaryAction} to="/library">
             {isFinishedSession ? "Выбрать новую тренировку" : "В библиотеку"}
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PracticeDeckNotFoundView() {
+  return (
+    <main className={styles.centeredMain}>
+      <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
+        <h1>Колода не найдена</h1>
+        <p>Возможно, она была удалена или ссылка больше недоступна.</p>
+        <div className={styles.errorActions}>
+          <Link className={styles.primaryAction} to="/library">
+            Выбрать другую колоду
+          </Link>
+          <Link className={styles.secondaryAction} to="/">
+            На главную
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PracticeDeckLoadErrorView({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  return (
+    <main className={styles.centeredMain}>
+      <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
+        <h1>Не удалось открыть колоду</h1>
+        <p>{getPracticeDeckLoadErrorMessage(error)}</p>
+        <div className={styles.errorActions}>
+          <button className={styles.primaryAction} onClick={onRetry} type="button">
+            Попробовать снова
+          </button>
+          <Link className={styles.secondaryAction} to="/library">
+            В библиотеку
           </Link>
         </div>
       </section>
@@ -479,8 +968,8 @@ export function PracticeCompletionView({ summary }: CompletionViewProps) {
 
         <div className={styles.completionActions}>
           <Link className={styles.primaryAction} to={`/practice?deck=${summary.deckUuid}`}>
+            <RepeatIcon />
             Ещё раз
-            <ArrowIcon />
           </Link>
           <Link className={styles.secondaryAction} to="/library">
             В библиотеку
@@ -568,7 +1057,7 @@ function CardPagination({
         onClick={() => previousSequenceNumber !== undefined && onSelect(previousSequenceNumber)}
         type="button"
       >
-        <ArrowIcon direction="left" />
+        <ChevronIcon direction="left" />
       </button>
 
       <div className={styles.pageNumbers}>
@@ -592,6 +1081,8 @@ function CardPagination({
               : feedback.isCorrect
                 ? styles.pageNumberCorrect
                 : styles.pageNumberWrong;
+          const feedbackLabel =
+            feedback === undefined ? null : feedback.isCorrect ? "Верный ответ" : "Неверный ответ";
           const className = [
             styles.pageNumber,
             token.isCurrent ? styles.pageNumberCurrent : "",
@@ -603,7 +1094,9 @@ function CardPagination({
           return (
             <button
               aria-current={token.isCurrent ? "page" : undefined}
-              aria-label={token.ariaLabel}
+              aria-label={
+                feedbackLabel === null ? token.ariaLabel : `${token.ariaLabel}. ${feedbackLabel}`
+              }
               className={className}
               disabled={isDisabled}
               key={token.key}
@@ -611,11 +1104,6 @@ function CardPagination({
               type="button"
             >
               {token.label}
-              {feedback === undefined ? null : (
-                <span className={styles.pageNumberStatus}>
-                  <ResultIcon isCorrect={feedback.isCorrect} />
-                </span>
-              )}
             </button>
           );
         })}
@@ -628,7 +1116,7 @@ function CardPagination({
         onClick={() => nextSequenceNumber !== undefined && onSelect(nextSequenceNumber)}
         type="button"
       >
-        <ArrowIcon />
+        <ChevronIcon direction="right" />
       </button>
     </nav>
   );
@@ -664,6 +1152,7 @@ function AnswerArea({
   value,
 }: AnswerAreaProps) {
   const inputId = useId();
+  const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -677,6 +1166,32 @@ function AnswerArea({
       continueButtonRef.current?.focus();
     }
   }, [feedback]);
+
+  useEffect(() => {
+    const input = answerInputRef.current;
+    if (input === null) {
+      return;
+    }
+
+    const resizeInput = (): void => {
+      const maximumHeight = 156;
+      input.style.height = "0px";
+      const nextHeight = Math.min(Math.max(input.scrollHeight, 54), maximumHeight);
+      input.style.height = `${nextHeight}px`;
+      input.style.overflowY = input.scrollHeight > maximumHeight ? "auto" : "hidden";
+    };
+
+    resizeInput();
+    window.addEventListener("resize", resizeInput);
+    return () => window.removeEventListener("resize", resizeInput);
+  }, [value]);
+
+  const feedbackText =
+    feedback === undefined
+      ? null
+      : feedback.isCorrect
+        ? feedback.answerText
+        : `Правильный ответ: ${feedback.answerText}`;
 
   const liveMessage =
     feedback === undefined
@@ -701,10 +1216,11 @@ function AnswerArea({
           </span>
           <div className={styles.feedbackCopy}>
             <strong>{feedback.isCorrect ? "Верно" : "Не совсем"}</strong>
-            <span>
-              {feedback.isCorrect
-                ? feedback.answerText
-                : `Правильный ответ: ${feedback.answerText}`}
+            <span
+              className={styles.feedbackAnswer}
+              data-text-size={getPracticeTextSize(feedbackText ?? "")}
+            >
+              {feedbackText}
             </span>
           </div>
           <button
@@ -714,7 +1230,6 @@ function AnswerArea({
             type="button"
           >
             {isFinished || nextSequenceNumber === null ? "Результат" : "Дальше"}
-            <ArrowIcon />
           </button>
         </div>
       </div>
@@ -731,15 +1246,24 @@ function AnswerArea({
           Ваш ответ
         </label>
         <div className={styles.answerControls}>
-          <input
+          <textarea
             autoComplete="off"
             autoFocus
             disabled={isSubmitting}
             id={inputId}
             lang={card.answerLanguage}
             onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                if (!isSubmitting && value.trim()) {
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }
+            }}
             placeholder="Ваш ответ"
-            type="text"
+            ref={answerInputRef}
+            rows={1}
             value={value}
           />
           <button
@@ -748,7 +1272,7 @@ function AnswerArea({
             disabled={isSubmitting || !value.trim()}
             type="submit"
           >
-            {isSubmitting ? <span className={styles.buttonSpinner} /> : <ArrowIcon />}
+            {isSubmitting ? <span className={styles.buttonSpinner} /> : <CheckIcon />}
           </button>
         </div>
         <div className={styles.answerMeta}>
@@ -829,13 +1353,17 @@ export function ActivePracticeSessionView({ onComplete, onSubmit, state }: Activ
               className={styles.languageFlow}
             >
               <span>{formatLanguage(selectedCard.promptLanguage, locale)}</span>
-              <ArrowIcon />
+              <DirectionMark />
               <span>{formatLanguage(selectedCard.answerLanguage, locale)}</span>
             </span>
           </div>
 
           <div className={styles.promptArea}>
-            <h1 id="practice-prompt" lang={selectedCard.promptLanguage}>
+            <h1
+              data-text-size={getPracticeTextSize(selectedCard.promptText)}
+              id="practice-prompt"
+              lang={selectedCard.promptLanguage}
+            >
               {selectedCard.promptText}
             </h1>
           </div>
@@ -912,6 +1440,7 @@ export function PracticePage() {
       : null;
   const completionSummary = readCompletionSummary(location.state);
   const practice = usePracticeSession(sessionUuid, deckUuid);
+  const practiceDeck = usePracticeDeckAvailability(deckUuid);
   const isActiveSession = sessionQuery !== null;
 
   useEffect(() => {
@@ -954,7 +1483,13 @@ export function PracticePage() {
     content = <InvalidPracticeLinkView />;
   } else if (sessionQuery !== null) {
     if (practice.state.status === "ready" && practice.state.session.uuid === sessionUuid) {
-      content = (
+      const terminalSubmitError = practice.state.submitError?.error;
+      const isMissingSessionAfterSubmit =
+        isApiError(terminalSubmitError) &&
+        (terminalSubmitError.status === 403 || terminalSubmitError.status === 404);
+      content = isMissingSessionAfterSubmit ? (
+        <SessionErrorView error={terminalSubmitError} onRetry={practice.retryResume} />
+      ) : (
         <ActivePracticeSessionView
           key={practice.state.session.uuid}
           onComplete={(summary) => {
@@ -979,25 +1514,66 @@ export function PracticePage() {
       content = <SessionLoadingView />;
     }
   } else if (deckUuid !== null) {
-    content = (
-      <PracticeSetupView
-        deckUuid={deckUuid}
-        onStarted={(session) => {
-          setSearchParams({ session: session.uuid }, { replace: true });
-        }}
-        practice={practice}
-      />
-    );
+    const startResourceError =
+      practice.state.status === "error" &&
+      practice.state.operation === "start" &&
+      isApiError(practice.state.error) &&
+      (practice.state.error.status === 403 || practice.state.error.status === 404);
+    const availabilityStateMatches =
+      practiceDeck.state.status !== "idle" && practiceDeck.state.deckUuid === deckUuid;
+
+    if (startResourceError) {
+      content = <PracticeDeckNotFoundView />;
+    } else if (!availabilityStateMatches || practiceDeck.state.status === "loading") {
+      content = (
+        <SessionLoadingView ariaLabel="Проверяем доступность колоды" message="Проверяем колоду…" />
+      );
+    } else if (practiceDeck.state.status === "error") {
+      const isMissingDeck =
+        isApiError(practiceDeck.state.error) &&
+        (practiceDeck.state.error.status === 403 || practiceDeck.state.error.status === 404);
+      content = isMissingDeck ? (
+        <PracticeDeckNotFoundView />
+      ) : (
+        <PracticeDeckLoadErrorView error={practiceDeck.state.error} onRetry={practiceDeck.retry} />
+      );
+    } else {
+      content = (
+        <PracticeSetupView
+          deckUuid={deckUuid}
+          onStarted={(session) => {
+            setSearchParams({ session: session.uuid }, { replace: true });
+          }}
+          practice={practice}
+        />
+      );
+    }
   } else if (completionSummary !== null) {
     content = <PracticeCompletionView summary={completionSummary} />;
   } else {
-    content = <LandingView />;
+    const historyStartError =
+      practice.state.status === "error" && practice.state.operation === "start"
+        ? practice.state.error
+        : null;
+    content = (
+      <PracticeHistoryView
+        onContinue={(historySession) => {
+          setSearchParams({ session: historySession.uuid }, { replace: true });
+        }}
+        onRepeat={async (historySession) => {
+          const session = await practice.start(historySession.deckUuid, historySession.promptSide);
+          if (session !== null) {
+            setSearchParams({ session: session.uuid }, { replace: true });
+          }
+        }}
+        startError={historyStartError}
+      />
+    );
   }
 
   return (
     <div className={styles.page} data-practice-mode={isActiveSession ? "session" : "setup"}>
       <AmbientBackground />
-      <PracticeHeader compact={isActiveSession} />
       {content}
     </div>
   );

@@ -1,8 +1,8 @@
 """add models
 
-Revision ID: a902184ebb69
+Revision ID: f7ec0cd826fd
 Revises: 
-Create Date: 2026-08-01 14:34:51.236198
+Create Date: 2026-08-04 15:43:22.793291
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a902184ebb69'
+revision: str = 'f7ec0cd826fd'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -40,8 +40,8 @@ def upgrade() -> None:
     sa.Column('user_id', sa.BigInteger(), nullable=False),
     sa.Column('front_text', sa.String(length=255), nullable=False),
     sa.Column('back_text', sa.String(length=255), nullable=False),
-    sa.Column('source_lang', sa.String(length=3), server_default='ru', nullable=False),
-    sa.Column('target_lang', sa.String(length=3), server_default='en', nullable=False),
+    sa.Column('front_lang', sa.String(length=3), server_default='ru', nullable=False),
+    sa.Column('back_lang', sa.String(length=3), server_default='en', nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
@@ -52,7 +52,7 @@ def upgrade() -> None:
     op.create_table('decks',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
-    sa.Column('user_id', sa.BigInteger(), nullable=True),
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
     sa.Column('source_deck_id', sa.BigInteger(), nullable=True),
     sa.Column('title', sa.String(length=150), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
@@ -110,6 +110,7 @@ def upgrade() -> None:
     sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
     sa.Column('user_id', sa.BigInteger(), nullable=False),
     sa.Column('deck_id', sa.BigInteger(), nullable=False),
+    sa.Column('status', sa.Enum('in_progress', 'completed', 'abandoned', name='training_session_status', native_enum=False, create_constraint=True), server_default='in_progress', nullable=False),
     sa.Column('requested_count', sa.Integer(), nullable=False),
     sa.Column('actual_count', sa.Integer(), server_default='0', nullable=False),
     sa.Column('correct_count', sa.Integer(), server_default='0', nullable=False),
@@ -124,6 +125,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_training_sessions_deck_id'), 'training_sessions', ['deck_id'], unique=False)
+    op.create_index(op.f('ix_training_sessions_status'), 'training_sessions', ['status'], unique=False)
     op.create_index(op.f('ix_training_sessions_user_id'), 'training_sessions', ['user_id'], unique=False)
     op.create_index(op.f('ix_training_sessions_uuid'), 'training_sessions', ['uuid'], unique=True)
     op.create_table('user_decks',
@@ -176,6 +178,7 @@ def downgrade() -> None:
     op.drop_table('user_decks')
     op.drop_index(op.f('ix_training_sessions_uuid'), table_name='training_sessions')
     op.drop_index(op.f('ix_training_sessions_user_id'), table_name='training_sessions')
+    op.drop_index(op.f('ix_training_sessions_status'), table_name='training_sessions')
     op.drop_index(op.f('ix_training_sessions_deck_id'), table_name='training_sessions')
     op.drop_table('training_sessions')
     op.drop_index(op.f('ix_deck_cards_uuid'), table_name='deck_cards')

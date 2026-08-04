@@ -1,4 +1,5 @@
-export { LocaleProvider, useLocale } from "./LocaleProvider";
+export { LocaleProvider } from "./LocaleProvider";
+export { useLocale } from "./useLocale";
 export {
   CARD_COUNT_FORMS,
   CARDS_LOADED_COUNT_FORMS,

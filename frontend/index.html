@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta id="theme-color" name="theme-color" content="#0f1116" />
+    <meta id="theme-color" name="theme-color" content="#c3b8f5" />
     <script>
       const usesLightBootPalette =
         window.location.pathname === "/" ||
@@ -18,9 +18,9 @@
     </script>
     <style>
       :root {
-        --loader-background: #0f1116;
-        --loader-track: rgb(242 233 218 / 14%);
-        --loader-accent: #2a6f6b;
+        --loader-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
+        --loader-track: rgb(73 56 115 / 14%);
+        --loader-accent: #493873;
       }
 
       :root[data-boot-palette="light"] {
@@ -84,13 +84,14 @@
       name="description"
       content="Etch — спокойное пространство для изучения и запоминания слов."
     />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:wght@500;600;700&amp;display=swap"
       rel="stylesheet"
     />
-    <title>Вход — Etch</title>
+    <title>Etch</title>
   </head>
   <body>
     <div aria-label="Загрузка страницы" class="page-loader" id="boot-loader" role="status">

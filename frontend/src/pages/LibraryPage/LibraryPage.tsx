@@ -28,6 +28,7 @@ import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { DeckDeleteDialog } from "./DeckDeleteDialog";
 import styles from "./LibraryPage.module.css";
+import { OverflowingCardText } from "./OverflowingCardText";
 
 type LibraryView = "decks" | "cards";
 
@@ -128,10 +129,7 @@ function getCardDeleteErrorMessage(error: unknown): string {
 
 function getFavouriteErrorMessage(error: unknown): string {
   if (isApiError(error)) {
-    if (error.status === 403) {
-      return "Нет доступа к изменению этой колоды.";
-    }
-    if (error.status === 404) {
+    if (error.status === 403 || error.status === 404) {
       return "Колода больше не найдена.";
     }
   }
@@ -143,10 +141,7 @@ function getDeckDeleteErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
     return "Не удалось удалить колоду. Попробуйте ещё раз.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к удалению этой колоды.";
-  }
-  if (error.status === 404) {
+  if (error.status === 403 || error.status === 404) {
     return "Колода уже удалена или больше не существует.";
   }
   if (error.status === 0) {
@@ -406,15 +401,21 @@ function DeckCard({
             {previewCards.map((card) => (
               <li data-card-uuid={card.uuid} key={card.uuid}>
                 <span className={styles.previewAccent} />
-                <span className={styles.previewFront} lang={card.sourceLang} title={card.frontText}>
-                  {card.frontText}
-                </span>
+                <OverflowingCardText
+                  className={styles.previewFront}
+                  label="Перевод"
+                  language={card.frontLang}
+                  text={card.frontText}
+                />
                 <span aria-hidden="true" className={styles.previewDivider}>
                   —
                 </span>
-                <span className={styles.previewBack} lang={card.targetLang} title={card.backText}>
-                  {card.backText}
-                </span>
+                <OverflowingCardText
+                  className={styles.previewBack}
+                  label="Слово"
+                  language={card.backLang}
+                  text={card.backText}
+                />
               </li>
             ))}
             {previewCards.length === 1 ? (
@@ -426,7 +427,7 @@ function DeckCard({
                     : `${styles.previewPlaceholder} ${styles.previewPlaceholderEnd}`
                 }
               >
-                <span>{hasMoreCards ? "•••" : "× Больше нет"}</span>
+                <span>{hasMoreCards ? "•••" : "Все карточки показаны"}</span>
               </li>
             ) : null}
           </ul>
@@ -446,7 +447,7 @@ function DeckCard({
               : styles.previewContinuation
           }
         >
-          <span>{hasMoreCards ? "•••" : "× Больше нет"}</span>
+          <span>{hasMoreCards ? "•••" : "Все карточки показаны"}</span>
         </div>
       </section>
 
@@ -688,75 +689,6 @@ interface LibraryCardRowProps {
   onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
 }
 
-interface OverflowingCardTextProps {
-  className: string;
-  label: string;
-  language: string;
-  text: string;
-}
-
-function OverflowingCardText({ className, label, language, text }: OverflowingCardTextProps) {
-  const textRef = useRef<HTMLParagraphElement | null>(null);
-  const tooltipId = useId();
-  const [isOverflowing, setIsOverflowing] = useState(false);
-
-  useEffect(() => {
-    const element = textRef.current;
-
-    if (element === null) {
-      return;
-    }
-
-    const updateOverflow = (): void => {
-      const nextIsOverflowing =
-        element.scrollHeight > element.clientHeight + 1 ||
-        element.scrollWidth > element.clientWidth + 1;
-
-      setIsOverflowing((currentValue) =>
-        currentValue === nextIsOverflowing ? currentValue : nextIsOverflowing,
-      );
-    };
-
-    updateOverflow();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateOverflow);
-      return () => window.removeEventListener("resize", updateOverflow);
-    }
-
-    const observer = new ResizeObserver(updateOverflow);
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, [text]);
-
-  return (
-    <div className={styles.cardTextOverflow}>
-      <p
-        aria-describedby={isOverflowing ? tooltipId : undefined}
-        className={className}
-        data-overflowing={isOverflowing}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.currentTarget.blur();
-          }
-        }}
-        ref={textRef}
-        tabIndex={isOverflowing ? 0 : undefined}
-      >
-        <span className={styles.visuallyHidden}>{label}: </span>
-        <span lang={language}>{text}</span>
-      </p>
-      {isOverflowing ? (
-        <span className={styles.cardTextTooltip} id={tooltipId} role="tooltip">
-          <span className={styles.cardTextTooltipLabel}>Полный текст</span>
-          <span lang={language}>{text}</span>
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
 function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCardRowProps) {
   const isMountedRef = useRef(true);
   const deleteInFlightRef = useRef(false);
@@ -802,24 +734,24 @@ function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCar
   return (
     <li aria-busy={isDeleting} className={cardRowClassName} data-card-uuid={card.uuid}>
       <div className={`${styles.cardFace} ${styles.cardFaceSource}`}>
-        <span className={styles.languageBadge}>{card.targetLang.toUpperCase()}</span>
+        <span className={styles.languageBadge}>{card.backLang.toUpperCase()}</span>
         <div className={styles.cardFaceCopy}>
           <OverflowingCardText
             className={styles.cardWord}
             label="Слово"
-            language={card.targetLang}
+            language={card.backLang}
             text={card.backText}
           />
         </div>
       </div>
 
       <div className={`${styles.cardFace} ${styles.cardFaceTarget}`}>
-        <span className={styles.languageBadge}>{card.sourceLang.toUpperCase()}</span>
+        <span className={styles.languageBadge}>{card.frontLang.toUpperCase()}</span>
         <div className={styles.cardFaceCopy}>
           <OverflowingCardText
             className={styles.cardTranslation}
             label="Перевод"
-            language={card.sourceLang}
+            language={card.frontLang}
             text={card.frontText}
           />
         </div>
@@ -1071,26 +1003,32 @@ export function LibraryPage() {
   const { locale } = useLocale();
   const currentUserUuid = user?.uuid ?? null;
   const openDeckCreatorFromNavigation = shouldOpenDeckCreator(location.state);
-  const cachedUiStateAtMountRef = useRef(
-    cachedLibraryUiState?.currentUserUuid === currentUserUuid ? cachedLibraryUiState : null,
-  );
+  const cachedUiStateAtMount =
+    cachedLibraryUiState?.currentUserUuid === currentUserUuid ? cachedLibraryUiState : null;
   const [activeView, setActiveView] = useState<LibraryView>(
-    cachedUiStateAtMountRef.current?.activeView ?? "decks",
+    cachedUiStateAtMount?.activeView ?? "decks",
   );
   const [hasOpenedCards, setHasOpenedCards] = useState(
-    cachedUiStateAtMountRef.current?.hasOpenedCards ?? false,
+    cachedUiStateAtMount?.hasOpenedCards ?? false,
   );
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(openDeckCreatorFromNavigation);
   const [useCompactDeckLoading, setUseCompactDeckLoading] = useState(false);
-  const library = useLibraryDecks(currentUserUuid);
+  const [deckSearchQuery, setDeckSearchQuery] = useState("");
+  const [cardAssignedNoticeKey, setCardAssignedNoticeKey] = useState<number | null>(null);
+  const cardAssignedNoticeSequenceRef = useRef(0);
+  const cardAssignedNoticeTimeoutRef = useRef<number | null>(null);
+  const isDeckSearchActive = deckSearchQuery.trim().length > 0;
+  const library = useLibraryDecks(currentUserUuid, deckSearchQuery);
   const cardLibrary = useLibraryCards({
     enabled: hasOpenedCards,
     onDeleteSuccess: library.retry,
   });
   const loadedDeckCount = localizeCount(
     library.decks.length,
-    library.onlyFavourites ? FAVOURITE_DECKS_LOADED_COUNT_FORMS : DECKS_LOADED_COUNT_FORMS,
+    !isDeckSearchActive && library.onlyFavourites
+      ? FAVOURITE_DECKS_LOADED_COUNT_FORMS
+      : DECKS_LOADED_COUNT_FORMS,
     locale,
   );
   const loadedCardCount = localizeCount(cardLibrary.cards.length, CARDS_LOADED_COUNT_FORMS, locale);
@@ -1110,6 +1048,15 @@ export function LibraryPage() {
     );
   }, [location.hash, location.pathname, location.search, navigate, openDeckCreatorFromNavigation]);
 
+  useEffect(
+    () => () => {
+      if (cardAssignedNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(cardAssignedNoticeTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
   function handleViewChange(view: LibraryView): void {
     const nextHasOpenedCards = hasOpenedCards || view === "cards";
     cachedLibraryUiState = {
@@ -1119,6 +1066,20 @@ export function LibraryPage() {
     };
     setActiveView(view);
     setHasOpenedCards(nextHasOpenedCards);
+  }
+
+  function handleCardAssigned(): void {
+    library.retry();
+    cardAssignedNoticeSequenceRef.current += 1;
+    setCardAssignedNoticeKey(cardAssignedNoticeSequenceRef.current);
+
+    if (cardAssignedNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(cardAssignedNoticeTimeoutRef.current);
+    }
+    cardAssignedNoticeTimeoutRef.current = window.setTimeout(() => {
+      setCardAssignedNoticeKey(null);
+      cardAssignedNoticeTimeoutRef.current = null;
+    }, 3200);
   }
 
   return (
@@ -1140,6 +1101,24 @@ export function LibraryPage() {
           <LibraryTabs activeView={activeView} onChange={handleViewChange} />
           {activeView === "decks" ? (
             <div className={styles.toolbarDetails}>
+              <label className={styles.deckSearchField}>
+                <span className={styles.visuallyHidden}>Поиск по названию колоды</span>
+                <input
+                  autoComplete="off"
+                  maxLength={150}
+                  name="deck_search"
+                  onChange={(event) => {
+                    const nextQuery = event.currentTarget.value;
+                    setDeckSearchQuery(nextQuery);
+                    if (nextQuery.trim().length > 0 && library.onlyFavourites) {
+                      library.setOnlyFavourites(false);
+                    }
+                  }}
+                  placeholder="Поиск по колодам"
+                  type="search"
+                  value={deckSearchQuery}
+                />
+              </label>
               <button
                 aria-controls="library-decks-panel"
                 aria-pressed={library.onlyFavourites}
@@ -1148,6 +1127,7 @@ export function LibraryPage() {
                 }
                 disabled={library.status === "loading"}
                 onClick={() => {
+                  setDeckSearchQuery("");
                   setUseCompactDeckLoading(true);
                   library.setOnlyFavourites(!library.onlyFavourites);
                 }}
@@ -1188,7 +1168,7 @@ export function LibraryPage() {
           role="tabpanel"
         >
           {library.status === "loading" ? (
-            useCompactDeckLoading ? (
+            useCompactDeckLoading && !isDeckSearchActive ? (
               <DeckFilterLoading onlyFavourites={library.onlyFavourites} />
             ) : (
               <DeckSkeletons />
@@ -1200,13 +1180,26 @@ export function LibraryPage() {
               description={getLibraryErrorMessage(library.error)}
               onAction={library.retry}
               title={
-                library.onlyFavourites
-                  ? "Любимые колоды не загрузились"
-                  : "Библиотека не загрузилась"
+                isDeckSearchActive
+                  ? "Поиск недоступен"
+                  : library.onlyFavourites
+                    ? "Любимые колоды не загрузились"
+                    : "Библиотека не загрузилась"
               }
             />
           ) : null}
-          {library.status === "success" && library.decks.length === 0 && !library.hasMore ? (
+          {isDeckSearchActive &&
+          library.status === "success" &&
+          library.decks.length === 0 &&
+          !library.hasMore ? (
+            <p className={styles.deckSearchEmpty} role="status">
+              Колоды не найдены
+            </p>
+          ) : null}
+          {!isDeckSearchActive &&
+          library.status === "success" &&
+          library.decks.length === 0 &&
+          !library.hasMore ? (
             <StateMessage
               description={
                 library.onlyFavourites
@@ -1257,7 +1250,7 @@ export function LibraryPage() {
           <LibraryCardsPanel
             cardLibrary={cardLibrary}
             isHidden={activeView !== "cards"}
-            onCardAssigned={library.retry}
+            onCardAssigned={handleCardAssigned}
           />
         ) : (
           <section
@@ -1283,6 +1276,20 @@ export function LibraryPage() {
           />
         ) : null}
       </section>
+      {cardAssignedNoticeKey === null ? null : (
+        <div
+          aria-atomic="true"
+          aria-live="polite"
+          className={styles.cardAssignedToast}
+          key={cardAssignedNoticeKey}
+          role="status"
+        >
+          <span aria-hidden="true" className={styles.cardAssignedToastIcon}>
+            ✓
+          </span>
+          <span>Карточка успешно добавлена</span>
+        </div>
+      )}
     </main>
   );
 }

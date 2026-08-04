@@ -19,10 +19,7 @@ function getDeckLoadErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
     return "Не удалось загрузить колоду. Попробуйте ещё раз.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к редактированию этой колоды.";
-  }
-  if (error.status === 404) {
+  if (error.status === 403 || error.status === 404) {
     return "Колода не найдена или уже удалена.";
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
@@ -42,10 +39,7 @@ function getDeckCardsErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
     return "Не удалось загрузить следующие карточки. Попробуйте ещё раз.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к карточкам этой колоды.";
-  }
-  if (error.status === 404) {
+  if (error.status === 403 || error.status === 404) {
     return "Колода больше не найдена.";
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
@@ -65,10 +59,7 @@ function getDeckSaveErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
     return "Не удалось сохранить колоду. Попробуйте ещё раз.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к редактированию этой колоды.";
-  }
-  if (error.status === 404) {
+  if (error.status === 403 || error.status === 404) {
     return "Колода больше не найдена.";
   }
   if (error.status === 409) {
@@ -250,7 +241,9 @@ function DeckDetailsForm({
       <div className={styles.fields}>
         <label className={styles.field}>
           <span>
-            <strong>Название</strong>
+            <strong>
+              Название <span aria-hidden="true">*</span>
+            </strong>
             <small>{title.length}/50</small>
           </span>
           <input
@@ -454,7 +447,7 @@ export function LibraryDeckEditPage() {
         {editor.status === "loading" ? <PageLoadingState /> : null}
         {editor.status === "error" ? <PageErrorState editor={editor} /> : null}
         {editor.status === "success" && editor.deck !== null ? (
-          <>
+          <div className={styles.loadedContent}>
             <header className={styles.header}>
               <Link aria-label="Вернуться в библиотеку" className={styles.backLink} to="/library">
                 <BackGlyph />
@@ -480,7 +473,7 @@ export function LibraryDeckEditPage() {
 
             <DeckDetailsForm deck={editor.deck} onSave={editor.saveDeck} />
             <CardsSection editor={editor} />
-          </>
+          </div>
         ) : null}
       </div>
     </main>

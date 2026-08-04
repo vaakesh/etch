@@ -512,6 +512,7 @@ class UserDeckService:
                         is_favourite=True,
                         is_following=True,
                     )
+                    uow.user_deck_repo.add(user_deck=user_deck)
                 else:
                     raise DeckIsNotFavouriteError()
 

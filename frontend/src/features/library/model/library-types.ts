@@ -2,8 +2,8 @@ export interface LibraryPreviewCard {
   uuid: string;
   frontText: string;
   backText: string;
-  sourceLang: string;
-  targetLang: string;
+  frontLang: string;
+  backLang: string;
   updatedAt: string;
 }
 
@@ -11,8 +11,8 @@ export interface EditableLibraryCard {
   uuid: string;
   frontText: string;
   backText: string;
-  sourceLang: string;
-  targetLang: string;
+  frontLang: string;
+  backLang: string;
 }
 
 export interface LibraryCard extends EditableLibraryCard {
@@ -34,8 +34,8 @@ export interface DeckCardPage {
 export interface UpdateLibraryCardInput {
   frontText: string;
   backText: string;
-  sourceLang: string;
-  targetLang: string;
+  frontLang: string;
+  backLang: string;
 }
 
 export type CreateLibraryCardInput = UpdateLibraryCardInput;

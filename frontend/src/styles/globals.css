@@ -21,13 +21,13 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: var(--loader-background, #0f1116);
+  background: var(--loader-background, #c3b8f5);
 }
 
 .page-loader {
-  --loader-background: #0f1116;
-  --loader-track: rgb(242 233 218 / 14%);
-  --loader-accent: #2a6f6b;
+  --loader-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
+  --loader-track: rgb(73 56 115 / 14%);
+  --loader-accent: #493873;
   display: grid;
   min-height: 100vh;
   min-height: 100dvh;

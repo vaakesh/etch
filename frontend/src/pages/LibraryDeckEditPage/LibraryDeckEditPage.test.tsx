@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../api";
 import type { UseDeckEditorResult } from "../../features/library/model/useDeckEditor";
 
 const useDeckEditorMock = vi.hoisted(() => vi.fn());
@@ -32,8 +33,8 @@ function createEditorResult(overrides: Partial<UseDeckEditorResult> = {}): UseDe
         uuid: CARD_UUID,
         frontText: "путешествие",
         backText: "viaje",
-        sourceLang: "ru",
-        targetLang: "es",
+        frontLang: "ru",
+        backLang: "es",
       },
     ],
     nextOffset: 50,
@@ -106,6 +107,25 @@ describe("LibraryDeckEditPage", () => {
     expect(markup).toContain("Попробовать снова");
   });
 
+  it.each([403, 404])("does not reveal deck access details for status %s", (status) => {
+    useDeckEditorMock.mockReturnValue(
+      createEditorResult({
+        status: "error",
+        deck: null,
+        cards: [],
+        nextOffset: 0,
+        hasMore: false,
+        error: new ApiError({ status, message: "Internal backend detail" }),
+      }),
+    );
+
+    const markup = renderEditor();
+
+    expect(markup).toContain("Колода не найдена или уже удалена");
+    expect(markup).not.toContain("Internal backend detail");
+    expect(markup).not.toContain("нет доступа");
+  });
+
   it("renders editable deck fields, a compact card row, scoped actions, and load more", () => {
     const markup = renderEditor();
     const page = markup.match(/<main[^>]*>/)?.[0];
@@ -121,6 +141,7 @@ describe("LibraryDeckEditPage", () => {
     expect(markup).toContain("<h1");
     expect(markup).toContain("Испанский в путешествии");
     expect(markup).toContain(`data-deck-details-form="${DECK_UUID}"`);
+    expect(markup).toContain('aria-hidden="true">*</span>');
     expect(markup).toMatch(
       /<input[^>]*maxLength="50"[^>]*minLength="3"[^>]*name="title"[^>]*value="Испанский в путешествии"/,
     );

@@ -1,5 +1,5 @@
 import { Suspense, useState, type CSSProperties } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   DashboardIcon,
   DeckIllustration,
@@ -47,9 +47,9 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
 
   return (
     <aside className={styles.sidebar} id="app-sidebar">
-      <div className={styles.brand}>
+      <Link aria-label="На главную" className={styles.brand} to="/">
         <span className={styles.brandName}>Etch</span>
-      </div>
+      </Link>
 
       <nav
         aria-label="Основная навигация"

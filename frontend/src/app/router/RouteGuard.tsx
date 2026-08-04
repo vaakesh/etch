@@ -2,8 +2,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { PageLoader } from "../PageLoader";
-import { getSafeReturnPath, HOME_PATH, LOGIN_PATH } from "./navigation-state";
+import {
+  getSafeReturnPath,
+  HOME_PATH,
+  LOGIN_PATH,
+  SESSION_EXPIRED_NOTICE,
+} from "./navigation-state";
 import type { RouteAccess } from "./route-config";
+import styles from "./RouteGuard.module.css";
 
 interface RouteGuardProps {
   access: RouteAccess;
@@ -43,12 +49,29 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
 
   if (status === "error") {
     return (
-      <div role="alert">
-        <p>Не удалось проверить сессию.</p>
-        <button onClick={() => void initialize()} type="button">
-          Повторить
-        </button>
-      </div>
+      <main className={styles.page}>
+        <div aria-hidden="true" className={styles.ambient}>
+          <span className={styles.ambientOrb} />
+          <span className={styles.ambientLetter}>Aa</span>
+        </div>
+        <section aria-labelledby="session-error-title" className={styles.card} role="alert">
+          <div aria-hidden="true" className={styles.visual}>
+            <span className={styles.visualCardBack} />
+            <span className={styles.visualCardFront}>?</span>
+          </div>
+          <div className={styles.copy}>
+            <span aria-hidden="true" className={styles.mark}>
+              Etch · соединение
+            </span>
+            <h1 id="session-error-title">Не удалось проверить сессию</h1>
+            <p>Сервер временно недоступен. Проверьте подключение и попробуйте ещё раз.</p>
+            <button onClick={() => void initialize()} type="button">
+              Повторить
+              <span aria-hidden="true">↻</span>
+            </button>
+          </div>
+        </section>
+      </main>
     );
   }
 
@@ -65,5 +88,11 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
   }
 
   const requestedPath = `${location.pathname}${location.search}${location.hash}`;
-  return <Navigate replace state={{ from: requestedPath }} to={LOGIN_PATH} />;
+  return (
+    <Navigate
+      replace
+      state={{ from: requestedPath, notice: SESSION_EXPIRED_NOTICE }}
+      to={LOGIN_PATH}
+    />
+  );
 }

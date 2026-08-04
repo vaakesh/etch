@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, get_current_user
@@ -13,6 +14,8 @@ from app.bff.service import BffService
 from app.decks.schemas import CursorPage
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
+
+from app.users.schemas import SearchQuery
 
 router = APIRouter(prefix="/bff")
 
@@ -32,6 +35,7 @@ async def get_home_dashboard(
 @router.get("/library/decks", response_model=CursorPage[DeckLibraryPage])
 async def get_decks_library_page(
     current_user: CurrentUser,
+    search_query: SearchQuery = None,
     cursor: str | None = Query(default=None),
     is_favourite: bool | None = Query(default=False),
     limit: int = Query(default=50, ge=1, le=100),
@@ -40,6 +44,7 @@ async def get_decks_library_page(
     result = await bff_service.get_decks_library_page(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
+        search_query=search_query,
         is_favourite=is_favourite,
         cursor=cursor,
         limit=limit,

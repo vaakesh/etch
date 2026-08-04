@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum,
+    Enum as SQLAlchemyEnum,
     ForeignKey,
     Integer,
     String,
@@ -22,12 +23,28 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 type CardSide = Literal["front", "back"]
 
-card_side_enum = Enum(
+card_side_enum = SQLAlchemyEnum(
     "front",
     "back",
     name="card_side",
     native_enum=False,
     create_constraint=True,
+)
+
+class TrainingSessionStatus(StrEnum):
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    ABANDONED = "abandoned"
+
+session_status_enum = SQLAlchemyEnum(
+    TrainingSessionStatus,
+    name="training_session_status",
+    native_enum=False,
+    create_constraint=True,
+    validate_strings=True,
+    values_callable=lambda enum_class: [
+        member.value for member in enum_class
+    ],
 )
 
 class TrainingSession(Base):
@@ -53,6 +70,14 @@ class TrainingSession(Base):
         BigInteger,
         ForeignKey("decks.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+
+    status: Mapped[TrainingSessionStatus] = mapped_column(
+        session_status_enum,
+        nullable=False,
+        default=TrainingSessionStatus.IN_PROGRESS,
+        server_default=TrainingSessionStatus.IN_PROGRESS.value,
         index=True,
     )
 
@@ -123,6 +148,10 @@ class TrainingSession(Base):
         ),
     )
 
+    @property
+    def deck_uuid(self) -> UUID:
+        return self.deck.uuid
+
 
 class TrainingSessionItem(Base):
     __tablename__ = "training_session_items"
@@ -150,6 +179,7 @@ class TrainingSessionItem(Base):
         index=True,
     )
 
+    user_typed_text: Mapped[str] = mapped_column(Text, nullable=True)
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
     answer_text: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_lang: Mapped[str] = mapped_column(String(3), nullable=False)

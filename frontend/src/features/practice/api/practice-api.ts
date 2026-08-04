@@ -1,11 +1,23 @@
 import { ApiError, apiFetch } from "../../../api";
-import { parsePracticeSession, parseSubmitPracticeAnswerResult } from "../model/practice-contract";
+import {
+  parsePracticeDeckUuid,
+  parsePracticeHistoryPage,
+  parsePracticeSession,
+  parsePracticeSessionHistory,
+  parseSubmitPracticeAnswerResult,
+} from "../model/practice-contract";
 import type {
+  PracticeHistoryFilter,
+  PracticeHistorySession,
   PracticeSession,
+  PracticeSessionHistoryItem,
   StartPracticeSessionInput,
   SubmitPracticeAnswerInput,
   SubmitPracticeAnswerResult,
 } from "../model/practice-types";
+
+const PRACTICE_HISTORY_PAGE_SIZE = 100;
+const PRACTICE_SESSION_HISTORY_PAGE_SIZE = 100;
 
 function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: string): void {
   if (actualUuid.toLowerCase() !== expectedUuid.toLowerCase()) {
@@ -15,6 +27,101 @@ function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: 
       message: `The backend returned ${resource} with an unexpected UUID.`,
     });
   }
+}
+
+export async function validatePracticeDeck(deckUuid: string, signal?: AbortSignal): Promise<void> {
+  const payload = await apiFetch<unknown>(`/decks/${deckUuid}`, { signal });
+  const responseDeckUuid = parsePracticeDeckUuid(payload);
+
+  assertExpectedUuid(deckUuid, responseDeckUuid, "a different deck");
+}
+
+export async function getPracticeSessionHistory(
+  filter: PracticeHistoryFilter,
+  signal?: AbortSignal,
+): Promise<readonly PracticeHistorySession[]> {
+  const sessions: PracticeHistorySession[] = [];
+  const knownSessionUuids = new Set<string>();
+  const requestedCursors = new Set<string | null>();
+  let cursor: string | null = null;
+
+  do {
+    if (requestedCursors.has(cursor)) {
+      throw new ApiError({
+        status: 0,
+        code: "INVALID_PRACTICE_RESPONSE",
+        message: "The backend repeated a practice-history pagination cursor.",
+      });
+    }
+    requestedCursors.add(cursor);
+
+    const payload = await apiFetch<unknown>("/users/me/training-sessions", {
+      query: {
+        cursor,
+        limit: PRACTICE_HISTORY_PAGE_SIZE,
+        status: filter === "all" ? null : filter,
+      },
+      signal,
+    });
+    const page = parsePracticeHistoryPage(payload);
+
+    if (filter !== "all" && page.sessions.some((session) => session.status !== filter)) {
+      throw new ApiError({
+        status: 0,
+        code: "INVALID_PRACTICE_RESPONSE",
+        message: "The backend returned a practice-history session outside the requested filter.",
+      });
+    }
+
+    page.sessions.forEach((session) => {
+      if (!knownSessionUuids.has(session.uuid)) {
+        knownSessionUuids.add(session.uuid);
+        sessions.push(session);
+      }
+    });
+    cursor = page.hasMore ? page.nextCursor : null;
+  } while (cursor !== null);
+
+  return sessions;
+}
+
+export async function getPracticeSessionItemsHistory(
+  sessionUuid: string,
+  signal?: AbortSignal,
+): Promise<readonly PracticeSessionHistoryItem[]> {
+  const items: PracticeSessionHistoryItem[] = [];
+  const knownItemUuids = new Set<string>();
+  const knownSequenceNumbers = new Set<number>();
+  let pageNumber = 1;
+
+  while (true) {
+    const payload = await apiFetch<unknown>(`/training-sessions/${sessionUuid}/history`, {
+      query: { ps: PRACTICE_SESSION_HISTORY_PAGE_SIZE, pn: pageNumber },
+      signal,
+    });
+    const page = parsePracticeSessionHistory(payload);
+
+    page.forEach((item) => {
+      if (knownItemUuids.has(item.itemUuid) || knownSequenceNumbers.has(item.sequenceNumber)) {
+        throw new ApiError({
+          status: 0,
+          code: "INVALID_PRACTICE_RESPONSE",
+          message: "The backend repeated an item in the practice-session history.",
+        });
+      }
+
+      knownItemUuids.add(item.itemUuid);
+      knownSequenceNumbers.add(item.sequenceNumber);
+      items.push(item);
+    });
+
+    if (page.length < PRACTICE_SESSION_HISTORY_PAGE_SIZE) {
+      break;
+    }
+    pageNumber += 1;
+  }
+
+  return items.sort((left, right) => left.sequenceNumber - right.sequenceNumber);
 }
 
 export async function startPracticeSession(

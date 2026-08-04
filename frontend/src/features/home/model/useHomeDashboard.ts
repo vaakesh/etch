@@ -23,11 +23,9 @@ const INITIAL_STATE: HomeDashboardState = {
 let cachedHomeDashboardState: HomeDashboardState | null = null;
 
 export function useHomeDashboard(): UseHomeDashboardResult {
-  const cachedStateAtMountRef = useRef(cachedHomeDashboardState);
-  const shouldLoadOnMountRef = useRef(cachedStateAtMountRef.current === null);
-  const [state, setState] = useState<HomeDashboardState>(
-    cachedStateAtMountRef.current ?? INITIAL_STATE,
-  );
+  const cachedStateAtMount = cachedHomeDashboardState;
+  const shouldLoadOnMountRef = useRef(cachedStateAtMount === null);
+  const [state, setState] = useState<HomeDashboardState>(cachedStateAtMount ?? INITIAL_STATE);
   const activeControllerRef = useRef<AbortController | null>(null);
   const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);

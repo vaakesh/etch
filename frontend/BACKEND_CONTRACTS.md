@@ -5,20 +5,21 @@
 
 ## Быстрая карта
 
-| Frontend / consumer                   | Backend-вызовы                                                                                                                                                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Запуск приложения                     | <code>GET /users/me</code>; при <code>401</code> — <code>POST /auth/refresh</code> и один повтор                                                                                                             |
-| <code>/login</code>                   | <code>POST /auth/login</code> → <code>GET /users/me</code>                                                                                                                                                   |
-| <code>/</code>                        | <code>GET /bff/home</code>                                                                                                                                                                                   |
-| <code>/library</code>, колоды         | <code>GET /bff/library/decks</code>, <code>POST /decks/create</code>, <code>PATCH /decks/{deck_uuid}/set-favourite</code>                                                                                    |
-| <code>/library</code>, карточки       | <code>GET /bff/library/cards</code>, <code>POST /cards/</code>, <code>PATCH/DELETE /cards/{card_uuid}</code>                                                                                                 |
-| Добавление карточки в колоды          | <code>GET /users/me/decks</code>, <code>POST /decks/{deck_uuid}/cards/{card_uuid}</code>                                                                                                                     |
-| <code>/library/:deck_uuid/edit</code> | <code>GET/PATCH /decks/{deck_uuid}</code>, <code>GET /decks/{deck_uuid}/cards</code>, <code>PATCH /cards/{card_uuid}</code>, <code>POST /decks/{deck_uuid}/cards/remove/{card_uuid}</code>                   |
-| <code>/practice</code>                | <code>POST /bff/practice/{deck_uuid}/start</code>, <code>GET /bff/practice/{training_session_uuid}/resume</code>, <code>PUT /training-sessions/{training_session_uuid}/items/{sequence_number}/submit</code> |
-| Logout / очистка сессии               | <code>POST /auth/logout</code>                                                                                                                                                                               |
-| <code>*</code> (404)                  | Backend-вызовов нет                                                                                                                                                                                          |
+| Frontend / consumer                                   | Backend-вызовы                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Запуск приложения                                     | <code>GET /users/me</code>; при <code>401</code> — <code>POST /auth/refresh</code> и один повтор                                                                                                                                                           |
+| <code>/login</code>                                   | <code>POST /auth/login</code> → <code>GET /users/me</code>                                                                                                                                                                                                 |
+| <code>/</code>                                        | <code>GET /bff/home</code>                                                                                                                                                                                                                                 |
+| <code>/library</code>, колоды                         | <code>GET /bff/library/decks</code>, <code>POST /decks/create</code>, <code>PATCH /decks/{deck_uuid}/set-favourite</code>                                                                                                                                  |
+| <code>/library</code>, карточки                       | <code>GET /bff/library/cards</code>, <code>POST /cards/</code>, <code>PATCH/DELETE /cards/{card_uuid}</code>                                                                                                                                               |
+| Добавление карточки в колоды                          | <code>GET /users/me/decks</code>, <code>POST /decks/{deck_uuid}/cards/{card_uuid}</code>                                                                                                                                                                   |
+| <code>/library/:deck_uuid/edit</code>                 | <code>GET/PATCH /decks/{deck_uuid}</code>, <code>GET /decks/{deck_uuid}/cards</code>, <code>PATCH /cards/{card_uuid}</code>, <code>POST /decks/{deck_uuid}/cards/remove/{card_uuid}</code>                                                                 |
+| <code>/practice</code>                                | <code>GET /users/me/training-sessions</code>, <code>POST /bff/practice/{deck_uuid}/start</code>, <code>GET /bff/practice/{training_session_uuid}/resume</code>, <code>PUT /training-sessions/{training_session_uuid}/items/{sequence_number}/submit</code> |
+| <code>/practice/sessions/:session_uuid/history</code> | <code>GET /training-sessions/{session_uuid}/history</code>                                                                                                                                                                                                 |
+| Logout / очистка сессии                               | <code>POST /auth/logout</code>                                                                                                                                                                                                                             |
+| <code>*</code> (404)                                  | Backend-вызовов нет                                                                                                                                                                                                                                        |
 
-Всего: **22 frontend-вызова / 21 уникальная пара method + path**. Два варианта списка колод используют один endpoint с разным <code>is_favourite</code>.
+Всего: **26 frontend-вызовов / 24 уникальные пары method + path**. Два варианта списка колод используют один endpoint с разным <code>is_favourite</code>, а проверка колоды перед практикой повторно использует <code>GET /decks/{deck_uuid}</code>.
 
 ## Общие правила транспорта
 
@@ -157,6 +158,18 @@ type SubmitAnswerResponse = {
   is_finished: boolean;
   time_to_complete: number | null; // int, секунды
 };
+
+type TrainingSessionItemOut = {
+  item_uuid: UUID;
+  sequence_number: number; // int, >= 1
+  prompt_text: CardText;
+  answer_text: CardText;
+  prompt_lang: CardLang;
+  answer_lang: CardLang;
+  user_typed_text: CardText | null;
+  is_answered: boolean;
+  is_correct: boolean | null;
+};
 ```
 
 ### Ограничения и нормализация
@@ -223,10 +236,11 @@ type SubmitAnswerResponse = {
 - **Frontend:** <code>/library</code>, список колод и фильтр «Только любимые».
 - **Auth:** обязателен.
 - **Query:**
+  - <code>q: string | null</code> (trim + lowercase, 1–150), поиск по словам в названии;
   - <code>cursor: Cursor | null = null</code>;
   - <code>is_favourite: boolean | null = false</code>;
   - <code>limit: int = 50</code>, диапазон 1–100.
-- **Фактические вызовы:** frontend отправляет <code>limit=50</code> и явный <code>is_favourite=false/true</code>. При смене фильтра cursor сбрасывается.
+- **Фактические вызовы:** frontend отправляет <code>limit=50</code> и явный <code>is_favourite=false/true</code>. Непустой поиск передаётся как trimmed <code>q</code> после debounce; при смене поиска или фильтра cursor сбрасывается.
 - **Success:** <code>200 CursorPage&lt;DeckLibraryPage&gt;</code>.
 - **Mapping:** <code>items → decks</code>, <code>deck_uuid → uuid</code>, <code>owner_uuid → ownerUuid</code>, <code>deck_words_count → totalWordsCount</code>, <code>next_cursor → nextCursor</code>. Preview-карточки используют <code>card_uuid</code>, <code>front_text</code>, <code>back_text</code>, <code>source_lang</code>, <code>target_lang</code> и <code>updated_at</code>.
 - **Ошибки:** <code>401</code>, <code>422</code> query/cursor, возможные <code>404</code> и <code>500</code>.
@@ -348,7 +362,7 @@ type SubmitAnswerResponse = {
 
 ## Практика
 
-Маршрут frontend — <code>/practice</code>. Query <code>deck={deck_uuid}</code> открывает настройку и запуск новой сессии, а <code>session={training_session_uuid}</code> — продолжение уже созданной сессии. Одновременно используется только один из этих вариантов.
+Маршрут frontend — <code>/practice</code>. Query <code>deck={deck_uuid}</code> открывает настройку и запуск новой сессии, а <code>session={training_session_uuid}</code> — продолжение уже созданной сессии. Одновременно используется только один из этих вариантов. Детали отдельной сессии открываются на <code>/practice/sessions/:session_uuid/history</code>.
 
 ### <code>POST /bff/practice/{deck_uuid}/start</code>
 
@@ -369,6 +383,15 @@ type SubmitAnswerResponse = {
 - **Success:** <code>200 PracticeSessionResponse</code>. В <code>cards</code> возвращаются только ещё не отвеченные элементы, отсортированные по исходному <code>sequence_number</code>; counters и <code>total_count</code> относятся ко всей сессии.
 - **Frontend navigation:** нельзя вычислять wire-номер как индекс массива + 1. Для отображения номера и отправки ответа frontend использует <code>PracticeCard.sequence_number</code>, потому что после resume первый оставшийся элемент может иметь любой номер.
 - **Ошибки:** <code>401</code>; <code>404</code> сессия отсутствует, принадлежит другому пользователю или связанная колода исчезла; <code>409</code> сессия уже завершена; <code>422</code> UUID; <code>500</code>.
+
+### <code>GET /training-sessions/{session_uuid}/history</code>
+
+- **Frontend:** <code>/practice/sessions/:session_uuid/history</code>, переход по компактной кнопке в карточке сессии.
+- **Auth:** обязателен; backend выбирает только элементы сессии текущего пользователя.
+- **Query:** <code>ps: int = 30</code>, диапазон 1–100; <code>pn: int = 1</code>, минимум 1; <code>only_answered_items: boolean = false</code>. Frontend запрашивает страницы по 100 элементов до первой неполной страницы.
+- **Success:** <code>200 TrainingSessionItemOut[]</code>, без page-envelope. Frontend сортирует итог по <code>sequence_number</code>, проверяет уникальность item UUID и номеров.
+- **Отображение:** <code>is_answered=false</code> означает неотвеченную карточку — она показывается нейтрально, без раскрытия правильного ответа. Для отвеченной карточки <code>user_typed_text=null</code> означает пропуск. Непустой <code>user_typed_text</code> — введённый ответ: правильный подсвечивается зелёным, неправильный — красным рядом с правильным зелёным ответом.
+- **Ошибки:** <code>401</code>; <code>422</code> UUID/query; возможные <code>500</code>.
 
 ### <code>PUT /training-sessions/{training_session_uuid}/items/{sequence_number}/submit</code>
 

@@ -16,6 +16,7 @@ import type {
 export type LibraryDecksStatus = "loading" | "success" | "error";
 
 interface LibraryDecksState {
+  searchQuery: string;
   status: LibraryDecksStatus;
   decks: readonly LibraryDeckItem[];
   nextCursor: string | null;
@@ -40,6 +41,7 @@ export interface UseLibraryDecksResult extends LibraryDecksState {
 }
 
 const INITIAL_STATE: LibraryDecksState = {
+  searchQuery: "",
   status: "loading",
   decks: [],
   nextCursor: null,
@@ -60,8 +62,7 @@ interface LibraryDecksCache {
 }
 
 type LibraryDecksStateUpdate =
-  | LibraryDecksState
-  | ((currentState: LibraryDecksState) => LibraryDecksState);
+  LibraryDecksState | ((currentState: LibraryDecksState) => LibraryDecksState);
 
 let cachedLibraryDecks: LibraryDecksCache | null = null;
 
@@ -88,18 +89,22 @@ function toLibraryDeck(deck: CreatedLibraryDeck, ownerUuid: string): LibraryDeck
   };
 }
 
-export function useLibraryDecks(currentUserUuid: string | null = null): UseLibraryDecksResult {
-  const cachedStateAtMountRef = useRef(
-    cachedLibraryDecks?.currentUserUuid === currentUserUuid ? cachedLibraryDecks : null,
-  );
-  const shouldLoadOnMountRef = useRef(cachedStateAtMountRef.current === null);
-  const [state, setState] = useState<LibraryDecksState>(
-    cachedStateAtMountRef.current?.state ?? INITIAL_STATE,
-  );
+export function useLibraryDecks(
+  currentUserUuid: string | null = null,
+  searchQuery = "",
+): UseLibraryDecksResult {
+  const normalizedSearchQuery = searchQuery.trim();
+  const cachedStateAtMount =
+    cachedLibraryDecks?.currentUserUuid === currentUserUuid &&
+    cachedLibraryDecks.state.searchQuery === normalizedSearchQuery
+      ? cachedLibraryDecks
+      : null;
+  const shouldLoadOnMountRef = useRef(cachedStateAtMount === null);
+  const [state, setState] = useState<LibraryDecksState>(cachedStateAtMount?.state ?? INITIAL_STATE);
   const [onlyFavourites, setOnlyFavouritesState] = useState(
-    cachedStateAtMountRef.current?.onlyFavourites ?? false,
+    cachedStateAtMount?.onlyFavourites ?? false,
   );
-  const onlyFavouritesRef = useRef(cachedStateAtMountRef.current?.onlyFavourites ?? false);
+  const onlyFavouritesRef = useRef(cachedStateAtMount?.onlyFavourites ?? false);
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);
@@ -107,6 +112,8 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
   const deleteControllerRefs = useRef(new Map<string, AbortController>());
   const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);
+  const searchQueryRef = useRef(normalizedSearchQuery);
+  const previousSearchQueryRef = useRef(normalizedSearchQuery);
 
   const setCachedState = useCallback(
     (update: LibraryDecksStateUpdate): void => {
@@ -123,63 +130,79 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
     [currentUserUuid],
   );
 
-  const loadFirstPage = useCallback((loadOnlyFavourites = onlyFavouritesRef.current): void => {
-    initialControllerRef.current?.abort();
-    loadMoreControllerRef.current?.abort();
-    createControllerRef.current?.abort();
-    favouriteControllerRefs.current.forEach((controller) => controller.abort());
-    favouriteControllerRefs.current.clear();
-    deleteControllerRefs.current.forEach((controller) => controller.abort());
-    deleteControllerRefs.current.clear();
+  const loadFirstPage = useCallback(
+    (
+      loadOnlyFavourites = onlyFavouritesRef.current,
+      loadSearchQuery = searchQueryRef.current,
+    ): void => {
+      initialControllerRef.current?.abort();
+      loadMoreControllerRef.current?.abort();
+      createControllerRef.current?.abort();
+      favouriteControllerRefs.current.forEach((controller) => controller.abort());
+      favouriteControllerRefs.current.clear();
+      deleteControllerRefs.current.forEach((controller) => controller.abort());
+      deleteControllerRefs.current.clear();
 
-    const controller = new AbortController();
-    const requestRevision = requestRevisionRef.current + 1;
-    requestRevisionRef.current = requestRevision;
-    cachedLibraryDecks = null;
-    initialControllerRef.current = controller;
-    loadMoreControllerRef.current = null;
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current + 1;
+      const requestedSearchQuery = loadOnlyFavourites ? "" : loadSearchQuery;
+      requestRevisionRef.current = requestRevision;
+      searchQueryRef.current = requestedSearchQuery;
+      cachedLibraryDecks = null;
+      initialControllerRef.current = controller;
+      loadMoreControllerRef.current = null;
 
-    queueMicrotask(() => {
-      if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-        setState(INITIAL_STATE);
-      }
-    });
-
-    const getDeckPage = loadOnlyFavourites ? getFavouriteLibraryDeckPage : getLibraryDeckPage;
-
-    void getDeckPage(null, controller.signal)
-      .then((page) => {
+      queueMicrotask(() => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setCachedState({
-            status: "success",
-            decks: page.decks,
-            nextCursor: page.nextCursor,
-            hasMore: page.hasMore,
-            error: null,
-            isLoadingMore: false,
-            loadMoreError: null,
-            favouriteUpdatingDeckUuids: [],
-            favouriteErrors: {},
-            deletingDeckUuids: [],
-            deleteErrors: {},
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setCachedState({
-            ...INITIAL_STATE,
-            status: "error",
-            error,
-          });
-        }
-      })
-      .finally(() => {
-        if (initialControllerRef.current === controller) {
-          initialControllerRef.current = null;
+          setState({ ...INITIAL_STATE, searchQuery: requestedSearchQuery });
         }
       });
-  }, [setCachedState]);
+
+      const pageRequest = loadOnlyFavourites
+        ? getFavouriteLibraryDeckPage(null, controller.signal)
+        : getLibraryDeckPage(
+            null,
+            controller.signal,
+            requestedSearchQuery.length === 0 ? null : requestedSearchQuery,
+          );
+
+      void pageRequest
+        .then((page) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setCachedState({
+              searchQuery: requestedSearchQuery,
+              status: "success",
+              decks: page.decks,
+              nextCursor: page.nextCursor,
+              hasMore: page.hasMore,
+              error: null,
+              isLoadingMore: false,
+              loadMoreError: null,
+              favouriteUpdatingDeckUuids: [],
+              favouriteErrors: {},
+              deletingDeckUuids: [],
+              deleteErrors: {},
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setCachedState({
+              ...INITIAL_STATE,
+              searchQuery: requestedSearchQuery,
+              status: "error",
+              error,
+            });
+          }
+        })
+        .finally(() => {
+          if (initialControllerRef.current === controller) {
+            initialControllerRef.current = null;
+          }
+        });
+    },
+    [setCachedState],
+  );
 
   const loadMore = useCallback((): void => {
     if (
@@ -203,11 +226,15 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
       loadMoreError: null,
     }));
 
-    const getDeckPage = onlyFavouritesRef.current
-      ? getFavouriteLibraryDeckPage
-      : getLibraryDeckPage;
+    const pageRequest = onlyFavouritesRef.current
+      ? getFavouriteLibraryDeckPage(cursor, controller.signal)
+      : getLibraryDeckPage(
+          cursor,
+          controller.signal,
+          state.searchQuery.length === 0 ? null : state.searchQuery,
+        );
 
-    void getDeckPage(cursor, controller.signal)
+    void pageRequest
       .then((page) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
           setCachedState((currentState) => ({
@@ -234,7 +261,14 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
           loadMoreControllerRef.current = null;
         }
       });
-  }, [setCachedState, state.hasMore, state.isLoadingMore, state.nextCursor, state.status]);
+  }, [
+    setCachedState,
+    state.hasMore,
+    state.isLoadingMore,
+    state.nextCursor,
+    state.searchQuery,
+    state.status,
+  ]);
 
   const setFavourite = useCallback(
     (deckUuid: string, value: boolean): void => {
@@ -389,7 +423,7 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
           return;
         }
 
-        const shouldReloadAllDecks = onlyFavouritesRef.current;
+        const shouldReloadAllDecks = onlyFavouritesRef.current || searchQueryRef.current.length > 0;
         initialControllerRef.current?.abort();
         loadMoreControllerRef.current?.abort();
         favouriteControllerRefs.current.forEach((favouriteController) =>
@@ -404,7 +438,7 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
         onlyFavouritesRef.current = false;
         setOnlyFavouritesState(false);
 
-        if (currentUserUuid !== null) {
+        if (currentUserUuid !== null && searchQueryRef.current.length === 0) {
           const libraryDeck = toLibraryDeck(createdDeck, currentUserUuid);
           setCachedState((currentState) => ({
             ...(currentState.status === "success" ? currentState : INITIAL_STATE),
@@ -437,6 +471,20 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
   );
 
   useEffect(() => {
+    if (previousSearchQueryRef.current === normalizedSearchQuery) {
+      return;
+    }
+
+    previousSearchQueryRef.current = normalizedSearchQuery;
+    searchQueryRef.current = normalizedSearchQuery;
+    const timer = window.setTimeout(() => {
+      loadFirstPage(onlyFavouritesRef.current, normalizedSearchQuery);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [loadFirstPage, normalizedSearchQuery]);
+
+  useEffect(() => {
     const favouriteControllers = favouriteControllerRefs.current;
     const deleteControllers = deleteControllerRefs.current;
     if (cleanupTimerRef.current !== null) {
@@ -466,8 +514,13 @@ export function useLibraryDecks(currentUserUuid: string | null = null): UseLibra
     };
   }, [loadFirstPage]);
 
+  const visibleState =
+    state.searchQuery === normalizedSearchQuery
+      ? state
+      : { ...INITIAL_STATE, searchQuery: normalizedSearchQuery };
+
   return {
-    ...state,
+    ...visibleState,
     onlyFavourites,
     retry,
     loadMore,

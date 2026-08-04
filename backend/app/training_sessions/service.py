@@ -1,14 +1,16 @@
 from collections.abc import Callable
+from typing import Literal, Sequence
 from uuid import UUID
 
-from app.decks.errors import UserDeckNotFoundError
+from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, PermissionDeniedError, UserDeckNotFoundError
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
     TrainingSessionAlreadyFinishedError,
     TrainingSessionItemNotFoundError,
+    TrainingSessionNotFinishedYet,
     TrainingSessionNotFoundError,
 )
-from app.training_sessions.models import TrainingSession
+from app.training_sessions.models import TrainingSession, TrainingSessionItem
 from app.training_sessions.schemas import (
     SubmitAnswerResponse,
     TrainingSessionStatus,
@@ -16,11 +18,46 @@ from app.training_sessions.schemas import (
 )
 from app.users.errors import UserNotFoundError
 from app.utils import decode_cursor, encode_cursor, utcnow
+from app.bff.schemas import PracticeCard, PracticeSessionResponse
+from app.decks.models import UserDeck
 
 
 class TrainingSessionService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
         self.uow_factory = uow_factory
+
+    async def get_session_history(
+        self,
+        user_id: int,
+        session_uuid: UUID,
+        only_answered_items: bool = False,
+        page_size: int = 30,
+        page_number: int = 1,
+    ) -> tuple[list[TrainingSessionItem], TrainingSessionStatus]:
+        async with self.uow_factory() as uow:
+
+            rows = await uow.training_session_item_repo.get_session_history(
+                user_id=user_id,
+                session_uuid=session_uuid,
+                last_sequence_number=(
+                    page_size * (page_number - 1)
+                ),
+                page_size=page_size,
+                only_answered_items=only_answered_items,
+            )
+            items = []
+            status = rows[0][1]
+            for item, _ in rows:
+                if item is not None:
+                    items.append(item)
+
+            if status == TrainingSessionStatus.IN_PROGRESS:
+                raise TrainingSessionNotFinishedYet()
+
+            return items
+
+            
+            
 
     async def submit_answer(
             self,
@@ -85,12 +122,16 @@ class TrainingSessionService:
                 item.is_correct = False
                 training_session.wrong_count += 1
 
+            if user_answer.action == "answer":
+                item.user_typed_text = user_answer.answer
+
             if (
                 training_session.actual_count == training_session.requested_count 
                 and 
                 training_session.finished_at is None
             ):
                 training_session.finished_at = utcnow()
+                training_session.status = TrainingSessionStatus.COMPLETED
                 await self._update_user_deck_after_session(
                         uow=uow,
                         user_id=user_id,
@@ -144,8 +185,8 @@ class TrainingSessionService:
         async with self.uow_factory() as uow:
             training_session = await self._get_by_uuid(uow, session_uuid)
 
-            # незавершенную сессию в публичный доступ не отдаем
-            if training_session.finished_at is None:
+            # только завершенные сессии в публичный доступ
+            if training_session.status != TrainingSessionStatus.COMPLETED:
                 if current_user_id is None or current_user_id != training_session.user_id:
                     raise TrainingSessionNotFoundError()
             
@@ -183,7 +224,7 @@ class TrainingSessionService:
             next_cursor = None
 
             match status:
-                case TrainingSessionStatus.FINISHED:
+                case TrainingSessionStatus.COMPLETED | TrainingSessionStatus.ABANDONED:
                     cursor_finished_at, cursor_id = (
                         decode_cursor(cursor) if cursor is not None 
                         else (None, None)
@@ -192,6 +233,7 @@ class TrainingSessionService:
                         await uow.training_session_repo
                         .get_all_finished_sessions_by_user_id(
                             user_id=user.id,
+                            status=status,
                             cursor_finished_at=cursor_finished_at,
                             cursor_id=cursor_id,
                             limit=limit,
@@ -202,7 +244,7 @@ class TrainingSessionService:
                             training_sessions[-1].finished_at,
                             training_sessions[-1].id,
                         )
-                case TrainingSessionStatus.UNFINISHED:
+                case TrainingSessionStatus.IN_PROGRESS:
                     cursor_started_at, cursor_id = (
                         decode_cursor(cursor) if cursor is not None 
                         else (None, None)
@@ -241,3 +283,130 @@ class TrainingSessionService:
                         )
             
             return training_sessions, next_cursor, has_more
+
+    async def start_training_session(
+        self,
+        user_id: int,
+        deck_uuid: UUID,
+        prompt_side: Literal["front", "back"],
+    ) -> PracticeSessionResponse:
+        async with self.uow_factory() as uow:
+            deck = await uow.deck_repo.get_by_uuid(
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
+
+            if deck is None:
+                raise DeckNotFoundError()
+
+            if deck.user_id != user_id and not deck.is_public:
+                raise DeckNotFoundError()
+
+            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
+                user_id=user_id,
+                deck_id=deck.id,
+            )
+
+            if user_deck is None:
+                user_deck = UserDeck(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                    sessions_count=0,
+                    correct_count=0,
+                    wrong_count=0,
+                )
+                uow.user_deck_repo.add(user_deck)
+
+            answer_side = "back" if prompt_side == "front" else "front"
+
+            training_session = TrainingSession(
+                user_id=user_id,
+                deck_id=deck.id,
+                requested_count=0,
+                actual_count=0,
+                correct_count=0,
+                wrong_count=0,
+                prompt_side=prompt_side,
+                answer_side=answer_side,
+            )
+            uow.training_session_repo.add(training_session)
+
+            await uow.flush()
+
+            training_session_items = await uow.training_session_item_repo.create_snapshot(
+                training_session_id=training_session.id,
+                deck_id=deck.id,
+                prompt_side=prompt_side,
+                answer_side=answer_side,
+            )
+            if not training_session_items:
+                raise DeckIsEmptyError()
+
+            training_session.requested_count = len(training_session_items)
+
+            response = PracticeSessionResponse(
+                training_session_uuid=training_session.uuid,
+                deck_uuid=deck.uuid,
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+                total_count=training_session.requested_count,
+                answered_count=training_session.actual_count,
+                correct_count=training_session.correct_count,
+                wrong_count=training_session.wrong_count,
+                started_at=training_session.started_at,
+                cards=[PracticeCard(
+                    sequence_number=item.sequence_number,
+                    prompt_text=item.prompt_text,
+                    prompt_language=item.prompt_lang,
+                    answer_language=item.answer_lang,
+                ) for item in training_session_items]
+            )
+
+            await uow.commit()
+
+            return response
+
+    async def resume_practice_session(
+            self,
+            user_id: int,
+            training_session_uuid: UUID,
+    ) -> PracticeSessionResponse:
+        async with self.uow_factory() as uow:
+            training_session = await uow.training_session_repo.get_by_uuid(
+                training_session_uuid,
+            )
+
+            if training_session is None or training_session.user_id != user_id:
+                raise TrainingSessionNotFoundError()
+
+            if training_session.finished_at is not None:
+                raise TrainingSessionAlreadyFinishedError()
+
+            deck = await uow.deck_repo.get_by_id(training_session.deck_id)
+
+            if deck is None:
+                raise DeckNotFoundError()
+
+            training_session_next_cards = (
+                await uow.training_session_item_repo.get_next_cards(
+                    training_session_id=training_session.id,
+                )
+            )
+
+            return PracticeSessionResponse(
+                training_session_uuid=training_session.uuid,
+                deck_uuid=deck.uuid,
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+                total_count=training_session.requested_count,
+                answered_count=training_session.actual_count,
+                correct_count=training_session.correct_count,
+                wrong_count=training_session.wrong_count,
+                started_at=training_session.started_at,
+                cards=[PracticeCard(
+                    sequence_number=item.sequence_number,
+                    prompt_text=item.prompt_text,
+                    prompt_language=item.prompt_lang,
+                    answer_language=item.answer_lang,
+                ) for item in training_session_next_cards]
+            )

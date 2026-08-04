@@ -6,7 +6,9 @@ import {
   type AnimationEvent as ReactAnimationEvent,
   type FormEvent,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { isApiError } from "../../api";
+import { hasSessionExpiredNotice } from "../../app/router/navigation-state";
 import { useAuth } from "../../auth/hooks/useAuth";
 import styles from "./LoginPage.module.css";
 
@@ -36,6 +38,7 @@ function getLoginErrorMessage(error: unknown): string {
 
 export function LoginPage() {
   const { login } = useAuth();
+  const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -156,90 +159,125 @@ export function LoginPage() {
   }
 
   const errorDescriptionId = errorMessage ? "login-error" : undefined;
+  const showSessionExpiredNotice = hasSessionExpiredNotice(location.state);
 
   return (
     <main className={styles.page}>
-      <div className={styles.login}>
-        <h1 className={styles.heading} id="login-title">
-          С возвращением
-        </h1>
+      <div aria-hidden="true" className={styles.ambient}>
+        <span className={styles.ambientOrb} />
+        <span className={styles.ambientLetter}>Aa</span>
+        <span className={styles.ambientRule} />
+      </div>
 
-        <section aria-labelledby="login-title" className={styles.card}>
-          <form
-            aria-busy={isSubmitting}
-            autoComplete="off"
-            className={styles.form}
-            onSubmit={handleSubmit}
-            ref={formRef}
-          >
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="username">
-                Имя пользователя
-              </label>
-              <input
-                aria-describedby={errorDescriptionId}
-                aria-invalid={errorMessage ? true : undefined}
-                autoCapitalize="none"
-                autoComplete="off"
-                autoCorrect="off"
-                className={styles.input}
-                disabled={isSubmitting}
-                id="username"
-                maxLength={USERNAME_MAX_LENGTH}
-                minLength={USERNAME_MIN_LENGTH}
-                name="username"
-                onAnimationStart={handleAutofillDetected}
-                onChange={(event) => setUsername(event.target.value)}
-                onFocus={enableFormInput}
-                onPointerDown={enableFormInput}
-                pattern="\S+"
-                readOnly={!isAcceptingInput}
-                ref={usernameInputRef}
-                required
-                spellCheck={false}
-                type="text"
-                value={username}
-              />
-            </div>
+      <div className={styles.shell}>
+        <section aria-hidden="true" className={styles.visual}>
+          <p className={styles.brand}>Etch</p>
+          <div className={styles.cardStack}>
+            <span className={styles.wordCardBack} />
+            <span className={styles.wordCardMiddle} />
+            <span className={styles.wordCardFront}>
+              <i>hello</i>
+              <b>привет</b>
+              <small>EN · RU</small>
+            </span>
+          </div>
+          <div className={styles.visualCopy}>
+            <span>Ваш словарь</span>
+            <strong>Слова, которые остаются с вами.</strong>
+          </div>
+        </section>
 
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="password">
-                Пароль
-              </label>
-              <input
-                aria-describedby={errorDescriptionId}
-                aria-invalid={errorMessage ? true : undefined}
-                autoComplete="off"
-                className={styles.input}
-                disabled={isSubmitting}
-                id="password"
-                maxLength={PASSWORD_MAX_LENGTH}
-                minLength={PASSWORD_MIN_LENGTH}
-                name="password"
-                onAnimationStart={handleAutofillDetected}
-                onChange={(event) => setPassword(event.target.value)}
-                onFocus={enableFormInput}
-                onPointerDown={enableFormInput}
-                pattern="\S+"
-                readOnly={!isAcceptingInput}
-                ref={passwordInputRef}
-                required
-                type="password"
-                value={password}
-              />
-            </div>
+        <div className={styles.login}>
+          <div className={styles.headingGroup}>
+            <span className={styles.eyebrow}>Личный кабинет</span>
+            <h1 className={styles.heading} id="login-title">
+              С возвращением
+            </h1>
+            <p className={styles.lead}>Продолжите учиться с того места, где остановились.</p>
+          </div>
 
-            {errorMessage ? (
-              <p className={styles.error} id="login-error" role="alert">
-                {errorMessage}
+          <section aria-labelledby="login-title" className={styles.card}>
+            {showSessionExpiredNotice ? (
+              <p className={styles.notice} role="status">
+                Сессия истекла. Войдите снова.
               </p>
             ) : null}
+            <form
+              aria-busy={isSubmitting}
+              autoComplete="off"
+              className={styles.form}
+              onSubmit={handleSubmit}
+              ref={formRef}
+            >
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="username">
+                  Имя пользователя <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  aria-describedby={errorDescriptionId}
+                  aria-invalid={errorMessage ? true : undefined}
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  className={styles.input}
+                  disabled={isSubmitting}
+                  id="username"
+                  maxLength={USERNAME_MAX_LENGTH}
+                  minLength={USERNAME_MIN_LENGTH}
+                  name="username"
+                  onAnimationStart={handleAutofillDetected}
+                  onChange={(event) => setUsername(event.target.value)}
+                  onFocus={enableFormInput}
+                  onPointerDown={enableFormInput}
+                  pattern="\S+"
+                  readOnly={!isAcceptingInput}
+                  ref={usernameInputRef}
+                  required
+                  spellCheck={false}
+                  type="text"
+                  value={username}
+                />
+              </div>
 
-            <button className={styles.submit} disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Входим…" : "Войти"}
-            </button>
-          </form>
-        </section>
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="password">
+                  Пароль <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  aria-describedby={errorDescriptionId}
+                  aria-invalid={errorMessage ? true : undefined}
+                  autoComplete="off"
+                  className={styles.input}
+                  disabled={isSubmitting}
+                  id="password"
+                  maxLength={PASSWORD_MAX_LENGTH}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  name="password"
+                  onAnimationStart={handleAutofillDetected}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onFocus={enableFormInput}
+                  onPointerDown={enableFormInput}
+                  pattern="\S+"
+                  readOnly={!isAcceptingInput}
+                  ref={passwordInputRef}
+                  required
+                  type="password"
+                  value={password}
+                />
+              </div>
+
+              {errorMessage ? (
+                <p className={styles.error} id="login-error" role="alert">
+                  {errorMessage}
+                </p>
+              ) : null}
+
+              <button className={styles.submit} disabled={isSubmitting} type="submit">
+                {isSubmitting ? "Входим…" : "Войти"}
+              </button>
+            </form>
+          </section>
+        </div>
       </div>
     </main>
   );

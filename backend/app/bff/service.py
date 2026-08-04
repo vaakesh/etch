@@ -26,6 +26,8 @@ from app.training_sessions.errors import (
 )
 from app.training_sessions.models import TrainingSession
 from app.utils import decode_cursor
+from app.training_sessions.service import TrainingSessionService
+from app.users.schemas import SearchQuery
 
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
@@ -102,6 +104,7 @@ class BffService:
         self,
         user_id: int,
         user_uuid: UUID,
+        search_query: SearchQuery = None,
         is_favourite: bool = False,
         cursor: str | None = None,
         limit: int = 50,
@@ -112,7 +115,7 @@ class BffService:
         if not is_favourite:
             decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
                 user_uuid=user_uuid,
-                search_query=None,
+                search_query=search_query,
                 cursor=cursor,
                 limit=limit,
                 public_only=False,
@@ -151,7 +154,7 @@ class BffService:
             items=[
                 DeckLibraryPage(
                     deck_uuid=deck.uuid,
-                    owner_uuid=user_uuid,
+                    owner_uuid=deck.owner_uuid,
                     title=deck.title,
                     description=deck.description,
                     deck_words_count=deck.words_count,
@@ -169,8 +172,8 @@ class BffService:
                             card_uuid=card.uuid,
                             front_text=card.front_text,
                             back_text=card.back_text,
-                            source_lang=card.source_lang,
-                            target_lang=card.target_lang,
+                            front_lang=card.front_lang,
+                            back_lang=card.back_lang,
                             updated_at=card.updated_at,
                         ) for card in deck_cards_by_deck_id[deck.id]
                     ]
@@ -206,8 +209,8 @@ class BffService:
                     card_uuid=card.uuid,
                     front_text=card.front_text,
                     back_text=card.back_text,
-                    source_lang=card.source_lang,
-                    target_lang=card.target_lang,
+                    front_lang=card.front_lang,
+                    back_lang=card.back_lang,
                     updated_at=card.updated_at,
                 ) for card in cards
             ],
@@ -222,124 +225,22 @@ class BffService:
             deck_uuid: UUID,
             prompt_side: Literal["front", "back"],
     ) -> PracticeSessionResponse:
-        async with self.uow_factory() as uow:
-            deck = await uow.deck_repo.get_by_uuid(
-                deck_uuid=deck_uuid,
-                for_update=True,
-            )
-
-            if deck is None:
-                raise DeckNotFoundError()
-
-            if deck.user_id != user_id and not deck.is_public:
-                raise PermissionDeniedError()
-
-
-            user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
-                user_id=user_id,
-                deck_id=deck.id,
-            )
-            if user_deck is None:
-                user_deck = UserDeck(
-                    user_id=user_id,
-                    deck_id=deck.id,
-                    sessions_count=0,
-                    correct_count=0,
-                    wrong_count=0,
-                )
-                uow.user_deck_repo.add(user_deck)
-
-            answer_side = "back" if prompt_side == "front" else "front"
-
-            training_session = TrainingSession(
-                user_id=user_id,
-                deck_id=deck.id,
-                requested_count=0,
-                actual_count=0,
-                correct_count=0,
-                wrong_count=0,
-                prompt_side=prompt_side,
-                answer_side=answer_side,
-            )
-
-
-            uow.training_session_repo.add(training_session)
-            await uow.flush()
-
-            training_session_items = await uow.training_session_item_repo.create_snapshot(
-                training_session_id=training_session.id,
-                deck_id=deck.id,
-                prompt_side=prompt_side,
-                answer_side=answer_side,
-            )
-            if not training_session_items:
-                raise DeckIsEmptyError()
-            
-            training_session.requested_count = len(training_session_items)
-
-            response = PracticeSessionResponse(
-                training_session_uuid=training_session.uuid,
-                deck_uuid=deck.uuid,
-                prompt_side=training_session.prompt_side,
-                answer_side=training_session.answer_side,
-                total_count=training_session.requested_count,
-                answered_count=training_session.actual_count,
-                correct_count=training_session.correct_count,
-                wrong_count=training_session.wrong_count,
-                started_at=training_session.started_at,
-                cards=[PracticeCard(
-                    sequence_number=item.sequence_number,
-                    prompt_text=item.prompt_text,
-                    prompt_language=item.prompt_lang,
-                    answer_language=item.answer_lang,
-                ) for item in training_session_items]
-            )
-
-            await uow.commit()
-
-            return response
+        training_session_service = TrainingSessionService(uow_factory=self.uow_factory)
+        response = await training_session_service.start_training_session(
+            user_id=user_id,
+            deck_uuid=deck_uuid,
+            prompt_side=prompt_side,
+        )
+        return response
 
     async def resume_practice_session(
             self,
             user_id: int,
             training_session_uuid: UUID,
     ) -> PracticeSessionResponse:
-        async with self.uow_factory() as uow:
-            training_session = await uow.training_session_repo.get_by_uuid(
-                training_session_uuid,
-            )
-
-            if training_session is None or training_session.user_id != user_id:
-                raise TrainingSessionNotFoundError()
-
-            if training_session.finished_at is not None:
-                raise TrainingSessionAlreadyFinishedError()
-
-            deck = await uow.deck_repo.get_by_id(training_session.deck_id)
-
-            if deck is None:
-                raise DeckNotFoundError()
-
-            training_session_next_cards = (
-                await uow.training_session_item_repo.get_next_cards(
-                    training_session_id=training_session.id,
-                )
-            )
-
-            return PracticeSessionResponse(
-                training_session_uuid=training_session.uuid,
-                deck_uuid=deck.uuid,
-                prompt_side=training_session.prompt_side,
-                answer_side=training_session.answer_side,
-                total_count=training_session.requested_count,
-                answered_count=training_session.actual_count,
-                correct_count=training_session.correct_count,
-                wrong_count=training_session.wrong_count,
-                started_at=training_session.started_at,
-                cards=[PracticeCard(
-                    sequence_number=item.sequence_number,
-                    prompt_text=item.prompt_text,
-                    prompt_language=item.prompt_lang,
-                    answer_language=item.answer_lang,
-                ) for item in training_session_next_cards]
-            )
+        training_session_service = TrainingSessionService(uow_factory=self.uow_factory)
+        response = await training_session_service.resume_practice_session(
+            user_id=user_id,
+            training_session_uuid=training_session_uuid,
+        )
+        return response

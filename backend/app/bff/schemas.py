@@ -69,8 +69,8 @@ class CardLibraryPage(BaseModel):
 
     front_text: CardText
     back_text: CardText
-    source_lang: CardLang
-    target_lang: CardLang
+    front_lang: CardLang
+    back_lang: CardLang
 
     updated_at: datetime
 

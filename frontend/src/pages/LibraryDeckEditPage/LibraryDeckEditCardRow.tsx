@@ -6,6 +6,7 @@ import type {
 } from "../../features/library/model/library-types";
 import { CardEditorDialog } from "../LibraryPage/CardEditorDialog";
 import libraryStyles from "../LibraryPage/LibraryPage.module.css";
+import { OverflowingCardText } from "../LibraryPage/OverflowingCardText";
 
 interface LibraryDeckEditCardRowProps {
   card: EditableLibraryCard;
@@ -17,11 +18,8 @@ function getCardRemoveErrorMessage(error: unknown): string {
   if (!isApiError(error)) {
     return "Не удалось удалить карточку из колоды. Попробуйте ещё раз.";
   }
-  if (error.status === 403) {
-    return "У вас нет доступа к изменению этой колоды.";
-  }
-  if (error.status === 404) {
-    return "Карточка уже удалена из колоды или больше не существует.";
+  if (error.status === 403 || error.status === 404) {
+    return "Колода или карточка больше недоступна.";
   }
   if (error.code === "REQUEST_ABORTED") {
     return "Удаление карточки из колоды было отменено.";
@@ -239,22 +237,26 @@ export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeck
   return (
     <li aria-busy={isRemoving} className={cardRowClassName} data-card-uuid={card.uuid} ref={rowRef}>
       <div className={`${libraryStyles.cardFace} ${libraryStyles.cardFaceSource}`}>
-        <span className={libraryStyles.languageBadge}>{card.targetLang.toUpperCase()}</span>
+        <span className={libraryStyles.languageBadge}>{card.backLang.toUpperCase()}</span>
         <div className={libraryStyles.cardFaceCopy}>
-          <p className={libraryStyles.cardWord} title={card.backText}>
-            <span className={libraryStyles.visuallyHidden}>Слово: </span>
-            <span lang={card.targetLang}>{card.backText}</span>
-          </p>
+          <OverflowingCardText
+            className={libraryStyles.cardWord}
+            label="Слово"
+            language={card.backLang}
+            text={card.backText}
+          />
         </div>
       </div>
 
       <div className={`${libraryStyles.cardFace} ${libraryStyles.cardFaceTarget}`}>
-        <span className={libraryStyles.languageBadge}>{card.sourceLang.toUpperCase()}</span>
+        <span className={libraryStyles.languageBadge}>{card.frontLang.toUpperCase()}</span>
         <div className={libraryStyles.cardFaceCopy}>
-          <p className={libraryStyles.cardTranslation} title={card.frontText}>
-            <span className={libraryStyles.visuallyHidden}>Перевод: </span>
-            <span lang={card.sourceLang}>{card.frontText}</span>
-          </p>
+          <OverflowingCardText
+            className={libraryStyles.cardTranslation}
+            label="Перевод"
+            language={card.frontLang}
+            text={card.frontText}
+          />
         </div>
       </div>
 

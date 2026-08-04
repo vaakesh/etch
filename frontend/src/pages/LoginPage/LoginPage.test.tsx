@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const { loginMock } = vi.hoisted(() => ({ loginMock: vi.fn() }));
@@ -9,12 +10,21 @@ vi.mock("../../auth/hooks/useAuth", () => ({
 
 import { LoginPage } from "./LoginPage";
 
+function renderLogin(state?: unknown): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={[{ pathname: "/login", state }]}>
+      <LoginPage />
+    </MemoryRouter>,
+  );
+}
+
 describe("LoginPage", () => {
   it("renders a focused username and password login form", () => {
-    const markup = renderToStaticMarkup(<LoginPage />);
+    const markup = renderLogin();
 
     expect(markup).toContain("С возвращением");
     expect(markup).toContain("Имя пользователя");
+    expect(markup.match(/aria-hidden="true">\*<\/span>/g)).toHaveLength(2);
     expect(markup).toContain('name="username"');
     expect(markup).toContain('minLength="3"');
     expect(markup).toContain('maxLength="18"');
@@ -27,5 +37,12 @@ describe("LoginPage", () => {
     expect(markup.match(/readonly=""/gi)).toHaveLength(2);
     expect(markup).not.toMatch(/autocomplete="(?:username|current-password)"/i);
     expect(markup).not.toContain('type="email"');
+  });
+
+  it("explains why an expired session redirected the user to login", () => {
+    const markup = renderLogin({ notice: "session-expired", from: "/practice?deck=missing" });
+
+    expect(markup).toContain("Сессия истекла. Войдите снова.");
+    expect(markup).toContain('role="status"');
   });
 });

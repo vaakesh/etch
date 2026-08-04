@@ -42,8 +42,8 @@ const DECK_CARD_RESPONSE = {
   uuid: CARD_UUID,
   front_text: "привет",
   back_text: "hello",
-  source_lang: "ru",
-  target_lang: "en",
+  front_lang: "ru",
+  back_lang: "en",
 };
 
 describe("getEditableLibraryDeck", () => {
@@ -157,8 +157,8 @@ describe("getLibraryDeckCardPage", () => {
           uuid: CARD_UUID,
           frontText: "привет",
           backText: "hello",
-          sourceLang: "ru",
-          targetLang: "en",
+          frontLang: "ru",
+          backLang: "en",
         },
       ],
       nextOffset: 51,
@@ -421,6 +421,22 @@ describe("getLibraryDeckPage", () => {
     });
   });
 
+  it("sends a trimmed title query to the BFF deck page", async () => {
+    const controller = new AbortController();
+
+    await getLibraryDeckPage(null, controller.signal, "  Daily words  ");
+
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: {
+        cursor: null,
+        is_favourite: false,
+        limit: 50,
+        q: "Daily words",
+      },
+      signal: controller.signal,
+    });
+  });
+
   it.each([true, false])("sets favourite=%s through the deck PATCH route query", async (value) => {
     vi.mocked(apiFetch).mockResolvedValue(value);
     const controller = new AbortController();
@@ -520,8 +536,8 @@ describe("createLibraryCard", () => {
       uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
       front_text: "привет",
       back_text: "hello",
-      source_lang: "ru",
-      target_lang: "en",
+      front_lang: "ru",
+      back_lang: "en",
     });
   });
 
@@ -533,8 +549,8 @@ describe("createLibraryCard", () => {
         {
           frontText: "привет",
           backText: "hello",
-          sourceLang: "ru",
-          targetLang: "en",
+          frontLang: "ru",
+          backLang: "en",
         },
         controller.signal,
       ),
@@ -542,8 +558,8 @@ describe("createLibraryCard", () => {
       uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
       frontText: "привет",
       backText: "hello",
-      sourceLang: "ru",
-      targetLang: "en",
+      frontLang: "ru",
+      backLang: "en",
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/cards/", {
@@ -551,8 +567,8 @@ describe("createLibraryCard", () => {
       body: {
         front_text: "привет",
         back_text: "hello",
-        source_lang: "ru",
-        target_lang: "en",
+        front_lang: "ru",
+        back_lang: "en",
       },
       signal: controller.signal,
     });
@@ -568,8 +584,8 @@ describe("createLibraryCard", () => {
       createLibraryCard({
         frontText: "привет",
         backText: "hello",
-        sourceLang: "ru",
-        targetLang: "en",
+        frontLang: "ru",
+        backLang: "en",
       }),
     ).rejects.toMatchObject({
       status: 0,
@@ -585,8 +601,8 @@ describe("updateLibraryCard", () => {
       uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
       front_text: "неизгладимый",
       back_text: "indelible",
-      source_lang: "ru",
-      target_lang: "en",
+      front_lang: "ru",
+      back_lang: "en",
     });
   });
 
@@ -599,8 +615,8 @@ describe("updateLibraryCard", () => {
         {
           frontText: "неизгладимый",
           backText: "indelible",
-          sourceLang: "ru",
-          targetLang: "en",
+          frontLang: "ru",
+          backLang: "en",
         },
         controller.signal,
       ),
@@ -608,8 +624,8 @@ describe("updateLibraryCard", () => {
       uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
       frontText: "неизгладимый",
       backText: "indelible",
-      sourceLang: "ru",
-      targetLang: "en",
+      frontLang: "ru",
+      backLang: "en",
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/cards/413b1910-5d07-4c67-93a0-6b8946c59b15", {
@@ -617,8 +633,8 @@ describe("updateLibraryCard", () => {
       body: {
         front_text: "неизгладимый",
         back_text: "indelible",
-        source_lang: "ru",
-        target_lang: "en",
+        front_lang: "ru",
+        back_lang: "en",
       },
       signal: controller.signal,
     });
@@ -634,8 +650,8 @@ describe("updateLibraryCard", () => {
       updateLibraryCard("413b1910-5d07-4c67-93a0-6b8946c59b15", {
         frontText: "hello",
         backText: "привет",
-        sourceLang: "en",
-        targetLang: "ru",
+        frontLang: "en",
+        backLang: "ru",
       }),
     ).rejects.toMatchObject({
       status: 0,

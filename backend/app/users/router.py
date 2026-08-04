@@ -12,7 +12,6 @@ from app.training_sessions.deps import (
 )
 from app.training_sessions.schemas import (
     TrainingSessionOut,
-    TrainingSessionStatus,
 )
 from app.users.deps import UserServiceDeps
 from app.users.schemas import (
@@ -24,6 +23,8 @@ from app.users.schemas import (
     UserUpdate,
 )
 from fastapi import APIRouter, Query, Response, status
+
+from app.training_sessions.models import TrainingSessionStatus
 
 router = APIRouter(prefix="/users")
 

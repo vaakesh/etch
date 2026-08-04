@@ -6,27 +6,38 @@ from uuid import UUID
 from app.errors import RequestValueError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.training_sessions.models import CardSide, TrainingSessionStatus
+from app.cards.schemas import CardLang, CardText
+
+type Counter = Annotated[
+    int,
+    Field(ge=0),
+]
+
+type Percent = Annotated[
+    int,
+    Field(ge=0, le=100),
+]
 
 class TrainingSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
+    deck_uuid: UUID
 
-    requested_count: int
-    actual_count: int
+    status: TrainingSessionStatus
 
-    correct_count: int
-    wrong_count: int
+    requested_count: Counter
+    actual_count: Counter
 
-    prompt_side: str
-    answer_side: str
+    correct_count: Counter
+    wrong_count: Counter
+
+    prompt_side: CardSide
+    answer_side: CardSide
 
     started_at: datetime
     finished_at: datetime | None
-
-class TrainingSessionStatus(StrEnum):
-    FINISHED = "finished"
-    UNFINISHED = "unfinished"
 
 class SkipAnswer(BaseModel):
     action: Literal["skip"]
@@ -54,9 +65,28 @@ type UserAnswer = Annotated[
 
 class SubmitAnswerResponse(BaseModel):
     is_correct: bool
-    answer_text: str
-    answered_count: int
-    correct_count: int
-    total_count: int
+    answer_text: CardText
+    answered_count: Counter
+    correct_count: Counter
+    total_count: Counter
     is_finished: bool
     time_to_complete: int | None 
+
+type PositiveInt = Annotated[
+    int,
+    Field(ge=1),
+]
+
+class TrainingSessionItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    item_uuid: UUID
+    sequence_number: PositiveInt
+    prompt_text: CardText
+    answer_text: CardText
+    prompt_lang: CardLang
+    answer_lang: CardLang
+    user_typed_text: CardText | None
+
+    is_answered: bool
+    is_correct: bool | None

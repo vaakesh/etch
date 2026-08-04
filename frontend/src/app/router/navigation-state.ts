@@ -4,6 +4,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export const LOGIN_PATH = "/login";
 export const HOME_PATH = "/";
+export const SESSION_EXPIRED_NOTICE = "session-expired";
+
+export function hasSessionExpiredNotice(state: unknown): boolean {
+  return isRecord(state) && state.notice === SESSION_EXPIRED_NOTICE;
+}
 
 export function getSafeReturnPath(state: unknown, fallback = HOME_PATH): string {
   if (!isRecord(state) || typeof state.from !== "string") {

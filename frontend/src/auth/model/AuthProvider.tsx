@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
-import { apiClient, isApiError } from "../../api";
+import { apiClient } from "../../api";
 import { getCurrentUser, loginRequest, logoutRequest } from "../api/auth-api";
 import { AuthContext } from "./auth-context";
+import { isAuthSessionRejected } from "./auth-errors";
 import { authReducer, initialAuthState } from "./auth-reducer";
 import { withAuthMutationLock } from "./auth-mutation-lock";
 import { setUnauthorizedListener } from "./auth-session";
@@ -30,10 +31,6 @@ const SESSION_INVALIDATED_REASON = "auth-session-invalidated";
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error("An unknown authentication error occurred.");
-}
-
-function isUnauthorizedError(error: unknown): boolean {
-  return isApiError(error) && (error.status === 401 || error.status === 403);
 }
 
 function shouldDeferCookieCleanup(signal: AbortSignal): boolean {
@@ -107,7 +104,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        if (isUnauthorizedError(error)) {
+        if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
           dispatch({ type: "unauthorized" });
         } else {
@@ -228,7 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        if (isUnauthorizedError(error)) {
+        if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
           dispatch({ type: "unauthorized" });
         } else {
@@ -295,7 +292,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       operationRef.current += 1;
       if (mountedRef.current) {
         dispatch(
-          isUnauthorizedError(error)
+          isAuthSessionRejected(error)
             ? { type: "unauthorized" }
             : { type: "error", error: toError(error) },
         );
@@ -337,7 +334,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (isCurrentOperation(operation) && !signal.aborted) {
             apiClient.invalidateSession();
             dispatch(
-              isUnauthorizedError(error)
+              isAuthSessionRejected(error)
                 ? { type: "unauthorized" }
                 : { type: "error", error: toError(error) },
             );

@@ -184,7 +184,9 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
         <form className={styles.cardEditorForm} onSubmit={handleSubmit}>
           <label className={styles.cardEditorField} htmlFor={deckTitleId}>
             <span className={styles.cardEditorLabel}>
-              <strong>Название</strong>
+              <strong>
+                Название <span aria-hidden="true">*</span>
+              </strong>
               <code>title</code>
             </span>
             <input

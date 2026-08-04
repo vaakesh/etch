@@ -53,16 +53,16 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
             uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
             frontText: "hello",
             backText: "привет",
-            sourceLang: "en",
-            targetLang: "ru",
+            frontLang: "en",
+            backLang: "ru",
             updatedAt: "2026-07-20T09:15:00Z",
           },
           {
             uuid: "28dd615b-a6cb-4471-8238-b41c25556bb0",
             frontText: "journey",
             backText: "путешествие",
-            sourceLang: "en",
-            targetLang: "ru",
+            frontLang: "en",
+            backLang: "ru",
             updatedAt: "2026-07-20T09:15:00Z",
           },
         ],
@@ -109,8 +109,8 @@ function createCardLibraryResult(
         uuid: "8f449a33-87ff-4cf8-a371-43c681623f61",
         frontText: "indelible",
         backText: "неизгладимый",
-        sourceLang: "en",
-        targetLang: "ru",
+        frontLang: "en",
+        backLang: "ru",
         updatedAt: "2026-07-20T09:15:00Z",
       },
     ],
@@ -188,6 +188,11 @@ describe("LibraryPage", () => {
     expect(markup).toContain('id="library-cards-tab"');
     expect(markup).toContain('aria-selected="true"');
     expect(markup).toContain("Только любимые");
+    expect(markup).toContain('name="deck_search"');
+    expect(markup).toContain('type="search"');
+    expect(markup).toContain('placeholder="Поиск по колодам"');
+    expect(markup).toContain('maxLength="150"');
+    expect(markup).toContain("Поиск по названию колоды");
     expect(markup).toMatch(
       /<button[^>]*aria-controls="library-decks-panel"[^>]*aria-pressed="false"/,
     );
@@ -345,8 +350,8 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Редактировать карточку");
     expect(markup).toContain('name="front_text"');
     expect(markup).toContain('name="back_text"');
-    expect(markup).toContain('name="source_lang"');
-    expect(markup).toContain('name="target_lang"');
+    expect(markup).toContain('name="front_lang"');
+    expect(markup).toContain('name="back_lang"');
     expect(markup.match(/maxLength="255"/g)).toHaveLength(2);
     expect(markup.match(/maxLength="3"/g)).toHaveLength(2);
     expect(markup.match(/minLength="2"/g)).toHaveLength(2);
@@ -422,6 +427,7 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Новая карточка");
     expect(markup).toContain("Заполните тексты и языки обеих сторон.");
     expect(markup.match(/required=""/g)).toHaveLength(4);
+    expect(markup.match(/aria-hidden="true">\*<\/span>/g)).toHaveLength(4);
     expect(markup.match(/<textarea[^>]*><\/textarea>/g)).toHaveLength(2);
     expect(markup.match(/value=""/g)).toHaveLength(2);
     expect(markup).toContain("Создать");
@@ -438,6 +444,7 @@ describe("LibraryPage", () => {
     expect(markup).toContain('name="title"');
     expect(markup).toContain('maxLength="50"');
     expect(markup).toContain('minLength="3"');
+    expect(markup).toContain('aria-hidden="true">*</span>');
     expect(markup).toContain('name="description"');
     expect(markup).toContain("необязательно");
     expect(markup.match(/name="is_public"/g)).toHaveLength(2);
@@ -491,8 +498,8 @@ describe("LibraryPage", () => {
                 uuid: "413b1910-5d07-4c67-93a0-6b8946c59b15",
                 frontText: "etch",
                 backText: "гравировать",
-                sourceLang: "en",
-                targetLang: "ru",
+                frontLang: "en",
+                backLang: "ru",
                 updatedAt: "2026-07-20T09:15:00Z",
               },
             ],

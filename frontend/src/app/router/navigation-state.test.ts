@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getSafeReturnPath, HOME_PATH } from "./navigation-state";
+import {
+  getSafeReturnPath,
+  hasSessionExpiredNotice,
+  HOME_PATH,
+  SESSION_EXPIRED_NOTICE,
+} from "./navigation-state";
 
 describe("navigation state", () => {
   it("uses the root path as the authenticated fallback", () => {
@@ -19,5 +24,11 @@ describe("navigation state", () => {
     { from: "/login" },
   ])("rejects an unsafe return state", (state) => {
     expect(getSafeReturnPath(state)).toBe(HOME_PATH);
+  });
+
+  it("recognizes only the explicit session-expired login notice", () => {
+    expect(hasSessionExpiredNotice({ notice: SESSION_EXPIRED_NOTICE })).toBe(true);
+    expect(hasSessionExpiredNotice({ notice: "server-error" })).toBe(false);
+    expect(hasSessionExpiredNotice(null)).toBe(false);
   });
 });
