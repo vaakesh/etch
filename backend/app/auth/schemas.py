@@ -3,7 +3,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.users.schemas import Password, Username
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PastDatetime
 
 
 @dataclass(slots=True, frozen=True)
@@ -25,7 +25,7 @@ class SessionOut(BaseModel):
     user_id: int
     user_agent: str | None
     ip: str | None
-    revoked_at: datetime | None
+    revoked_at: PastDatetime | None
     replaced_by_session_id: int | None
 
 class LoginRequest(BaseModel):

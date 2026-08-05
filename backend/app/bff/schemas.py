@@ -10,7 +10,10 @@ from typing import Literal
 from uuid import UUID
 
 from app.cards.schemas import CardLang, CardText
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PastDatetime
+
+from app.decks.schemas import DeckTitle, DeckDescription
+from app.training_sessions.schemas import Counter, Percent, Seconds
 
 
 # home page
@@ -21,23 +24,23 @@ class DeckDashboard(BaseModel):
 
     deck_uuid: UUID
     owner_uuid: UUID
-    title: str
-    description: str | None = None
-    deck_words_count: int
-    user_accuracy: int
-    updated_at: datetime | None = None
+    title: DeckTitle
+    description: DeckDescription = None
+    deck_words_count: Counter
+    user_accuracy: Percent
+    updated_at: PastDatetime | None = None
 
 class UserProgress(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    user_words_explored: int
-    user_weekly_accuracy: float
-    user_current_streak: int # days
-    user_total_study_time: int # seconds
+    user_words_explored: Counter
+    user_weekly_accuracy: Percent
+    user_current_streak: Counter # days
+    user_total_study_time: Seconds # seconds
 
 class WeeklyActivityDay(BaseModel):
     date: Date
-    percent: int = Field(ge=0, le=100)
+    percent: Percent
 
 class HomeDashboard(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -53,12 +56,12 @@ class DeckLibraryPage(BaseModel):
 
     deck_uuid: UUID
     owner_uuid: UUID
-    title: str
-    description: str | None = None
-    deck_words_count: int
-    user_accuracy: int
+    title: DeckTitle
+    description: DeckDescription = None
+    deck_words_count: Counter
+    user_accuracy: Percent
     is_favourite: bool
-    updated_at: datetime | None = None
+    updated_at: PastDatetime | None = None
 
     cards: list[CardLibraryPage]
 
@@ -72,7 +75,7 @@ class CardLibraryPage(BaseModel):
     front_lang: CardLang
     back_lang: CardLang
 
-    updated_at: datetime
+    updated_at: PastDatetime
 
     # decks_contain_count: int
 

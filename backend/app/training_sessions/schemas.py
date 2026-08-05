@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from app.errors import RequestValueError
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, PastDatetime
 
 from app.training_sessions.models import CardSide, TrainingSessionStatus
 from app.cards.schemas import CardLang, CardText
@@ -36,8 +36,8 @@ class TrainingSessionOut(BaseModel):
     prompt_side: CardSide
     answer_side: CardSide
 
-    started_at: datetime
-    finished_at: datetime | None
+    started_at: PastDatetime
+    finished_at: PastDatetime | None
 
 class SkipAnswer(BaseModel):
     action: Literal["skip"]
@@ -63,6 +63,11 @@ type UserAnswer = Annotated[
     Field(discriminator="action"),
 ]
 
+type Seconds = Annotated[
+    int,
+    Field(ge=0),
+]
+
 class SubmitAnswerResponse(BaseModel):
     is_correct: bool
     answer_text: CardText
@@ -70,7 +75,7 @@ class SubmitAnswerResponse(BaseModel):
     correct_count: Counter
     total_count: Counter
     is_finished: bool
-    time_to_complete: int | None 
+    time_to_complete: Seconds | None 
 
 type PositiveInt = Annotated[
     int,
