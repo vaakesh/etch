@@ -9,7 +9,6 @@ import type {
   PracticeHistoryFilter,
   PracticeHistorySession,
   PracticeSession,
-  TrainingSessionStatus,
 } from "../../features/practice/model/practice-types";
 import { usePracticeHistory } from "../../features/practice/model/usePracticeHistory";
 import {
@@ -26,9 +25,11 @@ import {
   formatNumber,
   localizeCount,
   useLocale,
+  useLocalizedMessages,
   type AppLocale,
 } from "../../i18n";
 import styles from "./PracticePage.module.css";
+import { PRACTICE_MESSAGES, type PracticeMessages } from "./PracticePage.messages";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const practiceHistoryDateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
@@ -55,21 +56,12 @@ function getPracticeTextSize(text: string): PracticeTextSize {
   return "regular";
 }
 
-const PRACTICE_HISTORY_FILTERS: readonly {
-  value: PracticeHistoryFilter;
-  label: string;
-}[] = [
-  { value: "all", label: "Все" },
-  { value: "completed", label: "Завершённые" },
-  { value: "in_progress", label: "Незавершённые" },
-  { value: "abandoned", label: "Брошенные" },
+const PRACTICE_HISTORY_FILTERS: readonly PracticeHistoryFilter[] = [
+  "all",
+  "completed",
+  "in_progress",
+  "abandoned",
 ];
-
-const PRACTICE_STATUS_LABELS: Readonly<Record<TrainingSessionStatus, string>> = {
-  completed: "Завершена",
-  in_progress: "Не завершена",
-  abandoned: "Брошена",
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -133,8 +125,10 @@ function DirectionMark() {
 }
 
 function DirectionLabel({ from, to }: { from: string; to: string }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
   return (
-    <span aria-label={`${from} в ${to}`} className={styles.directionLabel}>
+    <span aria-label={messages.directionLabel(from, to)} className={styles.directionLabel}>
       <span>{from}</span>
       <DirectionMark />
       <span>{to}</span>
@@ -202,64 +196,64 @@ function AmbientBackground() {
   );
 }
 
-function getPracticeErrorMessage(error: unknown, operation: "resume" | "start" | "submit"): string {
+function getPracticeErrorMessage(
+  error: unknown,
+  operation: "resume" | "start" | "submit",
+  messages: PracticeMessages,
+): string {
   if (!isApiError(error)) {
-    return "Что-то пошло не так. Попробуйте ещё раз.";
+    return messages.errors.default;
   }
 
   if (error.code === "INVALID_PRACTICE_RESPONSE") {
-    return "Сервер вернул данные тренировки в неожиданном формате.";
+    return messages.errors.invalidResponse;
   }
   if (error.status === 403 || error.status === 404) {
-    return operation === "start"
-      ? "Колода не найдена или больше недоступна."
-      : "Тренировочная сессия не найдена или больше недоступна.";
+    return operation === "start" ? messages.errors.deckNotFound : messages.errors.sessionNotFound;
   }
   if (error.status === 409) {
     if (operation === "start") {
-      return "В этой колоде пока нет карточек для тренировки.";
+      return messages.errors.emptyDeck;
     }
     return operation === "resume"
-      ? "Эта тренировочная сессия уже завершена."
-      : "Сессия уже завершена — этот ответ отправить нельзя.";
+      ? messages.errors.resumedFinished
+      : messages.errors.submittedFinished;
   }
   if (error.status === 422) {
-    return operation === "submit"
-      ? "Ответ не прошёл проверку. Проверьте текст и попробуйте снова."
-      : "Ссылка на тренировку содержит некорректные данные.";
+    return operation === "submit" ? messages.errors.invalidAnswer : messages.errors.invalidLink;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может продолжить тренировку.";
+    return messages.errors.server;
   }
 
-  return "Не удалось продолжить тренировку. Попробуйте ещё раз.";
+  return messages.errors.fallback;
 }
 
-function getPracticeDeckLoadErrorMessage(error: unknown): string {
+function getPracticeDeckLoadErrorMessage(error: unknown, messages: PracticeMessages): string {
   if (isApiError(error) && error.code === "INVALID_PRACTICE_RESPONSE") {
-    return "Сервер вернул данные колоды в неожиданном формате.";
+    return messages.errors.invalidDeckResponse;
   }
 
-  return getPracticeErrorMessage(error, "start");
+  return getPracticeErrorMessage(error, "start", messages);
 }
 
-function getPracticeHistoryErrorMessage(error: unknown): string {
+function getPracticeHistoryErrorMessage(error: unknown, messages: PracticeMessages): string {
   if (isApiError(error)) {
     if (error.code === "INVALID_PRACTICE_RESPONSE") {
-      return "Сервер вернул историю тренировок в неожиданном формате.";
+      return messages.historyErrors.invalid;
     }
     if (error.status === 0) {
-      return "Не удалось связаться с сервером. Проверьте подключение.";
+      return messages.historyErrors.network;
     }
     if (error.status >= 500) {
-      return "Сервер временно не может загрузить историю тренировок.";
+      return messages.historyErrors.server;
     }
   }
 
-  return "Не удалось загрузить историю тренировок.";
+  return messages.historyErrors.default;
 }
 
 function getPracticeHistoryDateFormatter(locale: AppLocale): Intl.DateTimeFormat {
@@ -303,6 +297,7 @@ function getPracticeAccuracyToneClassName(accuracy: number): string {
 }
 
 function SessionAccuracyStat({ accuracy, locale }: { accuracy: number; locale: AppLocale }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const tooltipId = useId();
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const formattedAccuracy = formatNumber(accuracy, locale);
@@ -314,7 +309,7 @@ function SessionAccuracyStat({ accuracy, locale }: { accuracy: number; locale: A
     <span className={hintClassName}>
       <span
         aria-describedby={tooltipId}
-        aria-label="Точность сессии"
+        aria-label={messages.sessionAccuracy}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={accuracy}
@@ -341,8 +336,8 @@ function SessionAccuracyStat({ accuracy, locale }: { accuracy: number; locale: A
         {formattedAccuracy}
       </span>
       <span className={styles.historyAccuracyTooltip} id={tooltipId} role="tooltip">
-        <strong>Точность сессии</strong>
-        <span>Правильных ответов — {formattedAccuracy}%</span>
+        <strong>{messages.sessionAccuracy}</strong>
+        <span>{messages.correctPercentage(formattedAccuracy)}</span>
       </span>
     </span>
   );
@@ -363,6 +358,7 @@ function PracticeHistoryCard({
   onRepeat: (session: PracticeHistorySession) => void;
   session: PracticeHistorySession;
 }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const canContinue = session.status === "in_progress";
   const canViewHistory = session.status === "completed" || session.status === "abandoned";
   const accuracy =
@@ -377,32 +373,32 @@ function PracticeHistoryCard({
           {formatPracticeHistoryDate(session.startedAt, locale)}
         </time>
         <span className={styles[`historyStatus_${session.status}`]}>
-          {PRACTICE_STATUS_LABELS[session.status]}
+          {messages.statuses[session.status]}
         </span>
       </header>
 
       <div className={styles.historyDirection}>
         <strong>
           {session.promptSide === "front" ? (
-            <DirectionLabel from="Перевод" to="слово" />
+            <DirectionLabel from={messages.translation} to={messages.wordLower} />
           ) : (
-            <DirectionLabel from="Слово" to="перевод" />
+            <DirectionLabel from={messages.word} to={messages.translationLower} />
           )}
         </strong>
         <span>
           {formatNumber(session.actualCount, locale)} /{" "}
           {formatNumber(session.requestedCount, locale)}
-          &nbsp;карточек
+          &nbsp;{messages.cards}
         </span>
       </div>
 
       <dl className={styles.historyStats}>
         <div>
-          <dt>Верно</dt>
+          <dt>{messages.correct}</dt>
           <dd>{formatNumber(session.correctCount, locale)}</dd>
         </div>
         <div>
-          <dt>Ошибки</dt>
+          <dt>{messages.errorsLabel}</dt>
           <dd>{formatNumber(session.wrongCount, locale)}</dd>
         </div>
       </dl>
@@ -418,9 +414,9 @@ function PracticeHistoryCard({
       >
         {canViewHistory ? (
           <Link
-            aria-label="Открыть историю сессии"
+            aria-label={messages.openSessionHistory}
             className={styles.historyDetailsButton}
-            title="История сессии"
+            title={messages.sessionHistory}
             to={`/practice/sessions/${session.uuid}/history`}
           >
             <HistoryIcon />
@@ -437,7 +433,7 @@ function PracticeHistoryCard({
           type="button"
         >
           {isRepeating ? <span className={styles.buttonSpinner} /> : null}
-          {isRepeating ? "Запускаем…" : canContinue ? "Продолжить" : "Повторить"}
+          {isRepeating ? messages.launching : canContinue ? messages.continue : messages.repeat}
         </button>
       </div>
     </article>
@@ -454,6 +450,7 @@ function PracticeHistoryView({
   startError: unknown | null;
 }) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const [activeFilter, setActiveFilter] = useState<PracticeHistoryFilter>("all");
   const history = usePracticeHistory(activeFilter);
   const [repeatingSessionUuid, setRepeatingSessionUuid] = useState<string | null>(null);
@@ -476,11 +473,7 @@ function PracticeHistoryView({
   let historyContent;
   if (history.state.status === "loading") {
     historyContent = (
-      <div
-        aria-label="Загружаем историю тренировок"
-        className={styles.historySkeletons}
-        role="status"
-      >
+      <div aria-label={messages.loadingHistory} className={styles.historySkeletons} role="status">
         <span />
         <span />
         <span />
@@ -489,10 +482,10 @@ function PracticeHistoryView({
   } else if (history.state.status === "error") {
     historyContent = (
       <div className={styles.historyMessage} role="alert">
-        <strong>История пока недоступна</strong>
-        <p>{getPracticeHistoryErrorMessage(history.state.error)}</p>
+        <strong>{messages.historyUnavailable}</strong>
+        <p>{getPracticeHistoryErrorMessage(history.state.error, messages)}</p>
         <button className={styles.secondaryAction} onClick={history.retry} type="button">
-          Попробовать снова
+          {messages.retry}
         </button>
       </div>
     );
@@ -504,11 +497,11 @@ function PracticeHistoryView({
           <span>Бб</span>
         </div>
         <strong>
-          {activeFilter === "all" ? "Здесь появятся ваши тренировки" : "Таких сессий пока нет"}
+          {activeFilter === "all" ? messages.emptyHistory : messages.emptyFilteredHistory}
         </strong>
         {activeFilter === "all" ? (
           <Link className={styles.primaryAction} to="/library">
-            Выбрать колоду
+            {messages.chooseDeck}
           </Link>
         ) : null}
       </div>
@@ -536,35 +529,35 @@ function PracticeHistoryView({
       <section className={styles.historyPanel}>
         <header className={styles.historyIntro}>
           <div>
-            <h1>Тренировочные сессии</h1>
-            <p>Продолжайте в своём темпе или повторите знакомую колоду.</p>
+            <h1>{messages.sessionsTitle}</h1>
+            <p>{messages.sessionsLead}</p>
           </div>
           <Link className={styles.primaryAction} to="/library">
-            Новая сессия
+            {messages.newSession}
           </Link>
         </header>
 
-        <div aria-label="Фильтр тренировочных сессий" className={styles.historyFilters}>
+        <div aria-label={messages.historyFilters} className={styles.historyFilters}>
           {PRACTICE_HISTORY_FILTERS.map((filter) => (
             <button
-              aria-pressed={activeFilter === filter.value}
+              aria-pressed={activeFilter === filter}
               className={
-                activeFilter === filter.value
+                activeFilter === filter
                   ? `${styles.historyFilter} ${styles.historyFilterActive}`
                   : styles.historyFilter
               }
-              key={filter.value}
-              onClick={() => setActiveFilter(filter.value)}
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
               type="button"
             >
-              {filter.label}
+              {messages.filters[filter]}
             </button>
           ))}
         </div>
 
         {startError === null ? null : (
           <p className={styles.historyStartError} role="alert">
-            {getPracticeErrorMessage(startError, "start")}
+            {getPracticeErrorMessage(startError, "start", messages)}
           </p>
         )}
 
@@ -583,6 +576,7 @@ interface SetupViewProps {
 }
 
 export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewProps) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const [promptSide, setPromptSide] = useState<CardSide>("front");
   const isStarting = practice.state.status === "loading" && practice.state.operation === "start";
   const startError =
@@ -601,13 +595,13 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
     <main className={styles.centeredMain}>
       <section aria-busy={isStarting} className={styles.setupPanel}>
         <header className={styles.setupIntro}>
-          <h1>Настройка сессии</h1>
+          <h1>{messages.setupTitle}</h1>
         </header>
 
         <div className={styles.setupWorkspace}>
           <div className={styles.settingsCard}>
             <fieldset className={styles.settingGroup} disabled={isStarting}>
-              <legend>Направление</legend>
+              <legend>{messages.direction}</legend>
               <div className={styles.sideOptions} data-active={promptSide}>
                 <span aria-hidden="true" className={styles.sideOptionThumb} />
                 <label
@@ -624,7 +618,7 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
                     type="radio"
                     value="front"
                   />
-                  <DirectionLabel from="Перевод" to="слово" />
+                  <DirectionLabel from={messages.translation} to={messages.wordLower} />
                 </label>
 
                 <label
@@ -641,31 +635,31 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
                     type="radio"
                     value="back"
                   />
-                  <DirectionLabel from="Слово" to="перевод" />
+                  <DirectionLabel from={messages.word} to={messages.translationLower} />
                 </label>
               </div>
             </fieldset>
 
             <fieldset className={`${styles.settingGroup} ${styles.scopeGroup}`}>
-              <legend>Объём</legend>
+              <legend>{messages.scope}</legend>
               <div className={styles.scopeOptions}>
                 <label className={`${styles.scopeOption} ${styles.scopeOptionSelected}`}>
                   <input checked name="session_scope" readOnly type="radio" value="all" />
-                  <span>Вся колода</span>
+                  <span>{messages.entireDeck}</span>
                 </label>
                 <label className={styles.scopeOption}>
                   <input disabled name="session_scope" type="radio" value="50" />
-                  <span>50 карточек</span>
+                  <span>{messages.fiftyCards}</span>
                 </label>
                 <label className={styles.scopeOption}>
                   <input disabled name="session_scope" type="radio" value="100" />
-                  <span>100 карточек</span>
+                  <span>{messages.hundredCards}</span>
                 </label>
                 <label className={`${styles.scopeOption} ${styles.customScopeOption}`}>
                   <input disabled name="session_scope" type="radio" value="custom" />
-                  <span>Своё значение</span>
+                  <span>{messages.customCount}</span>
                   <input
-                    aria-label="Количество карточек"
+                    aria-label={messages.cardCount}
                     className={styles.scopeInput}
                     disabled
                     min="1"
@@ -678,11 +672,11 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
           </div>
 
           <section aria-atomic="true" aria-live="polite" className={styles.setupPreview}>
-            <h2>Пример</h2>
+            <h2>{messages.example}</h2>
 
             <div className={styles.previewCard}>
               <div className={styles.previewStage}>
-                <span className={styles.previewLabel}>Вы увидите</span>
+                <span className={styles.previewLabel}>{messages.youWillSee}</span>
                 <strong className={styles.previewWord}>
                   {promptSide === "front" ? "язык" : "language"}
                 </strong>
@@ -693,7 +687,7 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
               </div>
 
               <div className={`${styles.previewStage} ${styles.previewAnswer}`}>
-                <span className={styles.previewLabel}>Вы напечатаете</span>
+                <span className={styles.previewLabel}>{messages.youWillType}</span>
                 <div className={styles.previewInput}>
                   <span>{promptSide === "front" ? "language" : "язык"}</span>
                   <i aria-hidden="true" />
@@ -706,13 +700,13 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
         <div className={styles.setupBottom}>
           {startError === null ? null : (
             <p className={styles.inlineError} role="alert">
-              {getPracticeErrorMessage(startError, "start")}
+              {getPracticeErrorMessage(startError, "start", messages)}
             </p>
           )}
 
           <div className={styles.setupFooter}>
             <Link className={styles.secondaryAction} to="/library">
-              Назад
+              {messages.back}
             </Link>
             <button
               className={styles.primaryAction}
@@ -721,7 +715,7 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
               type="button"
             >
               {isStarting ? <span className={styles.buttonSpinner} /> : null}
-              {isStarting ? "Готовим…" : "Начать"}
+              {isStarting ? messages.preparing : messages.start}
             </button>
           </div>
         </div>
@@ -730,49 +724,50 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
   );
 }
 
-function SessionLoadingView({
-  ariaLabel = "Загружаем тренировочную сессию",
-  message = "Загружаем…",
-}: {
-  ariaLabel?: string;
-  message?: string;
-}) {
+function SessionLoadingView({ ariaLabel, message }: { ariaLabel?: string; message?: string }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
   return (
     <main className={styles.sessionMain}>
-      <div aria-label={ariaLabel} className={styles.sessionLoader} role="status">
+      <div
+        aria-label={ariaLabel ?? messages.loadingSession}
+        className={styles.sessionLoader}
+        role="status"
+      >
         <span className={styles.loaderCore} />
-        <p>{message}</p>
+        <p>{message ?? messages.loading}</p>
       </div>
     </main>
   );
 }
 
 function SessionErrorView({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const isFinishedSession = isApiError(error) && error.status === 409;
   const isMissingSession = isApiError(error) && (error.status === 403 || error.status === 404);
   const isInvalidSessionLink = isApiError(error) && error.status === 422;
   const canRetry = !isFinishedSession && !isMissingSession && !isInvalidSessionLink;
   const title = isMissingSession
-    ? "Тренировка не найдена"
+    ? messages.sessionNotFoundTitle
     : isFinishedSession
-      ? "Тренировка завершена"
+      ? messages.sessionFinishedTitle
       : isInvalidSessionLink
-        ? "Некорректная ссылка"
-        : "Не получилось продолжить";
+        ? messages.invalidLinkTitle
+        : messages.resumeFailedTitle;
 
   return (
     <main className={styles.centeredMain}>
       <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
         <h1>{title}</h1>
-        <p>{getPracticeErrorMessage(error, "resume")}</p>
+        <p>{getPracticeErrorMessage(error, "resume", messages)}</p>
         <div className={styles.errorActions}>
           {canRetry ? (
             <button className={styles.primaryAction} onClick={onRetry} type="button">
-              Попробовать снова
+              {messages.retry}
             </button>
           ) : null}
           <Link className={styles.secondaryAction} to="/library">
-            {isFinishedSession ? "Выбрать новую тренировку" : "В библиотеку"}
+            {isFinishedSession ? messages.chooseNewPractice : messages.toLibrary}
           </Link>
         </div>
       </section>
@@ -781,17 +776,19 @@ function SessionErrorView({ error, onRetry }: { error: unknown; onRetry: () => v
 }
 
 function PracticeDeckNotFoundView() {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
   return (
     <main className={styles.centeredMain}>
       <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
-        <h1>Колода не найдена</h1>
-        <p>Возможно, она была удалена или ссылка больше недоступна.</p>
+        <h1>{messages.deckNotFoundTitle}</h1>
+        <p>{messages.deckNotFoundLead}</p>
         <div className={styles.errorActions}>
           <Link className={styles.primaryAction} to="/library">
-            Выбрать другую колоду
+            {messages.chooseAnotherDeck}
           </Link>
           <Link className={styles.secondaryAction} to="/">
-            На главную
+            {messages.home}
           </Link>
         </div>
       </section>
@@ -800,17 +797,19 @@ function PracticeDeckNotFoundView() {
 }
 
 function PracticeDeckLoadErrorView({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
   return (
     <main className={styles.centeredMain}>
       <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
-        <h1>Не удалось открыть колоду</h1>
-        <p>{getPracticeDeckLoadErrorMessage(error)}</p>
+        <h1>{messages.deckLoadFailedTitle}</h1>
+        <p>{getPracticeDeckLoadErrorMessage(error, messages)}</p>
         <div className={styles.errorActions}>
           <button className={styles.primaryAction} onClick={onRetry} type="button">
-            Попробовать снова
+            {messages.retry}
           </button>
           <Link className={styles.secondaryAction} to="/library">
-            В библиотеку
+            {messages.toLibrary}
           </Link>
         </div>
       </section>
@@ -932,6 +931,7 @@ function readCompletionSummary(value: unknown): PracticeCompletionSummary | null
 
 export function PracticeCompletionView({ summary }: CompletionViewProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const panelRef = useRef<HTMLElement>(null);
   const accuracy = Math.round((summary.correctCount / summary.totalCount) * 100);
 
@@ -949,19 +949,19 @@ export function PracticeCompletionView({ summary }: CompletionViewProps) {
         <div className={styles.completionHalo}>
           <span>{accuracy}%</span>
         </div>
-        <h1>Колода пройдена</h1>
+        <h1>{messages.deckCompleted}</h1>
 
         <dl className={styles.completionStats}>
           <div>
-            <dt>Верно</dt>
+            <dt>{messages.correct}</dt>
             <dd>{summary.correctCount}</dd>
           </div>
           <div>
-            <dt>Ошибки</dt>
+            <dt>{messages.errorsLabel}</dt>
             <dd>{summary.wrongCount}</dd>
           </div>
           <div>
-            <dt>Время</dt>
+            <dt>{messages.time}</dt>
             <dd>{formatDuration(summary.timeToCompleteSeconds, locale)}</dd>
           </div>
         </dl>
@@ -969,10 +969,10 @@ export function PracticeCompletionView({ summary }: CompletionViewProps) {
         <div className={styles.completionActions}>
           <Link className={styles.primaryAction} to={`/practice?deck=${summary.deckUuid}`}>
             <RepeatIcon />
-            Ещё раз
+            {messages.again}
           </Link>
           <Link className={styles.secondaryAction} to="/library">
-            В библиотеку
+            {messages.toLibrary}
           </Link>
         </div>
       </section>
@@ -986,6 +986,7 @@ interface SessionProgressProps {
 
 function SessionProgress({ session }: SessionProgressProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const progress = Math.round((session.answeredCount / session.totalCount) * 100);
   const correctAnswerCount = localizeCount(
     session.correctCount,
@@ -1002,7 +1003,7 @@ function SessionProgress({ session }: SessionProgressProps) {
         </strong>
       </div>
       <div
-        aria-label={`Отвечено ${session.answeredCount} из ${session.totalCount}`}
+        aria-label={messages.progress(session.answeredCount, session.totalCount)}
         aria-valuemax={session.totalCount}
         aria-valuemin={0}
         aria-valuenow={session.answeredCount}
@@ -1039,6 +1040,7 @@ function CardPagination({
   onSelect,
 }: CardPaginationProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const sequenceNumbers = cards.map((card) => card.sequenceNumber);
   const tokens = getPracticePaginationTokens(sequenceNumbers, currentSequenceNumber, locale);
   const currentIndex = sequenceNumbers.indexOf(currentSequenceNumber);
@@ -1049,9 +1051,9 @@ function CardPagination({
       : undefined;
 
   return (
-    <nav aria-label="Карточки сессии" className={styles.pagination}>
+    <nav aria-label={messages.sessionCards} className={styles.pagination}>
       <button
-        aria-label="Предыдущая карточка"
+        aria-label={messages.previousCard}
         className={styles.paginationArrow}
         disabled={isDisabled || previousSequenceNumber === undefined}
         onClick={() => previousSequenceNumber !== undefined && onSelect(previousSequenceNumber)}
@@ -1082,7 +1084,11 @@ function CardPagination({
                 ? styles.pageNumberCorrect
                 : styles.pageNumberWrong;
           const feedbackLabel =
-            feedback === undefined ? null : feedback.isCorrect ? "Верный ответ" : "Неверный ответ";
+            feedback === undefined
+              ? null
+              : feedback.isCorrect
+                ? messages.correctAnswer
+                : messages.wrongAnswer;
           const className = [
             styles.pageNumber,
             token.isCurrent ? styles.pageNumberCurrent : "",
@@ -1110,7 +1116,7 @@ function CardPagination({
       </div>
 
       <button
-        aria-label="Следующая карточка"
+        aria-label={messages.nextCard}
         className={styles.paginationArrow}
         disabled={isDisabled || nextSequenceNumber === undefined}
         onClick={() => nextSequenceNumber !== undefined && onSelect(nextSequenceNumber)}
@@ -1151,6 +1157,7 @@ function AnswerArea({
   submitError,
   value,
 }: AnswerAreaProps) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const inputId = useId();
   const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
@@ -1191,16 +1198,16 @@ function AnswerArea({
       ? null
       : feedback.isCorrect
         ? feedback.answerText
-        : `Правильный ответ: ${feedback.answerText}`;
+        : messages.correctAnswerText(feedback.answerText);
 
   const liveMessage =
     feedback === undefined
       ? submitError === null
         ? ""
-        : getPracticeErrorMessage(submitError, "submit")
+        : getPracticeErrorMessage(submitError, "submit", messages)
       : feedback.isCorrect
-        ? `Ответ верный. Правильный ответ: ${feedback.answerText}`
-        : `Ответ неверный. Правильный ответ: ${feedback.answerText}`;
+        ? messages.correctLiveMessage(feedback.answerText)
+        : messages.wrongLiveMessage(feedback.answerText);
 
   if (feedback !== undefined) {
     return (
@@ -1215,7 +1222,9 @@ function AnswerArea({
             <ResultIcon isCorrect={feedback.isCorrect} />
           </span>
           <div className={styles.feedbackCopy}>
-            <strong>{feedback.isCorrect ? "Верно" : "Не совсем"}</strong>
+            <strong>
+              {feedback.isCorrect ? messages.correctFeedback : messages.wrongFeedback}
+            </strong>
             <span
               className={styles.feedbackAnswer}
               data-text-size={getPracticeTextSize(feedbackText ?? "")}
@@ -1229,7 +1238,7 @@ function AnswerArea({
             ref={continueButtonRef}
             type="button"
           >
-            {isFinished || nextSequenceNumber === null ? "Результат" : "Дальше"}
+            {isFinished || nextSequenceNumber === null ? messages.result : messages.next}
           </button>
         </div>
       </div>
@@ -1243,7 +1252,7 @@ function AnswerArea({
       </span>
       <form className={styles.answerForm} onSubmit={handleSubmit}>
         <label className={styles.visuallyHidden} htmlFor={inputId}>
-          Ваш ответ
+          {messages.yourAnswer}
         </label>
         <div className={styles.answerControls}>
           <textarea
@@ -1261,13 +1270,13 @@ function AnswerArea({
                 }
               }
             }}
-            placeholder="Ваш ответ"
+            placeholder={messages.yourAnswer}
             ref={answerInputRef}
             rows={1}
             value={value}
           />
           <button
-            aria-label="Отправить ответ"
+            aria-label={messages.submitAnswer}
             className={styles.submitButton}
             disabled={isSubmitting || !value.trim()}
             type="submit"
@@ -1277,11 +1286,13 @@ function AnswerArea({
         </div>
         <div className={styles.answerMeta}>
           <button disabled={isSubmitting} onClick={onSkip} type="button">
-            Не знаю
+            {messages.doNotKnow}
           </button>
         </div>
         {submitError === null ? null : (
-          <p className={styles.submitError}>{getPracticeErrorMessage(submitError, "submit")}</p>
+          <p className={styles.submitError}>
+            {getPracticeErrorMessage(submitError, "submit", messages)}
+          </p>
         )}
       </form>
     </div>
@@ -1296,6 +1307,7 @@ interface ActiveSessionViewProps {
 
 export function ActivePracticeSessionView({ onComplete, onSubmit, state }: ActiveSessionViewProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const [selectedSequenceNumber, setSelectedSequenceNumber] = useState(
     state.session.cards[0]?.sequenceNumber ?? 1,
   );
@@ -1343,13 +1355,16 @@ export function ActivePracticeSessionView({ onComplete, onSubmit, state }: Activ
         <article className={cardClassName} key={selectedCard.sequenceNumber}>
           <div className={styles.cardTopline}>
             <span
-              aria-label={`Карточка ${selectedCard.sequenceNumber}`}
+              aria-label={messages.card(selectedCard.sequenceNumber)}
               className={styles.cardNumber}
             >
               {String(selectedCard.sequenceNumber).padStart(2, "0")}
             </span>
             <span
-              aria-label={`Язык вопроса ${selectedCard.promptLanguage}, язык ответа ${selectedCard.answerLanguage}`}
+              aria-label={messages.languageFlow(
+                selectedCard.promptLanguage,
+                selectedCard.answerLanguage,
+              )}
               className={styles.languageFlow}
             >
               <span>{formatLanguage(selectedCard.promptLanguage, locale)}</span>
@@ -1410,13 +1425,15 @@ export function ActivePracticeSessionView({ onComplete, onSubmit, state }: Activ
 }
 
 function InvalidPracticeLinkView() {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
   return (
     <main className={styles.centeredMain}>
       <section className={`${styles.paperPanel} ${styles.errorPanel}`} role="alert">
-        <h1>Некорректная ссылка</h1>
-        <p>Выберите колоду заново — так мы точно запустим правильную тренировку.</p>
+        <h1>{messages.invalidLinkTitle}</h1>
+        <p>{messages.invalidLinkLead}</p>
         <Link className={styles.primaryAction} to="/library">
-          Перейти в библиотеку
+          {messages.goToLibrary}
         </Link>
       </section>
     </main>
@@ -1424,6 +1441,7 @@ function InvalidPracticeLinkView() {
 }
 
 export function PracticePage() {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1526,7 +1544,10 @@ export function PracticePage() {
       content = <PracticeDeckNotFoundView />;
     } else if (!availabilityStateMatches || practiceDeck.state.status === "loading") {
       content = (
-        <SessionLoadingView ariaLabel="Проверяем доступность колоды" message="Проверяем колоду…" />
+        <SessionLoadingView
+          ariaLabel={messages.checkingDeck}
+          message={messages.checkingDeckMessage}
+        />
       );
     } else if (practiceDeck.state.status === "error") {
       const isMissingDeck =

@@ -13,6 +13,7 @@ import {
   type AuthSessionEventInput,
 } from "./auth-session-events";
 import type { AuthContextValue, LoginCredentials } from "./auth-types";
+import type { UserSettings } from "../../features/settings/model/settings-types";
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -284,6 +285,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [publishSessionEvent],
   );
 
+  const applyUserSettings = useCallback((settings: UserSettings): void => {
+    dispatch({ type: "settings-updated", settings });
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     setUnauthorizedListener((error) => {
@@ -362,8 +367,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       refresh,
+      applyUserSettings,
     }),
-    [initialize, login, logout, refresh, state],
+    [applyUserSettings, initialize, login, logout, refresh, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

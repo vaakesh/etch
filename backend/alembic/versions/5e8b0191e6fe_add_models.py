@@ -1,8 +1,8 @@
 """add models
 
-Revision ID: f7ec0cd826fd
+Revision ID: 5e8b0191e6fe
 Revises: 
-Create Date: 2026-08-04 15:43:22.793291
+Create Date: 2026-08-05 00:30:09.233630
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f7ec0cd826fd'
+revision: str = '5e8b0191e6fe'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -87,6 +87,15 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_user_sessions_refresh_token_hash'), 'user_sessions', ['refresh_token_hash'], unique=True)
     op.create_index(op.f('ix_user_sessions_user_id'), 'user_sessions', ['user_id'], unique=False)
+    op.create_table('users_settings',
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('locale', sa.String(length=10), server_default='ru-RU', nullable=False),
+    sa.Column('theme', sa.String(length=10), server_default='system', nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('user_id')
+    )
     op.create_table('deck_cards',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('uuid', sa.UUID(), server_default=sa.text('uuidv7()'), nullable=False),
@@ -149,6 +158,7 @@ def upgrade() -> None:
     sa.Column('training_session_id', sa.BigInteger(), nullable=False),
     sa.Column('sequence_number', sa.Integer(), nullable=False),
     sa.Column('original_card_uuid', sa.UUID(), nullable=False),
+    sa.Column('user_typed_text', sa.Text(), nullable=True),
     sa.Column('prompt_text', sa.Text(), nullable=False),
     sa.Column('answer_text', sa.Text(), nullable=False),
     sa.Column('prompt_lang', sa.String(length=3), nullable=False),
@@ -185,6 +195,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_deck_cards_deck_id'), table_name='deck_cards')
     op.drop_index(op.f('ix_deck_cards_card_id'), table_name='deck_cards')
     op.drop_table('deck_cards')
+    op.drop_table('users_settings')
     op.drop_index(op.f('ix_user_sessions_user_id'), table_name='user_sessions')
     op.drop_index(op.f('ix_user_sessions_refresh_token_hash'), table_name='user_sessions')
     op.drop_table('user_sessions')

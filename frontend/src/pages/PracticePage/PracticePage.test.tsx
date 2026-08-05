@@ -11,6 +11,7 @@ import type {
   ReadyPracticeState,
   UsePracticeSessionResult,
 } from "../../features/practice/model/usePracticeSession";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const usePracticeSessionMock = vi.hoisted(() => vi.fn());
 const usePracticeDeckAvailabilityMock = vi.hoisted(() => vi.fn());
@@ -105,11 +106,13 @@ function createHistoryResult(
   return { state, retry: vi.fn() };
 }
 
-function renderPractice(pathname: string, state?: unknown): string {
+function renderPractice(pathname: string, state?: unknown, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[state === undefined ? pathname : { pathname, state }]}>
-      <PracticePage />
-    </MemoryRouter>,
+    <LocaleProvider initialLocale={locale}>
+      <MemoryRouter initialEntries={[state === undefined ? pathname : { pathname, state }]}>
+        <PracticePage />
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -140,6 +143,16 @@ describe("PracticePage", () => {
     expect(markup).not.toContain('aria-label="Выйти из практики в библиотеку"');
     expect(usePracticeSessionMock).toHaveBeenCalledWith(null, null);
     expect(usePracticeHistoryMock).toHaveBeenCalledWith("all");
+  });
+
+  it("renders practice history and filters in English", () => {
+    const markup = renderPractice("/practice", undefined, "en-US");
+
+    expect(markup).toContain("Practice sessions");
+    expect(markup).toContain("Completed");
+    expect(markup).toContain("In progress");
+    expect(markup).toContain("Abandoned");
+    expect(markup).toContain("Your practice sessions will appear here");
   });
 
   it("renders session setup with disabled future card limits", () => {

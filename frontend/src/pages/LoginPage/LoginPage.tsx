@@ -10,6 +10,7 @@ import { useLocation } from "react-router-dom";
 import { isApiError } from "../../api";
 import { hasSessionExpiredNotice } from "../../app/router/navigation-state";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LoginPage.module.css";
 
 const INVALID_CREDENTIALS_STATUSES = new Set([401, 403, 404]);
@@ -18,25 +19,69 @@ const USERNAME_MAX_LENGTH = 18;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
-function getLoginErrorMessage(error: unknown): string {
+const MESSAGES = defineMessages(
+  {
+    invalidCredentials: "Неверное имя пользователя или пароль.",
+    invalidFormat:
+      "Имя пользователя — 3–18 символов без пробелов, пароль — 8–128 символов без пробелов.",
+    networkError: "Не удалось связаться с сервером. Попробуйте ещё раз.",
+    genericError: "Не удалось войти. Попробуйте ещё раз.",
+    usernameRequired: "Введите имя пользователя.",
+    cardFront: "hello",
+    cardBack: "привет",
+    visualLabel: "Ваш словарь",
+    visualTitle: "Слова, которые остаются с вами.",
+    eyebrow: "Личный кабинет",
+    title: "С возвращением",
+    lead: "Продолжите учиться с того места, где остановились.",
+    expired: "Сессия истекла. Войдите снова.",
+    username: "Имя пользователя",
+    password: "Пароль",
+    submitting: "Входим…",
+    submit: "Войти",
+  },
+  {
+    invalidCredentials: "Incorrect username or password.",
+    invalidFormat:
+      "Username must be 3–18 characters without spaces; password must be 8–128 characters without spaces.",
+    networkError: "We couldn't reach the server. Try again.",
+    genericError: "We couldn't sign you in. Try again.",
+    usernameRequired: "Enter your username.",
+    cardFront: "hello",
+    cardBack: "hi",
+    visualLabel: "Your vocabulary",
+    visualTitle: "Words that stay with you.",
+    eyebrow: "Your account",
+    title: "Welcome back",
+    lead: "Continue learning right where you left off.",
+    expired: "Your session expired. Sign in again.",
+    username: "Username",
+    password: "Password",
+    submitting: "Signing in…",
+    submit: "Sign in",
+  },
+);
+
+function getLoginErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (isApiError(error)) {
     if (INVALID_CREDENTIALS_STATUSES.has(error.status)) {
-      return "Неверное имя пользователя или пароль.";
+      return messages.invalidCredentials;
     }
 
     if (error.status === 422) {
-      return "Имя пользователя — 3–18 символов без пробелов, пароль — 8–128 символов без пробелов.";
+      return messages.invalidFormat;
     }
 
     if (error.status === 0) {
-      return "Не удалось связаться с сервером. Попробуйте ещё раз.";
+      return messages.networkError;
     }
   }
 
-  return "Не удалось войти. Попробуйте ещё раз.";
+  return messages.genericError;
 }
 
 export function LoginPage() {
+  const messages = useLocalizedMessages(MESSAGES);
   const { login } = useAuth();
   const location = useLocation();
   const [username, setUsername] = useState("");
@@ -128,7 +173,7 @@ export function LoginPage() {
 
     const normalizedUsername = username.trim();
     if (!normalizedUsername) {
-      setErrorMessage("Введите имя пользователя.");
+      setErrorMessage(messages.usernameRequired);
       return;
     }
 
@@ -146,7 +191,7 @@ export function LoginPage() {
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        setErrorMessage(getLoginErrorMessage(error));
+        setErrorMessage(getLoginErrorMessage(error, messages));
       }
     } finally {
       if (submitControllerRef.current === controller) {
@@ -176,30 +221,30 @@ export function LoginPage() {
             <span className={styles.wordCardBack} />
             <span className={styles.wordCardMiddle} />
             <span className={styles.wordCardFront}>
-              <i>hello</i>
-              <b>привет</b>
+              <i>{messages.cardFront}</i>
+              <b>{messages.cardBack}</b>
               <small>EN · RU</small>
             </span>
           </div>
           <div className={styles.visualCopy}>
-            <span>Ваш словарь</span>
-            <strong>Слова, которые остаются с вами.</strong>
+            <span>{messages.visualLabel}</span>
+            <strong>{messages.visualTitle}</strong>
           </div>
         </section>
 
         <div className={styles.login}>
           <div className={styles.headingGroup}>
-            <span className={styles.eyebrow}>Личный кабинет</span>
+            <span className={styles.eyebrow}>{messages.eyebrow}</span>
             <h1 className={styles.heading} id="login-title">
-              С возвращением
+              {messages.title}
             </h1>
-            <p className={styles.lead}>Продолжите учиться с того места, где остановились.</p>
+            <p className={styles.lead}>{messages.lead}</p>
           </div>
 
           <section aria-labelledby="login-title" className={styles.card}>
             {showSessionExpiredNotice ? (
               <p className={styles.notice} role="status">
-                Сессия истекла. Войдите снова.
+                {messages.expired}
               </p>
             ) : null}
             <form
@@ -211,7 +256,7 @@ export function LoginPage() {
             >
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="username">
-                  Имя пользователя <span aria-hidden="true">*</span>
+                  {messages.username} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   aria-describedby={errorDescriptionId}
@@ -241,7 +286,7 @@ export function LoginPage() {
 
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="password">
-                  Пароль <span aria-hidden="true">*</span>
+                  {messages.password} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   aria-describedby={errorDescriptionId}
@@ -273,7 +318,7 @@ export function LoginPage() {
               ) : null}
 
               <button className={styles.submit} disabled={isSubmitting} type="submit">
-                {isSubmitting ? "Входим…" : "Войти"}
+                {isSubmitting ? messages.submitting : messages.submit}
               </button>
             </form>
           </section>

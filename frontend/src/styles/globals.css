@@ -24,6 +24,11 @@ body {
   background: var(--loader-background, #c3b8f5);
 }
 
+html[data-theme="dark"] body {
+  color: #f1ecff;
+  background: var(--loader-background, #171426);
+}
+
 .page-loader {
   --loader-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
   --loader-track: rgb(73 56 115 / 14%);
@@ -39,6 +44,13 @@ body {
   --loader-background: #f6f2eb;
   --loader-track: #e7dfd4;
   --loader-accent: #4d9892;
+}
+
+html[data-theme="dark"] .page-loader,
+html[data-theme="dark"] .page-loader--light {
+  --loader-background: #171426;
+  --loader-track: rgb(216 205 250 / 16%);
+  --loader-accent: #a48ce9;
 }
 
 .page-loader--contained {

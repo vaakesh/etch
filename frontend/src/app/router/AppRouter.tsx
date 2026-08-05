@@ -2,13 +2,22 @@ import { Suspense, useEffect, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "../layout/AppShell";
 import { PageLoader } from "../PageLoader";
+import { useLocale, type AppLocale } from "../../i18n";
 import { RouteGuard } from "./RouteGuard";
 import { appRoutes } from "./route-config";
 
-function RouteDocumentTitle({ children, title }: { children: ReactNode; title: string }) {
+function RouteDocumentTitle({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: Readonly<Record<AppLocale, string>>;
+}) {
+  const { locale } = useLocale();
+
   useEffect(() => {
-    document.title = title;
-  }, [title]);
+    document.title = title[locale];
+  }, [locale, title]);
 
   return children;
 }

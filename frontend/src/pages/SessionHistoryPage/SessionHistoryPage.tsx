@@ -2,12 +2,87 @@ import { Link, useParams } from "react-router-dom";
 import { isApiError } from "../../api";
 import type { PracticeSessionHistoryItem } from "../../features/practice/model/practice-types";
 import { usePracticeSessionHistory } from "../../features/practice/model/usePracticeSessionHistory";
-import { formatNumber, useLocale, type AppLocale } from "../../i18n";
+import {
+  defineMessages,
+  formatNumber,
+  useLocale,
+  useLocalizedMessages,
+  type AppLocale,
+} from "../../i18n";
 import styles from "./SessionHistoryPage.module.css";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type SessionItemResult = "correct" | "wrong" | "skipped" | "pending";
+
+const MESSAGES = defineMessages(
+  {
+    results: {
+      correct: "Верно",
+      wrong: "Ошибка",
+      skipped: "Пропущено",
+      pending: "Не отвечено",
+    },
+    correctAnswer: "Правильно",
+    yourAnswer: "Ваш ответ",
+    card: (sequenceNumber: number) => `Карточка ${sequenceNumber}`,
+    summary: "Итоги сессии",
+    summaryCorrect: (count: number) => `Верно: ${count}`,
+    summaryWrong: (count: number) => `Ошибки: ${count}`,
+    summarySkipped: (count: number) => `Пропущено: ${count}`,
+    summaryPending: (count: number) => `Не отвечено: ${count}`,
+    errors: {
+      default: "Не удалось загрузить историю.",
+      notFound: "Сессия не найдена или больше недоступна.",
+      invalid: "Сервер вернул историю в неожиданном формате.",
+      network: "Проверьте подключение и попробуйте снова.",
+      server: "Сервер временно недоступен.",
+    },
+    invalidLink: "Некорректная ссылка",
+    toSessions: "К сессиям",
+    retry: "Повторить",
+    loading: "Загружаем историю сессии",
+    empty: "История пуста",
+    sessionCards: "Карточки тренировочной сессии",
+    back: "Назад к тренировочным сессиям",
+    practice: "Практика",
+    title: "История сессии",
+  },
+  {
+    results: {
+      correct: "Correct",
+      wrong: "Incorrect",
+      skipped: "Skipped",
+      pending: "Not answered",
+    },
+    correctAnswer: "Correct answer",
+    yourAnswer: "Your answer",
+    card: (sequenceNumber: number) => `Card ${sequenceNumber}`,
+    summary: "Session summary",
+    summaryCorrect: (count: number) => `Correct: ${count}`,
+    summaryWrong: (count: number) => `Errors: ${count}`,
+    summarySkipped: (count: number) => `Skipped: ${count}`,
+    summaryPending: (count: number) => `Not answered: ${count}`,
+    errors: {
+      default: "Couldn't load the history.",
+      notFound: "The session was not found or is no longer available.",
+      invalid: "The server returned the history in an unexpected format.",
+      network: "Check your connection and try again.",
+      server: "The server is temporarily unavailable.",
+    },
+    invalidLink: "Invalid link",
+    toSessions: "Back to sessions",
+    retry: "Try again",
+    loading: "Loading session history",
+    empty: "History is empty",
+    sessionCards: "Practice session cards",
+    back: "Back to practice sessions",
+    practice: "Practice",
+    title: "Session history",
+  },
+);
+
+type Messages = (typeof MESSAGES)["ru-RU"];
 
 function BackGlyph() {
   return (
@@ -94,18 +169,8 @@ function getItemResult(item: PracticeSessionHistoryItem): SessionItemResult {
   return item.isCorrect ? "correct" : "wrong";
 }
 
-function getResultLabel(result: SessionItemResult): string {
-  if (result === "correct") {
-    return "Верно";
-  }
-  if (result === "wrong") {
-    return "Ошибка";
-  }
-  if (result === "skipped") {
-    return "Пропущено";
-  }
-
-  return "Не отвечено";
+function getResultLabel(result: SessionItemResult, messages: Messages): string {
+  return messages.results[result];
 }
 
 function formatLanguage(language: string, locale: AppLocale): string {
@@ -119,8 +184,10 @@ function SessionAnswer({
   item: PracticeSessionHistoryItem;
   result: SessionItemResult;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   if (result === "pending") {
-    return <strong className={styles.pendingAnswer}>Не отвечено</strong>;
+    return <strong className={styles.pendingAnswer}>{messages.results.pending}</strong>;
   }
 
   if (result === "correct") {
@@ -135,10 +202,10 @@ function SessionAnswer({
     return (
       <div className={styles.responseStack}>
         <span className={`${styles.responseLine} ${styles.responseSkipped}`}>
-          <small>Пропущено</small>
+          <small>{messages.results.skipped}</small>
         </span>
         <span className={`${styles.responseLine} ${styles.responseCorrect}`}>
-          <small>Правильно</small>
+          <small>{messages.correctAnswer}</small>
           <strong lang={item.answerLanguage}>{item.answerText}</strong>
         </span>
       </div>
@@ -148,11 +215,11 @@ function SessionAnswer({
   return (
     <div className={styles.responseStack}>
       <span className={`${styles.responseLine} ${styles.responseWrong}`}>
-        <small>Ваш ответ</small>
+        <small>{messages.yourAnswer}</small>
         <strong lang={item.answerLanguage}>{item.userTypedText}</strong>
       </span>
       <span className={`${styles.responseLine} ${styles.responseCorrect}`}>
-        <small>Правильно</small>
+        <small>{messages.correctAnswer}</small>
         <strong lang={item.answerLanguage}>{item.answerText}</strong>
       </span>
     </div>
@@ -166,12 +233,13 @@ function SessionHistoryItemCard({
   item: PracticeSessionHistoryItem;
   locale: AppLocale;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const result = getItemResult(item);
-  const resultLabel = getResultLabel(result);
+  const resultLabel = getResultLabel(result, messages);
 
   return (
     <li className={styles.card} data-result={result}>
-      <span aria-label={`Карточка ${item.sequenceNumber}`} className={styles.sequence}>
+      <span aria-label={messages.card(item.sequenceNumber)} className={styles.sequence}>
         {String(item.sequenceNumber).padStart(2, "0")}
       </span>
 
@@ -205,6 +273,7 @@ function SessionSummary({
   items: readonly PracticeSessionHistoryItem[];
   locale: AppLocale;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const correctCount = items.filter((item) => item.isCorrect === true).length;
   const wrongCount = items.filter(
     (item) => item.isAnswered && item.userTypedText !== null && item.isCorrect === false,
@@ -215,23 +284,23 @@ function SessionSummary({
   const pendingCount = items.length - correctCount - wrongCount - skippedCount;
 
   return (
-    <div aria-label="Итоги сессии" className={styles.summary}>
-      <span aria-label={`Верно: ${correctCount}`} className={styles.summaryCorrect}>
+    <div aria-label={messages.summary} className={styles.summary}>
+      <span aria-label={messages.summaryCorrect(correctCount)} className={styles.summaryCorrect}>
         <ResultGlyph result="correct" />
         {formatNumber(correctCount, locale)}
       </span>
-      <span aria-label={`Ошибки: ${wrongCount}`} className={styles.summaryWrong}>
+      <span aria-label={messages.summaryWrong(wrongCount)} className={styles.summaryWrong}>
         <ResultGlyph result="wrong" />
         {formatNumber(wrongCount, locale)}
       </span>
       {skippedCount > 0 ? (
-        <span aria-label={`Пропущено: ${skippedCount}`} className={styles.summarySkipped}>
+        <span aria-label={messages.summarySkipped(skippedCount)} className={styles.summarySkipped}>
           <ResultGlyph result="skipped" />
           {formatNumber(skippedCount, locale)}
         </span>
       ) : null}
       {pendingCount > 0 ? (
-        <span aria-label={`Не отвечено: ${pendingCount}`} className={styles.summaryPending}>
+        <span aria-label={messages.summaryPending(pendingCount)} className={styles.summaryPending}>
           <ResultGlyph result="pending" />
           {formatNumber(pendingCount, locale)}
         </span>
@@ -240,29 +309,30 @@ function SessionSummary({
   );
 }
 
-function getHistoryErrorMessage(error: unknown): string {
+function getHistoryErrorMessage(error: unknown, messages: Messages): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить историю.";
+    return messages.errors.default;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Сессия не найдена или больше недоступна.";
+    return messages.errors.notFound;
   }
   if (error.code === "INVALID_PRACTICE_RESPONSE") {
-    return "Сервер вернул историю в неожиданном формате.";
+    return messages.errors.invalid;
   }
   if (error.status === 0) {
-    return "Проверьте подключение и попробуйте снова.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно недоступен.";
+    return messages.errors.server;
   }
 
-  return "Не удалось загрузить историю.";
+  return messages.errors.default;
 }
 
 export function SessionHistoryPage() {
   const { session_uuid: sessionUuidParam } = useParams<{ session_uuid: string }>();
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const sessionUuid =
     sessionUuidParam !== undefined && UUID_PATTERN.test(sessionUuidParam)
       ? sessionUuidParam.toLowerCase()
@@ -275,23 +345,23 @@ export function SessionHistoryPage() {
     content = (
       <div className={styles.message} role="alert">
         <HistoryGlyph />
-        <strong>Некорректная ссылка</strong>
-        <Link to="/practice">К сессиям</Link>
+        <strong>{messages.invalidLink}</strong>
+        <Link to="/practice">{messages.toSessions}</Link>
       </div>
     );
   } else if (history.state.status === "error") {
     content = (
       <div className={styles.message} role="alert">
         <HistoryGlyph />
-        <strong>{getHistoryErrorMessage(history.state.error)}</strong>
+        <strong>{getHistoryErrorMessage(history.state.error, messages)}</strong>
         <button onClick={history.retry} type="button">
-          Повторить
+          {messages.retry}
         </button>
       </div>
     );
   } else if (readyItems === null) {
     content = (
-      <div aria-label="Загружаем историю сессии" className={styles.skeletons} role="status">
+      <div aria-label={messages.loading} className={styles.skeletons} role="status">
         <span />
         <span />
         <span />
@@ -302,13 +372,13 @@ export function SessionHistoryPage() {
     content = (
       <div className={styles.message}>
         <HistoryGlyph />
-        <strong>История пуста</strong>
-        <Link to="/practice">К сессиям</Link>
+        <strong>{messages.empty}</strong>
+        <Link to="/practice">{messages.toSessions}</Link>
       </div>
     );
   } else {
     content = (
-      <ol aria-label="Карточки тренировочной сессии" className={styles.cards}>
+      <ol aria-label={messages.sessionCards} className={styles.cards}>
         {readyItems.map((item) => (
           <SessionHistoryItemCard item={item} key={item.itemUuid} locale={locale} />
         ))}
@@ -320,12 +390,12 @@ export function SessionHistoryPage() {
     <div className={styles.page}>
       <main className={styles.main}>
         <header className={styles.header}>
-          <Link aria-label="Назад к тренировочным сессиям" className={styles.back} to="/practice">
+          <Link aria-label={messages.back} className={styles.back} to="/practice">
             <BackGlyph />
           </Link>
           <div>
-            <span>Практика</span>
-            <h1>История сессии</h1>
+            <span>{messages.practice}</span>
+            <h1>{messages.title}</h1>
           </div>
           {readyItems !== null && readyItems.length > 0 ? (
             <SessionSummary items={readyItems} locale={locale} />

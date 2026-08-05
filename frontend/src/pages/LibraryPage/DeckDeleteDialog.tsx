@@ -1,5 +1,25 @@
 import { useEffect, useId, useRef, type FormEvent, type PointerEvent } from "react";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LibraryPage.module.css";
+
+const MESSAGES = defineMessages(
+  {
+    eyebrow: "Удаление колоды",
+    title: "Удалить колоду?",
+    description: "Колода исчезнет из вашей библиотеки.",
+    warning: "Это действие нельзя отменить.",
+    cancel: "Отмена",
+    confirm: "Удалить",
+  },
+  {
+    eyebrow: "Delete deck",
+    title: "Delete this deck?",
+    description: "The deck will disappear from your library.",
+    warning: "This action cannot be undone.",
+    cancel: "Cancel",
+    confirm: "Delete",
+  },
+);
 
 interface DeckDeleteDialogProps {
   deckTitle: string;
@@ -23,6 +43,7 @@ function DeleteGlyph() {
 }
 
 export function DeckDeleteDialog({ deckTitle, onClose, onConfirm }: DeckDeleteDialogProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -68,24 +89,24 @@ export function DeckDeleteDialog({ deckTitle, onClose, onConfirm }: DeckDeleteDi
             <DeleteGlyph />
           </span>
           <div>
-            <span className={styles.deckDeleteEyebrow}>Удаление колоды</span>
-            <h2 id={titleId}>Удалить колоду?</h2>
+            <span className={styles.deckDeleteEyebrow}>{messages.eyebrow}</span>
+            <h2 id={titleId}>{messages.title}</h2>
           </div>
         </header>
 
         <div className={styles.deckDeleteBody}>
-          <p id={descriptionId}>Колода исчезнет из вашей библиотеки.</p>
+          <p id={descriptionId}>{messages.description}</p>
           <strong className={styles.deckDeleteName}>{deckTitle}</strong>
-          <p className={styles.deckDeleteWarning}>Это действие нельзя отменить.</p>
+          <p className={styles.deckDeleteWarning}>{messages.warning}</p>
         </div>
 
         <footer className={styles.deckDeleteActions}>
           <button autoFocus className={styles.deckDeleteCancel} onClick={closeDialog} type="button">
-            Отмена
+            {messages.cancel}
           </button>
           <button className={styles.deckDeleteConfirm} type="submit">
             <DeleteGlyph />
-            <span>Удалить</span>
+            <span>{messages.confirm}</span>
           </button>
         </footer>
       </form>

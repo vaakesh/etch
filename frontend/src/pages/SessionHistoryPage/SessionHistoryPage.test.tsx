@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PracticeSessionHistoryItem } from "../../features/practice/model/practice-types";
 import type { UsePracticeSessionHistoryResult } from "../../features/practice/model/usePracticeSessionHistory";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const usePracticeSessionHistoryMock = vi.hoisted(() => vi.fn());
 
@@ -31,13 +32,15 @@ function createItem(
   };
 }
 
-function renderPage(path: string): string {
+function renderPage(path: string, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<SessionHistoryPage />} path="/practice/sessions/:session_uuid/history" />
-      </Routes>
-    </MemoryRouter>,
+    <LocaleProvider initialLocale={locale}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<SessionHistoryPage />} path="/practice/sessions/:session_uuid/history" />
+        </Routes>
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -115,5 +118,13 @@ describe("SessionHistoryPage", () => {
 
     expect(markup).toContain("Некорректная ссылка");
     expect(usePracticeSessionHistoryMock).toHaveBeenCalledWith(null);
+  });
+
+  it("renders the history state in English", () => {
+    const markup = renderPage(`/practice/sessions/${SESSION_UUID}/history`, "en-US");
+
+    expect(markup).toContain("Session history");
+    expect(markup).toContain('aria-label="Loading session history"');
+    expect(markup).toContain('aria-label="Back to practice sessions"');
   });
 });

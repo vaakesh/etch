@@ -1,40 +1,102 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { isApiError } from "../../api";
 import type { CreateLibraryDeckInput } from "../../features/library/model/library-types";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LibraryPage.module.css";
+
+const MESSAGES = defineMessages(
+  {
+    errors: {
+      generic: "Не удалось создать колоду. Попробуйте ещё раз.",
+      forbidden: "У вас нет доступа к созданию колод.",
+      conflict: "Сервер отклонил новую колоду. Попробуйте изменить название.",
+      validation: "Проверьте название и остальные поля колоды.",
+      invalid: "Сервер вернул неожиданный ответ после создания колоды.",
+      aborted: "Создание колоды было отменено.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      server: "Сервер временно не может создать колоду.",
+    },
+    eyebrow: "Новая коллекция",
+    title: "Новая колода",
+    description: "Задайте название, описание и уровень приватности.",
+    close: "Закрыть окно создания колоды",
+    deckTitle: "Название",
+    deckDescription: "Описание",
+    optional: "необязательно",
+    descriptionPlaceholder: "О чём эта колода?",
+    privacy: "Приватность",
+    private: "Приватная",
+    privateDescription: "Не публикуется в общем доступе",
+    public: "Публичная",
+    publicDescription: "Появляется в публичной библиотеке",
+    footer: "Новая колода появится первой в вашей библиотеке.",
+    cancel: "Отмена",
+    creating: "Создаём…",
+    create: "Создать",
+  },
+  {
+    errors: {
+      generic: "We couldn't create the deck. Try again.",
+      forbidden: "You do not have permission to create decks.",
+      conflict: "The server rejected this deck. Try a different title.",
+      validation: "Check the title and the other deck fields.",
+      invalid: "The server returned an unexpected response after creating the deck.",
+      aborted: "Deck creation was canceled.",
+      network: "We couldn't reach the server. Check your connection.",
+      server: "The server cannot create a deck right now.",
+    },
+    eyebrow: "New collection",
+    title: "New deck",
+    description: "Add a title, description, and privacy level.",
+    close: "Close new deck dialog",
+    deckTitle: "Title",
+    deckDescription: "Description",
+    optional: "optional",
+    descriptionPlaceholder: "What is this deck about?",
+    privacy: "Privacy",
+    private: "Private",
+    privateDescription: "Only visible to you",
+    public: "Public",
+    publicDescription: "Appears in the public library",
+    footer: "Your new deck will appear first in your library.",
+    cancel: "Cancel",
+    creating: "Creating…",
+    create: "Create",
+  },
+);
 
 interface DeckCreatorDialogProps {
   onClose: () => void;
   onSave: (input: CreateLibraryDeckInput) => Promise<void>;
 }
 
-function getDeckCreateErrorMessage(error: unknown): string {
+function getDeckCreateErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось создать колоду. Попробуйте ещё раз.";
+    return messages.errors.generic;
   }
   if (error.status === 403) {
-    return "У вас нет доступа к созданию колод.";
+    return messages.errors.forbidden;
   }
   if (error.status === 409) {
-    return "Сервер отклонил новую колоду. Попробуйте изменить название.";
+    return messages.errors.conflict;
   }
   if (error.status === 422) {
-    return "Проверьте название и остальные поля колоды.";
+    return messages.errors.validation;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул неожиданный ответ после создания колоды.";
+    return messages.errors.invalid;
   }
   if (error.code === "REQUEST_ABORTED") {
-    return "Создание колоды было отменено.";
+    return messages.errors.aborted;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может создать колоду.";
+    return messages.errors.server;
   }
 
-  return "Не удалось создать колоду. Попробуйте ещё раз.";
+  return messages.errors.generic;
 }
 
 function DeckCreatorGlyph({ name }: { name: "close" | "deck" | "save" }) {
@@ -64,6 +126,7 @@ function DeckCreatorGlyph({ name }: { name: "close" | "deck" | "save" }) {
 }
 
 export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const isMountedRef = useRef(true);
   const isSavingRef = useRef(false);
@@ -165,13 +228,13 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
               <DeckCreatorGlyph name="deck" />
             </span>
             <div>
-              <span className={styles.cardEditorEyebrow}>Новая коллекция</span>
-              <h2 id={titleId}>Новая колода</h2>
-              <p id={descriptionId}>Задайте название, описание и уровень приватности.</p>
+              <span className={styles.cardEditorEyebrow}>{messages.eyebrow}</span>
+              <h2 id={titleId}>{messages.title}</h2>
+              <p id={descriptionId}>{messages.description}</p>
             </div>
           </div>
           <button
-            aria-label="Закрыть окно создания колоды"
+            aria-label={messages.close}
             className={styles.cardEditorClose}
             disabled={isSaving}
             onClick={closeDialog}
@@ -185,7 +248,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
           <label className={styles.cardEditorField} htmlFor={deckTitleId}>
             <span className={styles.cardEditorLabel}>
               <strong>
-                Название <span aria-hidden="true">*</span>
+                {messages.deckTitle} <span aria-hidden="true">*</span>
               </strong>
               <code>title</code>
             </span>
@@ -205,8 +268,8 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
 
           <label className={styles.cardEditorField} htmlFor={deckDescriptionId}>
             <span className={styles.cardEditorLabel}>
-              <strong>Описание</strong>
-              <span className={styles.deckCreatorOptional}>необязательно</span>
+              <strong>{messages.deckDescription}</strong>
+              <span className={styles.deckCreatorOptional}>{messages.optional}</span>
               <code>description</code>
             </span>
             <textarea
@@ -214,7 +277,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
               maxLength={3000}
               name="description"
               onChange={(event) => setDescription(event.currentTarget.value)}
-              placeholder="О чём эта колода?"
+              placeholder={messages.descriptionPlaceholder}
               rows={3}
               value={description}
             />
@@ -222,7 +285,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
 
           <fieldset aria-labelledby={privacyLegendId} className={styles.deckCreatorPrivacy}>
             <legend id={privacyLegendId}>
-              <strong>Приватность</strong>
+              <strong>{messages.privacy}</strong>
               <code>is_public</code>
             </legend>
             <div className={styles.deckCreatorPrivacyOptions}>
@@ -236,8 +299,8 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
                   value="false"
                 />
                 <span>
-                  <strong>Приватная</strong>
-                  <small>Не публикуется в общем доступе</small>
+                  <strong>{messages.private}</strong>
+                  <small>{messages.privateDescription}</small>
                 </span>
               </label>
               <label className={styles.deckCreatorPrivacyOption} htmlFor={publicId}>
@@ -250,8 +313,8 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
                   value="true"
                 />
                 <span>
-                  <strong>Публичная</strong>
-                  <small>Появляется в публичной библиотеке</small>
+                  <strong>{messages.public}</strong>
+                  <small>{messages.publicDescription}</small>
                 </span>
               </label>
             </div>
@@ -259,12 +322,12 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
 
           {saveError === null ? null : (
             <p className={styles.cardEditorError} role="alert">
-              {getDeckCreateErrorMessage(saveError)}
+              {getDeckCreateErrorMessage(saveError, messages)}
             </p>
           )}
 
           <footer className={styles.cardEditorFooter}>
-            <p>Новая колода появится первой в вашей библиотеке.</p>
+            <p>{messages.footer}</p>
             <div className={styles.cardEditorButtons}>
               <button
                 className={styles.cardEditorCancel}
@@ -272,7 +335,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
                 onClick={closeDialog}
                 type="button"
               >
-                Отмена
+                {messages.cancel}
               </button>
               <button
                 className={styles.cardEditorSave}
@@ -284,7 +347,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
                 ) : (
                   <DeckCreatorGlyph name="save" />
                 )}
-                <span>{isSaving ? "Создаём…" : "Создать"}</span>
+                <span>{isSaving ? messages.creating : messages.create}</span>
               </button>
             </div>
           </footer>

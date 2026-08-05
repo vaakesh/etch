@@ -23,6 +23,7 @@ function setAuthStatus(status: AuthStatus): void {
     login: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
     refresh: vi.fn(async () => undefined),
+    applyUserSettings: vi.fn(),
   } satisfies AuthContextValue);
 }
 

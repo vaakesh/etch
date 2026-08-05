@@ -409,6 +409,78 @@ a.navigationItem:not(.navigationItemActive):hover {
   background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
 }
 
+:global(html[data-theme="dark"]) .shell {
+  --canvas: #171426;
+  --surface: #211d31;
+  --surface-muted: rgb(216 205 250 / 8%);
+  --ink: #f1ecff;
+  --muted: #bbb2ce;
+  --line: rgb(216 205 250 / 15%);
+  --teal: #a48ce9;
+  --teal-dark: #d8cdfa;
+  --teal-soft: rgb(164 140 233 / 18%);
+  color-scheme: dark;
+}
+
+:global(html[data-theme="dark"]) .shell .sidebar {
+  color: #f1ecff;
+  background: linear-gradient(165deg, #29233e 0%, #211d31 52%, #173136 100%);
+  border-right-color: rgb(216 205 250 / 14%);
+  box-shadow:
+    10px 0 32px rgb(2 1 8 / 28%),
+    inset -1px 0 0 rgb(216 205 250 / 7%);
+}
+
+:global(html[data-theme="dark"]) .shell .brandName,
+:global(html[data-theme="dark"]) .shell .navigationItem {
+  color: #f1ecff;
+}
+
+:global(html[data-theme="dark"]) .shell .navigationThumb,
+:global(html[data-theme="dark"]) .shell .navigationItemActive {
+  color: #fff;
+  background: linear-gradient(135deg, #6d57aa, #8e73d1 72%, #6bb9b4);
+  border-color: rgb(255 255 255 / 16%);
+  box-shadow:
+    0 10px 24px rgb(2 1 8 / 36%),
+    inset 0 1px 0 rgb(255 255 255 / 14%);
+}
+
+:global(html[data-theme="dark"]) .shell a.navigationItem:not(.navigationItemActive):hover {
+  color: #fff;
+  background: rgb(216 205 250 / 9%);
+  border-color: rgb(216 205 250 / 12%);
+}
+
+:global(html[data-theme="dark"]) .shell .sidebarToggle {
+  color: #f1ecff;
+  background: linear-gradient(135deg, #44385f, #245258);
+  border-color: rgb(216 205 250 / 18%);
+  box-shadow:
+    0 9px 22px rgb(2 1 8 / 36%),
+    inset 0 1px 0 rgb(255 255 255 / 10%);
+}
+
+:global(html[data-theme="dark"]) .shell .sidebarToggle:hover {
+  background: linear-gradient(135deg, #6d57aa, #8e73d1);
+}
+
+:global(html[data-theme="dark"]) .shell .artBook {
+  background: #7b4d72;
+  border-color: #d8cdfa;
+  box-shadow: inset -9px 0 #392c43;
+}
+
+:global(html[data-theme="dark"]) .shell .artBookSecondary {
+  background: #367c78;
+  border-color: #d8cdfa;
+}
+
+:global(html[data-theme="dark"]) .shell .content,
+:global(html[data-theme="dark"]) .shellLibrary .content {
+  background: linear-gradient(105deg, #171426 0%, #183137 48%, #322033 100%);
+}
+
 .shellCollapsed .sidebar {
   padding-inline: 9px;
 }

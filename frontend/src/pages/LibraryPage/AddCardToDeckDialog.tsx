@@ -9,10 +9,81 @@ import {
   DECKS_LEFT_TO_SAVE_COUNT_FORMS,
   SELECTED_DECK_COUNT_FORMS,
   WORD_COUNT_FORMS,
+  defineMessages,
   localizeCount,
   useLocale,
+  useLocalizedMessages,
 } from "../../i18n";
 import styles from "./LibraryPage.module.css";
+
+const MESSAGES = defineMessages(
+  {
+    errors: {
+      loadGeneric: "Не удалось загрузить ваши колоды. Попробуйте ещё раз.",
+      loadForbidden: "У вас нет доступа к списку колод.",
+      loadInvalid: "Сервер вернул список колод в неожиданном формате.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      loadServer: "Сервер временно не может загрузить колоды.",
+      saveGeneric: "Не удалось добавить карточку в выбранную колоду. Попробуйте ещё раз.",
+      saveForbidden: "Нет доступа к карточке или одной из выбранных колод.",
+      saveNotFound: "Карточка или одна из выбранных колод больше не найдена.",
+      saveValidation: "Сервер не принял выбранную карточку или колоду.",
+      saveAborted: "Добавление карточки было отменено.",
+      saveServer: "Сервер временно не может добавить карточку в колоду.",
+      partial: "Остальные изменения уже сохранены.",
+    },
+    eyebrow: "Быстрое добавление",
+    title: "Добавить в колоду",
+    description: "Выберите одну или несколько колод для карточки",
+    close: "Закрыть окно выбора колод",
+    loading: "Загрузка ваших колод",
+    loadErrorTitle: "Колоды не загрузились",
+    retry: "Попробовать снова",
+    emptyTitle: "У вас пока нет колод",
+    emptyDescription: "Создайте колоду во вкладке «Колоды», затем вернитесь к карточке.",
+    optionsLegend: "Колоды для добавления карточки",
+    retryShort: "повторить",
+    added: "Карточка добавлена",
+    alreadyAdded: "Карточка уже была в этой колоде",
+    multiDeckHint: "Можно добавить карточку сразу в несколько колод.",
+    cancel: "Отмена",
+    saving: "Сохраняем…",
+    save: "Сохранить",
+  },
+  {
+    errors: {
+      loadGeneric: "We couldn't load your decks. Try again.",
+      loadForbidden: "You do not have access to the deck list.",
+      loadInvalid: "The server returned an unexpected deck list.",
+      network: "We couldn't reach the server. Check your connection.",
+      loadServer: "The server cannot load your decks right now.",
+      saveGeneric: "We couldn't add the card to the selected deck. Try again.",
+      saveForbidden: "You do not have access to the card or one of the selected decks.",
+      saveNotFound: "The card or one of the selected decks could not be found.",
+      saveValidation: "The server rejected the selected card or deck.",
+      saveAborted: "Adding the card was canceled.",
+      saveServer: "The server cannot add the card to a deck right now.",
+      partial: "Your other changes have already been saved.",
+    },
+    eyebrow: "Quick add",
+    title: "Add to deck",
+    description: "Choose one or more decks for",
+    close: "Close deck picker",
+    loading: "Loading your decks",
+    loadErrorTitle: "Your decks didn't load",
+    retry: "Try again",
+    emptyTitle: "You don't have any decks yet",
+    emptyDescription: "Create a deck on the Decks tab, then return to this card.",
+    optionsLegend: "Decks for this card",
+    retryShort: "retry",
+    added: "Card added",
+    alreadyAdded: "This card was already in the deck",
+    multiDeckHint: "You can add a card to several decks at once.",
+    cancel: "Cancel",
+    saving: "Saving…",
+    save: "Save",
+  },
+);
 
 interface AddCardToDeckDialogProps {
   card: LibraryCard;
@@ -20,46 +91,50 @@ interface AddCardToDeckDialogProps {
   onClose: () => void;
 }
 
-function getDeckLoadErrorMessage(error: unknown): string {
+function getDeckLoadErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить ваши колоды. Попробуйте ещё раз.";
+    return messages.errors.loadGeneric;
   }
   if (error.status === 403) {
-    return "У вас нет доступа к списку колод.";
+    return messages.errors.loadForbidden;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул список колод в неожиданном формате.";
+    return messages.errors.loadInvalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может загрузить колоды.";
+    return messages.errors.loadServer;
   }
 
-  return "Не удалось загрузить ваши колоды. Попробуйте ещё раз.";
+  return messages.errors.loadGeneric;
 }
 
-function getDeckSaveErrorMessage(error: unknown, hasCompletedDecks: boolean): string {
-  let message = "Не удалось добавить карточку в выбранную колоду. Попробуйте ещё раз.";
+function getDeckSaveErrorMessage(
+  error: unknown,
+  hasCompletedDecks: boolean,
+  messages: (typeof MESSAGES)["ru-RU"],
+): string {
+  let message = messages.errors.saveGeneric;
 
   if (isApiError(error)) {
     if (error.status === 403) {
-      message = "Нет доступа к карточке или одной из выбранных колод.";
+      message = messages.errors.saveForbidden;
     } else if (error.status === 404) {
-      message = "Карточка или одна из выбранных колод больше не найдена.";
+      message = messages.errors.saveNotFound;
     } else if (error.status === 422) {
-      message = "Сервер не принял выбранную карточку или колоду.";
+      message = messages.errors.saveValidation;
     } else if (error.code === "REQUEST_ABORTED") {
-      message = "Добавление карточки было отменено.";
+      message = messages.errors.saveAborted;
     } else if (error.status === 0) {
-      message = "Не удалось связаться с сервером. Проверьте подключение.";
+      message = messages.errors.network;
     } else if (error.status >= 500) {
-      message = "Сервер временно не может добавить карточку в колоду.";
+      message = messages.errors.saveServer;
     }
   }
 
-  return hasCompletedDecks ? `${message} Остальные изменения уже сохранены.` : message;
+  return hasCompletedDecks ? `${message} ${messages.errors.partial}` : message;
 }
 
 function DeckAssignmentGlyph({ name }: { name: "check" | "close" | "deck" | "save" }) {
@@ -106,6 +181,7 @@ function DeckAssignmentGlyph({ name }: { name: "check" | "close" | "deck" | "sav
 
 export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeckDialogProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const assignment = useCardDeckAssignment(card.uuid);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const isMountedRef = useRef(true);
@@ -251,10 +327,10 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
               <DeckAssignmentGlyph name="deck" />
             </span>
             <div>
-              <span className={styles.cardEditorEyebrow}>Быстрое добавление</span>
-              <h2 id={titleId}>Добавить в колоду</h2>
+              <span className={styles.cardEditorEyebrow}>{messages.eyebrow}</span>
+              <h2 id={titleId}>{messages.title}</h2>
               <p id={descriptionId}>
-                Выберите одну или несколько колод для карточки
+                {messages.description}
                 <strong className={styles.cardDeckCardName} title={card.backText}>
                   {` «${card.backText}»`}
                 </strong>
@@ -263,7 +339,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
             </div>
           </div>
           <button
-            aria-label="Закрыть окно выбора колод"
+            aria-label={messages.close}
             className={styles.cardEditorClose}
             disabled={isSaving}
             onClick={closeDialog}
@@ -276,11 +352,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
         <form className={styles.cardEditorForm} onSubmit={handleSubmit}>
           <div className={styles.cardDeckPicker}>
             {assignment.status === "loading" ? (
-              <div
-                aria-label="Загрузка ваших колод"
-                className={styles.cardDeckSkeletons}
-                role="status"
-              >
+              <div aria-label={messages.loading} className={styles.cardDeckSkeletons} role="status">
                 {Array.from({ length: 4 }, (_, index) => (
                   <span aria-hidden="true" key={index} />
                 ))}
@@ -289,25 +361,25 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
 
             {assignment.status === "error" ? (
               <div className={styles.cardDeckState} role="alert">
-                <strong>Колоды не загрузились</strong>
-                <p>{getDeckLoadErrorMessage(assignment.error)}</p>
+                <strong>{messages.loadErrorTitle}</strong>
+                <p>{getDeckLoadErrorMessage(assignment.error, messages)}</p>
                 <button disabled={isSaving} onClick={assignment.retry} type="button">
-                  Попробовать снова
+                  {messages.retry}
                 </button>
               </div>
             ) : null}
 
             {assignment.status === "success" && assignment.decks.length === 0 ? (
               <div className={styles.cardDeckState} role="status">
-                <strong>У вас пока нет колод</strong>
-                <p>Создайте колоду во вкладке «Колоды», затем вернитесь к карточке.</p>
+                <strong>{messages.emptyTitle}</strong>
+                <p>{messages.emptyDescription}</p>
               </div>
             ) : null}
 
             {assignment.status === "success" && assignment.decks.length > 0 ? (
               <fieldset aria-labelledby={optionsLegendId} className={styles.cardDeckOptions}>
                 <legend className={styles.visuallyHidden} id={optionsLegendId}>
-                  Колоды для добавления карточки
+                  {messages.optionsLegend}
                 </legend>
                 {assignment.decks.map((deck, index) => {
                   const completedStatus = completedDecks[deck.uuid];
@@ -343,14 +415,12 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                           {localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale).text}
                         </span>
                         {hasFailed ? (
-                          <small className={styles.cardDeckRetryLabel}>повторить</small>
+                          <small className={styles.cardDeckRetryLabel}>{messages.retryShort}</small>
                         ) : null}
                       </span>
                       {completedStatus === undefined ? null : (
                         <span className={styles.visuallyHidden}>
-                          {completedStatus === "added"
-                            ? "Карточка добавлена"
-                            : "Карточка уже была в этой колоде"}
+                          {completedStatus === "added" ? messages.added : messages.alreadyAdded}
                         </span>
                       )}
                     </label>
@@ -362,7 +432,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
 
           {firstSaveFailure === null ? null : (
             <p className={styles.cardEditorError} role="alert">
-              {getDeckSaveErrorMessage(firstSaveFailure, completedCount > 0)}
+              {getDeckSaveErrorMessage(firstSaveFailure, completedCount > 0, messages)}
             </p>
           )}
 
@@ -372,7 +442,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                 ? completedCount > 0
                   ? decksLeftToSaveCount.text
                   : selectedDeckCount.text
-                : "Можно добавить карточку сразу в несколько колод."}
+                : messages.multiDeckHint}
             </p>
             <div className={styles.cardEditorButtons}>
               <button
@@ -381,7 +451,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                 onClick={closeDialog}
                 type="button"
               >
-                Отмена
+                {messages.cancel}
               </button>
               <button
                 className={styles.cardEditorSave}
@@ -393,7 +463,7 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                 ) : (
                   <DeckAssignmentGlyph name="save" />
                 )}
-                <span>{isSaving ? "Сохраняем…" : "Сохранить"}</span>
+                <span>{isSaving ? messages.saving : messages.save}</span>
               </button>
             </div>
           </footer>

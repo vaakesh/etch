@@ -19,8 +19,10 @@ import {
   DECKS_LOADED_COUNT_FORMS,
   FAVOURITE_DECKS_LOADED_COUNT_FORMS,
   WORD_COUNT_FORMS,
+  defineMessages,
   localizeCount,
   useLocale,
+  useLocalizedMessages,
   type AppLocale,
 } from "../../i18n";
 import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
@@ -29,6 +31,173 @@ import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { DeckDeleteDialog } from "./DeckDeleteDialog";
 import styles from "./LibraryPage.module.css";
 import { OverflowingCardText } from "./OverflowingCardText";
+
+const MESSAGES = defineMessages(
+  {
+    errors: {
+      libraryGeneric: "Не удалось загрузить библиотеку. Попробуйте ещё раз.",
+      libraryForbidden: "У этой учётной записи нет доступа к библиотеке.",
+      libraryInvalid: "Сервер вернул данные библиотеки в неожиданном формате.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      libraryServer: "Сервер временно не может загрузить библиотеку.",
+      cardsGeneric: "Не удалось загрузить карточки. Попробуйте ещё раз.",
+      cardsForbidden: "У этой учётной записи нет доступа к карточкам.",
+      cardsInvalid: "Сервер вернул карточки в неожиданном формате.",
+      cardsServer: "Сервер временно не может загрузить карточки.",
+      cardDeleteGeneric: "Не удалось удалить карточку. Попробуйте ещё раз.",
+      cardDeleteForbidden: "У вас нет доступа к удалению этой карточки.",
+      cardDeleteNotFound: "Карточка уже удалена или больше не существует.",
+      cardDeleteServer: "Сервер временно не может удалить карточку.",
+      favouriteNotFound: "Колода больше не найдена.",
+      favouriteGeneric: "Не удалось изменить избранное. Попробуйте ещё раз.",
+      deckDeleteGeneric: "Не удалось удалить колоду. Попробуйте ещё раз.",
+      deckDeleteNotFound: "Колода уже удалена или больше не существует.",
+      deckDeleteServer: "Сервер временно не может удалить колоду.",
+    },
+    accuracy: "Точность колоды",
+    correctAnswers: (value: number) => `Правильных ответов — ${value}%`,
+    removeFavourite: "Удалить из избранного",
+    addFavourite: "Добавить в избранное",
+    saving: "Сохраняем…",
+    editDeck: (title: string) => `Редактировать колоду «${title}»`,
+    deckDeleting: (title: string) => `Колода «${title}» удаляется`,
+    deckDeletingShort: "Колода удаляется…",
+    deleteDeck: (title: string) => `Удалить колоду «${title}»`,
+    deleting: "Удаляем…",
+    noDescription: "Без описания",
+    deckPreview: (title: string) => `Первые карточки колоды «${title}»`,
+    translation: "Перевод",
+    word: "Слово",
+    allCardsShown: "Все карточки показаны",
+    noCards: "Карточек нет",
+    addFirstCard: "Добавьте первую карточку в колоду",
+    lastUpdated: (value: string) => `Последнее обновление: ${value}`,
+    updated: "Обновлено",
+    configurePractice: (title: string) => `Настроить тренировку по колоде «${title}»`,
+    startPractice: (title: string) => `Начать тренировку по колоде «${title}»`,
+    start: "Начать",
+    cardActions: (text: string) => `Действия с карточкой «${text}»`,
+    actions: "Действия",
+    edit: "Редактировать",
+    addToDeckTitle: "Добавить карточку в одну или несколько колод",
+    addToDeck: "Добавить в колоду",
+    deleteCardTitle: "Удалить карточку",
+    delete: "Удалить",
+    tabsAria: "Содержимое библиотеки",
+    decks: "Колоды",
+    cards: "Карточки",
+    loadingDecks: "Загрузка колод",
+    loadingFavourites: "Собираем любимые колоды…",
+    loadingAllDecks: "Возвращаем все колоды…",
+    loadingCards: "Загрузка карточек",
+    retry: "Попробовать снова",
+    cardsLoadErrorTitle: "Карточки не загрузились",
+    cardsEmptyDescription: "Когда у вас появятся карточки, они соберутся здесь.",
+    cardsEmptyTitle: "Карточек пока нет",
+    loadingMore: "Загружаем…",
+    showMore: "Показать ещё",
+    newDeck: "Новая колода",
+    newCard: "Новая карточка",
+    createDeck: "Создать новую колоду",
+    createCard: "Создать новую карточку",
+    eyebrow: "Ваше пространство",
+    title: "Библиотека",
+    searchLabel: "Поиск по названию колоды",
+    searchPlaceholder: "Поиск по колодам",
+    favouritesOnly: "Только любимые",
+    searchUnavailable: "Поиск недоступен",
+    favouritesLoadError: "Любимые колоды не загрузились",
+    libraryLoadError: "Библиотека не загрузилась",
+    noSearchResults: "Колоды не найдены",
+    emptyFavouritesDescription: "Добавьте колоды в любимые, и они появятся здесь.",
+    emptyLibraryDescription: "Когда у вас появятся колоды, они соберутся здесь.",
+    emptyFavouritesTitle: "Любимых колод пока нет",
+    emptyLibraryTitle: "В библиотеке пока пусто",
+    cardAssigned: "Карточка успешно добавлена",
+  },
+  {
+    errors: {
+      libraryGeneric: "We couldn't load the library. Try again.",
+      libraryForbidden: "This account does not have access to the library.",
+      libraryInvalid: "The server returned unexpected library data.",
+      network: "We couldn't reach the server. Check your connection.",
+      libraryServer: "The server cannot load the library right now.",
+      cardsGeneric: "We couldn't load your cards. Try again.",
+      cardsForbidden: "This account does not have access to the cards.",
+      cardsInvalid: "The server returned unexpected card data.",
+      cardsServer: "The server cannot load your cards right now.",
+      cardDeleteGeneric: "We couldn't delete the card. Try again.",
+      cardDeleteForbidden: "You do not have permission to delete this card.",
+      cardDeleteNotFound: "This card was already deleted or no longer exists.",
+      cardDeleteServer: "The server cannot delete the card right now.",
+      favouriteNotFound: "This deck could not be found.",
+      favouriteGeneric: "We couldn't update your favorites. Try again.",
+      deckDeleteGeneric: "We couldn't delete the deck. Try again.",
+      deckDeleteNotFound: "This deck was already deleted or no longer exists.",
+      deckDeleteServer: "The server cannot delete the deck right now.",
+    },
+    accuracy: "Deck accuracy",
+    correctAnswers: (value: number) => `Correct answers — ${value}%`,
+    removeFavourite: "Remove from favorites",
+    addFavourite: "Add to favorites",
+    saving: "Saving…",
+    editDeck: (title: string) => `Edit “${title}”`,
+    deckDeleting: (title: string) => `Deck “${title}” is being deleted`,
+    deckDeletingShort: "Deck is being deleted…",
+    deleteDeck: (title: string) => `Delete “${title}”`,
+    deleting: "Deleting…",
+    noDescription: "No description",
+    deckPreview: (title: string) => `First cards in “${title}”`,
+    translation: "Translation",
+    word: "Word",
+    allCardsShown: "All cards shown",
+    noCards: "No cards",
+    addFirstCard: "Add the first card to this deck",
+    lastUpdated: (value: string) => `Last updated: ${value}`,
+    updated: "Updated",
+    configurePractice: (title: string) => `Configure practice for “${title}”`,
+    startPractice: (title: string) => `Start practicing “${title}”`,
+    start: "Start",
+    cardActions: (text: string) => `Actions for card “${text}”`,
+    actions: "Actions",
+    edit: "Edit",
+    addToDeckTitle: "Add this card to one or more decks",
+    addToDeck: "Add to deck",
+    deleteCardTitle: "Delete card",
+    delete: "Delete",
+    tabsAria: "Library content",
+    decks: "Decks",
+    cards: "Cards",
+    loadingDecks: "Loading decks",
+    loadingFavourites: "Loading favorite decks…",
+    loadingAllDecks: "Loading all decks…",
+    loadingCards: "Loading cards",
+    retry: "Try again",
+    cardsLoadErrorTitle: "Your cards didn't load",
+    cardsEmptyDescription: "Your cards will appear here once you create them.",
+    cardsEmptyTitle: "No cards yet",
+    loadingMore: "Loading…",
+    showMore: "Show more",
+    newDeck: "New deck",
+    newCard: "New card",
+    createDeck: "Create a new deck",
+    createCard: "Create a new card",
+    eyebrow: "Your space",
+    title: "Library",
+    searchLabel: "Search by deck title",
+    searchPlaceholder: "Search decks",
+    favouritesOnly: "Favorites only",
+    searchUnavailable: "Search is unavailable",
+    favouritesLoadError: "Favorite decks didn't load",
+    libraryLoadError: "The library didn't load",
+    noSearchResults: "No decks found",
+    emptyFavouritesDescription: "Add decks to your favorites and they will appear here.",
+    emptyLibraryDescription: "Your decks will appear here once you create them.",
+    emptyFavouritesTitle: "No favorite decks yet",
+    emptyLibraryTitle: "Your library is empty",
+    cardAssigned: "Card added successfully",
+  },
+);
 
 type LibraryView = "decks" | "cards";
 
@@ -67,91 +236,91 @@ function formatUpdatedAt(value: string | null, locale: AppLocale): string | null
   return Number.isNaN(date.getTime()) ? null : getDateFormatter(locale).format(date);
 }
 
-function getLibraryErrorMessage(error: unknown): string {
+function getLibraryErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить библиотеку. Попробуйте ещё раз.";
+    return messages.errors.libraryGeneric;
   }
   if (error.status === 403) {
-    return "У этой учётной записи нет доступа к библиотеке.";
+    return messages.errors.libraryForbidden;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул данные библиотеки в неожиданном формате.";
+    return messages.errors.libraryInvalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может загрузить библиотеку.";
+    return messages.errors.libraryServer;
   }
 
-  return "Не удалось загрузить библиотеку. Попробуйте ещё раз.";
+  return messages.errors.libraryGeneric;
 }
 
-function getLibraryCardsErrorMessage(error: unknown): string {
+function getLibraryCardsErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить карточки. Попробуйте ещё раз.";
+    return messages.errors.cardsGeneric;
   }
   if (error.status === 403) {
-    return "У этой учётной записи нет доступа к карточкам.";
+    return messages.errors.cardsForbidden;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул карточки в неожиданном формате.";
+    return messages.errors.cardsInvalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может загрузить карточки.";
+    return messages.errors.cardsServer;
   }
 
-  return "Не удалось загрузить карточки. Попробуйте ещё раз.";
+  return messages.errors.cardsGeneric;
 }
 
-function getCardDeleteErrorMessage(error: unknown): string {
+function getCardDeleteErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось удалить карточку. Попробуйте ещё раз.";
+    return messages.errors.cardDeleteGeneric;
   }
   if (error.status === 403) {
-    return "У вас нет доступа к удалению этой карточки.";
+    return messages.errors.cardDeleteForbidden;
   }
   if (error.status === 404) {
-    return "Карточка уже удалена или больше не существует.";
+    return messages.errors.cardDeleteNotFound;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может удалить карточку.";
+    return messages.errors.cardDeleteServer;
   }
 
-  return "Не удалось удалить карточку. Попробуйте ещё раз.";
+  return messages.errors.cardDeleteGeneric;
 }
 
-function getFavouriteErrorMessage(error: unknown): string {
+function getFavouriteErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (isApiError(error)) {
     if (error.status === 403 || error.status === 404) {
-      return "Колода больше не найдена.";
+      return messages.errors.favouriteNotFound;
     }
   }
 
-  return "Не удалось изменить избранное. Попробуйте ещё раз.";
+  return messages.errors.favouriteGeneric;
 }
 
-function getDeckDeleteErrorMessage(error: unknown): string {
+function getDeckDeleteErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось удалить колоду. Попробуйте ещё раз.";
+    return messages.errors.deckDeleteGeneric;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Колода уже удалена или больше не существует.";
+    return messages.errors.deckDeleteNotFound;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может удалить колоду.";
+    return messages.errors.deckDeleteServer;
   }
 
-  return "Не удалось удалить колоду. Попробуйте ещё раз.";
+  return messages.errors.deckDeleteGeneric;
 }
 
 function Glyph({ name }: { name: "delete" | "heart" | "pencil" | "play" | "sparkles" }) {
@@ -243,6 +412,7 @@ function getAccuracyTone(
 }
 
 function AccuracyStat({ value }: { value: number }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const tone = getAccuracyTone(value);
   const tooltipId = useId();
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
@@ -254,7 +424,7 @@ function AccuracyStat({ value }: { value: number }) {
     <span className={hintClassName}>
       <span
         aria-describedby={tooltipId}
-        aria-label="Точность колоды"
+        aria-label={messages.accuracy}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={value}
@@ -281,8 +451,8 @@ function AccuracyStat({ value }: { value: number }) {
         {value}
       </span>
       <span className={styles.accuracyTooltip} id={tooltipId} role="tooltip">
-        <strong>Точность колоды</strong>
-        <span>Правильных ответов — {value}%</span>
+        <strong>{messages.accuracy}</strong>
+        <span>{messages.correctAnswers(value)}</span>
       </span>
     </span>
   );
@@ -310,6 +480,7 @@ function DeckCard({
   onFavouriteChange,
 }: DeckCardProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const previewCards = deck.cards.slice(0, 2);
   const hasMoreCards = deck.totalWordsCount > previewCards.length;
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -317,7 +488,7 @@ function DeckCard({
   const wordCount = localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
   const favouriteErrorId = `favourite-error-${deck.uuid}`;
   const deleteErrorId = `delete-error-${deck.uuid}`;
-  const favouriteAction = deck.isFavourite ? "Удалить из избранного" : "Добавить в избранное";
+  const favouriteAction = deck.isFavourite ? messages.removeFavourite : messages.addFavourite;
   const canUseManagementActions = canEdit && !isDeleting;
 
   return (
@@ -335,7 +506,7 @@ function DeckCard({
             className={deck.isFavourite ? styles.favouriteActive : styles.favourite}
             disabled={isFavouriteUpdating || isDeleting}
             onClick={() => onFavouriteChange(deck.uuid, !deck.isFavourite)}
-            title={isFavouriteUpdating ? "Сохраняем…" : favouriteAction}
+            title={isFavouriteUpdating ? messages.saving : favouriteAction}
             type="button"
           >
             <Glyph name="heart" />
@@ -344,19 +515,19 @@ function DeckCard({
             <>
               {canUseManagementActions ? (
                 <Link
-                  aria-label={`Редактировать колоду «${deck.title}»`}
+                  aria-label={messages.editDeck(deck.title)}
                   className={styles.editButton}
-                  title={`Редактировать колоду «${deck.title}»`}
+                  title={messages.editDeck(deck.title)}
                   to={`/library/${deck.uuid}/edit`}
                 >
                   <Glyph name="pencil" />
                 </Link>
               ) : (
                 <button
-                  aria-label={`Колода «${deck.title}» удаляется`}
+                  aria-label={messages.deckDeleting(deck.title)}
                   className={styles.editButton}
                   disabled
-                  title="Колода удаляется…"
+                  title={messages.deckDeletingShort}
                   type="button"
                 >
                   <Glyph name="pencil" />
@@ -364,11 +535,11 @@ function DeckCard({
               )}
               <button
                 aria-describedby={deleteError === null ? undefined : deleteErrorId}
-                aria-label={`Удалить колоду «${deck.title}»`}
+                aria-label={messages.deleteDeck(deck.title)}
                 className={styles.deleteButton}
                 disabled={!canUseManagementActions}
                 onClick={() => setIsDeleteDialogOpen(true)}
-                title={isDeleting ? "Удаляем…" : `Удалить колоду «${deck.title}»`}
+                title={isDeleting ? messages.deleting : messages.deleteDeck(deck.title)}
                 type="button"
               >
                 <Glyph name="delete" />
@@ -379,23 +550,23 @@ function DeckCard({
       </div>
       {favouriteError === null ? null : (
         <p className={styles.favouriteError} id={favouriteErrorId} role="alert">
-          {getFavouriteErrorMessage(favouriteError)}
+          {getFavouriteErrorMessage(favouriteError, messages)}
         </p>
       )}
       {deleteError === null ? null : (
         <p className={styles.deckDeleteError} id={deleteErrorId} role="alert">
-          {getDeckDeleteErrorMessage(deleteError)}
+          {getDeckDeleteErrorMessage(deleteError, messages)}
         </p>
       )}
 
       <div className={styles.deckHero}>
         <div className={styles.deckCopy}>
           <h2 title={deck.title}>{deck.title}</h2>
-          <p>{deck.description ?? "Без описания"}</p>
+          <p>{deck.description ?? messages.noDescription}</p>
         </div>
       </div>
 
-      <section aria-label={`Первые карточки колоды «${deck.title}»`} className={styles.deckPreview}>
+      <section aria-label={messages.deckPreview(deck.title)} className={styles.deckPreview}>
         {previewCards.length > 0 ? (
           <ul className={styles.previewList}>
             {previewCards.map((card) => (
@@ -403,7 +574,7 @@ function DeckCard({
                 <span className={styles.previewAccent} />
                 <OverflowingCardText
                   className={styles.previewFront}
-                  label="Перевод"
+                  label={messages.translation}
                   language={card.frontLang}
                   text={card.frontText}
                 />
@@ -412,7 +583,7 @@ function DeckCard({
                 </span>
                 <OverflowingCardText
                   className={styles.previewBack}
-                  label="Слово"
+                  label={messages.word}
                   language={card.backLang}
                   text={card.backText}
                 />
@@ -427,14 +598,14 @@ function DeckCard({
                     : `${styles.previewPlaceholder} ${styles.previewPlaceholderEnd}`
                 }
               >
-                <span>{hasMoreCards ? "•••" : "Все карточки показаны"}</span>
+                <span>{hasMoreCards ? "•••" : messages.allCardsShown}</span>
               </li>
             ) : null}
           </ul>
         ) : (
           <div className={styles.emptyPreview} role="status">
-            <strong>Карточек нет</strong>
-            <span>Добавьте первую карточку в колоду</span>
+            <strong>{messages.noCards}</strong>
+            <span>{messages.addFirstCard}</span>
           </div>
         )}
         <div
@@ -447,7 +618,7 @@ function DeckCard({
               : styles.previewContinuation
           }
         >
-          <span>{hasMoreCards ? "•••" : "Все карточки показаны"}</span>
+          <span>{hasMoreCards ? "•••" : messages.allCardsShown}</span>
         </div>
       </section>
 
@@ -458,32 +629,32 @@ function DeckCard({
             <time
               className={styles.deckUpdatedAt}
               dateTime={deck.updatedAt}
-              title={`Последнее обновление: ${updatedAtLabel}`}
+              title={messages.lastUpdated(updatedAtLabel)}
             >
-              <span className={styles.deckUpdatedLabel}>Обновлено</span>
+              <span className={styles.deckUpdatedLabel}>{messages.updated}</span>
               <span className={styles.deckUpdatedValue}>{updatedAtLabel}</span>
             </time>
           ) : null}
         </footer>
         {isDeleting ? (
           <button
-            aria-label={`Колода «${deck.title}» удаляется`}
+            aria-label={messages.deckDeleting(deck.title)}
             className={styles.startButton}
             disabled
-            title="Колода удаляется…"
+            title={messages.deckDeletingShort}
             type="button"
           >
-            <span>Удаляем…</span>
+            <span>{messages.deleting}</span>
           </button>
         ) : (
           <Link
-            aria-label={`Настроить тренировку по колоде «${deck.title}»`}
+            aria-label={messages.configurePractice(deck.title)}
             className={styles.startButton}
-            title={`Начать тренировку по колоде «${deck.title}»`}
+            title={messages.startPractice(deck.title)}
             to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
           >
             <Glyph name="play" />
-            <span>Начать</span>
+            <span>{messages.start}</span>
           </Link>
         )}
       </div>
@@ -569,6 +740,7 @@ interface CardActionsProps {
 }
 
 function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const menuId = useId();
   const triggerId = useId();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -623,14 +795,14 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
   return (
     <div className={styles.cardActions}>
       <button
-        aria-label={`Действия с карточкой «${card.backText}»`}
+        aria-label={messages.cardActions(card.backText)}
         className={styles.cardActionsTrigger}
         id={triggerId}
         onClick={positionMenu}
         popoverTarget={menuId}
         popoverTargetAction="toggle"
         ref={triggerRef}
-        title="Действия"
+        title={messages.actions}
         type="button"
       >
         <CardActionGlyph name="menu" />
@@ -651,7 +823,7 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
           type="button"
         >
           <CardActionGlyph name="edit" />
-          <span>Редактировать</span>
+          <span>{messages.edit}</span>
         </button>
         <button
           aria-haspopup="dialog"
@@ -659,11 +831,11 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
           data-card-action="add-to-deck"
           disabled={isDeleting}
           onClick={handleAdd}
-          title="Добавить карточку в одну или несколько колод"
+          title={messages.addToDeckTitle}
           type="button"
         >
           <CardActionGlyph name="add" />
-          <span>Добавить в колоду</span>
+          <span>{messages.addToDeck}</span>
         </button>
         <span aria-hidden="true" className={styles.cardActionsDivider} />
         <button
@@ -671,11 +843,11 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
           data-card-action="delete"
           disabled={isDeleting}
           onClick={handleDelete}
-          title="Удалить карточку"
+          title={messages.deleteCardTitle}
           type="button"
         >
           <CardActionGlyph name="delete" />
-          <span>{isDeleting ? "Удаляем…" : "Удалить"}</span>
+          <span>{isDeleting ? messages.deleting : messages.delete}</span>
         </button>
       </div>
     </div>
@@ -690,6 +862,7 @@ interface LibraryCardRowProps {
 }
 
 function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCardRowProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const isMountedRef = useRef(true);
   const deleteInFlightRef = useRef(false);
   const [isDeckPickerOpen, setIsDeckPickerOpen] = useState(false);
@@ -738,7 +911,7 @@ function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCar
         <div className={styles.cardFaceCopy}>
           <OverflowingCardText
             className={styles.cardWord}
-            label="Слово"
+            label={messages.word}
             language={card.backLang}
             text={card.backText}
           />
@@ -750,7 +923,7 @@ function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCar
         <div className={styles.cardFaceCopy}>
           <OverflowingCardText
             className={styles.cardTranslation}
-            label="Перевод"
+            label={messages.translation}
             language={card.frontLang}
             text={card.frontText}
           />
@@ -766,7 +939,7 @@ function LibraryCardRow({ card, onCardAssigned, onDelete, onUpdate }: LibraryCar
       />
       {deleteError === null ? null : (
         <p className={styles.cardMutationError} role="alert">
-          {getCardDeleteErrorMessage(deleteError)}
+          {getCardDeleteErrorMessage(deleteError, messages)}
         </p>
       )}
       {isEditorOpen ? (
@@ -793,6 +966,7 @@ interface LibraryTabsProps {
 }
 
 function LibraryTabs({ activeView, onChange }: LibraryTabsProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     let nextView: LibraryView | null = null;
 
@@ -812,7 +986,7 @@ function LibraryTabs({ activeView, onChange }: LibraryTabsProps) {
 
   return (
     <div
-      aria-label="Содержимое библиотеки"
+      aria-label={messages.tabsAria}
       className={styles.librarySwitch}
       data-active={activeView}
       onKeyDown={handleKeyDown}
@@ -829,7 +1003,7 @@ function LibraryTabs({ activeView, onChange }: LibraryTabsProps) {
         tabIndex={activeView === "decks" ? 0 : -1}
         type="button"
       >
-        Колоды
+        {messages.decks}
       </button>
       <button
         aria-controls="library-cards-panel"
@@ -841,15 +1015,17 @@ function LibraryTabs({ activeView, onChange }: LibraryTabsProps) {
         tabIndex={activeView === "cards" ? 0 : -1}
         type="button"
       >
-        Карточки
+        {messages.cards}
       </button>
     </div>
   );
 }
 
 function DeckSkeletons() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
-    <div aria-label="Загрузка колод" className={styles.decksGrid} role="status">
+    <div aria-label={messages.loadingDecks} className={styles.decksGrid} role="status">
       {Array.from({ length: 3 }, (_, index) => (
         <div aria-hidden="true" className={styles.skeleton} key={index} />
       ))}
@@ -858,17 +1034,21 @@ function DeckSkeletons() {
 }
 
 function DeckFilterLoading({ onlyFavourites }: { onlyFavourites: boolean }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <div className={styles.deckFilterLoading} role="status">
       <span aria-hidden="true" className={styles.deckFilterSpinner} />
-      <span>{onlyFavourites ? "Собираем любимые колоды…" : "Возвращаем все колоды…"}</span>
+      <span>{onlyFavourites ? messages.loadingFavourites : messages.loadingAllDecks}</span>
     </div>
   );
 }
 
 function CardSkeletons() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
-    <div aria-label="Загрузка карточек" className={styles.cardSkeletons} role="status">
+    <div aria-label={messages.loadingCards} className={styles.cardSkeletons} role="status">
       {Array.from({ length: 3 }, (_, index) => (
         <div aria-hidden="true" className={styles.cardSkeleton} key={index} />
       ))}
@@ -909,6 +1089,8 @@ export function LibraryCardsPanel({
   isHidden: boolean;
   onCardAssigned?: () => void;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <section
       aria-labelledby="library-cards-tab"
@@ -922,18 +1104,18 @@ export function LibraryCardsPanel({
       {cardLibrary.status === "loading" ? <CardSkeletons /> : null}
       {cardLibrary.status === "error" ? (
         <StateMessage
-          actionLabel="Попробовать снова"
-          description={getLibraryCardsErrorMessage(cardLibrary.error)}
+          actionLabel={messages.retry}
+          description={getLibraryCardsErrorMessage(cardLibrary.error, messages)}
           onAction={cardLibrary.retry}
-          title="Карточки не загрузились"
+          title={messages.cardsLoadErrorTitle}
         />
       ) : null}
       {cardLibrary.status === "success" &&
       cardLibrary.cards.length === 0 &&
       !cardLibrary.hasMore ? (
         <StateMessage
-          description="Когда у вас появятся карточки, они соберутся здесь."
-          title="Карточек пока нет"
+          description={messages.cardsEmptyDescription}
+          title={messages.cardsEmptyTitle}
         />
       ) : null}
       {cardLibrary.status === "success" && (cardLibrary.cards.length > 0 || cardLibrary.hasMore) ? (
@@ -951,7 +1133,7 @@ export function LibraryCardsPanel({
           </ul>
           {cardLibrary.loadMoreError ? (
             <p className={styles.loadMoreError} role="alert">
-              {getLibraryCardsErrorMessage(cardLibrary.loadMoreError)}
+              {getLibraryCardsErrorMessage(cardLibrary.loadMoreError, messages)}
             </p>
           ) : null}
           {cardLibrary.hasMore ? (
@@ -961,7 +1143,7 @@ export function LibraryCardsPanel({
               onClick={cardLibrary.loadMore}
               type="button"
             >
-              <span>{cardLibrary.isLoadingMore ? "Загружаем…" : "Показать ещё"}</span>
+              <span>{cardLibrary.isLoadingMore ? messages.loadingMore : messages.showMore}</span>
               <DashboardIcon name="chevron" />
             </button>
           ) : null}
@@ -980,14 +1162,15 @@ export function LibraryCreateButton({
   onCreateCard: () => void;
   onCreateDeck: () => void;
 }) {
-  const label = activeView === "decks" ? "Новая колода" : "Новая карточка";
+  const messages = useLocalizedMessages(MESSAGES);
+  const label = activeView === "decks" ? messages.newDeck : messages.newCard;
   const isDeckView = activeView === "decks";
 
   return (
     <button
       className={styles.newDeckButton}
       onClick={isDeckView ? onCreateDeck : onCreateCard}
-      title={isDeckView ? "Создать новую колоду" : "Создать новую карточку"}
+      title={isDeckView ? messages.createDeck : messages.createCard}
       type="button"
     >
       <DashboardIcon name="plus" />
@@ -1001,6 +1184,7 @@ export function LibraryPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const currentUserUuid = user?.uuid ?? null;
   const openDeckCreatorFromNavigation = shouldOpenDeckCreator(location.state);
   const cachedUiStateAtMount =
@@ -1087,8 +1271,8 @@ export function LibraryPage() {
       <section className={styles.library}>
         <header className={styles.libraryHeader}>
           <div>
-            <span className={styles.eyebrow}>Ваше пространство</span>
-            <h1>Библиотека</h1>
+            <span className={styles.eyebrow}>{messages.eyebrow}</span>
+            <h1>{messages.title}</h1>
           </div>
           <LibraryCreateButton
             activeView={activeView}
@@ -1102,7 +1286,7 @@ export function LibraryPage() {
           {activeView === "decks" ? (
             <div className={styles.toolbarDetails}>
               <label className={styles.deckSearchField}>
-                <span className={styles.visuallyHidden}>Поиск по названию колоды</span>
+                <span className={styles.visuallyHidden}>{messages.searchLabel}</span>
                 <input
                   autoComplete="off"
                   maxLength={150}
@@ -1114,7 +1298,7 @@ export function LibraryPage() {
                       library.setOnlyFavourites(false);
                     }
                   }}
-                  placeholder="Поиск по колодам"
+                  placeholder={messages.searchPlaceholder}
                   type="search"
                   value={deckSearchQuery}
                 />
@@ -1134,7 +1318,7 @@ export function LibraryPage() {
                 type="button"
               >
                 <Glyph name="heart" />
-                <span>Только любимые</span>
+                <span>{messages.favouritesOnly}</span>
               </button>
               {library.status === "success" ? (
                 <div aria-live="polite" className={styles.summary}>
@@ -1176,15 +1360,15 @@ export function LibraryPage() {
           ) : null}
           {library.status === "error" ? (
             <StateMessage
-              actionLabel="Попробовать снова"
-              description={getLibraryErrorMessage(library.error)}
+              actionLabel={messages.retry}
+              description={getLibraryErrorMessage(library.error, messages)}
               onAction={library.retry}
               title={
                 isDeckSearchActive
-                  ? "Поиск недоступен"
+                  ? messages.searchUnavailable
                   : library.onlyFavourites
-                    ? "Любимые колоды не загрузились"
-                    : "Библиотека не загрузилась"
+                    ? messages.favouritesLoadError
+                    : messages.libraryLoadError
               }
             />
           ) : null}
@@ -1193,7 +1377,7 @@ export function LibraryPage() {
           library.decks.length === 0 &&
           !library.hasMore ? (
             <p className={styles.deckSearchEmpty} role="status">
-              Колоды не найдены
+              {messages.noSearchResults}
             </p>
           ) : null}
           {!isDeckSearchActive &&
@@ -1203,10 +1387,12 @@ export function LibraryPage() {
             <StateMessage
               description={
                 library.onlyFavourites
-                  ? "Добавьте колоды в любимые, и они появятся здесь."
-                  : "Когда у вас появятся колоды, они соберутся здесь."
+                  ? messages.emptyFavouritesDescription
+                  : messages.emptyLibraryDescription
               }
-              title={library.onlyFavourites ? "Любимых колод пока нет" : "В библиотеке пока пусто"}
+              title={
+                library.onlyFavourites ? messages.emptyFavouritesTitle : messages.emptyLibraryTitle
+              }
             />
           ) : null}
           {library.status === "success" && (library.decks.length > 0 || library.hasMore) ? (
@@ -1228,7 +1414,7 @@ export function LibraryPage() {
               </div>
               {library.loadMoreError ? (
                 <p className={styles.loadMoreError} role="alert">
-                  {getLibraryErrorMessage(library.loadMoreError)}
+                  {getLibraryErrorMessage(library.loadMoreError, messages)}
                 </p>
               ) : null}
               {library.hasMore ? (
@@ -1238,7 +1424,7 @@ export function LibraryPage() {
                   onClick={library.loadMore}
                   type="button"
                 >
-                  <span>{library.isLoadingMore ? "Загружаем…" : "Показать ещё"}</span>
+                  <span>{library.isLoadingMore ? messages.loadingMore : messages.showMore}</span>
                   <DashboardIcon name="chevron" />
                 </button>
               ) : null}
@@ -1287,7 +1473,7 @@ export function LibraryPage() {
           <span aria-hidden="true" className={styles.cardAssignedToastIcon}>
             ✓
           </span>
-          <span>Карточка успешно добавлена</span>
+          <span>{messages.cardAssigned}</span>
         </div>
       )}
     </main>

@@ -24,12 +24,14 @@ describe("auth API", () => {
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
+      user_settings: { locale: "ru-RU", theme: "light" },
     });
 
     await expect(getCurrentUser()).resolves.toEqual({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
+      settings: { locale: "ru-RU", theme: "light" },
     });
     expect(apiFetch).toHaveBeenCalledWith("/users/me", {
       signal: undefined,

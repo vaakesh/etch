@@ -7,7 +7,7 @@ describe("app route configuration", () => {
 
     expect(loginRoute).toBeDefined();
     expect(loginRoute?.access).toBe("guest");
-    expect(loginRoute?.title).toBe("Вход — Etch");
+    expect(loginRoute?.title).toEqual({ "ru-RU": "Вход — Etch", "en-US": "Sign in — Etch" });
     expect(loginRoute?.Component).toBeDefined();
   });
 
@@ -16,7 +16,7 @@ describe("app route configuration", () => {
 
     expect(homeRoute).toBeDefined();
     expect(homeRoute?.access).toBe("protected");
-    expect(homeRoute?.title).toBe("Главная — Etch");
+    expect(homeRoute?.title).toEqual({ "ru-RU": "Главная — Etch", "en-US": "Home — Etch" });
     expect(homeRoute?.Component).toBeDefined();
   });
 
@@ -25,7 +25,10 @@ describe("app route configuration", () => {
 
     expect(libraryRoute).toBeDefined();
     expect(libraryRoute?.access).toBe("protected");
-    expect(libraryRoute?.title).toBe("Библиотека — Etch");
+    expect(libraryRoute?.title).toEqual({
+      "ru-RU": "Библиотека — Etch",
+      "en-US": "Library — Etch",
+    });
     expect(libraryRoute?.Component).toBeDefined();
   });
 
@@ -34,7 +37,10 @@ describe("app route configuration", () => {
 
     expect(deckEditorRoute).toBeDefined();
     expect(deckEditorRoute?.access).toBe("protected");
-    expect(deckEditorRoute?.title).toBe("Редактор колоды — Etch");
+    expect(deckEditorRoute?.title).toEqual({
+      "ru-RU": "Редактор колоды — Etch",
+      "en-US": "Deck editor — Etch",
+    });
     expect(deckEditorRoute?.Component).toBeDefined();
   });
 
@@ -43,7 +49,10 @@ describe("app route configuration", () => {
 
     expect(practiceRoute).toBeDefined();
     expect(practiceRoute?.access).toBe("protected");
-    expect(practiceRoute?.title).toBe("Практика — Etch");
+    expect(practiceRoute?.title).toEqual({
+      "ru-RU": "Практика — Etch",
+      "en-US": "Practice — Etch",
+    });
     expect(practiceRoute?.Component).toBeDefined();
   });
 
@@ -54,8 +63,23 @@ describe("app route configuration", () => {
 
     expect(historyRoute).toBeDefined();
     expect(historyRoute?.access).toBe("protected");
-    expect(historyRoute?.title).toBe("История сессии — Etch");
+    expect(historyRoute?.title).toEqual({
+      "ru-RU": "История сессии — Etch",
+      "en-US": "Session history — Etch",
+    });
     expect(historyRoute?.Component).toBeDefined();
+  });
+
+  it("registers /settings as a protected route", () => {
+    const settingsRoute = appRoutes.find(({ path }) => path === "/settings");
+
+    expect(settingsRoute).toBeDefined();
+    expect(settingsRoute?.access).toBe("protected");
+    expect(settingsRoute?.title).toEqual({
+      "ru-RU": "Настройки — Etch",
+      "en-US": "Settings — Etch",
+    });
+    expect(settingsRoute?.Component).toBeDefined();
   });
 
   it("renders unmatched routes as a public 404 page", () => {
@@ -63,7 +87,10 @@ describe("app route configuration", () => {
 
     expect(fallbackRoute).toBeDefined();
     expect(fallbackRoute?.access).toBe("public");
-    expect(fallbackRoute?.title).toBe("Страница не найдена — Etch");
+    expect(fallbackRoute?.title).toEqual({
+      "ru-RU": "Страница не найдена — Etch",
+      "en-US": "Page not found — Etch",
+    });
     expect(fallbackRoute?.Component).toBeDefined();
   });
 });

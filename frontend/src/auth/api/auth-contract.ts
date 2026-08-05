@@ -1,4 +1,5 @@
 import { ApiError } from "../../api/api-error";
+import { parseUserSettings } from "../../features/settings/model/settings-contract";
 import type { User } from "../model/auth-types";
 
 export class AuthContractError extends ApiError {
@@ -29,9 +30,21 @@ export function parseCurrentUser(payload: unknown): User {
     );
   }
 
+  let settings: User["settings"];
+  try {
+    settings = parseUserSettings(payload.user_settings);
+  } catch (error) {
+    throw new AuthContractError(
+      "INVALID_USER_RESPONSE",
+      "The backend returned an unexpected user shape.",
+      { cause: error },
+    );
+  }
+
   return {
     uuid: payload.uuid,
     username: payload.username,
     email: payload.email,
+    settings,
   };
 }

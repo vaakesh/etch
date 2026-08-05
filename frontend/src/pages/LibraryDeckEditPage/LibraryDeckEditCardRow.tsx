@@ -4,6 +4,7 @@ import type {
   EditableLibraryCard,
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import { CardEditorDialog } from "../LibraryPage/CardEditorDialog";
 import libraryStyles from "../LibraryPage/LibraryPage.module.css";
 import { OverflowingCardText } from "../LibraryPage/OverflowingCardText";
@@ -14,24 +15,63 @@ interface LibraryDeckEditCardRowProps {
   onUpdate: (cardUuid: string, input: UpdateLibraryCardInput) => Promise<void>;
 }
 
-function getCardRemoveErrorMessage(error: unknown): string {
+const MESSAGES = defineMessages(
+  {
+    removeErrors: {
+      default: "Не удалось удалить карточку из колоды. Попробуйте ещё раз.",
+      notFound: "Колода или карточка больше недоступна.",
+      aborted: "Удаление карточки из колоды было отменено.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      server: "Сервер временно не может изменить колоду.",
+    },
+    actionsLabel: (card: string) => `Действия с карточкой «${card}»`,
+    actions: "Действия",
+    edit: "Редактировать",
+    removeTitle: "Удалить карточку только из этой колоды",
+    removing: "Удаляем…",
+    remove: "Удалить из колоды",
+    word: "Слово",
+    translation: "Перевод",
+  },
+  {
+    removeErrors: {
+      default: "Couldn't remove the card from the deck. Please try again.",
+      notFound: "The deck or card is no longer available.",
+      aborted: "Removing the card from the deck was canceled.",
+      network: "Couldn't reach the server. Check your connection.",
+      server: "The server can't update the deck right now.",
+    },
+    actionsLabel: (card: string) => `Actions for card “${card}”`,
+    actions: "Actions",
+    edit: "Edit",
+    removeTitle: "Remove this card from this deck only",
+    removing: "Removing…",
+    remove: "Remove from deck",
+    word: "Word",
+    translation: "Translation",
+  },
+);
+
+type CardRemoveErrorMessages = (typeof MESSAGES)["ru-RU"]["removeErrors"];
+
+function getCardRemoveErrorMessage(error: unknown, messages: CardRemoveErrorMessages): string {
   if (!isApiError(error)) {
-    return "Не удалось удалить карточку из колоды. Попробуйте ещё раз.";
+    return messages.default;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Колода или карточка больше недоступна.";
+    return messages.notFound;
   }
   if (error.code === "REQUEST_ABORTED") {
-    return "Удаление карточки из колоды было отменено.";
+    return messages.aborted;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может изменить колоду.";
+    return messages.server;
   }
 
-  return "Не удалось удалить карточку из колоды. Попробуйте ещё раз.";
+  return messages.default;
 }
 
 function CardActionGlyph({ name }: { name: "delete" | "edit" | "menu" }) {
@@ -88,6 +128,7 @@ function CardActions({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const menuId = useId();
   const triggerId = useId();
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -127,14 +168,15 @@ function CardActions({
   return (
     <div className={libraryStyles.cardActions}>
       <button
-        aria-label={`Действия с карточкой «${card.backText}»`}
+        aria-label={messages.actionsLabel(card.backText)}
         className={libraryStyles.cardActionsTrigger}
+        data-card-actions-trigger="true"
         id={triggerId}
         onClick={positionMenu}
         popoverTarget={menuId}
         popoverTargetAction="toggle"
         ref={triggerRef}
-        title="Действия"
+        title={messages.actions}
         type="button"
       >
         <CardActionGlyph name="menu" />
@@ -158,7 +200,7 @@ function CardActions({
           type="button"
         >
           <CardActionGlyph name="edit" />
-          <span>Редактировать</span>
+          <span>{messages.edit}</span>
         </button>
         <span aria-hidden="true" className={libraryStyles.cardActionsDivider} />
         <button
@@ -169,11 +211,11 @@ function CardActions({
             menuRef.current?.hidePopover();
             onRemove();
           }}
-          title="Удалить карточку только из этой колоды"
+          title={messages.removeTitle}
           type="button"
         >
           <CardActionGlyph name="delete" />
-          <span>{isRemoving ? "Удаляем…" : "Удалить из колоды"}</span>
+          <span>{isRemoving ? messages.removing : messages.remove}</span>
         </button>
       </div>
     </div>
@@ -181,6 +223,7 @@ function CardActions({
 }
 
 export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeckEditCardRowProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const isMountedRef = useRef(true);
   const removeInFlightRef = useRef(false);
   const rowRef = useRef<HTMLLIElement | null>(null);
@@ -209,8 +252,12 @@ export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeck
     setIsRemoving(true);
     const row = rowRef.current;
     const nextFocusTarget =
-      row?.nextElementSibling?.querySelector<HTMLButtonElement>('button[title="Действия"]') ??
-      row?.previousElementSibling?.querySelector<HTMLButtonElement>('button[title="Действия"]') ??
+      row?.nextElementSibling?.querySelector<HTMLButtonElement>(
+        'button[data-card-actions-trigger="true"]',
+      ) ??
+      row?.previousElementSibling?.querySelector<HTMLButtonElement>(
+        'button[data-card-actions-trigger="true"]',
+      ) ??
       document.getElementById("deck-cards-heading");
 
     try {
@@ -241,7 +288,7 @@ export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeck
         <div className={libraryStyles.cardFaceCopy}>
           <OverflowingCardText
             className={libraryStyles.cardWord}
-            label="Слово"
+            label={messages.word}
             language={card.backLang}
             text={card.backText}
           />
@@ -253,7 +300,7 @@ export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeck
         <div className={libraryStyles.cardFaceCopy}>
           <OverflowingCardText
             className={libraryStyles.cardTranslation}
-            label="Перевод"
+            label={messages.translation}
             language={card.frontLang}
             text={card.frontText}
           />
@@ -268,7 +315,7 @@ export function LibraryDeckEditCardRow({ card, onRemove, onUpdate }: LibraryDeck
       />
       {removeError === null ? null : (
         <p className={libraryStyles.cardMutationError} role="alert">
-          {getCardRemoveErrorMessage(removeError)}
+          {getCardRemoveErrorMessage(removeError, messages.removeErrors)}
         </p>
       )}
       {isEditorOpen ? (

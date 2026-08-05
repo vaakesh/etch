@@ -20,6 +20,8 @@ from app.users.schemas import (
     PublicUserOut,
     SearchQuery,
     UserCreate,
+    UserSettingsOut,
+    UserSettingsUpdate,
     UserUpdate,
 )
 from fastapi import APIRouter, Query, Response, status
@@ -31,8 +33,36 @@ router = APIRouter(prefix="/users")
 @router.get("/me", response_model=PrivateUserOut)
 async def get_me(
     current_user: CurrentUser,
+    user_service: UserServiceDeps,
 ):
-    return current_user
+    user_settings = await user_service.get_user_settings_by_id(
+        user_id=current_user.id,
+        for_update=False,
+    )
+    return PrivateUserOut(
+        uuid=current_user.uuid,
+        username=current_user.username,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+        user_settings=UserSettingsOut(
+            locale=user_settings.locale,
+            theme=user_settings.theme,
+        )
+    )
+
+@router.patch("/me/settings", response_model=UserSettingsOut)
+async def change_settings(
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
+    payload: UserSettingsUpdate,
+):
+    new_user_settings = await user_service.update_user_settings(
+        current_user_id=current_user.id,
+        payload=payload,
+    )
+    return new_user_settings
+    
 
 @router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
@@ -148,8 +178,18 @@ async def create_user(
     payload: UserCreate,
     user_service: UserServiceDeps,
 ):
-    new_user = await user_service.create_user(payload)
-    return new_user
+    new_user, user_settings = await user_service.create_user(payload)
+    return PrivateUserOut(
+        uuid=new_user.uuid,
+        username=new_user.username,
+        email=new_user.email,
+        created_at=new_user.created_at,
+        updated_at=new_user.updated_at,
+        user_settings=UserSettingsOut(
+            locale=user_settings.locale,
+            theme=user_settings.theme,
+        )
+    )
 
 @router.patch("/me", response_model=PrivateUserOut)
 async def update_user(

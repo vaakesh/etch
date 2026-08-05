@@ -15,7 +15,13 @@ import {
   LIBRARY_CREATE_DECK_NAVIGATION_STATE,
   LIBRARY_PATH,
 } from "../../features/library/model/library-navigation";
-import { WORD_COUNT_FORMS, localizeCount, useLocale } from "../../i18n";
+import {
+  WORD_COUNT_FORMS,
+  defineMessages,
+  localizeCount,
+  useLocale,
+  useLocalizedMessages,
+} from "../../i18n";
 import type {
   HomeDashboard,
   HomeDeck,
@@ -25,42 +31,123 @@ import type {
 import { useHomeDashboard } from "../../features/home/model/useHomeDashboard";
 import styles from "./HomePage.module.css";
 
-function getHomeErrorMessage(error: unknown): string {
+const MESSAGES = defineMessages(
+  {
+    errors: {
+      generic: "Не удалось загрузить главную страницу. Попробуйте ещё раз.",
+      forbidden: "У этой учётной записи нет доступа к данным главной страницы.",
+      invalid: "Сервер вернул данные в неожиданном формате. Попробуйте обновить страницу позже.",
+      network: "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.",
+      server: "Сервер временно не может подготовить данные. Попробуйте ещё раз чуть позже.",
+    },
+    title: "Главная",
+    createDeckTitle: "Создать новую колоду в библиотеке",
+    newDeck: "Новая колода",
+    accuracy: "Точность колоды",
+    correctAnswers: (value: string) => `Правильных ответов — ${value}`,
+    noDescription: "Без описания",
+    lastUpdated: (value: string) => `Последнее обновление: ${value}`,
+    updated: "Обновлено",
+    configurePractice: (title: string) => `Настроить тренировку по колоде «${title}»`,
+    startPractice: (title: string) => `Начать тренировку по колоде «${title}»`,
+    start: "Начать",
+    emptyTitle: "Здесь появятся ваши колоды",
+    emptyDescription: "Когда колоды будут добавлены, главная страница покажет их прогресс.",
+    yourDecks: "Ваши колоды",
+    allDecks: "Все колоды",
+    yourProgress: "Ваш прогресс",
+    total: "Всего",
+    studied: "Изучено",
+    weekly: "За неделю",
+    accuracyMetric: "Точность",
+    keepGoing: "Продолжайте!",
+    streak: "Текущая серия",
+    studyTime: "Время занятий",
+    weeklyActivity: "Активность за неделю",
+    noActivity: "Пока нет данных об активности.",
+    loadingAria: "Загрузка данных главной страницы",
+    loading: "Загружаем данные…",
+    errorTitle: "Данные не загрузились",
+    retry: "Попробовать снова",
+  },
+  {
+    errors: {
+      generic: "We couldn't load the home page. Try again.",
+      forbidden: "This account does not have access to the home dashboard.",
+      invalid: "The server returned unexpected data. Try refreshing the page later.",
+      network: "We couldn't reach the server. Check your connection and try again.",
+      server: "The server cannot prepare your dashboard right now. Try again later.",
+    },
+    title: "Home",
+    createDeckTitle: "Create a new deck in your library",
+    newDeck: "New deck",
+    accuracy: "Deck accuracy",
+    correctAnswers: (value: string) => `Correct answers — ${value}`,
+    noDescription: "No description",
+    lastUpdated: (value: string) => `Last updated: ${value}`,
+    updated: "Updated",
+    configurePractice: (title: string) => `Configure practice for “${title}”`,
+    startPractice: (title: string) => `Start practicing “${title}”`,
+    start: "Start",
+    emptyTitle: "Your decks will appear here",
+    emptyDescription: "Once you add decks, the home page will show their progress.",
+    yourDecks: "Your decks",
+    allDecks: "All decks",
+    yourProgress: "Your progress",
+    total: "Total",
+    studied: "Studied",
+    weekly: "This week",
+    accuracyMetric: "Accuracy",
+    keepGoing: "Keep going!",
+    streak: "Current streak",
+    studyTime: "Study time",
+    weeklyActivity: "Weekly activity",
+    noActivity: "No activity yet.",
+    loadingAria: "Loading home dashboard",
+    loading: "Loading data…",
+    errorTitle: "Your data didn't load",
+    retry: "Try again",
+  },
+);
+
+function getHomeErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить главную страницу. Попробуйте ещё раз.";
+    return messages.errors.generic;
   }
 
   if (error.status === 403) {
-    return "У этой учётной записи нет доступа к данным главной страницы.";
+    return messages.errors.forbidden;
   }
   if (error.code === "INVALID_HOME_RESPONSE") {
-    return "Сервер вернул данные в неожиданном формате. Попробуйте обновить страницу позже.";
+    return messages.errors.invalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может подготовить данные. Попробуйте ещё раз чуть позже.";
+    return messages.errors.server;
   }
 
-  return "Не удалось загрузить главную страницу. Попробуйте ещё раз.";
+  return messages.errors.generic;
 }
 
 function DashboardHeader() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <header className={styles.header}>
-      <h1>Главная</h1>
+      <h1>{messages.title}</h1>
 
       <div className={styles.headerActions}>
         <Link
           aria-haspopup="dialog"
           className={styles.newDeckButton}
           state={LIBRARY_CREATE_DECK_NAVIGATION_STATE}
-          title="Создать новую колоду в библиотеке"
+          title={messages.createDeckTitle}
           to={LIBRARY_PATH}
         >
           <DashboardIcon name="plus" />
-          <span>Новая колода</span>
+          <span>{messages.newDeck}</span>
         </Link>
       </div>
     </header>
@@ -93,6 +180,7 @@ function getAccuracyToneClassName(accuracy: number): string {
 
 function DeckCard({ deck }: DeckCardProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const accuracy = clampPercent(deck.accuracy);
   const accuracyTooltipId = useId();
   const [isAccuracyTooltipOpen, setIsAccuracyTooltipOpen] = useState(false);
@@ -110,7 +198,7 @@ function DeckCard({ deck }: DeckCardProps) {
           <span className={accuracyHintClassName}>
             <span
               aria-describedby={accuracyTooltipId}
-              aria-label="Точность колоды"
+              aria-label={messages.accuracy}
               aria-valuemax={100}
               aria-valuemin={0}
               aria-valuenow={accuracy}
@@ -137,12 +225,12 @@ function DeckCard({ deck }: DeckCardProps) {
               {formatCount(accuracy, locale)}
             </span>
             <span className={styles.deckAccuracyTooltip} id={accuracyTooltipId} role="tooltip">
-              <strong>Точность колоды</strong>
-              <span>Правильных ответов — {formatPercent(accuracy, locale)}</span>
+              <strong>{messages.accuracy}</strong>
+              <span>{messages.correctAnswers(formatPercent(accuracy, locale))}</span>
             </span>
           </span>
         </div>
-        <p>{deck.description ?? "Без описания"}</p>
+        <p>{deck.description ?? messages.noDescription}</p>
       </div>
 
       <div className={styles.deckBody}>
@@ -154,9 +242,9 @@ function DeckCard({ deck }: DeckCardProps) {
             <time
               className={styles.deckUpdatedAt}
               dateTime={deck.updatedAt}
-              title={`Последнее обновление: ${updatedAtLabel}`}
+              title={messages.lastUpdated(updatedAtLabel)}
             >
-              <span className={styles.deckUpdatedLabel}>Обновлено</span>
+              <span className={styles.deckUpdatedLabel}>{messages.updated}</span>
               <span className={styles.deckUpdatedValue}>{updatedAtLabel}</span>
             </time>
           ) : null}
@@ -164,18 +252,20 @@ function DeckCard({ deck }: DeckCardProps) {
       </div>
 
       <Link
-        aria-label={`Настроить тренировку по колоде «${deck.title}»`}
+        aria-label={messages.configurePractice(deck.title)}
         className={styles.startButton}
-        title={`Начать тренировку по колоде «${deck.title}»`}
+        title={messages.startPractice(deck.title)}
         to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
       >
-        Начать
+        {messages.start}
       </Link>
     </article>
   );
 }
 
 function EmptyDecks() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <div className={styles.emptyDecks}>
       <div aria-hidden="true" className={styles.emptyIllustration}>
@@ -186,21 +276,23 @@ function EmptyDecks() {
         </span>
       </div>
       <div>
-        <h3>Здесь появятся ваши колоды</h3>
-        <p>Когда колоды будут добавлены, главная страница покажет их прогресс.</p>
+        <h3>{messages.emptyTitle}</h3>
+        <p>{messages.emptyDescription}</p>
       </div>
     </div>
   );
 }
 
 function DecksSection({ decks }: { decks: readonly HomeDeck[] }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <section aria-labelledby="decks-heading" className={styles.decksSection}>
       <div className={styles.sectionHeading}>
-        <h2 id="decks-heading">Ваши колоды</h2>
+        <h2 id="decks-heading">{messages.yourDecks}</h2>
         {decks.length > 0 ? (
           <Link className={styles.sectionAction} to="/library">
-            Все колоды
+            {messages.allDecks}
             <DashboardIcon name="chevron" />
           </Link>
         ) : null}
@@ -249,6 +341,7 @@ interface ProgressPanelProps {
 
 function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const chartValues = [...weeklyActivity]
     .sort((first, second) => first.date.localeCompare(second.date))
     .slice(-7);
@@ -260,42 +353,42 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
         <span aria-hidden="true" className={styles.progressHeadingIcon}>
           <DashboardIcon name="chart" />
         </span>
-        <h2 id="progress-heading">Ваш прогресс</h2>
+        <h2 id="progress-heading">{messages.yourProgress}</h2>
       </header>
 
       <div className={styles.metricsList}>
         <ProgressMetric
-          detail="Всего"
+          detail={messages.total}
           icon="book"
-          label="Изучено"
+          label={messages.studied}
           tone="teal"
           value={studiedWordsCount.text}
         />
         <ProgressMetric
-          detail="За неделю"
+          detail={messages.weekly}
           icon="gauge"
-          label="Точность"
+          label={messages.accuracyMetric}
           tone="mint"
           value={formatPercent(progress.weeklyAccuracy, locale)}
         />
         <ProgressMetric
-          detail="Продолжайте!"
+          detail={messages.keepGoing}
           icon="calendar"
-          label="Текущая серия"
+          label={messages.streak}
           tone="coral"
           value={formatStreak(progress.currentStreakDays, locale)}
         />
         <ProgressMetric
-          detail="Всего"
+          detail={messages.total}
           icon="clock"
-          label="Время занятий"
+          label={messages.studyTime}
           tone="sand"
           value={formatStudyTime(progress.totalStudyTimeSeconds, locale)}
         />
       </div>
 
       <section aria-labelledby="weekly-heading" className={styles.weeklySection}>
-        <h3 id="weekly-heading">Активность за неделю</h3>
+        <h3 id="weekly-heading">{messages.weeklyActivity}</h3>
         {chartValues.length > 0 ? (
           <div className={styles.weeklyChart}>
             {chartValues.map((activityDay) => {
@@ -318,7 +411,7 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
             })}
           </div>
         ) : (
-          <p className={styles.noActivity}>Пока нет данных об активности.</p>
+          <p className={styles.noActivity}>{messages.noActivity}</p>
         )}
       </section>
     </aside>
@@ -337,9 +430,11 @@ function DashboardContent({ dashboard }: { dashboard: HomeDashboard }) {
 }
 
 function DashboardSkeleton() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
-    <div aria-label="Загрузка данных главной страницы" className={styles.contentGrid} role="status">
-      <span className={styles.srOnly}>Загружаем данные…</span>
+    <div aria-label={messages.loadingAria} className={styles.contentGrid} role="status">
+      <span className={styles.srOnly}>{messages.loading}</span>
       <aside className={styles.skeletonPanel}>
         <span className={styles.skeletonLineWide} />
         <div className={styles.skeletonMetrics}>
@@ -374,15 +469,17 @@ interface ErrorStateProps {
 }
 
 function ErrorState({ error, onRetry }: ErrorStateProps) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <section className={styles.errorState}>
       <div className={styles.errorIcon}>
         <DashboardIcon name="book" />
       </div>
-      <h2>Данные не загрузились</h2>
-      <p>{getHomeErrorMessage(error)}</p>
+      <h2>{messages.errorTitle}</h2>
+      <p>{getHomeErrorMessage(error, messages)}</p>
       <button onClick={onRetry} type="button">
-        Попробовать снова
+        {messages.retry}
       </button>
     </section>
   );

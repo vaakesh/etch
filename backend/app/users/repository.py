@@ -1,8 +1,32 @@
 from uuid import UUID
 
-from app.users.models import User
+from app.users.models import User, UserSettings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+class UserSettingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def refresh(self, user_settings: UserSettings) -> None:
+        await self.session.refresh(user_settings)
+
+    def add(
+        self,
+        user_settings: UserSettings,
+    ) -> None:
+        self.session.add(user_settings)
+
+    async def get_by_user_id(
+            self,
+            user_id: int,
+            for_update: bool = False,
+    ) -> User | None:
+        stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+        if for_update:
+            stmt = stmt.with_for_update(of=UserSettings)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
 
 class UserRepository:

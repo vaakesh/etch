@@ -6,7 +6,7 @@ from app.training_sessions.repository import (
     TrainingSessionItemRepository,
     TrainingSessionRepository,
 )
-from app.users.repository import UserRepository
+from app.users.repository import UserRepository, UserSettingsRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -22,6 +22,7 @@ class UnitOfWork:
         self.auth_repo: AuthRepository | None = None
         self.user_deck_repo: UserDeckRepository | None = None
         self.training_session_item_repo: TrainingSessionItemRepository | None = None
+        self.user_settings_repo: UserSettingsRepository | None = None
 
     async def __aenter__(self):
         self.session = self._async_session_maker()
@@ -33,6 +34,7 @@ class UnitOfWork:
         self.auth_repo = AuthRepository(self.session)
         self.user_deck_repo = UserDeckRepository(self.session)
         self.training_session_item_repo = TrainingSessionItemRepository(self.session)
+        self.user_settings_repo = UserSettingsRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -51,6 +53,7 @@ class UnitOfWork:
             self.auth_repo = None
             self.user_deck_repo = None
             self.training_session_item_repo = None
+            self.user_settings_repo = None
 
     async def commit(self):
         if self.session is None:

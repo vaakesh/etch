@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api";
 import type { UseDeckEditorResult } from "../../features/library/model/useDeckEditor";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const useDeckEditorMock = vi.hoisted(() => vi.fn());
 
@@ -51,13 +52,15 @@ function createEditorResult(overrides: Partial<UseDeckEditorResult> = {}): UseDe
   };
 }
 
-function renderEditor(path = `/library/${DECK_UUID}/edit`): string {
+function renderEditor(path = `/library/${DECK_UUID}/edit`, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<LibraryDeckEditPage />} path="/library/:deck_uuid/edit" />
-      </Routes>
-    </MemoryRouter>,
+    <LocaleProvider initialLocale={locale}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<LibraryDeckEditPage />} path="/library/:deck_uuid/edit" />
+        </Routes>
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -206,5 +209,15 @@ describe("LibraryDeckEditPage", () => {
     expect(markup).not.toContain("data-card-uuid");
     expect(markup).not.toContain("data-card-action");
     expect(markup).not.toContain("Загрузить больше");
+  });
+
+  it("renders the editor controls in English", () => {
+    const markup = renderEditor(`/library/${DECK_UUID}/edit`, "en-US");
+
+    expect(markup).toContain("Deck editor");
+    expect(markup).toContain("Deck access");
+    expect(markup).toContain("Save changes");
+    expect(markup).toContain("Remove from deck");
+    expect(markup).toContain("Load more");
   });
 });

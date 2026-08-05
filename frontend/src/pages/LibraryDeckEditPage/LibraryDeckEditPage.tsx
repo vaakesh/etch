@@ -10,78 +10,193 @@ import {
   useDeckEditor,
   type UseDeckEditorResult,
 } from "../../features/library/model/useDeckEditor";
-import { CARD_COUNT_FORMS, localizeCount, useLocale } from "../../i18n";
+import {
+  CARD_COUNT_FORMS,
+  defineMessages,
+  localizeCount,
+  useLocale,
+  useLocalizedMessages,
+} from "../../i18n";
 import libraryStyles from "../LibraryPage/LibraryPage.module.css";
 import styles from "./LibraryDeckEditPage.module.css";
 import { LibraryDeckEditCardRow } from "./LibraryDeckEditCardRow";
 
-function getDeckLoadErrorMessage(error: unknown): string {
+const MESSAGES = defineMessages(
+  {
+    loadErrors: {
+      default: "Не удалось загрузить колоду. Попробуйте ещё раз.",
+      notFound: "Колода не найдена или уже удалена.",
+      invalid: "Сервер вернул данные колоды в неожиданном формате.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      server: "Сервер временно не может загрузить колоду.",
+    },
+    cardsErrors: {
+      default: "Не удалось загрузить следующие карточки. Попробуйте ещё раз.",
+      notFound: "Колода больше не найдена.",
+      invalid: "Сервер вернул карточки в неожиданном формате.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      server: "Сервер временно не может загрузить карточки.",
+    },
+    saveErrors: {
+      default: "Не удалось сохранить колоду. Попробуйте ещё раз.",
+      notFound: "Колода больше не найдена.",
+      conflict: "Сервер отклонил изменения. Попробуйте изменить название.",
+      validation: "Проверьте название и описание колоды.",
+      aborted: "Сохранение было отменено.",
+      invalid: "Сервер вернул неожиданный ответ после сохранения.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      server: "Сервер временно не может сохранить колоду.",
+    },
+    public: "Публичная",
+    private: "Приватная",
+    title: "Название",
+    description: "Описание",
+    optional: "необязательно",
+    descriptionPlaceholder: "О чём эта колода?",
+    access: "Доступ к колоде",
+    publicDescription: "Другие пользователи смогут видеть эту колоду.",
+    privateDescription: "Колода доступна только вам.",
+    saved: "Изменения сохранены",
+    saving: "Сохраняем…",
+    save: "Сохранить изменения",
+    loading: "Загрузка редактора колоды",
+    pageErrorTitle: "Колода не загрузилась",
+    backToLibrary: "Вернуться в библиотеку",
+    retry: "Попробовать снова",
+    deckContents: "Состав колоды",
+    cards: "Карточки",
+    emptyTitle: "В этой колоде пока нет карточек",
+    emptyDescription: "Добавить карточки можно из вкладки «Карточки» в библиотеке.",
+    openLibrary: "Открыть библиотеку",
+    loadingMore: "Загружаем…",
+    loadMore: "Загрузить больше",
+    editor: "Редактор колоды",
+    lead: "Изменяйте данные колоды и управляйте карточками в одном месте.",
+  },
+  {
+    loadErrors: {
+      default: "Couldn't load the deck. Please try again.",
+      notFound: "The deck was not found or has already been deleted.",
+      invalid: "The server returned the deck in an unexpected format.",
+      network: "Couldn't reach the server. Check your connection.",
+      server: "The server can't load the deck right now.",
+    },
+    cardsErrors: {
+      default: "Couldn't load more cards. Please try again.",
+      notFound: "The deck is no longer available.",
+      invalid: "The server returned the cards in an unexpected format.",
+      network: "Couldn't reach the server. Check your connection.",
+      server: "The server can't load the cards right now.",
+    },
+    saveErrors: {
+      default: "Couldn't save the deck. Please try again.",
+      notFound: "The deck is no longer available.",
+      conflict: "The server rejected the changes. Try a different title.",
+      validation: "Check the deck title and description.",
+      aborted: "Saving was canceled.",
+      invalid: "The server returned an unexpected response after saving.",
+      network: "Couldn't reach the server. Check your connection.",
+      server: "The server can't save the deck right now.",
+    },
+    public: "Public",
+    private: "Private",
+    title: "Title",
+    description: "Description",
+    optional: "optional",
+    descriptionPlaceholder: "What is this deck about?",
+    access: "Deck access",
+    publicDescription: "Other users will be able to see this deck.",
+    privateDescription: "Only you can access this deck.",
+    saved: "Changes saved",
+    saving: "Saving…",
+    save: "Save changes",
+    loading: "Loading deck editor",
+    pageErrorTitle: "The deck couldn't be loaded",
+    backToLibrary: "Back to library",
+    retry: "Try again",
+    deckContents: "Deck contents",
+    cards: "Cards",
+    emptyTitle: "This deck has no cards yet",
+    emptyDescription: "You can add cards from the Cards tab in your library.",
+    openLibrary: "Open library",
+    loadingMore: "Loading…",
+    loadMore: "Load more",
+    editor: "Deck editor",
+    lead: "Edit deck details and manage its cards in one place.",
+  },
+);
+
+type DeckLoadErrorMessages = (typeof MESSAGES)["ru-RU"]["loadErrors"];
+type DeckCardsErrorMessages = (typeof MESSAGES)["ru-RU"]["cardsErrors"];
+type DeckSaveErrorMessages = (typeof MESSAGES)["ru-RU"]["saveErrors"];
+
+function getDeckLoadErrorMessage(error: unknown, messages: DeckLoadErrorMessages): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить колоду. Попробуйте ещё раз.";
+    return messages.default;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Колода не найдена или уже удалена.";
+    return messages.notFound;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул данные колоды в неожиданном формате.";
+    return messages.invalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может загрузить колоду.";
+    return messages.server;
   }
 
-  return "Не удалось загрузить колоду. Попробуйте ещё раз.";
+  return messages.default;
 }
 
-function getDeckCardsErrorMessage(error: unknown): string {
+function getDeckCardsErrorMessage(error: unknown, messages: DeckCardsErrorMessages): string {
   if (!isApiError(error)) {
-    return "Не удалось загрузить следующие карточки. Попробуйте ещё раз.";
+    return messages.default;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Колода больше не найдена.";
+    return messages.notFound;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул карточки в неожиданном формате.";
+    return messages.invalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может загрузить карточки.";
+    return messages.server;
   }
 
-  return "Не удалось загрузить следующие карточки. Попробуйте ещё раз.";
+  return messages.default;
 }
 
-function getDeckSaveErrorMessage(error: unknown): string {
+function getDeckSaveErrorMessage(error: unknown, messages: DeckSaveErrorMessages): string {
   if (!isApiError(error)) {
-    return "Не удалось сохранить колоду. Попробуйте ещё раз.";
+    return messages.default;
   }
   if (error.status === 403 || error.status === 404) {
-    return "Колода больше не найдена.";
+    return messages.notFound;
   }
   if (error.status === 409) {
-    return "Сервер отклонил изменения. Попробуйте изменить название.";
+    return messages.conflict;
   }
   if (error.status === 422) {
-    return "Проверьте название и описание колоды.";
+    return messages.validation;
   }
   if (error.code === "REQUEST_ABORTED") {
-    return "Сохранение было отменено.";
+    return messages.aborted;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return "Сервер вернул неожиданный ответ после сохранения.";
+    return messages.invalid;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.network;
   }
   if (error.status >= 500) {
-    return "Сервер временно не может сохранить колоду.";
+    return messages.server;
   }
 
-  return "Не удалось сохранить колоду. Попробуйте ещё раз.";
+  return messages.default;
 }
 
 function BackGlyph() {
@@ -141,6 +256,7 @@ function DeckDetailsForm({
   deck: EditableLibraryDeck;
   onSave: (input: UpdateLibraryDeckInput) => Promise<void>;
 }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const isMountedRef = useRef(true);
   const isSavingRef = useRef(false);
   const [title, setTitle] = useState(deck.title);
@@ -234,7 +350,7 @@ function DeckDetailsForm({
         </div>
         <span className={styles.visibilityBadge} data-public={isPublic}>
           <VisibilityGlyph isPublic={isPublic} />
-          <span>{isPublic ? "Публичная" : "Приватная"}</span>
+          <span>{isPublic ? messages.public : messages.private}</span>
         </span>
       </div>
 
@@ -242,7 +358,7 @@ function DeckDetailsForm({
         <label className={styles.field}>
           <span>
             <strong>
-              Название <span aria-hidden="true">*</span>
+              {messages.title} <span aria-hidden="true">*</span>
             </strong>
             <small>{title.length}/50</small>
           </span>
@@ -262,8 +378,8 @@ function DeckDetailsForm({
 
         <label className={styles.field}>
           <span>
-            <strong>Описание</strong>
-            <small>необязательно</small>
+            <strong>{messages.description}</strong>
+            <small>{messages.optional}</small>
           </span>
           <textarea
             maxLength={3000}
@@ -272,7 +388,7 @@ function DeckDetailsForm({
               setDescription(event.currentTarget.value);
               setShowSavedNotice(false);
             }}
-            placeholder="О чём эта колода?"
+            placeholder={messages.descriptionPlaceholder}
             rows={4}
             value={description}
           />
@@ -280,12 +396,8 @@ function DeckDetailsForm({
 
         <div className={styles.privacyControl}>
           <div className={styles.privacyControlCopy} id="deck-visibility-label">
-            <strong>Доступ к колоде</strong>
-            <small>
-              {isPublic
-                ? "Другие пользователи смогут видеть эту колоду."
-                : "Колода доступна только вам."}
-            </small>
+            <strong>{messages.access}</strong>
+            <small>{isPublic ? messages.publicDescription : messages.privateDescription}</small>
           </div>
           <div
             aria-labelledby="deck-visibility-label"
@@ -301,7 +413,7 @@ function DeckDetailsForm({
                 type="button"
               >
                 <VisibilityGlyph isPublic={false} />
-                <span>Приватная</span>
+                <span>{messages.private}</span>
               </button>
               <button
                 aria-pressed={isPublic}
@@ -310,7 +422,7 @@ function DeckDetailsForm({
                 type="button"
               >
                 <VisibilityGlyph isPublic />
-                <span>Публичная</span>
+                <span>{messages.public}</span>
               </button>
               <span aria-hidden="true" className={styles.privacyThumb} />
             </div>
@@ -322,16 +434,16 @@ function DeckDetailsForm({
         <div aria-live="polite" className={styles.saveStatus}>
           {saveError === null ? null : (
             <p className={styles.formError} role="alert">
-              {getDeckSaveErrorMessage(saveError)}
+              {getDeckSaveErrorMessage(saveError, messages.saveErrors)}
             </p>
           )}
           {showSavedNotice && saveError === null ? (
-            <p className={styles.savedNotice}>Изменения сохранены</p>
+            <p className={styles.savedNotice}>{messages.saved}</p>
           ) : null}
         </div>
         <button disabled={isSaving || !canSave} type="submit">
           {isSaving ? <span aria-hidden="true" className={styles.spinner} /> : null}
-          <span>{isSaving ? "Сохраняем…" : "Сохранить изменения"}</span>
+          <span>{isSaving ? messages.saving : messages.save}</span>
         </button>
       </div>
     </form>
@@ -339,8 +451,10 @@ function DeckDetailsForm({
 }
 
 function PageLoadingState() {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
-    <div aria-label="Загрузка редактора колоды" className={styles.loadingState} role="status">
+    <div aria-label={messages.loading} className={styles.loadingState} role="status">
       <span className={styles.loadingHeading} />
       <span className={styles.loadingForm} />
       <div className={styles.loadingCards}>
@@ -353,17 +467,19 @@ function PageLoadingState() {
 }
 
 function PageErrorState({ editor }: { editor: UseDeckEditorResult }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
   return (
     <div className={styles.pageState} role="alert">
       <span aria-hidden="true" className={styles.stateMark}>
         Etch
       </span>
-      <h1>Колода не загрузилась</h1>
-      <p>{getDeckLoadErrorMessage(editor.error)}</p>
+      <h1>{messages.pageErrorTitle}</h1>
+      <p>{getDeckLoadErrorMessage(editor.error, messages.loadErrors)}</p>
       <div>
-        <Link to="/library">Вернуться в библиотеку</Link>
+        <Link to="/library">{messages.backToLibrary}</Link>
         <button onClick={editor.retry} type="button">
-          Попробовать снова
+          {messages.retry}
         </button>
       </div>
     </div>
@@ -371,6 +487,7 @@ function PageErrorState({ editor }: { editor: UseDeckEditorResult }) {
 }
 
 function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
+  const messages = useLocalizedMessages(MESSAGES);
   const deck = editor.deck;
 
   if (deck === null) {
@@ -385,9 +502,9 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
     >
       <div className={styles.sectionHeading}>
         <div>
-          <span>Состав колоды</span>
+          <span>{messages.deckContents}</span>
           <h2 id="deck-cards-heading" tabIndex={-1}>
-            Карточки
+            {messages.cards}
           </h2>
         </div>
       </div>
@@ -395,9 +512,9 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
       {editor.cards.length === 0 && !editor.hasMore ? (
         <div className={styles.emptyCards} role="status">
           <span aria-hidden="true">Aa</span>
-          <h3>В этой колоде пока нет карточек</h3>
-          <p>Добавить карточки можно из вкладки «Карточки» в библиотеке.</p>
-          <Link to="/library">Открыть библиотеку</Link>
+          <h3>{messages.emptyTitle}</h3>
+          <p>{messages.emptyDescription}</p>
+          <Link to="/library">{messages.openLibrary}</Link>
         </div>
       ) : (
         <>
@@ -414,7 +531,7 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
 
           {editor.loadMoreError === null ? null : (
             <p className={styles.loadMoreError} role="alert">
-              {getDeckCardsErrorMessage(editor.loadMoreError)}
+              {getDeckCardsErrorMessage(editor.loadMoreError, messages.cardsErrors)}
             </p>
           )}
 
@@ -425,7 +542,7 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
               onClick={editor.loadMore}
               type="button"
             >
-              <span>{editor.isLoadingMore ? "Загружаем…" : "Загрузить больше"}</span>
+              <span>{editor.isLoadingMore ? messages.loadingMore : messages.loadMore}</span>
               <DashboardIcon name="chevron" />
             </button>
           ) : null}
@@ -438,6 +555,7 @@ function CardsSection({ editor }: { editor: UseDeckEditorResult }) {
 export function LibraryDeckEditPage() {
   const { deck_uuid: deckUuid = "" } = useParams<{ deck_uuid: string }>();
   const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
   const editor = useDeckEditor(deckUuid);
   const deckCardCount = localizeCount(editor.deck?.totalWordsCount ?? 0, CARD_COUNT_FORMS, locale);
 
@@ -449,12 +567,12 @@ export function LibraryDeckEditPage() {
         {editor.status === "success" && editor.deck !== null ? (
           <div className={styles.loadedContent}>
             <header className={styles.header}>
-              <Link aria-label="Вернуться в библиотеку" className={styles.backLink} to="/library">
+              <Link aria-label={messages.backToLibrary} className={styles.backLink} to="/library">
                 <BackGlyph />
               </Link>
               <div className={styles.headerCopy}>
                 <div className={styles.headerTopline}>
-                  <span className={styles.eyebrow}>Редактор колоды</span>
+                  <span className={styles.eyebrow}>{messages.editor}</span>
                   <div
                     aria-live="polite"
                     aria-label={deckCardCount.text}
@@ -467,7 +585,7 @@ export function LibraryDeckEditPage() {
                   </div>
                 </div>
                 <h1 title={editor.deck.title}>{editor.deck.title}</h1>
-                <p>Изменяйте данные колоды и управляйте карточками в одном месте.</p>
+                <p>{messages.lead}</p>
               </div>
             </header>
 

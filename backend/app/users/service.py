@@ -9,14 +9,40 @@ from app.users.errors import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from app.users.models import User
-from app.users.schemas import UserCreate, UserUpdate
+from app.users.models import User, UserSettings
+from app.users.schemas import UserCreate, UserSettingsUpdate, UserUpdate
 from sqlalchemy.exc import IntegrityError
 
 
 class UserService:
     def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
         self.uow_factory = uow_factory
+
+    async def get_user_settings_by_id(
+        self,
+        user_id: int,
+        for_update: bool = False,
+    ) -> UserSettings:
+        async with self.uow_factory() as uow:
+            user_settings = await uow.user_settings_repo.get_by_user_id(
+                user_id=user_id,
+                for_update=for_update,
+            )
+            return user_settings
+
+    async def _get_user_settings_by_id(
+            self,
+            uow: UnitOfWork,
+            user_id: int,
+            for_update: bool = False,
+        ) -> UserSettings:
+            user_settings = await uow.user_settings_repo.get_by_user_id(
+                user_id=user_id,
+                for_update=for_update,
+            )
+            if user_settings is None:
+                raise UserNotFoundError()
+            return user_settings
 
     async def get_by_uuid(
             self, 
@@ -48,7 +74,7 @@ class UserService:
     async def create_user(
             self,
             payload: UserCreate,
-    ) -> User:
+    ) -> tuple[User, UserSettings]:
         try:
             async with self.uow_factory() as uow:
                 user_data = payload.model_dump(exclude={"password"})
@@ -57,10 +83,46 @@ class UserService:
                     hashed_password=hash_password(payload.password),
                 )
                 uow.user_repo.add(user)
+                await uow.flush()
+                user_settings = UserSettings(
+                    user_id=user.id,
+                    locale="ru-RU",
+                    theme="light",
+                )
+                uow.user_settings_repo.add(user_settings)
                 await uow.commit()
-                return user
+                await uow.user_settings_repo.refresh(user_settings)
+                return user, user_settings
         except IntegrityError as e:
             raise UserAlreadyExistsError() from e
+
+    async def update_user_settings(
+        self,
+        current_user_id: int,
+        payload: UserSettingsUpdate,
+    ) -> UserSettings:
+        async with self.uow_factory() as uow:
+            update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+            if not update_data:
+                raise RequestValueError(
+                    message="Update body is empty",
+                    failed_field="body",
+                )
+
+            user_settings = await self._get_user_settings_by_id(
+                uow=uow,
+                user_id=current_user_id,
+                for_update=True,
+            )
+
+            for field, value in update_data.items():
+                setattr(user_settings, field, value)
+
+            await uow.flush()
+            await uow.user_settings_repo.refresh(user_settings)
+            await uow.commit()
+            return user_settings
+
         
     async def update_user(
             self,

@@ -1,7 +1,24 @@
 import { Link } from "react-router-dom";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./NotFoundPage.module.css";
 
+const MESSAGES = defineMessages(
+  {
+    eyebrow: "Etch · ошибка 404",
+    title: "Страница не найдена",
+    description: "Возможно, адрес указан с ошибкой или страница была перемещена.",
+    home: "На главную",
+  },
+  {
+    eyebrow: "Etch · error 404",
+    title: "Page not found",
+    description: "The address may be incorrect, or the page may have moved.",
+    home: "Go home",
+  },
+);
+
 export function NotFoundPage() {
+  const messages = useLocalizedMessages(MESSAGES);
   return (
     <main className={styles.page}>
       <div aria-hidden="true" className={styles.ambient}>
@@ -22,18 +39,16 @@ export function NotFoundPage() {
         </div>
 
         <div className={styles.copy}>
-          <span className={styles.eyebrow}>Etch · ошибка 404</span>
+          <span className={styles.eyebrow}>{messages.eyebrow}</span>
           <p aria-hidden="true" className={styles.code}>
             404
           </p>
           <h1 className={styles.heading} id="not-found-title">
-            Страница не найдена
+            {messages.title}
           </h1>
-          <p className={styles.description}>
-            Возможно, адрес указан с ошибкой или страница была перемещена.
-          </p>
+          <p className={styles.description}>{messages.description}</p>
           <Link className={styles.homeLink} to="/">
-            На главную
+            {messages.home}
             <span aria-hidden="true">→</span>
           </Link>
         </div>

@@ -4,7 +4,81 @@ import type {
   EditableLibraryCard,
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LibraryPage.module.css";
+
+const MESSAGES = defineMessages(
+  {
+    errors: {
+      genericCreate: "Не удалось создать карточку. Попробуйте ещё раз.",
+      genericSave: "Не удалось сохранить карточку. Попробуйте ещё раз.",
+      forbiddenCreate: "У вас нет доступа к созданию карточек.",
+      forbiddenSave: "У вас нет доступа к редактированию этой карточки.",
+      notFound: "Карточка больше не найдена.",
+      conflict: "Сервер отклонил изменения. Проверьте значения полей.",
+      validation: "Проверьте длину и формат заполненных полей.",
+      invalidCreate: "Сервер вернул неожиданный ответ после попытки создания.",
+      invalidSave: "Сервер вернул неожиданный ответ после попытки сохранения.",
+      aborted: "Сохранение было отменено.",
+      network: "Не удалось связаться с сервером. Проверьте подключение.",
+      serverCreate: "Сервер временно не может создать карточку.",
+      serverSave: "Сервер временно не может сохранить карточку.",
+    },
+    eyebrow: "Настройка карточки",
+    newTitle: "Новая карточка",
+    editTitle: "Редактировать карточку",
+    newDescription: "Заполните тексты и языки обеих сторон.",
+    editDescription: "Измените тексты и языки обеих сторон.",
+    closeCreate: "Закрыть окно создания",
+    closeEdit: "Закрыть окно редактирования",
+    foreignWord: "Иностранное слово",
+    translation: "Перевод",
+    wordLanguage: "Язык слова",
+    translationLanguage: "Язык перевода",
+    createFooter: "Карточка появится в библиотеке после создания.",
+    editFooter: "Изменения применятся к карточке сразу после сохранения.",
+    cancel: "Отмена",
+    creating: "Создаём…",
+    saving: "Сохраняем…",
+    create: "Создать",
+    save: "Сохранить",
+  },
+  {
+    errors: {
+      genericCreate: "We couldn't create the card. Try again.",
+      genericSave: "We couldn't save the card. Try again.",
+      forbiddenCreate: "You do not have permission to create cards.",
+      forbiddenSave: "You do not have permission to edit this card.",
+      notFound: "This card could not be found.",
+      conflict: "The server rejected the changes. Check the field values.",
+      validation: "Check the length and format of each field.",
+      invalidCreate: "The server returned an unexpected response after creating the card.",
+      invalidSave: "The server returned an unexpected response after saving the card.",
+      aborted: "Saving was canceled.",
+      network: "We couldn't reach the server. Check your connection.",
+      serverCreate: "The server cannot create the card right now.",
+      serverSave: "The server cannot save the card right now.",
+    },
+    eyebrow: "Card settings",
+    newTitle: "New card",
+    editTitle: "Edit card",
+    newDescription: "Enter the text and language for both sides.",
+    editDescription: "Update the text and language for both sides.",
+    closeCreate: "Close new card dialog",
+    closeEdit: "Close card editor",
+    foreignWord: "Foreign word",
+    translation: "Translation",
+    wordLanguage: "Word language",
+    translationLanguage: "Translation language",
+    createFooter: "The card will appear in your library after it is created.",
+    editFooter: "Your changes will be applied as soon as the card is saved.",
+    cancel: "Cancel",
+    creating: "Creating…",
+    saving: "Saving…",
+    create: "Create",
+    save: "Save",
+  },
+);
 
 interface CardEditorDialogProps {
   card: EditableLibraryCard | null;
@@ -12,40 +86,42 @@ interface CardEditorDialogProps {
   onSave: (input: UpdateLibraryCardInput) => Promise<void>;
 }
 
-function getCardSaveErrorMessage(error: unknown, isCreating: boolean): string {
-  const action = isCreating ? "создать" : "сохранить";
+function getCardSaveErrorMessage(
+  error: unknown,
+  isCreating: boolean,
+  messages: (typeof MESSAGES)["ru-RU"],
+): string {
+  const genericMessage = isCreating ? messages.errors.genericCreate : messages.errors.genericSave;
 
   if (!isApiError(error)) {
-    return `Не удалось ${action} карточку. Попробуйте ещё раз.`;
+    return genericMessage;
   }
   if (error.status === 403) {
-    return isCreating
-      ? "У вас нет доступа к созданию карточек."
-      : "У вас нет доступа к редактированию этой карточки.";
+    return isCreating ? messages.errors.forbiddenCreate : messages.errors.forbiddenSave;
   }
   if (error.status === 404) {
-    return "Карточка больше не найдена.";
+    return messages.errors.notFound;
   }
   if (error.status === 409) {
-    return "Сервер отклонил изменения. Проверьте значения полей.";
+    return messages.errors.conflict;
   }
   if (error.status === 422) {
-    return "Проверьте длину и формат заполненных полей.";
+    return messages.errors.validation;
   }
   if (error.code === "INVALID_LIBRARY_RESPONSE") {
-    return `Сервер вернул неожиданный ответ после попытки ${isCreating ? "создания" : "сохранения"}.`;
+    return isCreating ? messages.errors.invalidCreate : messages.errors.invalidSave;
   }
   if (error.code === "REQUEST_ABORTED") {
-    return "Сохранение было отменено.";
+    return messages.errors.aborted;
   }
   if (error.status === 0) {
-    return "Не удалось связаться с сервером. Проверьте подключение.";
+    return messages.errors.network;
   }
   if (error.status >= 500) {
-    return `Сервер временно не может ${action} карточку.`;
+    return isCreating ? messages.errors.serverCreate : messages.errors.serverSave;
   }
 
-  return `Не удалось ${action} карточку. Попробуйте ещё раз.`;
+  return genericMessage;
 }
 
 function EditorGlyph({ name }: { name: "close" | "save" }) {
@@ -66,6 +142,7 @@ function EditorGlyph({ name }: { name: "close" | "save" }) {
 }
 
 export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const isCreating = card === null;
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const isMountedRef = useRef(true);
@@ -172,17 +249,15 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
               <CardActionPencil />
             </span>
             <div>
-              <span className={styles.cardEditorEyebrow}>Настройка карточки</span>
-              <h2 id={titleId}>{isCreating ? "Новая карточка" : "Редактировать карточку"}</h2>
+              <span className={styles.cardEditorEyebrow}>{messages.eyebrow}</span>
+              <h2 id={titleId}>{isCreating ? messages.newTitle : messages.editTitle}</h2>
               <p id={descriptionId}>
-                {isCreating
-                  ? "Заполните тексты и языки обеих сторон."
-                  : "Измените тексты и языки обеих сторон."}
+                {isCreating ? messages.newDescription : messages.editDescription}
               </p>
             </div>
           </div>
           <button
-            aria-label={isCreating ? "Закрыть окно создания" : "Закрыть окно редактирования"}
+            aria-label={isCreating ? messages.closeCreate : messages.closeEdit}
             className={styles.cardEditorClose}
             disabled={isSaving}
             onClick={closeDialog}
@@ -197,7 +272,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
             <label className={styles.cardEditorField} htmlFor={backTextId}>
               <span className={styles.cardEditorLabel}>
                 <strong>
-                  Иностранное слово <span aria-hidden="true">*</span>
+                  {messages.foreignWord} <span aria-hidden="true">*</span>
                 </strong>
                 <code>back_text</code>
               </span>
@@ -217,7 +292,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
             <label className={styles.cardEditorField} htmlFor={frontTextId}>
               <span className={styles.cardEditorLabel}>
                 <strong>
-                  Перевод <span aria-hidden="true">*</span>
+                  {messages.translation} <span aria-hidden="true">*</span>
                 </strong>
                 <code>front_text</code>
               </span>
@@ -238,7 +313,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
             <label className={styles.cardEditorField} htmlFor={backLangId}>
               <span className={styles.cardEditorLabel}>
                 <strong>
-                  Язык слова <span aria-hidden="true">*</span>
+                  {messages.wordLanguage} <span aria-hidden="true">*</span>
                 </strong>
                 <code>back_lang</code>
               </span>
@@ -259,7 +334,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
             <label className={styles.cardEditorField} htmlFor={frontLangId}>
               <span className={styles.cardEditorLabel}>
                 <strong>
-                  Язык перевода <span aria-hidden="true">*</span>
+                  {messages.translationLanguage} <span aria-hidden="true">*</span>
                 </strong>
                 <code>front_lang</code>
               </span>
@@ -280,16 +355,12 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
 
           {saveError === null ? null : (
             <p className={styles.cardEditorError} role="alert">
-              {getCardSaveErrorMessage(saveError, isCreating)}
+              {getCardSaveErrorMessage(saveError, isCreating, messages)}
             </p>
           )}
 
           <footer className={styles.cardEditorFooter}>
-            <p>
-              {isCreating
-                ? "Карточка появится в библиотеке после создания."
-                : "Изменения применятся к карточке сразу после сохранения."}
-            </p>
+            <p>{isCreating ? messages.createFooter : messages.editFooter}</p>
             <div className={styles.cardEditorButtons}>
               <button
                 className={styles.cardEditorCancel}
@@ -297,7 +368,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 onClick={closeDialog}
                 type="button"
               >
-                Отмена
+                {messages.cancel}
               </button>
               <button
                 className={styles.cardEditorSave}
@@ -312,11 +383,11 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 <span>
                   {isSaving
                     ? isCreating
-                      ? "Создаём…"
-                      : "Сохраняем…"
+                      ? messages.creating
+                      : messages.saving
                     : isCreating
-                      ? "Создать"
-                      : "Сохранить"}
+                      ? messages.create
+                      : messages.save}
                 </span>
               </button>
             </div>

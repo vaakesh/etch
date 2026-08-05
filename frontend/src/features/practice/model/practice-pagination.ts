@@ -31,16 +31,23 @@ function createPageToken(
   sequenceNumber: number,
   index: number,
   currentSequenceNumber: number,
+  locale: AppLocale,
 ): PracticePaginationPageToken {
   const isCurrent = sequenceNumber === currentSequenceNumber;
+  const ariaLabel =
+    locale === "en-US"
+      ? isCurrent
+        ? `Card ${sequenceNumber}, current`
+        : `Go to card ${sequenceNumber}`
+      : isCurrent
+        ? `Карточка ${sequenceNumber}, текущая`
+        : `Перейти к карточке ${sequenceNumber}`;
 
   return {
     type: "page",
     key: `page-${sequenceNumber}-${index}`,
     label: String(sequenceNumber),
-    ariaLabel: isCurrent
-      ? `Карточка ${sequenceNumber}, текущая`
-      : `Перейти к карточке ${sequenceNumber}`,
+    ariaLabel,
     sequenceNumber,
     isCurrent,
   };
@@ -100,7 +107,7 @@ export function getPracticePaginationTokens(
     }
 
     tokens.push(
-      createPageToken(sequenceNumbers[visibleIndex], visibleIndex, currentSequenceNumber),
+      createPageToken(sequenceNumbers[visibleIndex], visibleIndex, currentSequenceNumber, locale),
     );
     previousVisibleIndex = visibleIndex;
   });

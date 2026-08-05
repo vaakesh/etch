@@ -1,5 +1,8 @@
 export { LocaleProvider } from "./LocaleProvider";
 export { useLocale } from "./useLocale";
+export { defineMessages } from "./messages";
+export type { LocalizedMessages } from "./messages";
+export { useLocalizedMessages } from "./useLocalizedMessages";
 export {
   CARD_COUNT_FORMS,
   CARDS_LOADED_COUNT_FORMS,

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import { PageLoader } from "../PageLoader";
 import {
   getSafeReturnPath,
@@ -16,7 +17,23 @@ interface RouteGuardProps {
   children: ReactNode;
 }
 
+const MESSAGES = defineMessages(
+  {
+    eyebrow: "Etch · соединение",
+    title: "Не удалось проверить сессию",
+    description: "Сервер временно недоступен. Проверьте подключение и попробуйте ещё раз.",
+    retry: "Повторить",
+  },
+  {
+    eyebrow: "Etch · connection",
+    title: "We couldn't verify your session",
+    description: "The server is temporarily unavailable. Check your connection and try again.",
+    retry: "Try again",
+  },
+);
+
 export function RouteGuard({ access, children }: RouteGuardProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const { initialize, status } = useAuth();
   const location = useLocation();
   const [isSessionRevalidated, setIsSessionRevalidated] = useState(access !== "protected");
@@ -61,12 +78,12 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
           </div>
           <div className={styles.copy}>
             <span aria-hidden="true" className={styles.mark}>
-              Etch · соединение
+              {messages.eyebrow}
             </span>
-            <h1 id="session-error-title">Не удалось проверить сессию</h1>
-            <p>Сервер временно недоступен. Проверьте подключение и попробуйте ещё раз.</p>
+            <h1 id="session-error-title">{messages.title}</h1>
+            <p>{messages.description}</p>
             <button onClick={() => void initialize()} type="button">
-              Повторить
+              {messages.retry}
               <span aria-hidden="true">↻</span>
             </button>
           </div>

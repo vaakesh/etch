@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LibraryPage.module.css";
+
+const MESSAGES = defineMessages({ fullText: "Полный текст" }, { fullText: "Full text" });
 
 interface OverflowingCardTextProps {
   className: string;
@@ -14,6 +17,7 @@ export function OverflowingCardText({
   language,
   text,
 }: OverflowingCardTextProps) {
+  const messages = useLocalizedMessages(MESSAGES);
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const tooltipId = useId();
   const [isOverflowing, setIsOverflowing] = useState(false);
@@ -67,7 +71,7 @@ export function OverflowingCardText({
       </p>
       {isOverflowing ? (
         <span className={styles.cardTextTooltip} id={tooltipId} role="tooltip">
-          <span className={styles.cardTextTooltipLabel}>Полный текст</span>
+          <span className={styles.cardTextTooltipLabel}>{messages.fullText}</span>
           <span lang={language}>{text}</span>
         </span>
       ) : null}

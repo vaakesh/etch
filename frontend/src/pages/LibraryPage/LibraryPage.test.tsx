@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIBRARY_CREATE_DECK_NAVIGATION_STATE } from "../../features/library/model/library-navigation";
 import type { UseCardDeckAssignmentResult } from "../../features/library/model/useCardDeckAssignment";
 import type { UseLibraryCardsResult } from "../../features/library/model/useLibraryCards";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const useLibraryDecksMock = vi.hoisted(() => vi.fn());
 const useLibraryCardsMock = vi.hoisted(() => vi.fn());
@@ -16,6 +17,7 @@ vi.mock("../../auth/hooks/useAuth", () => ({
       uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
       username: "etch-user",
       email: "etch@example.com",
+      settings: { locale: "ru-RU", theme: "light" },
     },
     error: null,
     isAuthenticated: true,
@@ -23,6 +25,7 @@ vi.mock("../../auth/hooks/useAuth", () => ({
     login: vi.fn(),
     logout: vi.fn(),
     refresh: vi.fn(),
+    applyUserSettings: vi.fn(),
   }),
 }));
 vi.mock("../../features/library/model/useLibraryDecks", () => ({
@@ -157,11 +160,13 @@ import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { LibraryCardsPanel, LibraryCreateButton, LibraryPage } from "./LibraryPage";
 
-function renderLibraryPage(state?: unknown): string {
+function renderLibraryPage(state?: unknown, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[{ pathname: "/library", state }]}>
-      <LibraryPage />
-    </MemoryRouter>,
+    <LocaleProvider initialLocale={locale}>
+      <MemoryRouter initialEntries={[{ pathname: "/library", state }]}>
+        <LibraryPage />
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -576,5 +581,16 @@ describe("LibraryPage", () => {
 
     expect(markup).not.toContain("Любимых колод пока нет");
     expect(markup).toContain("Показать ещё");
+  });
+
+  it("renders the library page controls in English", () => {
+    const markup = renderLibraryPage(undefined, "en-US");
+
+    expect(markup).toContain("Library");
+    expect(markup).toContain("Decks");
+    expect(markup).toContain("Cards");
+    expect(markup).toContain("Favorites only");
+    expect(markup).toContain('placeholder="Search decks"');
+    expect(markup).toContain("Deck accuracy");
   });
 });

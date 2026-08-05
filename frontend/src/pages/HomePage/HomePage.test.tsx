@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const { retryMock } = vi.hoisted(() => ({ retryMock: vi.fn() }));
 
@@ -52,13 +53,19 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
 import { HomePage } from "./HomePage";
 import styles from "./HomePage.module.css";
 
-describe("HomePage", () => {
-  it("renders BFF dashboard content without duplicating the app navigation", () => {
-    const markup = renderToStaticMarkup(
+function renderHome(locale: AppLocale = "ru-RU"): string {
+  return renderToStaticMarkup(
+    <LocaleProvider initialLocale={locale}>
       <MemoryRouter>
         <HomePage />
-      </MemoryRouter>,
-    );
+      </MemoryRouter>
+    </LocaleProvider>,
+  );
+}
+
+describe("HomePage", () => {
+  it("renders BFF dashboard content without duplicating the app navigation", () => {
+    const markup = renderHome();
     const accuracyTooltipIds = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map(
       ([, id]) => id,
     );
@@ -92,5 +99,15 @@ describe("HomePage", () => {
     expect(markup.match(/<time /g)).toHaveLength(1);
     expect(markup).toContain("Вс, 2026-07-12: 40%");
     expect(markup).toContain("Сб, 2026-07-18: 90%");
+  });
+
+  it("renders dashboard chrome in English", () => {
+    const markup = renderHome("en-US");
+
+    expect(markup).toContain("Your decks");
+    expect(markup).toContain("Your progress");
+    expect(markup).toContain("Weekly activity");
+    expect(markup).toContain("Deck accuracy");
+    expect(markup).toContain("Last updated:");
   });
 });

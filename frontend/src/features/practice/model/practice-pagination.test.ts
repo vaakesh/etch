@@ -39,6 +39,20 @@ describe("getPracticePaginationTokens", () => {
     ]);
   });
 
+  it("localizes page and ellipsis labels in English", () => {
+    const tokens = getPracticePaginationTokens([1, 2, 3, 4, 5, 6, 7, 8, 9], 1, "en-US");
+
+    expect(tokens[0]).toMatchObject({ ariaLabel: "Card 1, current" });
+    expect(tokens[1]).toMatchObject({ ariaLabel: "Go to card 2" });
+    expect(tokens).toContainEqual({
+      type: "ellipsis",
+      key: "ellipsis-end",
+      label: "…",
+      ariaLabel: "2 cards hidden",
+      hiddenCount: 2,
+    });
+  });
+
   it("keeps seven numeric buttons at the beginning of a large session", () => {
     const sequenceNumbers = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const tokens = getPracticePaginationTokens(sequenceNumbers, 10);

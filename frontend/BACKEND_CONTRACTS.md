@@ -1,7 +1,7 @@
 # Карта контрактов Frontend ↔ Backend
 
 > [!NOTE]
-> Снимок актуален для рабочего backend на **2026-08-01**. Здесь перечислены только те backend-endpoint-ы, которые frontend действительно вызывает. Источник истины при расхождении — route, schema и runtime handler в <code>/backend</code>.
+> Снимок актуален для рабочего backend на **2026-08-05**. Здесь перечислены только те backend-endpoint-ы, которые frontend действительно вызывает. Источник истины при расхождении — route, schema и runtime handler в <code>/backend</code>.
 
 ## Быстрая карта
 
@@ -16,10 +16,11 @@
 | <code>/library/:deck_uuid/edit</code>                 | <code>GET/PATCH /decks/{deck_uuid}</code>, <code>GET /decks/{deck_uuid}/cards</code>, <code>PATCH /cards/{card_uuid}</code>, <code>POST /decks/{deck_uuid}/cards/remove/{card_uuid}</code>                                                                 |
 | <code>/practice</code>                                | <code>GET /users/me/training-sessions</code>, <code>POST /bff/practice/{deck_uuid}/start</code>, <code>GET /bff/practice/{training_session_uuid}/resume</code>, <code>PUT /training-sessions/{training_session_uuid}/items/{sequence_number}/submit</code> |
 | <code>/practice/sessions/:session_uuid/history</code> | <code>GET /training-sessions/{session_uuid}/history</code>                                                                                                                                                                                                 |
+| <code>/settings</code>                                | <code>PATCH /users/me/settings</code>; исходные значения приходят в <code>GET /users/me</code>                                                                                                                                                             |
 | Logout / очистка сессии                               | <code>POST /auth/logout</code>                                                                                                                                                                                                                             |
 | <code>*</code> (404)                                  | Backend-вызовов нет                                                                                                                                                                                                                                        |
 
-Всего: **26 frontend-вызовов / 24 уникальные пары method + path**. Два варианта списка колод используют один endpoint с разным <code>is_favourite</code>, а проверка колоды перед практикой повторно использует <code>GET /decks/{deck_uuid}</code>.
+Всего: **27 frontend-вызовов / 25 уникальных пар method + path**. Два варианта списка колод используют один endpoint с разным <code>is_favourite</code>, а проверка колоды перед практикой повторно использует <code>GET /decks/{deck_uuid}</code>.
 
 ## Общие правила транспорта
 
@@ -45,12 +46,21 @@ type CursorPage<T> = {
   has_more: boolean;
 };
 
+type UserLocale = "ru-RU" | "en-US";
+type UserTheme = "light" | "dark" | "system";
+
+type UserSettingsOut = {
+  locale: UserLocale;
+  theme: UserTheme;
+};
+
 type PrivateUserOut = {
   uuid: UUID;
   username: string;
   email: string;
   created_at: DateTime;
   updated_at: DateTime;
+  user_settings: UserSettingsOut;
 };
 
 type HomeDashboard = {
@@ -200,8 +210,16 @@ type TrainingSessionItemOut = {
 - **Auth:** access cookie.
 - **Request:** без query/body.
 - **Success:** <code>200 PrivateUserOut</code>.
-- **Frontend использует:** <code>uuid</code>, <code>username</code>, <code>email</code>. Поля <code>created_at</code> и <code>updated_at</code> намеренно не сохраняются в auth state.
+- **Frontend использует:** <code>uuid</code>, <code>username</code>, <code>email</code> и обязательный объект <code>user_settings</code>. Настройки строго проверяются и сохраняются в auth state как <code>settings</code>; поля <code>created_at</code> и <code>updated_at</code> намеренно не сохраняются.
 - **Ошибки:** <code>401</code> отсутствующий/невалидный access token; <code>404</code> пользователь исчез; <code>500</code>.
+
+### <code>PATCH /users/me/settings</code>
+
+- **Consumer:** <code>/settings</code>.
+- **Auth:** access cookie.
+- **Body, JSON:** <code>{ locale: "ru-RU" | "en-US"; theme: "light" | "dark" | "system" }</code>. Оба поля обязательны; frontend всегда отправляет их вместе.
+- **Success:** <code>200 UserSettingsOut</code>. Ответ обновляет настройки внутри текущего auth-state, после чего locale/theme providers применяют сохранённые значения.
+- **Ошибки:** <code>401</code>, <code>404</code> настройки пользователя отсутствуют, <code>422</code> validation, <code>500</code>.
 
 ### <code>POST /auth/refresh</code>
 

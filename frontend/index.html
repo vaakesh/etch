@@ -1,19 +1,59 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru-RU">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      id="meta-description"
+      name="description"
+      content="Etch — спокойное пространство для изучения и запоминания слов."
+    />
     <meta id="theme-color" name="theme-color" content="#c3b8f5" />
     <script>
+      const storedLocale = (() => {
+        try {
+          return window.localStorage.getItem("etch.locale");
+        } catch {
+          return null;
+        }
+      })();
+      const selectedLocale = ["ru-RU", "en-US"].includes(storedLocale) ? storedLocale : "ru-RU";
+      const storedTheme = (() => {
+        try {
+          return window.localStorage.getItem("etch.theme");
+        } catch {
+          return null;
+        }
+      })();
+      const selectedTheme = ["light", "dark", "system"].includes(storedTheme)
+        ? storedTheme
+        : "system";
+      const resolvedTheme =
+        selectedTheme === "system"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light"
+          : selectedTheme;
       const usesLightBootPalette =
         window.location.pathname === "/" ||
         window.location.pathname === "/library" ||
         window.location.pathname.startsWith("/library/") ||
-        window.location.pathname === "/practice";
+        window.location.pathname === "/practice" ||
+        window.location.pathname === "/settings";
 
+      document.documentElement.lang = selectedLocale;
+      document.documentElement.dataset.theme = resolvedTheme;
       document.documentElement.dataset.bootPalette = usesLightBootPalette ? "light" : "dark";
-      if (usesLightBootPalette) {
+      document.documentElement.style.colorScheme = resolvedTheme;
+      if (resolvedTheme === "dark") {
+        document.getElementById("theme-color")?.setAttribute("content", "#171426");
+      } else if (usesLightBootPalette) {
         document.getElementById("theme-color")?.setAttribute("content", "#f6f2eb");
+      }
+      if (selectedLocale === "en-US") {
+        document
+          .getElementById("meta-description")
+          ?.setAttribute("content", "Etch — a calm space for learning and remembering vocabulary.");
       }
     </script>
     <style>
@@ -27,6 +67,12 @@
         --loader-background: #f6f2eb;
         --loader-track: #e7dfd4;
         --loader-accent: #4d9892;
+      }
+
+      :root[data-theme="dark"] {
+        --loader-background: #171426;
+        --loader-track: rgb(216 205 250 / 16%);
+        --loader-accent: #a48ce9;
       }
 
       html,
@@ -80,10 +126,6 @@
         }
       }
     </style>
-    <meta
-      name="description"
-      content="Etch — спокойное пространство для изучения и запоминания слов."
-    />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -97,6 +139,11 @@
     <div aria-label="Загрузка страницы" class="page-loader" id="boot-loader" role="status">
       <span aria-hidden="true" class="page-loader__spinner"></span>
     </div>
+    <script>
+      if (document.documentElement.lang === "en-US") {
+        document.getElementById("boot-loader")?.setAttribute("aria-label", "Loading page");
+      }
+    </script>
     <div aria-hidden="true" data-booting id="root" inert></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

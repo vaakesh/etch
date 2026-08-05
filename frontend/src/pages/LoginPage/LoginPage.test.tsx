@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const { loginMock } = vi.hoisted(() => ({ loginMock: vi.fn() }));
 
@@ -10,11 +11,13 @@ vi.mock("../../auth/hooks/useAuth", () => ({
 
 import { LoginPage } from "./LoginPage";
 
-function renderLogin(state?: unknown): string {
+function renderLogin(state?: unknown, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[{ pathname: "/login", state }]}>
-      <LoginPage />
-    </MemoryRouter>,
+    <LocaleProvider initialLocale={locale}>
+      <MemoryRouter initialEntries={[{ pathname: "/login", state }]}>
+        <LoginPage />
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -44,5 +47,14 @@ describe("LoginPage", () => {
 
     expect(markup).toContain("Сессия истекла. Войдите снова.");
     expect(markup).toContain('role="status"');
+  });
+
+  it("renders the complete form in English", () => {
+    const markup = renderLogin(undefined, "en-US");
+
+    expect(markup).toContain("Welcome back");
+    expect(markup).toContain("Username");
+    expect(markup).toContain("Password");
+    expect(markup).toContain("Sign in");
   });
 });
