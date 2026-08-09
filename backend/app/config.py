@@ -39,9 +39,14 @@ class Settings(BaseSettings):
     db_user: str
     db_password: str
     refresh_pepper: str
+    redis_user: str
+    redis_password: str
 
     def database_url(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+
+    def redis_url(self) -> str:
+        return f"redis://{self.redis_user}:{self.redis_password}@redis:6379/0"
     
 
     auth_jwt: AuthJWT

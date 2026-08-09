@@ -1,0 +1,7 @@
+user default off
+
+user app on >app-password-change-me ~app:* resetchannels -@all +get +set +del +exists +expire +pexpire +ttl +pttl +mget +mset +incr +decr
+
+user readonly on >readonly-password-change-me ~app:* resetchannels -@all +@read
+
+user healthcheck on >health-password-change-me ~* resetchannels -@all +ping

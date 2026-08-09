@@ -15,13 +15,18 @@ from app.users.router import router as users_router
 from app.utils import format_duration
 from fastapi import FastAPI, Request, Response
 
+from app.redis import RedisDep, get_redis
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    redis = get_redis()
     setup_logging()
 
     yield
 
+    await redis.aclose()
+    get_redis.cache_clear()
 
 def create_app(*args, **kwargs) -> FastAPI:
     app = FastAPI(*args, **kwargs)
@@ -50,8 +55,14 @@ async def timing_middleware(
     response = await call_next(request)
     duration = time.perf_counter() - start
     logger.info(
-        f"{request.method} {request.url.path}"
+        f"{request.method} {request.url.path} "
         f"completed in {format_duration(duration)}"
         f" | status={response.status_code}"
     )
     return response
+
+@app.get("/health")
+async def healthcheck(
+    redis: RedisDep,
+):
+    return await redis.ping()
