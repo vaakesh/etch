@@ -10,6 +10,20 @@ class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def get_by_uuids(
+        self,
+        card_uuids: list[UUID],
+    ) -> list[Card]:
+        stmt = (
+            select(Card)
+            .where(
+                Card.uuid.in_(card_uuids),
+            )
+        )
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        return rows
+
     async def get_by_uuid(
             self, 
             card_uuid: UUID,

@@ -1,7 +1,0 @@
-user default off
-
-user admin reset on >b4ab95a14810f47fa25dd16e836b5821305ee61a19e3a68b5053e646c81be8bf ~* &* +@all
-
-user readonly on >readonly-password-change-me ~* resetchannels -@all +@read
-
-user healthcheck on >health-password-change-me ~* resetchannels -@all +ping

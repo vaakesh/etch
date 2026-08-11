@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from functools import lru_cache
 
 from app.config import get_settings
+from app.redis.service import RedisCacheService
 
 @lru_cache
 def get_redis() -> Redis:
@@ -20,7 +21,12 @@ def get_redis() -> Redis:
     )
     return redis
 
-RedisDep = Annotated[
-    Redis,
-    Depends(get_redis),
+def get_redis_service(
+    redis: Redis = Depends(get_redis),
+):
+    return RedisCacheService(redis=redis)
+
+CacheServiceDeps = Annotated[
+    RedisCacheService,
+    Depends(get_redis_service),
 ]

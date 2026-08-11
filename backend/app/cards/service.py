@@ -6,6 +6,7 @@ from app.cards.errors import (
     CardNotFoundError,
     PermissionDeniedError,
 )
+from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
@@ -15,8 +16,23 @@ from .schemas import CardCreate, CardUpdate
 
 
 class CardService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(
+        self, 
+        uow_factory: Callable[[], UnitOfWork],
+        cache_service: RedisCacheService,
+    ) -> None:
         self.uow_factory = uow_factory
+        self.cache_service = cache_service
+
+    async def get_by_uuids(
+        self,
+        card_uuids: list[UUID],
+    ) -> list[Card]:
+        async with self.uow_factory() as uow:
+            cards = await uow.card_repo.get_by_uuids(
+                card_uuids=card_uuids,
+            )
+            return cards
 
     async def get_by_uuid(
             self, 
@@ -109,6 +125,10 @@ class CardService:
                 await uow.commit()
                 await uow.card_repo.refresh(card)
 
+                await self.cache_service.invalidate_cards(
+                    card_uuids=[card.uuid],
+                )
+
                 return card
 
         except IntegrityError as e:
@@ -124,10 +144,27 @@ class CardService:
             if card.user_id != user_id:
                 raise CardNotFoundError(f"Card with uuid={card_uuid} not found")
 
-            deck_ids = await uow.deck_card_repo.get_all_decks_by_card_id(card.id)
+            deck_ids_and_uuids = await uow.deck_card_repo.get_all_decks_by_card_id(card.id)
+            deck_ids=[deck_id for deck_id, deck_uuid in deck_ids_and_uuids]
+            deck_uuids=[deck_uuid for deck_id, deck_uuid in deck_ids_and_uuids]
+
             await uow.card_repo.delete(card)
             await uow.flush()
-            await uow.deck_card_repo.update_cards_count(deck_ids=deck_ids)
+            await uow.deck_card_repo.update_cards_count(
+                deck_ids=deck_ids
+            )
             await uow.commit()
+
+            await self.cache_service.invalidate_cards(
+                card_uuids=[card.uuid],
+            )
+
+            await self.cache_service.invalidate_deck_cards(
+                deck_uuids=deck_uuids,
+            )
+
+            await self.cache_service.invalidate_decks(
+                deck_uuids=deck_uuids,
+            )
 
             return None

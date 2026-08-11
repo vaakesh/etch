@@ -145,7 +145,7 @@ export function useLibraryDecks(
 
       const controller = new AbortController();
       const requestRevision = requestRevisionRef.current + 1;
-      const requestedSearchQuery = loadOnlyFavourites ? "" : loadSearchQuery;
+      const requestedSearchQuery = loadSearchQuery;
       requestRevisionRef.current = requestRevision;
       searchQueryRef.current = requestedSearchQuery;
       cachedLibraryDecks = null;
@@ -159,7 +159,11 @@ export function useLibraryDecks(
       });
 
       const pageRequest = loadOnlyFavourites
-        ? getFavouriteLibraryDeckPage(null, controller.signal)
+        ? getFavouriteLibraryDeckPage(
+            null,
+            controller.signal,
+            requestedSearchQuery.length === 0 ? null : requestedSearchQuery,
+          )
         : getLibraryDeckPage(
             null,
             controller.signal,
@@ -227,7 +231,11 @@ export function useLibraryDecks(
     }));
 
     const pageRequest = onlyFavouritesRef.current
-      ? getFavouriteLibraryDeckPage(cursor, controller.signal)
+      ? getFavouriteLibraryDeckPage(
+          cursor,
+          controller.signal,
+          state.searchQuery.length === 0 ? null : state.searchQuery,
+        )
       : getLibraryDeckPage(
           cursor,
           controller.signal,

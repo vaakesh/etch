@@ -12,6 +12,7 @@ from app.bff.schemas import (
 )
 from app.bff.service import BffService
 from app.decks.schemas import CursorPage
+from app.redis.deps import CacheServiceDeps
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
 

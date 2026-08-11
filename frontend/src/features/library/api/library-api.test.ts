@@ -496,6 +496,22 @@ describe("getFavouriteLibraryDeckPage", () => {
       signal: undefined,
     });
   });
+
+  it("combines the favourite filter with a trimmed title query", async () => {
+    const controller = new AbortController();
+
+    await getFavouriteLibraryDeckPage(null, controller.signal, "  Daily words  ");
+
+    expect(apiFetch).toHaveBeenCalledWith("/bff/library/decks", {
+      query: {
+        cursor: null,
+        is_favourite: true,
+        limit: 50,
+        q: "Daily words",
+      },
+      signal: controller.signal,
+    });
+  });
 });
 
 describe("getLibraryCardPage", () => {

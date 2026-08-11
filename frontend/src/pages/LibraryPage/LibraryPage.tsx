@@ -1292,11 +1292,7 @@ export function LibraryPage() {
                   maxLength={150}
                   name="deck_search"
                   onChange={(event) => {
-                    const nextQuery = event.currentTarget.value;
-                    setDeckSearchQuery(nextQuery);
-                    if (nextQuery.trim().length > 0 && library.onlyFavourites) {
-                      library.setOnlyFavourites(false);
-                    }
+                    setDeckSearchQuery(event.currentTarget.value);
                   }}
                   placeholder={messages.searchPlaceholder}
                   type="search"
@@ -1311,7 +1307,6 @@ export function LibraryPage() {
                 }
                 disabled={library.status === "loading"}
                 onClick={() => {
-                  setDeckSearchQuery("");
                   setUseCompactDeckLoading(true);
                   library.setOnlyFavourites(!library.onlyFavourites);
                 }}

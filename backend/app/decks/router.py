@@ -50,6 +50,7 @@ async def update_deck(
 ):
     return await deck_service.update_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         payload=payload,
     )
@@ -64,6 +65,7 @@ async def delete_deck(
     await deck_service.delete_deck(
         deck_uuid=deck_uuid,
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
     )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
@@ -96,6 +98,7 @@ async def remove_card_from_deck(
 ):
     await deck_service.remove_card_from_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
@@ -131,6 +134,7 @@ async def add_card_to_deck(
 ):
     new_deck_card = await deck_service.add_card_to_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
@@ -148,6 +152,7 @@ async def set_favourite(
 ):
     user_deck = await user_deck_service.set_favourite_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         value=value,
     )
@@ -165,6 +170,7 @@ async def follow_deck(
 ):
     await user_deck_service.follow_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
     )
     response = Response(status_code=status.HTTP_200_OK)
@@ -181,6 +187,7 @@ async def unfollow_deck(
 ):
     await user_deck_service.unfollow_deck(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
     )
     response = Response(status_code=status.HTTP_200_OK)

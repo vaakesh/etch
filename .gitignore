@@ -5,3 +5,11 @@ backend/certs/
 .githubtoken
 .agents
 skills-lock.json
+users.acl
+bob.py
+.codex
+.ruff_cache
+.pytest_cache
+.mypy_cache
+.ty_cache
+.vscode

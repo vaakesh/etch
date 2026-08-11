@@ -209,9 +209,15 @@ export async function getLibraryDeckPage(
 export async function getFavouriteLibraryDeckPage(
   cursor: string | null,
   signal?: AbortSignal,
+  searchQuery: string | null = null,
 ): Promise<LibraryDeckPage> {
   const payload = await apiFetch<unknown>(LIBRARY_DECKS_PATH, {
-    query: { cursor, is_favourite: true, limit: LIBRARY_PAGE_SIZE },
+    query: {
+      cursor,
+      is_favourite: true,
+      limit: LIBRARY_PAGE_SIZE,
+      ...(searchQuery === null ? {} : { q: searchQuery.trim() }),
+    },
     signal,
   });
 

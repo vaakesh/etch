@@ -3,6 +3,8 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
+from redis.asyncio import Redis
+
 import app.models  # noqa: F401 # sqlalchemy models registration
 from app.auth.router import router as auth_router
 from app.bff.router import router as bff_router
@@ -10,12 +12,12 @@ from app.cards.router import router as cards_router
 from app.decks.router import router as decks_router
 from app.exception_handlers import register_exception_handlers
 from app.logging_config import setup_logging
+from app.redis.deps import get_redis
 from app.training_sessions.router import router as training_sessions_router
 from app.users.router import router as users_router
 from app.utils import format_duration
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
-from app.redis import RedisDep, get_redis
 
 
 @asynccontextmanager
@@ -61,8 +63,8 @@ async def timing_middleware(
     )
     return response
 
-@app.get("/health")
+@app.get("/health/redis")
 async def healthcheck(
-    redis: RedisDep,
+    redis: Redis = Depends(get_redis),
 ):
     return await redis.ping()

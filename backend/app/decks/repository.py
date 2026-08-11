@@ -16,6 +16,24 @@ class DeckRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def _get_by_uuids(
+        self,
+        deck_uuids: list[UUID],
+        for_update: bool = False,
+    ) -> list[Deck]:
+        stmt = (
+            select(Deck)
+            .options(joinedload(Deck.user).load_only(User.uuid))
+            .where(
+                Deck.uuid.in_(deck_uuids)
+            )
+        )
+        if for_update:
+            stmt = stmt.with_for_update(of=Deck)
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        return rows
+
     async def get_by_uuid(
             self, 
             deck_uuid: UUID, 
@@ -164,16 +182,15 @@ class DeckCardRepository:
     async def get_all_decks_by_card_id(
             self,
             card_id: int,
-    ) -> list[int]:
+    ) -> list[tuple[int, UUID]]:
         stmt = (
-            select(DeckCard.deck_id)
+            select(DeckCard.deck_id, Deck.uuid)
+            .join(Deck, DeckCard.deck_id == Deck.id)
             .where(DeckCard.card_id == card_id)
             .distinct()
         )
         result = await self.session.execute(stmt)
-        deck_ids = result.scalars().all()
-
-        return deck_ids
+        return result.tuples().all()
 
     async def update_cards_count(
             self,
@@ -199,7 +216,6 @@ class DeckCardRepository:
     async def delete(self, deck_card: DeckCard) -> None:
         await self.session.delete(deck_card)
 
-
     async def get_by_uuid(self, deck_card_uuid: UUID) -> DeckCard | None:
         stmt = select(DeckCard).where(DeckCard.uuid == deck_card_uuid)
         result = await self.session.execute(stmt)
@@ -218,7 +234,6 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         max_position = result.scalar_one_or_none()
         return max_position
-
 
     async def reorder_cards(
             self,
@@ -323,6 +338,83 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         return list(result.all())
 
+    async def get_all_cards_by_deck_uuids(
+        self,
+        deck_uuids: list[UUID],
+        limit: int = 100,
+    ) -> dict[UUID, list[Card]]:
+        """
+        returns only existing decks with its cards including empty decks
+        """
+        if not deck_uuids or limit <= 0:
+            return {}
+
+        existing_result = await self.session.execute(
+            select(Deck.uuid).where(Deck.uuid.in_(deck_uuids))
+        )
+        existing_deck_uuids = set(existing_result.scalars().all())
+
+        cards_by_deck: dict[UUID, list[Card]] = {
+            deck_uuid: []
+            for deck_uuid in existing_deck_uuids
+        }
+
+        ranked_deck_cards = (
+            select(
+                Deck.uuid.label("deck_uuid"),
+                Deck.id.label("deck_id"),
+                DeckCard.card_id.label("card_id"),
+                DeckCard.position.label("position"),
+                DeckCard.id.label("deck_card_id"),
+                func.row_number()
+                .over(
+                    partition_by=Deck.id,
+                    order_by=(
+                        DeckCard.position.asc(),
+                        DeckCard.id.asc(),
+                    ),
+                )
+                .label("row_number"),
+            )
+            .select_from(Deck)
+            .join(
+                DeckCard,
+                DeckCard.deck_id == Deck.id,
+            )
+            .where(
+                Deck.uuid.in_(deck_uuids),
+            )
+            .subquery()
+        )
+
+        stmt = (
+            select(
+                ranked_deck_cards.c.deck_uuid,
+                Card,
+            )
+            .join(
+                Card,
+                Card.id == ranked_deck_cards.c.card_id,
+            )
+            .where(
+                ranked_deck_cards.c.row_number <= limit,
+            )
+            .order_by(
+                ranked_deck_cards.c.deck_uuid.asc(),
+                ranked_deck_cards.c.position.asc(),
+                ranked_deck_cards.c.deck_card_id.asc(),
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        print(result)
+
+
+        for deck_uuid, card in result.all():
+            cards_by_deck[deck_uuid].append(card)
+
+        return cards_by_deck
+
     def add(self, deck_card: DeckCard) -> None:
         self.session.add(deck_card)
 
@@ -356,8 +448,9 @@ class UserDeckRepository:
     async def get_favourite_decks_by_user_id(
             self,
             user_id: int,
-            cursor_updated_at: datetime | None,
-            cursor_id: int | None,
+            search_query: SearchQuery = None,
+            cursor_updated_at: datetime | None = None,
+            cursor_id: int | None = None,
             limit: int = 16,
     ) -> tuple[list[Deck], bool]:
         stmt = (
@@ -367,8 +460,25 @@ class UserDeckRepository:
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_favourite.is_(True),
+                or_(
+                    Deck.is_public.is_(True),
+                    and_(
+                        Deck.is_public.is_(False),
+                        Deck.user_id == user_id,
+                    )
+                )
             )
         )
+
+        if search_query:
+            terms = search_query.split()
+        
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
 
         if cursor_updated_at is not None and cursor_id is not None:
             stmt = stmt.where(
@@ -403,6 +513,13 @@ class UserDeckRepository:
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_following.is_(True),
+                or_(
+                    Deck.is_public.is_(True),
+                    and_(
+                        Deck.is_public.is_(False),
+                        Deck.user_id == user_id,
+                    ),
+                )
             )
             .order_by(
                 Deck.updated_at.desc(),

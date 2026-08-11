@@ -1,6 +1,6 @@
 user default off
 
-user app on >app-password-change-me ~app:* resetchannels -@all +get +set +del +exists +expire +pexpire +ttl +pttl +mget +mset +incr +decr
+user admin reset on >app-password-change-me ~* &* +@all
 
 user readonly on >readonly-password-change-me ~app:* resetchannels -@all +@read
 

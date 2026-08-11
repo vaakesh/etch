@@ -3,8 +3,10 @@ from uuid import UUID
 
 from app.cards.errors import CardNotFoundError
 from app.cards.models import Card
+from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
+from app.users.schemas import SearchQuery
 from app.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
@@ -32,8 +34,24 @@ from .schemas import (
 
 
 class DeckService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(
+        self, 
+        uow_factory: Callable[[], UnitOfWork],
+        cache_service: RedisCacheService,
+    ) -> None:
         self.uow_factory = uow_factory
+        self.cache_service = cache_service
+
+    async def get_by_uuids(
+        self,
+        deck_uuids: list[UUID],
+    ) -> list[Deck]:
+        async with self.uow_factory() as uow:
+            decks = await uow.deck_repo._get_by_uuids(
+                deck_uuids=deck_uuids,
+                for_update=False,
+            )
+            return decks
 
     async def get_by_uuid(
             self, 
@@ -157,6 +175,10 @@ class DeckService:
                 uow.user_deck_repo.add(user_deck)
                 await uow.commit()
 
+                await self.cache_service.invalidate_library_deck_page(
+                    user_uuid=user_uuid,
+                )
+
                 return deck
 
         except IntegrityError as e:
@@ -165,6 +187,7 @@ class DeckService:
     async def update_deck(
         self,
         user_id: int,
+        user_uuid: UUID,
         deck_uuid: UUID,
         payload: DeckUpdate,
     ) -> Deck:
@@ -183,6 +206,14 @@ class DeckService:
                 await uow.commit()
                 await uow.deck_repo.refresh(deck)
 
+                await self.cache_service.invalidate_decks(
+                    deck_uuids=[deck.uuid],
+                )
+
+                await self.cache_service.invalidate_library_deck_page(
+                    user_uuid=user_uuid,
+                )
+
                 return deck
 
         except IntegrityError as e:
@@ -192,14 +223,28 @@ class DeckService:
             self, 
             deck_uuid: UUID,
             user_id: int,
+            user_uuid: UUID,
         ) -> None:
         async with self.uow_factory() as uow:
             deck = await self._get_by_uuid(uow, deck_uuid)
+
             if deck.user_id != user_id:
                 raise PermissionDeniedError()
 
             await uow.deck_repo.delete(deck)
             await uow.commit()
+
+            await self.cache_service.invalidate_decks(
+                deck_uuids=[deck.uuid],
+            )
+
+            await self.cache_service.invalidate_deck_cards(
+                deck_uuids=[deck.uuid],
+            )
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_uuid=user_uuid,
+            )
 
             return None
 
@@ -239,10 +284,27 @@ class DeckService:
             )
             return cards
 
+    async def get_all_cards_by_deck_uuids(
+        self,
+        user_id: int,
+        deck_uuids: list[UUID],
+        offset: int = 0,
+        limit: int = 2,
+    ) -> dict[UUID, list[Card]]:
+        """
+        returns only existing decks with its cards including empty decks
+        """
+        async with self.uow_factory() as uow:
+            cards_by_deck = await uow.deck_card_repo.get_all_cards_by_deck_uuids(
+                deck_uuids=deck_uuids,
+                limit=limit,
+            )
+            return cards_by_deck
 
     async def add_card_to_deck(
         self,
         user_id: int,
+        user_uuid: UUID,
         deck_uuid: UUID,
         card_uuid: UUID,
     ) -> DeckCardDetail:
@@ -291,6 +353,18 @@ class DeckService:
 
                 await uow.commit()
 
+                await self.cache_service.invalidate_library_deck_page(
+                    user_uuid=user_uuid,
+                )
+
+                await self.cache_service.invalidate_decks(
+                    deck_uuids=[deck_uuid],
+                )
+
+                await self.cache_service.invalidate_deck_cards(
+                    deck_uuids=[deck_uuid],
+                )
+
                 return DeckCardDetail(
                     deck_uuid=deck.uuid,
                     card_uuid=card.uuid,
@@ -302,6 +376,7 @@ class DeckService:
     async def remove_card_from_deck(
         self,
         user_id: int,
+        user_uuid: UUID,
         deck_uuid: UUID,
         card_uuid: UUID,
     ) -> None:
@@ -341,6 +416,18 @@ class DeckService:
                 deleted_position=deck_card.position,
             )
             await uow.commit()
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_uuid=user_uuid,
+            )
+
+            await self.cache_service.invalidate_decks(
+                deck_uuids=[deck_uuid],
+            )
+
+            await self.cache_service.invalidate_deck_cards(
+                deck_uuids=[deck_uuid],
+            )
 
             return None
         
@@ -390,15 +477,25 @@ class DeckService:
             deck_card.position = to_position
             await uow.commit()
 
+            await self.cache_service.invalidate_deck_cards(
+                deck_uuids=[deck_uuid],
+            )
+
 
 class UserDeckService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(
+        self, 
+        uow_factory: Callable[[], UnitOfWork],
+        cache_service: RedisCacheService,
+    ) -> None:
         self.uow_factory = uow_factory
+        self.cache_service = cache_service
 
     async def unfollow_deck(
-            self,
-            user_id: int,
-            deck_uuid: UUID,
+        self,
+        user_id: int,
+        user_uuid: UUID,
+        deck_uuid: UUID,
     ) -> UserDeck:
         async with self.uow_factory() as uow:
             deck = await uow.deck_repo.get_by_uuid_and_is_public(deck_uuid=deck_uuid)
@@ -416,11 +513,17 @@ class UserDeckService:
             else:
                 user_deck.is_following = False
             await uow.commit()
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_uuid=user_uuid,
+            )
+
             return user_deck
 
     async def follow_deck(
             self,
             user_id: int,
+            user_uuid: UUID,
             deck_uuid: UUID,
     ) -> UserDeck:
         async with self.uow_factory() as uow:
@@ -445,6 +548,11 @@ class UserDeckService:
             else:
                 user_deck.is_following = True
             await uow.commit()
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_uuid=user_uuid,
+            )
+
             return user_deck
         
     async def get_page_of_followed_decks_by_user_id(
@@ -485,11 +593,11 @@ class UserDeckService:
                     )
                 )
             return result
-        
 
     async def set_favourite_deck(
             self,
             user_id: int,
+            user_uuid: UUID,
             deck_uuid: UUID,
             value: bool,
     ):
@@ -519,6 +627,11 @@ class UserDeckService:
             user_deck.is_favourite = value
             
             await uow.commit()
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_uuid=user_uuid,
+            )
+
             return user_deck
 
     async def get_user_decks_by_deck_ids(
@@ -533,10 +646,11 @@ class UserDeckService:
             )
             return user_decks
 
-    async def get_favourite_decks(
+    async def get_my_favourite_decks(
         self,
         user_id: int,
-        cursor: str | None,
+        search_query: SearchQuery = None,
+        cursor: str | None = None,
         limit: int = 50,
     ) -> tuple[list[Deck], str | None, bool]:
         async with self.uow_factory() as uow:
@@ -547,6 +661,7 @@ class UserDeckService:
             favourite_decks, has_more = (
                 await uow.user_deck_repo.get_favourite_decks_by_user_id(
                     user_id=user_id,
+                    search_query=search_query,
                     cursor_updated_at=cursor_updated_at,
                     cursor_id=cursor_id,
                     limit=limit,

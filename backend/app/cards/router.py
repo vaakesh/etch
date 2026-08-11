@@ -4,6 +4,7 @@ from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.cards.deps import CardServiceDeps, get_card_service
 from app.cards.schemas import CardCreate, CardDetail, CardUpdate
 from app.cards.service import CardService
+from app.redis.deps import CacheServiceDeps
 from app.users.models import User
 from fastapi import APIRouter, Depends, Response, status
 

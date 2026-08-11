@@ -5,18 +5,31 @@
 
 
 
+from fastapi.security import OAuth2PasswordRequestForm
+
 from app.auth.cookies import clear_tokens_cookie, get_refresh_cookie, set_tokens_cookie
 from app.auth.deps import AuthServiceDeps, CurrentUser, get_auth_service
-from app.auth.schemas import LoginRequest, SessionOut
+from app.auth.schemas import BearerToken, LoginRequest, SessionOut
 from app.auth.service import AuthService
 from fastapi import APIRouter, Depends, Request, Response, status
 
 router = APIRouter(prefix="/auth")
 
+@router.post("/token")
+async def login_for_bearer_token(
+    auth_service: AuthServiceDeps,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+) -> BearerToken:
+    bearer_token = await auth_service.login_by_bearer_token_without_refresh(
+        username=form_data.username,
+        password=form_data.password,
+    )
+    return bearer_token
+
 @router.post("/login", status_code=status.HTTP_204_NO_CONTENT)
 async def login(
     form_data: LoginRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: AuthServiceDeps,
 ) -> None:
     tokens = await auth_service.login(
         username=form_data.username, 

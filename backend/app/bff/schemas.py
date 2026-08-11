@@ -9,14 +9,14 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from app.cards.models import Card
 from app.cards.schemas import CardLang, CardText
 from pydantic import BaseModel, ConfigDict, Field, PastDatetime
 
+from app.decks.models import Deck
 from app.decks.schemas import DeckTitle, DeckDescription
-from app.training_sessions.schemas import Counter, Percent, Seconds
+from app.training_sessions.schemas import Counter, Percent, PositiveInt, Seconds
 
-
-# home page
 
 # todo: change deckdashboard to decklibrarypage
 class DeckDashboard(BaseModel):
@@ -29,6 +29,58 @@ class DeckDashboard(BaseModel):
     deck_words_count: Counter
     user_accuracy: Percent
     updated_at: PastDatetime | None = None
+
+class InternalDeck(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    owner_uuid: UUID
+    title: DeckTitle
+    description: DeckDescription
+    words_count: Counter
+    is_public: bool
+    version: PositiveInt
+    created_at: PastDatetime
+    updated_at: PastDatetime
+
+    @classmethod
+    def from_entity(cls, deck: Deck) -> "InternalDeck":
+        return cls(
+            id=deck.id,
+            uuid=deck.uuid,
+            owner_uuid=deck.owner_uuid,
+            title=deck.title,
+            description=deck.description,
+            words_count=deck.words_count,
+            is_public=deck.is_public,
+            version=deck.version,
+            created_at=deck.created_at,
+            updated_at=deck.updated_at,
+        )
+
+class InternalCard(BaseModel):
+    id: int
+    uuid: UUID
+    front_text: CardText
+    back_text: CardText
+    front_lang: CardLang
+    back_lang: CardLang
+    created_at: PastDatetime
+    updated_at: PastDatetime
+
+    @classmethod
+    def from_entity(cls, card: Card) -> InternalCard:
+        return cls(
+            id=card.id,
+            uuid=card.uuid,
+            front_text=card.front_text,
+            back_text=card.back_text,
+            front_lang=card.front_lang,
+            back_lang=card.back_lang,
+            created_at=card.created_at,
+            updated_at=card.updated_at,
+        )
 
 class UserProgress(BaseModel):
     model_config = ConfigDict(from_attributes=True)

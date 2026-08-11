@@ -19,6 +19,12 @@ class TokenPair:
     refresh_token: str
 
 
+@dataclass(slots=True)
+class BearerToken:
+    access_token: str
+    token_type: str = "Bearer"
+
+
 class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     uuid: UUID
