@@ -407,8 +407,6 @@ class DeckCardRepository:
         )
 
         result = await self.session.execute(stmt)
-        print(result)
-
 
         for deck_uuid, card in result.all():
             cards_by_deck[deck_uuid].append(card)

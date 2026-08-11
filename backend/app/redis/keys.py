@@ -20,6 +20,29 @@ def make_library_deck_page_generation_cache_key(
 ) -> str:
     return f"library:{user_uuid}:decks:generation"
 
+def make_library_cards_page_generation_cache_key(
+    user_uuid: UUID,
+) -> str:
+    return f"library:{user_uuid}:cards:generation"
+
+def make_library_cards_page_cache_key(
+    user_uuid: UUID,
+    generation: int,
+    cursor: str | None = None,
+    limit: int = 50,
+):
+    fingerprint = hashlib.sha256(
+        orjson.dumps(
+            [
+                cursor,
+                limit,
+            ]
+        )
+    ).hexdigest()
+
+    key = f"library:{user_uuid}:cards:v{generation}:{fingerprint}"
+    return key
+
 def make_library_deck_page_cache_key(
     user_uuid: UUID,
     generation: int,

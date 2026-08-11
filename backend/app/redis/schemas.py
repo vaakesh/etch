@@ -18,7 +18,7 @@ class CacheLookupResult[T]:
 
 class CachedLibraryPage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    deck_uuids: list[UUID]
+    item_uuids: list[UUID]
     next_cursor: str | None
     has_more: bool
 

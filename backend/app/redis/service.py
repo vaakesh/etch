@@ -10,6 +10,8 @@ from app.redis.keys import (
     make_card_cache_key,
     make_deck_cache_key,
     make_deck_cards_cache_key,
+    make_library_cards_page_cache_key,
+    make_library_cards_page_generation_cache_key,
     make_library_deck_page_cache_key,
     make_library_deck_page_generation_cache_key,
 )
@@ -38,8 +40,8 @@ class RedisCacheService:
 
     # helpers
 
+    @staticmethod
     def with_jitter(
-            self,
             base: int, 
             spread: int = 300
         ) -> int:
@@ -140,31 +142,24 @@ class RedisCacheService:
                 operation=f"DELETE {len(keys)} keys",
             )
 
-    async def _get_library_deck_page_generation(
+    async def _get_page_generation(
         self,
         user_uuid: UUID,
-    ) -> int | None:
+        key_generation_factory: Callable[[UUID], str],
+    ) -> str:
         """
         returns valid generation starting from 0
         or returns None if error has occured
         """
-        key = make_library_deck_page_generation_cache_key(
-            user_uuid=user_uuid,
-        )
+        key = key_generation_factory(user_uuid)
 
-        try:
-            value = await self.redis.get(name=key)
-        except RedisError:
-            self._log_redis_error(
-                operation=f"GET {key}",
-            )
-            return
+        generation = await self._safe_get(key=key)
 
-        if value is None:
+        if generation is None:
             return 0
 
         try:
-            return int(value)
+            return int(generation)
         except (TypeError, ValueError):
             logger.warning(
                 "Ignoring invalid library cache generation",
@@ -174,6 +169,32 @@ class RedisCacheService:
                 exc_info=True,
             )
             return
+
+    async def _get_library_cards_page_generation(
+        self,
+        user_uuid: UUID,
+    ) -> int | None:
+        """
+        returns valid generation starting from 0
+        or returns None if error has occured
+        """
+        return await self._get_page_generation(
+            user_uuid=user_uuid,
+            key_generation_factory=make_library_cards_page_generation_cache_key,
+        )
+
+    async def _get_library_deck_page_generation(
+        self,
+        user_uuid: UUID,
+    ) -> int | None:
+        """
+        returns valid generation starting from 0
+        or returns None if error has occured
+        """
+        return await self._get_page_generation(
+            user_uuid=user_uuid,
+            key_generation_factory=make_library_deck_page_generation_cache_key,
+        )
 
     def _log_redis_error(
         self,
@@ -191,6 +212,9 @@ class RedisCacheService:
         value: bytes | str,
         deserializer: Callable[[bytes | str], T],
     ) -> T | None:
+        """
+        returns deserialized value or None if error has occured
+        """
         try:
             return deserializer(value)
         except (TypeError, ValueError):
@@ -229,9 +253,101 @@ class RedisCacheService:
 
         return uuids
 
+
     # cache operations
 
-    async def cache_library_deck_page(
+    async def cache_library_cards_page(
+        self,
+        user_uuid: UUID,
+        card_uuids: list[UUID],
+        expected_generation: int | None,
+        cursor: str | None = None,
+        limit: int = 50,
+        next_cursor: str | None = None,
+        has_more: bool = False,
+    ) -> None:
+        if expected_generation is None:
+            return
+
+        key = make_library_cards_page_cache_key(
+            user_uuid=user_uuid,
+            generation=expected_generation,
+            cursor=cursor,
+            limit=limit,
+        )
+
+        cached_page = CachedLibraryPage(
+            item_uuids=card_uuids,
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
+
+        await self._safe_set(
+            key=key,
+            value=cached_page.model_dump_json(),
+            ex=LIBRARY_PAGE_TTL,
+        )
+
+    async def get_cached_library_cards_page(
+        self,
+        user_uuid: UUID,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> LibraryPageCacheLookup:
+        """
+        returns cached page and generation \n
+        if page is None - no cache \n
+        if generation is None - error has occured
+        """
+        generation = await self._get_library_cards_page_generation(
+            user_uuid=user_uuid,
+        )
+
+        # error
+        if generation is None:
+            return LibraryPageCacheLookup(
+                page=None,
+                generation=None,
+            )
+
+        key = make_library_cards_page_cache_key(
+            user_uuid=user_uuid,
+            generation=generation,
+            cursor=cursor,
+            limit=limit,
+        )
+
+        value = await self._safe_get(
+            key=key,
+        )
+
+        # no cache
+        if value is None:
+            return LibraryPageCacheLookup(
+                page=None,
+                generation=generation,
+            )
+
+        cached = self._deserialize_cached_value(
+            key=key,
+            value=value,
+            deserializer=CachedLibraryPage.model_validate_json,
+        )
+
+        # error in deserializing
+        if cached is None:
+            await self._safe_delete(key=key)
+            return LibraryPageCacheLookup(
+                page=None,
+                generation=generation,
+            )
+
+        return LibraryPageCacheLookup(
+            page=cached,
+            generation=generation,
+        )
+
+    async def cache_library_decks_page(
         self,
         user_uuid: UUID,
         deck_uuids: list[UUID],
@@ -256,7 +372,7 @@ class RedisCacheService:
         )
 
         cached_page = CachedLibraryPage(
-            deck_uuids=deck_uuids,
+            item_uuids=deck_uuids,
             next_cursor=next_cursor,
             has_more=has_more,
         )
@@ -266,7 +382,7 @@ class RedisCacheService:
             ex=LIBRARY_PAGE_TTL,
         )
 
-    async def get_cached_library_deck_page(
+    async def get_cached_library_decks_page(
         self,
         user_uuid: UUID,
         search_query: NormalizedSearch | None = None,

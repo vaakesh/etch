@@ -83,6 +83,19 @@ class BffService:
             ],
         )
 
+    @staticmethod
+    def _build_library_card(
+        card: InternalCard,
+    ) -> CardLibraryPage:
+        return CardLibraryPage(
+            card_uuid=card.uuid,
+            front_text=card.front_text,
+            back_text=card.back_text,
+            front_lang=card.front_lang,
+            back_lang=card.back_lang,
+            updated_at=card.updated_at,
+        )
+
     async def get_home_dashboard(
             self,
             user_id: int,
@@ -211,7 +224,7 @@ class BffService:
             )
 
         await asyncio.gather(
-            self.cache_service.cache_library_deck_page(
+            self.cache_service.cache_library_decks_page(
                 user_uuid=user_uuid,
                 deck_uuids=[deck.uuid for deck in decks],
                 next_cursor=next_cursor,
@@ -242,7 +255,7 @@ class BffService:
         cursor: str | None = None,
         limit: int = 50,
     ) -> CursorPage[DeckLibraryPage]:
-        library_result = await self._get_library_decks(
+        library_result = await self._get_decks_library_deck_page(
             user_id=user_id,
             user_uuid=user_uuid,
             search_query=search_query,
@@ -261,7 +274,7 @@ class BffService:
         decks = library_result.items
 
         cards_by_deck, user_decks = await asyncio.gather(
-            self._get_library_cards(
+            self._get_cards_library_deck_page(
                 user_id=user_id,
                 deck_uuids=[deck.uuid for deck in decks],
             ),
@@ -294,7 +307,7 @@ class BffService:
         )
         return result
 
-    async def _get_library_decks(
+    async def _get_decks_library_deck_page(
         self,
         user_id: int,
         user_uuid: UUID,
@@ -303,7 +316,7 @@ class BffService:
         cursor: str | None,
         limit: int,
     ) -> CursorPage[InternalDeck]:
-        page_lookup = await self.cache_service.get_cached_library_deck_page(
+        page_lookup = await self.cache_service.get_cached_library_decks_page(
             user_uuid=user_uuid,
             search_query=search_query,
             is_favourite=is_favourite,
@@ -324,7 +337,7 @@ class BffService:
 
         cached_page = page_lookup.page
 
-        if not cached_page.deck_uuids:
+        if not cached_page.item_uuids:
             return CursorPage[InternalDeck](
                 items=[],
                 next_cursor=cached_page.next_cursor,
@@ -332,7 +345,7 @@ class BffService:
             )
 
         deck_lookup = await self.cache_service.get_cached_decks(
-            deck_uuids=cached_page.deck_uuids,
+            deck_uuids=cached_page.item_uuids,
         )
 
         decks_by_uuid: dict[UUID, InternalDeck] = dict(
@@ -358,7 +371,7 @@ class BffService:
         # устаревшие deck_uuids, которых уже нет
         unresolved_deck_uuids = [
             deck_uuid
-            for deck_uuid in cached_page.deck_uuids
+            for deck_uuid in cached_page.item_uuids
             if deck_uuid not in decks_by_uuid
         ]
 
@@ -378,13 +391,13 @@ class BffService:
         return CursorPage[InternalDeck](
             items=[
                 decks_by_uuid[deck_uuid]
-                for deck_uuid in cached_page.deck_uuids
+                for deck_uuid in cached_page.item_uuids
             ],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
         )
 
-    async def _get_library_cards(
+    async def _get_cards_library_deck_page(
         self,
         user_id: int,
         deck_uuids: list[UUID],
@@ -489,6 +502,117 @@ class BffService:
             for deck_uuid in deck_uuids
         }
 
+    async def _get_cards_library_card_page(
+        self,
+        user_id: int,
+        user_uuid: UUID,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> CursorPage[InternalCard]:
+        cards_page_lookup = await self.cache_service.get_cached_library_cards_page(
+            user_uuid=user_uuid,
+            cursor=cursor,
+            limit=limit,
+        )
+
+        # no cache -> get from db and do cache
+        if cards_page_lookup.page is None:
+            return await self._fetch_and_cache_cards_library_cards_page(
+                user_id=user_id,
+                user_uuid=user_uuid,
+                expected_generation=cards_page_lookup.generation,
+                cursor=cursor,
+                limit=limit,
+            )
+
+        cached_page = cards_page_lookup.page
+
+
+        if not cached_page.item_uuids:
+            return CursorPage[InternalCard](
+                items=[],
+                next_cursor=cached_page.next_cursor,
+                has_more=cached_page.has_more,
+            )
+
+        cards_lookup = await self.cache_service.get_cached_cards(
+            card_uuids=cached_page.item_uuids,
+        )
+        cards_by_uuid = cards_lookup.cached
+
+        if cards_lookup.missing:
+            fetched_missing_cards = await self.card_service.get_by_uuids(
+                card_uuids=cards_lookup.missing,
+            )
+
+            for fetched_card in fetched_missing_cards:
+                cards_by_uuid[fetched_card.uuid] = fetched_card
+
+            # карточки, которые есть в кэше страницы, но нет в бд
+            unresolved_cards = []
+
+            for missing_card_uuid in cards_lookup.missing:
+                # проходим по всему списку, можно оптимизировать и пройти только по fetched списку
+                if missing_card_uuid not in cards_by_uuid:
+                    unresolved_cards.append(missing_card_uuid)
+
+            # если в кэше старое значение, значит кэш где-то не инвалидировался
+            # полностью достаем страницу из бд
+            if unresolved_cards:
+                return await self._fetch_and_cache_cards_library_cards_page(
+                    user_id=user_id,
+                    user_uuid=user_uuid,
+                    expected_generation=cached_page.generation,
+                    cursor=cursor,
+                    limit=limit,
+                )
+
+        return CursorPage[InternalCard](
+            items=[
+                InternalCard.from_entity(cards_by_uuid[card_uuid])
+                for card_uuid in cached_page.item_uuids
+            ],
+            next_cursor=cached_page.next_cursor,
+            has_more=cached_page.has_more,
+        )
+
+    async def _fetch_and_cache_cards_library_cards_page(
+        self,
+        user_id: int,
+        user_uuid: UUID,
+        expected_generation: int | None,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> CursorPage[InternalCard]:
+        
+        # no cache -> get from db
+        cards, next_cursor, has_more = await self.card_service.get_all_by_user_id(
+            user_id=user_id,
+            cursor=cursor,
+            limit=limit,
+        )
+
+        # caching page and cards
+        await asyncio.gather(
+            self.cache_service.cache_library_cards_page(
+                user_uuid=user_uuid,
+                card_uuids=[card.uuid for card in cards],
+                expected_generation=expected_generation,
+                cursor=cursor,
+                limit=limit,
+                next_cursor=next_cursor,
+                has_more=has_more,
+            ),
+            self.cache_service.cache_cards(
+                cards=cards,
+            ),
+        )
+
+        return CursorPage[InternalCard](
+            items=[InternalCard.from_entity(card) for card in cards],
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
 
     async def get_cards_library_page(
             self,
@@ -497,27 +621,20 @@ class BffService:
             cursor: str | None = None,
             limit: int = 50,
     ) -> CursorPage[CardLibraryPage]:
-        cards, next_cursor, has_more = await self.card_service.get_all_by_user_id(
+        cards_page = await self._get_cards_library_card_page(
             user_id=user_id,
+            user_uuid=user_uuid,
             cursor=cursor,
             limit=limit,
         )
 
-        result = CursorPage[CardLibraryPage](
+        return CursorPage[CardLibraryPage](
             items=[
-                CardLibraryPage(
-                    card_uuid=card.uuid,
-                    front_text=card.front_text,
-                    back_text=card.back_text,
-                    front_lang=card.front_lang,
-                    back_lang=card.back_lang,
-                    updated_at=card.updated_at,
-                ) for card in cards
+                self._build_library_card(card) for card in cards_page.items
             ],
-            next_cursor=next_cursor,
-            has_more=has_more,
+            next_cursor=cards_page.next_cursor,
+            has_more=cards_page.has_more,
         )
-        return result
 
     async def start_practice_session(
             self,

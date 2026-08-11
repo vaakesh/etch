@@ -14,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase
 def get_engine() -> AsyncEngine:
     settings = get_settings()
     return create_async_engine(
-        settings.database_url(),
+        url=settings.database_url(),
         echo=False,
     )
 
