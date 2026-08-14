@@ -1,9 +1,11 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints
+
+from app.users.types import Locale, Theme
 
 # TYPES
 
@@ -54,20 +56,20 @@ type SearchQuery = Annotated[
 
 # SCHEMAS
 
-class PublicUserOut(BaseModel):
+class PublicUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
     username: str
     created_at: datetime
 
-class UserSettingsOut(BaseModel):
+class UserSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     locale: str
     theme: str
 
-class PrivateUserOut(BaseModel):
+class PrivateUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
@@ -75,34 +77,21 @@ class PrivateUserOut(BaseModel):
     email: EmailStr
     created_at: datetime
     updated_at: datetime
-    user_settings: UserSettingsOut
+    settings: UserSettingsResponse
 
-class UserCreate(BaseModel):
+class CreateUserRequest(BaseModel):
     username: Username
     email: NormalizedEmail
     password: Password
 
-class UserUpdate(BaseModel):
+class UpdateUserRequest(BaseModel):
     username: Username | None = None
     email: NormalizedEmail | None = None
 
-class ChangePassword(BaseModel):
+class ChangePasswordRequest(BaseModel):
     current_password: Password
     new_password: Password
 
-type Theme = Annotated[
-    Literal["light", "dark", "system"],
-    Field(description="UI theme"),
-]
-
-type Locale = Annotated[
-    Literal[
-        "ru-RU",
-        "en-US",
-    ],
-    Field(description="User locale in BCP 47 format"),
-]
-
 class UserSettingsUpdate(BaseModel):
-    locale: Locale
-    theme: Theme
+    locale: Locale | None = None
+    theme: Theme | None = None

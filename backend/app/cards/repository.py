@@ -5,6 +5,9 @@ from app.cards.models import Card
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cards.schemas import InternalCard
+from app.decks.models import Deck, DeckCard
+
 
 class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -67,6 +70,39 @@ class CardRepository:
         rows = result.scalars().all()
         has_more = len(rows) > limit
         return rows[:limit], has_more
+
+    async def get_card_in_deck(
+        self,
+        deck_uuid: UUID,
+        card_uuid: UUID,
+        viewer_id: int | None,
+        for_update: bool = False,
+    ) -> Card | None:
+        access_condition = Deck.is_public.is_(True)
+
+        if viewer_id is not None:
+            access_condition = or_(
+                access_condition,
+                Deck.user_id == viewer_id,
+            )
+
+        stmt = (
+            select(Card)
+            .join(DeckCard, DeckCard.card_id == Card.id)
+            .join(Deck, DeckCard.deck_id == Deck.id)
+            .where(
+                Card.uuid == card_uuid,
+                Deck.uuid == deck_uuid,
+                access_condition,
+            )
+        )
+        if for_update:
+            stmt = stmt.with_for_update(of=Card)
+
+        result = await self.session.execute(stmt)
+        rows = result.one_or_none()
+        return rows
+
 
     def add(self, card: Card) -> None:
         self.session.add(card)

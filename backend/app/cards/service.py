@@ -12,7 +12,7 @@ from app.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
 from .models import Card
-from .schemas import CardCreate, CardUpdate
+from .schemas import CreateCardRequest, UpdateCardRequest
 
 
 class CardService:
@@ -23,6 +23,25 @@ class CardService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+
+    async def get_card_in_deck(
+        self,
+        card_uuid: UUID,
+        deck_uuid: UUID,
+        viewer_id: int | None,
+    ):
+        async with self.uow_factory() as uow:
+            card = await uow.card_repo.get_card_in_deck(
+                deck_uuid=deck_uuid,
+                card_uuid=card_uuid,
+                viewer_id=viewer_id,
+                for_update=False,
+            )
+
+            if card is None:
+                raise CardNotFoundError()
+
+            return card
 
     async def get_by_uuids(
         self,
@@ -82,7 +101,7 @@ class CardService:
 
     async def create_card(
         self,
-        payload: CardCreate,
+        payload: CreateCardRequest,
         user_id: int,
     ) -> Card:
         try:
@@ -106,7 +125,7 @@ class CardService:
         self,
         card_uuid: UUID,
         user_id: int,
-        payload: CardUpdate,
+        payload: UpdateCardRequest,
     ) -> Card:
         try:
             async with self.uow_factory() as uow:

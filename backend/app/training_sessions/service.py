@@ -1,8 +1,8 @@
 from collections.abc import Callable
-from typing import Literal, Sequence
+from typing import Literal
 from uuid import UUID
 
-from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, PermissionDeniedError, UserDeckNotFoundError
+from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
     TrainingSessionAlreadyFinishedError,
@@ -12,13 +12,14 @@ from app.training_sessions.errors import (
 )
 from app.training_sessions.models import TrainingSession, TrainingSessionItem
 from app.training_sessions.schemas import (
+    PracticeCardResponse,
+    PracticeSessionResponse,
     SubmitAnswerResponse,
     TrainingSessionStatus,
     UserAnswer,
 )
 from app.users.errors import UserNotFoundError
 from app.utils import decode_cursor, encode_cursor, utcnow
-from app.bff.schemas import PracticeCard, PracticeSessionResponse
 from app.decks.models import UserDeck
 from app.redis.service import RedisCacheService
 
@@ -39,7 +40,7 @@ class TrainingSessionService:
         only_answered_items: bool = False,
         page_size: int = 30,
         page_number: int = 1,
-    ) -> tuple[list[TrainingSessionItem], TrainingSessionStatus]:
+    ) -> list[TrainingSessionItem] | None:
         async with self.uow_factory() as uow:
 
             rows = await uow.training_session_item_repo.get_session_history(
@@ -51,6 +52,8 @@ class TrainingSessionService:
                 page_size=page_size,
                 only_answered_items=only_answered_items,
             )
+            if not rows:
+                raise TrainingSessionNotFoundError()
             items = []
             status = rows[0][1]
             for item, _ in rows:
@@ -369,7 +372,7 @@ class TrainingSessionService:
                 correct_count=training_session.correct_count,
                 wrong_count=training_session.wrong_count,
                 started_at=training_session.started_at,
-                cards=[PracticeCard(
+                cards=[PracticeCardResponse(
                     sequence_number=item.sequence_number,
                     prompt_text=item.prompt_text,
                     prompt_language=item.prompt_lang,
@@ -418,7 +421,7 @@ class TrainingSessionService:
                 correct_count=training_session.correct_count,
                 wrong_count=training_session.wrong_count,
                 started_at=training_session.started_at,
-                cards=[PracticeCard(
+                cards=[PracticeCardResponse(
                     sequence_number=item.sequence_number,
                     prompt_text=item.prompt_text,
                     prompt_language=item.prompt_lang,

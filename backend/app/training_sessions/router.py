@@ -1,4 +1,3 @@
-from typing import Annotated
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
@@ -7,20 +6,18 @@ from app.training_sessions.deps import (
 )
 from app.training_sessions.schemas import (
     SubmitAnswerResponse,
-    TrainingSessionItemOut,
-    TrainingSessionOut,
+    TrainingSessionHistoryItemResponse,
+    TrainingSessionResponse,
     UserAnswer,
 )
 from fastapi import APIRouter, Path, Query
-
-from app.decks.schemas import CursorPage
 
 router = APIRouter(prefix="/training-sessions")
 
 
 @router.get(
     "/{session_uuid}", 
-    response_model=TrainingSessionOut,
+    response_model=TrainingSessionResponse,
 )
 async def get_training_session(
     session_uuid: UUID,
@@ -35,7 +32,7 @@ async def get_training_session(
 
 @router.get(
     "/{session_uuid}/history",
-    response_model=list[TrainingSessionItemOut],
+    response_model=list[TrainingSessionHistoryItemResponse],
 )
 async def get_training_session_history(
     session_uuid: UUID,
@@ -53,7 +50,7 @@ async def get_training_session_history(
         page_number=page_number,
     )
     result = [
-        TrainingSessionItemOut(
+        TrainingSessionHistoryItemResponse(
             item_uuid=item.uuid,
             sequence_number=item.sequence_number,
             prompt_text=item.prompt_text,

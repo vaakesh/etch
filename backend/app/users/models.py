@@ -1,13 +1,11 @@
 
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from app.database import Base
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as postgresUUID
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 

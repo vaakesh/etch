@@ -7,7 +7,7 @@ from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.schemas import SearchQuery
-from app.utils import decode_cursor, encode_cursor
+from app.utils import calculate_accuracy, decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
 from .errors import (
@@ -23,13 +23,14 @@ from .errors import (
 )
 from .models import Deck, DeckCard, UserDeck
 from .schemas import (
-    DeckCardDetail,
-    DeckCreate,
-    DeckDetail,
-    DeckSummary,
-    DeckUpdate,
-    DeckWithUserState,
-    UserDeckDetails,
+    CreateDeckRequest,
+    DeckCardResponse,
+    DeckListItemResponse,
+    DeckResponse,
+    DeckViewerStateResponse,
+    InternalDeck,
+    InternalDeckCard,
+    UpdateDeckRequest,
 )
 
 
@@ -153,10 +154,10 @@ class DeckService:
 
     async def create_deck(
         self,
-        payload: DeckCreate,
+        payload: CreateDeckRequest,
         user_id: int,
         user_uuid: UUID,
-    ) -> DeckDetail:
+    ) -> InternalDeck:
         try:
             async with self.uow_factory() as uow:
                 deck = Deck(
@@ -179,7 +180,18 @@ class DeckService:
                     user_uuid=user_uuid,
                 )
 
-                return deck
+                return InternalDeck(
+                    id=deck.id,
+                    uuid=deck.uuid,
+                    owner_uuid=user_uuid,
+                    title=deck.title,
+                    description=deck.description,
+                    words_count=deck.words_count,
+                    is_public=deck.is_public,
+                    version=deck.version,
+                    created_at=deck.created_at,
+                    updated_at=deck.updated_at,
+                )
 
         except IntegrityError as e:
             raise DeckAlreadyExistsError() from e
@@ -189,8 +201,8 @@ class DeckService:
         user_id: int,
         user_uuid: UUID,
         deck_uuid: UUID,
-        payload: DeckUpdate,
-    ) -> Deck:
+        payload: UpdateDeckRequest,
+    ) -> InternalDeck:
         try:
             async with self.uow_factory() as uow:
                 deck = await self._get_by_uuid(
@@ -222,7 +234,18 @@ class DeckService:
                     user_uuid=user_uuid,
                 )
 
-                return deck
+                return InternalDeck(
+                    id=deck.id,
+                    uuid=deck.uuid,
+                    owner_uuid=user_uuid,
+                    title=deck.title,
+                    description=deck.description,
+                    words_count=deck.words_count,
+                    is_public=deck.is_public,
+                    version=deck.version,
+                    created_at=deck.created_at,
+                    updated_at=deck.updated_at,
+                )
 
         except IntegrityError as e:
             raise DeckAlreadyExistsError() from e
@@ -319,7 +342,7 @@ class DeckService:
         user_uuid: UUID,
         deck_uuid: UUID,
         card_uuid: UUID,
-    ) -> DeckCardDetail:
+    ) -> InternalDeckCard:
         try:
             async with self.uow_factory() as uow:
                 deck = await self._get_by_uuid(
@@ -365,6 +388,7 @@ class DeckService:
                 uow.deck_card_repo.add(deck_card)
 
                 await uow.commit()
+                await uow.deck_card_repo.refresh(deck_card=deck_card)
 
                 await self.cache_service.invalidate_user_decks(
                     identities=[(user_id, deck.id)]
@@ -382,11 +406,7 @@ class DeckService:
                     deck_uuids=[deck_uuid],
                 )
 
-                return DeckCardDetail(
-                    deck_uuid=deck.uuid,
-                    card_uuid=card.uuid,
-                    position=deck_card.position,
-                )
+                return InternalDeckCard.model_validate(obj=deck_card)
         except IntegrityError as e:
             raise DeckCardAlreadyExistsError() from e
 
@@ -590,7 +610,7 @@ class UserDeckService:
             user_id: int,
             page: int,
             page_size: int,
-    ) -> list[DeckWithUserState]:
+    ) -> list[DeckListItemResponse]:
         async with self.uow_factory() as uow:
             offset = (page - 1) * page_size
             rows = (
@@ -601,25 +621,19 @@ class UserDeckService:
                     limit=page_size,
                 )
             )
-            result = []
-            for (user_deck,
-                deck_uuid, deck_title, deck_description, deck_words_count) in rows:
+            result: list[DeckListItemResponse] = []
+            for (owner_uuid, deck, user_deck) in rows:
                 result.append(
-                    DeckWithUserState(
-                        deck=DeckSummary(
-                            uuid=deck_uuid,
-                            title=deck_title,
-                            description=deck_description,
-                            words_count=deck_words_count,
+                    DeckListItemResponse(
+                        deck=DeckResponse(
+                            uuid=deck.uuid,
+                            owner_uuid=owner_uuid,
+                            title=deck.title,
+                            description=deck.description,
+                            words_count=deck.words_count,
+                            is_public=deck.is_public
                         ),
-                        user_deck=UserDeckDetails(
-                            sessions_count=user_deck.sessions_count,
-                            correct_count=user_deck.correct_count,
-                            wrong_count=user_deck.wrong_count,
-                            last_studied_at=user_deck.last_studied_at,
-                            is_favourite=user_deck.is_favourite,
-                            is_following=user_deck.is_following,
-                        )
+                        viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck)
                     )
                 )
             return result

@@ -54,10 +54,13 @@ class DeckRepository:
         # )
         stmt = (
             select(Deck)
+            .options(
+                joinedload(Deck.user).load_only(User.uuid)
+            )
             .where(Deck.uuid == deck_uuid)
         )
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=Deck)
 
         result = await self.session.execute(stmt)
         rows = result.scalar_one_or_none()
@@ -504,10 +507,15 @@ class UserDeckRepository:
             user_id: int,
             offset: int,
             limit: int,
-    ) -> Sequence[tuple[UserDeck, UUID, str, str | None, int]]:
+    ) -> Sequence[tuple[UUID, Deck, UserDeck]]:
         stmt = (
-            select(UserDeck, Deck.uuid, Deck.title, Deck.description, Deck.words_count)
+            select(
+                User.uuid,
+                Deck,
+                UserDeck,
+            )
             .join(Deck, UserDeck.deck_id == Deck.id)
+            .join(User, UserDeck.user_id == User.id)
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_following.is_(True),

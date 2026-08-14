@@ -1261,6 +1261,7 @@ function AnswerArea({
             disabled={isSubmitting}
             id={inputId}
             lang={card.answerLanguage}
+            maxLength={255}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {

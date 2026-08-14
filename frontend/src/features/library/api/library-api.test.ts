@@ -26,16 +26,12 @@ const RESPONSE = { items: [], next_cursor: null, has_more: false };
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const CARD_UUID = "413b1910-5d07-4c67-93a0-6b8946c59b15";
 const EDITABLE_DECK_RESPONSE = {
-  id: 7,
   uuid: DECK_UUID,
-  user_id: 4,
-  source_deck_id: null,
+  owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
   title: "Daily Words",
   description: "Core vocabulary",
   words_count: 48,
   is_public: false,
-  version: 2,
-  created_at: "2026-07-19T09:15:00Z",
   updated_at: "2026-07-21T18:30:00Z",
 };
 const DECK_CARD_RESPONSE = {
@@ -44,6 +40,7 @@ const DECK_CARD_RESPONSE = {
   back_text: "hello",
   front_lang: "ru",
   back_lang: "en",
+  updated_at: "2026-07-21T18:30:00Z",
 };
 
 describe("getEditableLibraryDeck", () => {
@@ -199,6 +196,7 @@ describe("getLibraryDeckOptions", () => {
       items: [
         {
           uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+          owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
           title: "Daily Words",
           description: null,
           words_count: 48,
@@ -234,6 +232,7 @@ describe("getLibraryDeckOptions", () => {
         items: [
           {
             uuid: DECK_UUID,
+            owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
             title: "Daily Words",
             words_count: 48,
           },
@@ -245,6 +244,7 @@ describe("getLibraryDeckOptions", () => {
         items: [
           {
             uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
+            owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
             title: "Travel Essentials",
             words_count: 12,
           },
@@ -279,7 +279,10 @@ describe("addLibraryCardToDeck", () => {
   });
 
   it("posts the exact deck-card route without a body", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({ uuid: "77e51a47-5c34-48cc-825e-c04a0a2998d8" });
+    vi.mocked(apiFetch).mockResolvedValue({
+      uuid: "77e51a47-5c34-48cc-825e-c04a0a2998d8",
+      position: 1,
+    });
     const controller = new AbortController();
 
     await expect(
@@ -330,17 +333,16 @@ describe("createLibraryDeck", () => {
     vi.mocked(apiFetch).mockReset();
     vi.mocked(apiFetch).mockResolvedValue({
       uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+      owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
       title: "Испанский в путешествии",
       description: null,
       words_count: 0,
       is_public: false,
-      version: 1,
-      created_at: "2026-07-21T18:30:00Z",
       updated_at: "2026-07-21T18:30:00Z",
     });
   });
 
-  it("posts the exact deck creation contract and maps DeckOut", async () => {
+  it("posts the exact deck creation contract and maps DeckResponse", async () => {
     const controller = new AbortController();
 
     await expect(
@@ -554,10 +556,11 @@ describe("createLibraryCard", () => {
       back_text: "hello",
       front_lang: "ru",
       back_lang: "en",
+      updated_at: "2026-07-21T18:30:00Z",
     });
   });
 
-  it("posts all fields to the exact card creation route and maps CardOut", async () => {
+  it("posts all fields to the exact card creation route and maps CardResponse", async () => {
     const controller = new AbortController();
 
     await expect(
@@ -619,6 +622,7 @@ describe("updateLibraryCard", () => {
       back_text: "indelible",
       front_lang: "ru",
       back_lang: "en",
+      updated_at: "2026-07-22T10:45:00Z",
     });
   });
 

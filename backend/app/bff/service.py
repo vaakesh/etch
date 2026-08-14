@@ -4,20 +4,16 @@ from uuid import UUID
 
 
 from app.bff.schemas import (
-    CardLibraryPage,
-    DeckDashboard,
-    DeckLibraryPage,
-    HomeDashboard,
-    InternalCard,
-    InternalDeck,
-    PracticeSessionResponse,
-    UserProgress,
+    HomeDeckItemResponse,
+    LibraryCardItemResponse,
+    LibraryDeckItemResponse,
+    HomeDashboardResponse,
+    UserProgressResponse,
 )
-from app.bff.utils import calculate_accuracy
 from app.cards.service import CardService
 from app.decks.errors import UserDeckNotFoundError
 from app.decks.models import UserDeck
-from app.decks.schemas import CursorPage
+from app.decks.schemas import DeckResponse, DeckViewerStateResponse, InternalDeck, InternalUserDeck
 from app.decks.service import DeckService, UserDeckService
 from app.deps import UoWFactory
 from app.redis.service import (
@@ -25,7 +21,11 @@ from app.redis.service import (
 )
 from app.training_sessions.service import TrainingSessionService
 from app.users.schemas import SearchQuery
-from app.redis.schemas import CachedUserDeck, UserDeckIdentity
+from app.redis.schemas import UserDeckIdentity
+from app.cards.schemas import CardResponse, InternalCard
+from app.training_sessions.schemas import PracticeSessionResponse
+from app.common.schemas import CursorPage
+from app.utils import calculate_accuracy
 
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
@@ -62,27 +62,14 @@ class BffService:
     @staticmethod
     def _build_library_deck(
         deck: InternalDeck,
-        user_deck: UserDeck,
+        user_deck: InternalUserDeck,
         cards: list[InternalCard],
-    ) -> DeckLibraryPage:
-        return DeckLibraryPage(
-            deck_uuid=deck.uuid,
-            owner_uuid=deck.owner_uuid,
-            title=deck.title,
-            description=deck.description,
-            deck_words_count=deck.words_count,
-            user_accuracy=calculate_accuracy(user_deck),
-            is_favourite=get_is_favourite(user_deck),
-            updated_at=deck.updated_at,
-            cards=[
-                CardLibraryPage(
-                    card_uuid=card.uuid,
-                    front_text=card.front_text,
-                    back_text=card.back_text,
-                    front_lang=card.front_lang,
-                    back_lang=card.back_lang,
-                    updated_at=card.updated_at,
-                )
+    ) -> LibraryDeckItemResponse:
+        return LibraryDeckItemResponse(
+            deck=DeckResponse.model_validate(obj=deck),
+            viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck),
+            preview_cards=[
+                CardResponse.model_validate(obj=card)
                 for card in cards
             ],
         )
@@ -90,21 +77,16 @@ class BffService:
     @staticmethod
     def _build_library_card(
         card: InternalCard,
-    ) -> CardLibraryPage:
-        return CardLibraryPage(
-            card_uuid=card.uuid,
-            front_text=card.front_text,
-            back_text=card.back_text,
-            front_lang=card.front_lang,
-            back_lang=card.back_lang,
-            updated_at=card.updated_at,
+    ) -> LibraryCardItemResponse:
+        return LibraryCardItemResponse(
+            card=CardResponse.model_validate(card),
         )
 
     async def get_home_dashboard(
             self,
             user_id: int,
             user_uuid: UUID,
-        ) -> HomeDashboard:
+        ) -> HomeDashboardResponse:
         decks, cursor, has_more = await self.deck_service.get_all_by_user_uuid(
             user_uuid=user_uuid,
             search_query=None,
@@ -134,21 +116,21 @@ class BffService:
         ]
 
 
-        result = HomeDashboard(
+        result = HomeDashboardResponse(
             decks=[
-                DeckDashboard(
-                    deck_uuid=deck.uuid,
+                HomeDeckItemResponse(
+                    uuid=deck.uuid,
                     owner_uuid=user_uuid,
                     title=deck.title,
                     description=deck.description,
-                    deck_words_count=deck.words_count,
+                    words_count=deck.words_count,
                     user_accuracy=calculate_accuracy(
                         user_decks_by_deck_id.get(deck.id, None),
                     ),
                     updated_at=deck.updated_at,
                 ) for deck in decks
             ],
-            progress=UserProgress(
+            progress=UserProgressResponse(
                 user_words_explored=67,
                 user_weekly_accuracy=55,
                 user_current_streak=6,
@@ -199,7 +181,7 @@ class BffService:
         self,
         user_id: int,
         deck_ids: list[int],
-    ) -> dict[UserDeckIdentity, CachedUserDeck]:
+    ) -> dict[UserDeckIdentity, InternalUserDeck]:
         lookup_user_decks = await self.cache_service.get_cached_user_decks(
             user_id=user_id,
             deck_ids=deck_ids,
@@ -287,7 +269,7 @@ class BffService:
         is_favourite: bool = False,
         cursor: str | None = None,
         limit: int = 50,
-    ) -> CursorPage[DeckLibraryPage]:
+    ) -> CursorPage[LibraryDeckItemResponse]:
         library_result = await self._get_decks_library_deck_page(
             user_id=user_id,
             user_uuid=user_uuid,
@@ -298,7 +280,7 @@ class BffService:
         )
 
         if not library_result.items:
-            return CursorPage[DeckLibraryPage](
+            return CursorPage[LibraryDeckItemResponse](
                 items=[],
                 next_cursor=library_result.next_cursor,
                 has_more=library_result.has_more,
@@ -322,7 +304,7 @@ class BffService:
                 raise UserDeckNotFoundError()
 
 
-        result = CursorPage[DeckLibraryPage](
+        result = CursorPage[LibraryDeckItemResponse](
             items=[
                 self._build_library_deck(
                     deck=deck,
@@ -365,7 +347,7 @@ class BffService:
 
         cached_page = page_lookup.page
 
-        if not cached_page.item_uuids:
+        if not cached_page.items:
             return CursorPage[InternalDeck](
                 items=[],
                 next_cursor=cached_page.next_cursor,
@@ -373,7 +355,7 @@ class BffService:
             )
 
         deck_lookup = await self.cache_service.get_cached_decks(
-            deck_uuids=cached_page.item_uuids,
+            deck_uuids=cached_page.items,
         )
 
         decks_by_uuid: dict[UUID, InternalDeck] = dict(
@@ -399,7 +381,7 @@ class BffService:
         # устаревшие deck_uuids, которых уже нет
         unresolved_deck_uuids = [
             deck_uuid
-            for deck_uuid in cached_page.item_uuids
+            for deck_uuid in cached_page.items
             if deck_uuid not in decks_by_uuid
         ]
 
@@ -419,7 +401,7 @@ class BffService:
         return CursorPage[InternalDeck](
             items=[
                 decks_by_uuid[deck_uuid]
-                for deck_uuid in cached_page.item_uuids
+                for deck_uuid in cached_page.items
             ],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
@@ -556,7 +538,7 @@ class BffService:
         cached_page = cards_page_lookup.page
 
 
-        if not cached_page.item_uuids:
+        if not cached_page.items:
             return CursorPage[InternalCard](
                 items=[],
                 next_cursor=cached_page.next_cursor,
@@ -564,7 +546,7 @@ class BffService:
             )
 
         cards_lookup = await self.cache_service.get_cached_cards(
-            card_uuids=cached_page.item_uuids,
+            card_uuids=cached_page.items,
         )
         cards_by_uuid = cards_lookup.cached
 
@@ -590,7 +572,7 @@ class BffService:
                 return await self._fetch_and_cache_cards_library_cards_page(
                     user_id=user_id,
                     user_uuid=user_uuid,
-                    expected_generation=cached_page.generation,
+                    expected_generation=cards_page_lookup.generation,
                     cursor=cursor,
                     limit=limit,
                 )
@@ -598,7 +580,7 @@ class BffService:
         return CursorPage[InternalCard](
             items=[
                 InternalCard.from_entity(cards_by_uuid[card_uuid])
-                for card_uuid in cached_page.item_uuids
+                for card_uuid in cached_page.items
             ],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
@@ -648,7 +630,7 @@ class BffService:
             user_uuid: UUID,
             cursor: str | None = None,
             limit: int = 50,
-    ) -> CursorPage[CardLibraryPage]:
+    ) -> CursorPage[LibraryCardItemResponse]:
         cards_page = await self._get_cards_library_card_page(
             user_id=user_id,
             user_uuid=user_uuid,
@@ -656,7 +638,7 @@ class BffService:
             limit=limit,
         )
 
-        return CursorPage[CardLibraryPage](
+        return CursorPage[LibraryCardItemResponse](
             items=[
                 self._build_library_card(card) for card in cards_page.items
             ],

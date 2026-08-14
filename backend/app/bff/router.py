@@ -1,27 +1,24 @@
-import asyncio
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
-    CardLibraryPage,
-    CreateTrainingSession,
-    DeckLibraryPage,
-    HomeDashboard,
-    PracticeSessionResponse,
+    LibraryCardItemResponse,
+    LibraryDeckItemResponse,
+    HomeDashboardResponse,
 )
 from app.bff.service import BffService
-from app.decks.schemas import CursorPage
-from app.redis.deps import CacheServiceDeps
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
 
 from app.users.schemas import SearchQuery
+from app.common.schemas import CursorPage
+from app.training_sessions.schemas import PracticeSessionResponse, StartPracticeSessionRequest
 
 router = APIRouter(prefix="/bff")
 
 
-@router.get("/home", response_model=HomeDashboard)
+@router.get("/home", response_model=HomeDashboardResponse)
 async def get_home_dashboard(
     current_user: CurrentUser,
     bff_service: BffService = Depends(get_bff_service),
@@ -33,7 +30,7 @@ async def get_home_dashboard(
     return result
 
 
-@router.get("/library/decks", response_model=CursorPage[DeckLibraryPage])
+@router.get("/library/decks", response_model=CursorPage[LibraryDeckItemResponse])
 async def get_decks_library_page(
     current_user: CurrentUser,
     search_query: SearchQuery = None,
@@ -53,13 +50,13 @@ async def get_decks_library_page(
     return result
 
 
-@router.get("/library/cards", response_model=CursorPage[CardLibraryPage])
+@router.get("/library/cards", response_model=CursorPage[LibraryCardItemResponse])
 async def get_cards_library_page(
     current_user: CurrentUser,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50),
     bff_service: BffService = Depends(get_bff_service),
-) -> CursorPage[CardLibraryPage]:
+) -> CursorPage[LibraryCardItemResponse]:
     result = await bff_service.get_cards_library_page(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
@@ -74,7 +71,7 @@ async def get_cards_library_page(
 )
 async def start_practice_session(
     deck_uuid: UUID,
-    payload: CreateTrainingSession,
+    payload: StartPracticeSessionRequest,
     current_user: User = Depends(get_current_user),
     bff_service: BffService = Depends(get_bff_service),
 ):

@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -19,7 +18,30 @@ type Percent = Annotated[
     Field(ge=0, le=100),
 ]
 
-class TrainingSessionOut(BaseModel):
+class PracticeCardResponse(BaseModel):
+    sequence_number: int = Field(ge=1)
+
+    prompt_text: str
+    prompt_language: str
+    answer_language: str
+
+class PracticeSessionResponse(BaseModel):
+    training_session_uuid: UUID
+
+    deck_uuid: UUID
+
+    prompt_side: Literal["front", "back"]
+    answer_side: Literal["front", "back"]
+
+    total_count: int
+    answered_count: int
+    correct_count: int
+    wrong_count: int
+
+    started_at: datetime
+    cards: list[PracticeCardResponse]
+
+class TrainingSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
@@ -39,13 +61,13 @@ class TrainingSessionOut(BaseModel):
     started_at: PastDatetime
     finished_at: PastDatetime | None
 
-class SkipAnswer(BaseModel):
+class SkipAnswerRequest(BaseModel):
     action: Literal["skip"]
     answer: None = None
 
-class SubmittedAnswer(BaseModel):
+class SubmittedAnswerRequest(BaseModel):
     action: Literal["answer"]
-    answer: str
+    answer: CardText
 
     @field_validator("answer")
     @classmethod
@@ -59,7 +81,7 @@ class SubmittedAnswer(BaseModel):
         return value
 
 type UserAnswer = Annotated[
-    SkipAnswer | SubmittedAnswer,
+    SkipAnswerRequest | SubmittedAnswerRequest,
     Field(discriminator="action"),
 ]
 
@@ -81,8 +103,10 @@ type PositiveInt = Annotated[
     int,
     Field(ge=1),
 ]
+class StartPracticeSessionRequest(BaseModel):
+    prompt_side: Literal["front", "back"]
 
-class TrainingSessionItemOut(BaseModel):
+class TrainingSessionHistoryItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     item_uuid: UUID

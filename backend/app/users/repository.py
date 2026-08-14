@@ -3,6 +3,7 @@ from uuid import UUID
 from app.users.models import User, UserSettings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 class UserSettingsRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -21,7 +22,7 @@ class UserSettingsRepository:
             self,
             user_id: int,
             for_update: bool = False,
-    ) -> User | None:
+    ) -> UserSettings | None:
         stmt = select(UserSettings).where(UserSettings.user_id == user_id)
         if for_update:
             stmt = stmt.with_for_update(of=UserSettings)
@@ -48,10 +49,20 @@ class UserRepository:
             self, 
             user_uuid: UUID,
             for_update: bool = False,
+            get_settings: bool = True,
         ) -> User | None:
         stmt = select(User).where(User.uuid == user_uuid)
+
+        if get_settings:
+            stmt = stmt.options(
+                joinedload(User.settings).load_only(
+                    UserSettings.locale,
+                    UserSettings.theme,
+                )
+            )
+
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=User)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
     

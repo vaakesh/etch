@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from app.users.schemas import Password, Username
@@ -20,12 +19,12 @@ class TokenPair:
 
 
 @dataclass(slots=True)
-class BearerToken:
+class AccessTokenResponse:
     access_token: str
     token_type: str = "Bearer"
 
 
-class SessionOut(BaseModel):
+class AuthSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     uuid: UUID
     user_id: int

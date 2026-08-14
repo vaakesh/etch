@@ -8,7 +8,6 @@ from uuid import UUID
 from fastapi.security import OAuth2PasswordBearer
 
 from app.auth.errors import AccessTokenNotFoundError
-from app.auth.schemas import BearerToken
 from app.auth.service import AuthService, AuthTokensService
 from app.config import get_auth_tokens_config
 from app.deps import UoWFactory, get_uow_factory

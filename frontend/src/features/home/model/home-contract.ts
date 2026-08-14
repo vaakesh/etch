@@ -114,18 +114,18 @@ function parseWeeklyActivityDay(value: unknown, index: number): HomeWeeklyActivi
 function parseDeck(value: unknown, index: number): HomeDeck {
   const path = `decks[${index}]`;
   const deck = readRecord(value, path);
-  const totalWordsCount = readInteger(deck.deck_words_count, `${path}.deck_words_count`);
+  const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
   const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
 
   if (totalWordsCount < 0) {
-    return invalidHomeResponse(`${path}.deck_words_count`);
+    return invalidHomeResponse(`${path}.words_count`);
   }
   if (accuracy < 0 || accuracy > 100) {
     return invalidHomeResponse(`${path}.user_accuracy`);
   }
 
   return {
-    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
+    uuid: readUuid(deck.uuid, `${path}.uuid`),
     ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
     title: readString(deck.title, `${path}.title`),
     description: readNullableString(deck.description, `${path}.description`),
@@ -137,18 +137,41 @@ function parseDeck(value: unknown, index: number): HomeDeck {
 
 function parseProgress(value: unknown): HomeProgress {
   const progress = readRecord(value, "progress");
+  const wordsExplored = readInteger(
+    progress.user_words_explored,
+    "progress.user_words_explored",
+  );
+  const weeklyAccuracy = readInteger(
+    progress.user_weekly_accuracy,
+    "progress.user_weekly_accuracy",
+  );
+  const currentStreakDays = readInteger(
+    progress.user_current_streak,
+    "progress.user_current_streak",
+  );
+  const totalStudyTimeSeconds = readInteger(
+    progress.user_total_study_time,
+    "progress.user_total_study_time",
+  );
+
+  if (wordsExplored < 0) {
+    return invalidHomeResponse("progress.user_words_explored");
+  }
+  if (weeklyAccuracy < 0 || weeklyAccuracy > 100) {
+    return invalidHomeResponse("progress.user_weekly_accuracy");
+  }
+  if (currentStreakDays < 0) {
+    return invalidHomeResponse("progress.user_current_streak");
+  }
+  if (totalStudyTimeSeconds < 0) {
+    return invalidHomeResponse("progress.user_total_study_time");
+  }
 
   return {
-    wordsExplored: readInteger(progress.user_words_explored, "progress.user_words_explored"),
-    weeklyAccuracy: readFiniteNumber(
-      progress.user_weekly_accuracy,
-      "progress.user_weekly_accuracy",
-    ),
-    currentStreakDays: readInteger(progress.user_current_streak, "progress.user_current_streak"),
-    totalStudyTimeSeconds: readInteger(
-      progress.user_total_study_time,
-      "progress.user_total_study_time",
-    ),
+    wordsExplored,
+    weeklyAccuracy,
+    currentStreakDays,
+    totalStudyTimeSeconds,
   };
 }
 

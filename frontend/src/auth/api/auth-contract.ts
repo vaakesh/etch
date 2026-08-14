@@ -32,7 +32,7 @@ export function parseCurrentUser(payload: unknown): User {
 
   let settings: User["settings"];
   try {
-    settings = parseUserSettings(payload.user_settings);
+    settings = parseUserSettings(payload.settings);
   } catch (error) {
     throw new AuthContractError(
       "INVALID_USER_RESPONSE",

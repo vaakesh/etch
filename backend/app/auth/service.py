@@ -17,7 +17,7 @@ from app.auth.errors import (
     InvalidTokenTypeError,
 )
 from app.auth.models import UserSession
-from app.auth.schemas import BearerToken, IssuedTokens, TokenPair
+from app.auth.schemas import AccessTokenResponse, IssuedTokens, TokenPair
 from app.auth.utils import hash_password, verify_password
 from app.config import AuthTokensConfig
 from app.service import UnitOfWork
@@ -144,7 +144,7 @@ class AuthService:
 
             return TokenPair(tokens.access_token, tokens.refresh_token)
 
-    async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> BearerToken:
+    async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
         async with self.uow_factory() as uow:
             user = await self._authenticate_user(
                 username,
@@ -152,7 +152,7 @@ class AuthService:
                 uow,
             )
             bearer_access_token = self.auth_tokens_service.create_access_token(user.uuid)
-            return BearerToken(bearer_access_token)
+            return AccessTokenResponse(bearer_access_token)
         
     async def logout(
         self,

@@ -8,9 +8,8 @@
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth.cookies import clear_tokens_cookie, get_refresh_cookie, set_tokens_cookie
-from app.auth.deps import AuthServiceDeps, CurrentUser, get_auth_service
-from app.auth.schemas import BearerToken, LoginRequest, SessionOut
-from app.auth.service import AuthService
+from app.auth.deps import AuthServiceDeps, CurrentUser
+from app.auth.schemas import AccessTokenResponse, LoginRequest, AuthSessionResponse
 from fastapi import APIRouter, Depends, Request, Response, status
 
 router = APIRouter(prefix="/auth")
@@ -19,7 +18,7 @@ router = APIRouter(prefix="/auth")
 async def login_for_bearer_token(
     auth_service: AuthServiceDeps,
     form_data: OAuth2PasswordRequestForm = Depends(),
-) -> BearerToken:
+) -> AccessTokenResponse:
     bearer_token = await auth_service.login_by_bearer_token_without_refresh(
         username=form_data.username,
         password=form_data.password,
@@ -59,10 +58,10 @@ async def refresh(
     set_tokens_cookie(tokens.access_token, tokens.refresh_token, response)
 
 
-@router.get("/sessions", response_model=list[SessionOut])
+@router.get("/sessions", response_model=list[AuthSessionResponse])
 async def get_sessions(
     user: CurrentUser,
     auth_service: AuthServiceDeps,
-) -> list[SessionOut]:
+) -> list[AuthSessionResponse]:
     sessions = await auth_service.get_all_user_sessions(user.id)
     return sessions

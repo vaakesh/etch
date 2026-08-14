@@ -18,10 +18,12 @@ const VALID_CARD_DETAIL = {
   back_text: "hello",
   front_lang: "ru",
   back_lang: "en",
+  updated_at: "2026-07-20T09:15:00Z",
 };
 
 const VALID_DECK_DETAIL = {
   uuid: DECK_UUID,
+  owner_uuid: OWNER_UUID,
   title: "Daily Words",
   description: "Core vocabulary",
   words_count: 48,
@@ -30,7 +32,7 @@ const VALID_DECK_DETAIL = {
 };
 
 const VALID_LIBRARY_CARD = {
-  card_uuid: CARD_UUID,
+  uuid: CARD_UUID,
   front_text: "hello",
   back_text: "привет",
   front_lang: "en",
@@ -41,15 +43,21 @@ const VALID_LIBRARY_CARD = {
 const VALID_DECK_PAGE = {
   items: [
     {
-      deck_uuid: DECK_UUID,
-      owner_uuid: OWNER_UUID,
-      title: "Daily Words",
-      description: null,
-      deck_words_count: 48,
-      user_accuracy: 75,
-      is_favourite: true,
-      updated_at: "2026-07-17T10:30:00Z",
-      cards: [VALID_LIBRARY_CARD],
+      deck: {
+        ...VALID_DECK_DETAIL,
+        description: null,
+        updated_at: "2026-07-17T10:30:00Z",
+      },
+      viewer_state: {
+        sessions_count: 4,
+        correct_count: 9,
+        wrong_count: 3,
+        accuracy: 75,
+        last_studied_at: "2026-07-17T10:30:00Z",
+        is_favourite: true,
+        is_following: false,
+      },
+      preview_cards: [VALID_LIBRARY_CARD],
     },
   ],
   next_cursor: "cursor-2",
@@ -57,13 +65,13 @@ const VALID_DECK_PAGE = {
 };
 
 const VALID_CARD_PAGE = {
-  items: [VALID_LIBRARY_CARD],
+  items: [{ card: VALID_LIBRARY_CARD }],
   next_cursor: "card-cursor-2",
   has_more: true,
 };
 
 describe("parseEditableLibraryDeck", () => {
-  it("maps DeckDetail into editable metadata", () => {
+  it("maps DeckResponse into editable metadata", () => {
     expect(parseEditableLibraryDeck(VALID_DECK_DETAIL)).toEqual({
       uuid: DECK_UUID,
       title: "Daily Words",
@@ -89,7 +97,7 @@ describe("parseEditableLibraryDeck", () => {
 });
 
 describe("parseDeckCardPage", () => {
-  it("maps CardDetail and derives offset pagination from the array length", () => {
+  it("maps CardResponse and derives offset pagination from the array length", () => {
     expect(parseDeckCardPage([VALID_CARD_DETAIL], 50, 50)).toEqual({
       cards: [
         {
@@ -113,7 +121,7 @@ describe("parseDeckCardPage", () => {
     ).toMatchObject({ nextOffset: 50, hasMore: true });
   });
 
-  it("rejects the removed updated_at requirement and malformed responses", () => {
+  it("keeps response-only timestamps out of the editable card model", () => {
     expect(parseDeckCardPage([VALID_CARD_DETAIL], 0, 50).cards[0]).not.toHaveProperty("updatedAt");
     expect(() => parseDeckCardPage({ items: [] }, 0, 50)).toThrow();
     expect(() =>
@@ -127,7 +135,7 @@ describe("parseDeckCardPage", () => {
 });
 
 describe("parseLibraryDeckOptionPage", () => {
-  it("maps the new CursorPage[DeckDetail] response", () => {
+  it("maps CursorPage[DeckResponse]", () => {
     expect(
       parseLibraryDeckOptionPage({
         items: [VALID_DECK_DETAIL],
@@ -147,7 +155,7 @@ describe("parseLibraryDeckOptionPage", () => {
 });
 
 describe("parseLibraryDeckPage", () => {
-  it("maps CursorPage[DeckLibraryPage] for both normal and favourite requests", () => {
+  it("maps CursorPage[LibraryDeckItemResponse] for both normal and favourite requests", () => {
     expect(parseLibraryDeckPage(VALID_DECK_PAGE)).toEqual({
       decks: [
         {
@@ -176,14 +184,14 @@ describe("parseLibraryDeckPage", () => {
     });
   });
 
-  it("reports a contract error for the removed deck field names", () => {
+  it("reports a contract error for the removed flat deck shape", () => {
     try {
       parseLibraryDeckPage({
         ...VALID_DECK_PAGE,
         items: [
           {
             ...VALID_DECK_PAGE.items[0],
-            deck_uuid: undefined,
+            deck: undefined,
             uuid: DECK_UUID,
           },
         ],
@@ -204,7 +212,7 @@ describe("parseLibraryDeckPage", () => {
         items: [
           {
             ...VALID_DECK_PAGE.items[0],
-            cards: [{ ...VALID_LIBRARY_CARD, card_uuid: "not-a-uuid" }],
+            preview_cards: [{ ...VALID_LIBRARY_CARD, uuid: "not-a-uuid" }],
           },
         ],
       }),
@@ -219,7 +227,7 @@ describe("parseLibraryDeckPage", () => {
 });
 
 describe("parseLibraryCardPage", () => {
-  it("maps CursorPage[CardLibraryPage] without the removed owner field", () => {
+  it("maps CursorPage[LibraryCardItemResponse]", () => {
     expect(parseLibraryCardPage(VALID_CARD_PAGE)).toEqual({
       cards: [
         {
@@ -247,7 +255,7 @@ describe("parseLibraryCardPage", () => {
     expect(() =>
       parseLibraryCardPage({
         ...VALID_CARD_PAGE,
-        items: [{ ...VALID_LIBRARY_CARD, updated_at: "not-a-date" }],
+        items: [{ card: { ...VALID_LIBRARY_CARD, updated_at: "not-a-date" } }],
       }),
     ).toThrow();
     expect(() =>

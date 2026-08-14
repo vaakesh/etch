@@ -2,39 +2,26 @@ from uuid import UUID
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.cards.deps import CardServiceDeps, get_card_service
-from app.cards.schemas import CardCreate, CardDetail, CardUpdate
+from app.cards.schemas import CreateCardRequest, CardResponse, UpdateCardRequest
 from app.cards.service import CardService
-from app.redis.deps import CacheServiceDeps
 from app.users.models import User
 from fastapi import APIRouter, Depends, Response, status
 
 router = APIRouter(prefix="/cards")
 
-
-@router.get("/{card_uuid}", response_model=CardDetail)
-async def get_card(
-    card_uuid: UUID,
-    current_user: OptionalCurrentUser,
-    card_service: CardServiceDeps,
-):
-    return await card_service.get_by_uuid(
-        card_uuid,
-    )
-
-
-@router.post("/", response_model=CardDetail)
+@router.post("/", response_model=CardResponse)
 async def create_card(
-    payload: CardCreate,
+    payload: CreateCardRequest,
     card_service: CardService = Depends(get_card_service),
     current_user: User = Depends(get_current_user),
 ):
     return await card_service.create_card(payload, current_user.id)
 
 
-@router.patch("/{card_uuid}", response_model=CardDetail)
+@router.patch("/{card_uuid}", response_model=CardResponse)
 async def update_card(
     card_uuid: UUID,
-    payload: CardUpdate,
+    payload: UpdateCardRequest,
     current_user: CurrentUser,
     card_service: CardServiceDeps,
 ):

@@ -8,18 +8,18 @@ const OWNER_UUID = "d2f61c35-11d0-489e-837d-3845418ba39e";
 const VALID_RESPONSE = {
   decks: [
     {
-      deck_uuid: DECK_UUID,
+      uuid: DECK_UUID,
       owner_uuid: OWNER_UUID,
       title: "Daily Words",
       description: null,
-      deck_words_count: 48,
+      words_count: 48,
       user_accuracy: 75,
       updated_at: "2026-07-17T10:30:00Z",
     },
   ],
   progress: {
     user_words_explored: 67,
-    user_weekly_accuracy: 55.5,
+    user_weekly_accuracy: 55,
     user_current_streak: 6,
     user_total_study_time: 120,
   },
@@ -50,7 +50,7 @@ describe("parseHomeDashboard", () => {
       ],
       progress: {
         wordsExplored: 67,
-        weeklyAccuracy: 55.5,
+        weeklyAccuracy: 55,
         currentStreakDays: 6,
         totalStudyTimeSeconds: 120,
       },
@@ -86,6 +86,13 @@ describe("parseHomeDashboard", () => {
       parseHomeDashboard({
         ...VALID_RESPONSE,
         user_weekly_activity: [{ date: "2026-07-18", percent: 101 }],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseHomeDashboard({
+        ...VALID_RESPONSE,
+        progress: { ...VALID_RESPONSE.progress, user_weekly_accuracy: 55.5 },
       }),
     ).toThrow();
   });

@@ -37,6 +37,7 @@ from app.training_sessions.errors import (
     TrainingSessionAlreadyExistsError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionItemNotFoundError,
+    TrainingSessionNotFinishedYet,
     TrainingSessionNotFoundError,
 )
 from app.training_sessions.errors import (
@@ -390,6 +391,18 @@ async def training_session_already_finished_handler(
     )
 
 
+async def training_session_not_finished_yet_handler(
+    request: Request,
+    exc: TrainingSessionNotFinishedYet,
+):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
 async def training_session_permission_denied_handler(
     request: Request,
     exc: TrainingSessionPermissionDeniedError,
@@ -496,6 +509,10 @@ def register_exception_handlers(app: FastAPI):
             TrainingSessionAlreadyFinishedError,
             training_session_already_finished_handler,
         )
+    app.add_exception_handler(
+        TrainingSessionNotFinishedYet,
+        training_session_not_finished_yet_handler,
+    )
     app.add_exception_handler(
         TrainingSessionItemNotFoundError,
         training_session_item_not_found_handler,

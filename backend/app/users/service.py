@@ -10,7 +10,7 @@ from app.users.errors import (
     UserNotFoundError,
 )
 from app.users.models import User, UserSettings
-from app.users.schemas import UserCreate, UserSettingsUpdate, UserUpdate
+from app.users.schemas import CreateUserRequest, UserSettingsUpdate, UpdateUserRequest
 from sqlalchemy.exc import IntegrityError
 
 
@@ -62,10 +62,12 @@ class UserService:
             uow: UnitOfWork, 
             user_uuid: UUID,
             for_update: bool = False,
+            get_settings: bool = True,
         ) -> User:
         user = await uow.user_repo.get_by_uuid(
             user_uuid=user_uuid,
             for_update=for_update,
+            get_settings=get_settings,
         )
         if user is None:
             raise UserNotFoundError(f"User with uuid={user_uuid} not found")
@@ -73,7 +75,7 @@ class UserService:
     
     async def create_user(
             self,
-            payload: UserCreate,
+            payload: CreateUserRequest,
     ) -> tuple[User, UserSettings]:
         try:
             async with self.uow_factory() as uow:
@@ -128,7 +130,7 @@ class UserService:
             self,
             target_user_uuid: UUID,
             current_user_id: int,
-            payload: UserUpdate,
+            payload: UpdateUserRequest,
     ) -> User:
         try:
             async with self.uow_factory() as uow:
@@ -144,6 +146,7 @@ class UserService:
                     uow=uow,
                     user_uuid=target_user_uuid,
                     for_update=True,
+                    get_settings=True,
                 )
 
                 if target_user.id != current_user_id:

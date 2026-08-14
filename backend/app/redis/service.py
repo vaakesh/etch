@@ -16,10 +16,14 @@ from app.redis.keys import (
     make_library_deck_page_generation_cache_key,
     make_user_deck_cache_key,
 )
-from app.redis.schemas import CachedCard, CachedDeck, CachedLibraryPage, CacheLookupResult, CachedUserDeck, LibraryPageCacheLookup, UserDeckIdentity
+from app.redis.schemas import CacheLookupResult, LibraryPageCacheLookup, UserDeckIdentity
 from app.users.schemas import NormalizedSearch
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
+
+from app.cards.schemas import InternalCard
+from app.decks.schemas import InternalDeck, InternalUserDeck
+from app.common.schemas import CursorPage
 
 LIBRARY_PAGE_TTL = 60 * 5
 GENERATION_TTL = LIBRARY_PAGE_TTL * 3
@@ -266,7 +270,7 @@ class RedisCacheService:
         entries = {
             make_user_deck_cache_key(
                 identity=(user_deck.user_id, user_deck.deck_id)
-            ): CachedUserDeck.model_validate(user_deck).model_dump_json()
+            ): InternalUserDeck.model_validate(user_deck).model_dump_json()
             for user_deck in user_decks
         }
 
@@ -279,12 +283,12 @@ class RedisCacheService:
         self,
         user_id: int,
         deck_ids: list[int],
-    ) -> CacheLookupResult[UserDeckIdentity, CachedUserDeck]:
+    ) -> CacheLookupResult[UserDeckIdentity, InternalUserDeck]:
         identities: list[UserDeckIdentity] = [(user_id, deck_id) for deck_id in deck_ids]
         result = await self._get_many(
             identities=identities,
             key_factory=make_user_deck_cache_key,
-            deserializer=CachedUserDeck.model_validate_json
+            deserializer=InternalUserDeck.model_validate_json
         )
         return result
 
@@ -317,8 +321,8 @@ class RedisCacheService:
             limit=limit,
         )
 
-        cached_page = CachedLibraryPage(
-            item_uuids=card_uuids,
+        cached_page = CursorPage[UUID](
+            items=card_uuids,
             next_cursor=next_cursor,
             has_more=has_more,
         )
@@ -372,7 +376,7 @@ class RedisCacheService:
         cached = self._deserialize_cached_value(
             key=key,
             value=value,
-            deserializer=CachedLibraryPage.model_validate_json,
+            deserializer=CursorPage[UUID].model_validate_json,
         )
 
         # error in deserializing
@@ -412,8 +416,8 @@ class RedisCacheService:
             limit=limit,
         )
 
-        cached_page = CachedLibraryPage(
-            item_uuids=deck_uuids,
+        cached_page = CursorPage[UUID](
+            items=deck_uuids,
             next_cursor=next_cursor,
             has_more=has_more,
         )
@@ -470,7 +474,7 @@ class RedisCacheService:
         cached = self._deserialize_cached_value(
             key=key,
             value=value,
-            deserializer=CachedLibraryPage.model_validate_json,
+            deserializer=CursorPage[UUID].model_validate_json,
         )
 
         if cached is None:
@@ -602,7 +606,7 @@ class RedisCacheService:
         ]
 
         values: list[str] = [
-            CachedCard
+            InternalCard
             .from_entity(card=card)
             .model_dump_json()
             for card in cards
@@ -616,11 +620,11 @@ class RedisCacheService:
     async def get_cached_cards(
         self,
         card_uuids: list[UUID],
-    ) -> CacheLookupResult[UUID, CachedCard]:
+    ) -> CacheLookupResult[UUID, InternalCard]:
         result = await self._get_many(
             identities=card_uuids,
             key_factory=make_card_cache_key,
-            deserializer=CachedCard.model_validate_json,
+            deserializer=InternalCard.model_validate_json,
         )
         return result
 
@@ -639,7 +643,7 @@ class RedisCacheService:
         ]
 
         values: list[str] = [
-            CachedDeck
+            InternalDeck
             .from_entity(deck)
             .model_dump_json()
             for deck in decks
@@ -653,11 +657,11 @@ class RedisCacheService:
     async def get_cached_decks(
         self,
         deck_uuids: list[UUID],
-    ) -> CacheLookupResult[UUID, CachedDeck]:
+    ) -> CacheLookupResult[UUID, InternalDeck]:
         result = await self._get_many(
             identities=deck_uuids,
             key_factory=make_deck_cache_key,
-            deserializer=CachedDeck.model_validate_json,
+            deserializer=InternalDeck.model_validate_json,
         )
         return result
 

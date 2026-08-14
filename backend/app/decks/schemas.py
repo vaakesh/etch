@@ -1,40 +1,79 @@
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 from uuid import UUID
 
-from app.cards.schemas import CardDetail
 from app.errors import RequestValueError
-from pydantic import BaseModel, ConfigDict, Field, PastDatetime, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, PastDatetime, model_validator
 
-from app.training_sessions.schemas import Counter, PositiveInt
+from app.training_sessions.schemas import Counter, Percent, PositiveInt
+from app.decks.models import Deck
+from app.decks.types import DeckDescription, DeckTitle
+from app.utils import calculate_accuracy
 
-type DeckTitle = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True,
-        min_length=3,
-        max_length=50,
-    ),
-]
+class InternalDeck(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-type DeckDescription = (
-    Annotated[
-        str,
-        StringConstraints(
-            strip_whitespace=True,
-            max_length=3000,
-        ),
-    ]
-    | None
-)
+    id: int
+    uuid: UUID
+    owner_uuid: UUID
+    title: DeckTitle
+    description: DeckDescription
+    words_count: Counter
+    is_public: bool
+    version: PositiveInt
+    created_at: PastDatetime
+    updated_at: PastDatetime
 
-class DeckCreate(BaseModel):
+    @classmethod
+    def from_entity(cls, deck: Deck) -> "InternalDeck":
+        return cls(
+            id=deck.id,
+            uuid=deck.uuid,
+            owner_uuid=deck.owner_uuid,
+            title=deck.title,
+            description=deck.description,
+            words_count=deck.words_count,
+            is_public=deck.is_public,
+            version=deck.version,
+            created_at=deck.created_at,
+            updated_at=deck.updated_at,
+        )
+
+class InternalUserDeck(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    deck_id: int
+    sessions_count: Counter
+    correct_count: Counter
+    wrong_count: Counter
+    last_studied_at: PastDatetime | None
+    is_favourite: bool
+    is_following: bool
+    last_seen_version: int | None
+    added_at: PastDatetime
+
+class InternalDeckCard(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: UUID
+    deck_id: int
+    card_id: int
+    position: int
+    created_at: PastDatetime
+    updated_at: PastDatetime
+
+class DeckCardResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    uuid: UUID
+    position: int
+
+class CreateDeckRequest(BaseModel):
     title: DeckTitle
     description: DeckDescription = None
     is_public: bool = False
 
-
-class DeckUpdate(BaseModel):
+class UpdateDeckRequest(BaseModel):
     title: DeckTitle | None = None
     description: DeckDescription = None
     is_public: bool | None = None
@@ -52,71 +91,44 @@ class DeckUpdate(BaseModel):
 
         return data
 
-
-class DeckDetail(BaseModel):
+class DeckResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
-    # owner_uuid: UUID | None = Field(
-    #     default=None,
-    #     validation_alias="__external_owner_uuid",
-    # )
-
+    owner_uuid: UUID
     title: DeckTitle
     description: DeckDescription = None
     words_count: Counter
-    is_public: bool = False
-
+    is_public: bool
     updated_at: PastDatetime | None = None
 
-class DeckCompact(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class DeckListItemResponse(BaseModel):
+    deck: DeckResponse
+    viewer_state: DeckViewerStateResponse
 
-    uuid: UUID
-    title: DeckTitle
-    words_count: Counter
-
-class DeckSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    uuid: UUID
-    title: DeckTitle
-    description: DeckDescription = None
-    words_count: Counter
-
-
-class DeckWithUserState(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    deck: DeckSummary
-    user_deck: UserDeckDetails
-
-
-class UserDeckDetails(BaseModel):
+class DeckViewerStateResponse(BaseModel):
     sessions_count: Counter
     correct_count: Counter
     wrong_count: Counter
+    accuracy: Percent
     last_studied_at: datetime | None
     is_favourite: bool
     is_following: bool
 
-
-class DeckCardDetail(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    deck_uuid: UUID
-    card_uuid: UUID
-
-    position: PositiveInt
-
+    @classmethod
+    def validate(cls, user_deck: InternalUserDeck) -> DeckViewerStateResponse:
+        return cls(
+            sessions_count=user_deck.sessions_count,
+            correct_count=user_deck.correct_count,
+            wrong_count=user_deck.wrong_count,
+            accuracy=calculate_accuracy(
+                user_deck=user_deck
+            ),
+            last_studied_at=user_deck.last_studied_at,
+            is_favourite=user_deck.is_favourite,
+            is_following=user_deck.is_following,
+        )
 
 class ReorderCards(BaseModel):
     card_uuid: UUID
     to_position: PositiveInt
-
-
-class CursorPage[T](BaseModel):
-
-    items: list[T]
-    next_cursor: str | None
-    has_more: bool

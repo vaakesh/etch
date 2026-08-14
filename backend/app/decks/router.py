@@ -1,22 +1,24 @@
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
-from app.cards.schemas import CardDetail
+from app.cards.schemas import CardResponse
 from fastapi import APIRouter, Query, Response, status
+
+from app.cards.deps import CardServiceDeps
 
 from .deps import DeckServiceDeps, UserDeckServiceDeps
 from .schemas import (
-    DeckCardDetail,
-    DeckCreate,
-    DeckDetail,
-    DeckUpdate,
+    CreateDeckRequest,
+    DeckCardResponse,
+    DeckResponse,
+    UpdateDeckRequest,
     ReorderCards,
 )
 
 router = APIRouter(prefix="/decks")
 
 
-@router.get("/{deck_uuid}", response_model=DeckDetail)
+@router.get("/{deck_uuid}", response_model=DeckResponse)
 async def get_deck(
     deck_uuid: UUID,
     current_user: OptionalCurrentUser,
@@ -28,9 +30,9 @@ async def get_deck(
     )
 
 
-@router.post("/create", response_model=DeckDetail)
+@router.post("/create", response_model=DeckResponse)
 async def create_deck(
-    payload: DeckCreate,
+    payload: CreateDeckRequest,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
@@ -41,10 +43,10 @@ async def create_deck(
     )
 
 
-@router.patch("/{deck_uuid}", response_model=DeckDetail)
+@router.patch("/{deck_uuid}", response_model=DeckResponse)
 async def update_deck(
     deck_uuid: UUID,
-    payload: DeckUpdate,
+    payload: UpdateDeckRequest,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
@@ -70,8 +72,7 @@ async def delete_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
-
-@router.get("/{deck_uuid}/cards", response_model=list[CardDetail])
+@router.get("/{deck_uuid}/cards", response_model=list[CardResponse])
 async def get_deck_cards(
     deck_uuid: UUID,
     current_user: OptionalCurrentUser,
@@ -84,6 +85,22 @@ async def get_deck_cards(
         deck_uuid=deck_uuid,
         offset=offset,
         limit=limit,
+    )
+
+@router.get(
+    "/{deck_uuid}/cards/{card_uuid}",
+    response_model=CardResponse,
+)
+async def get_card_in_deck(
+    deck_uuid: UUID,
+    card_uuid: UUID,
+    current_user: OptionalCurrentUser,
+    card_service: CardServiceDeps,
+):
+    return await card_service.get_card_in_deck(
+        card_uuid=card_uuid,
+        deck_uuid=deck_uuid,
+        viewer_id=current_user.id if current_user else None,
     )
 
 @router.post(
@@ -124,7 +141,7 @@ async def reorder_deck_cards(
 
 @router.post(
     "/{deck_uuid}/cards/{card_uuid}",
-    response_model=DeckCardDetail,
+    response_model=DeckCardResponse,
 )
 async def add_card_to_deck(
     deck_uuid: UUID,

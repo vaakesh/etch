@@ -99,7 +99,7 @@ function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
   const card = readRecord(value, path);
 
   return {
-    uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
+    uuid: readUuid(card.uuid, `${path}.uuid`),
     frontText: readString(card.front_text, `${path}.front_text`),
     backText: readString(card.back_text, `${path}.back_text`),
     frontLang: readString(card.front_lang, `${path}.front_lang`),
@@ -110,15 +110,17 @@ function parsePreviewCard(value: unknown, path: string): LibraryPreviewCard {
 
 function parseLibraryCard(value: unknown, index: number): LibraryCard {
   const path = `cards[${index}]`;
-  const card = readRecord(value, path);
+  const item = readRecord(value, path);
+  const cardPath = `${path}.card`;
+  const card = readRecord(item.card, cardPath);
 
   return {
-    uuid: readUuid(card.card_uuid, `${path}.card_uuid`),
-    frontText: readString(card.front_text, `${path}.front_text`),
-    backText: readString(card.back_text, `${path}.back_text`),
-    frontLang: readString(card.front_lang, `${path}.front_lang`),
-    backLang: readString(card.back_lang, `${path}.back_lang`),
-    updatedAt: readDateTime(card.updated_at, `${path}.updated_at`),
+    uuid: readUuid(card.uuid, `${cardPath}.uuid`),
+    frontText: readString(card.front_text, `${cardPath}.front_text`),
+    backText: readString(card.back_text, `${cardPath}.back_text`),
+    frontLang: readString(card.front_lang, `${cardPath}.front_lang`),
+    backLang: readString(card.back_lang, `${cardPath}.back_lang`),
+    updatedAt: readDateTime(card.updated_at, `${cardPath}.updated_at`),
   };
 }
 
@@ -211,32 +213,37 @@ export function parseCreatedLibraryDeck(value: unknown): CreatedLibraryDeck {
 
 function parseDeck(value: unknown, index: number): LibraryDeck {
   const path = `decks[${index}]`;
-  const deck = readRecord(value, path);
-  const totalWordsCount = readInteger(deck.deck_words_count, `${path}.deck_words_count`);
-  const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
+  const item = readRecord(value, path);
+  const deckPath = `${path}.deck`;
+  const viewerStatePath = `${path}.viewer_state`;
+  const deck = readRecord(item.deck, deckPath);
+  const viewerState = readRecord(item.viewer_state, viewerStatePath);
+  const previewCards = item.preview_cards;
+  const totalWordsCount = readInteger(deck.words_count, `${deckPath}.words_count`);
+  const accuracy = readInteger(viewerState.accuracy, `${viewerStatePath}.accuracy`);
 
-  if (!Array.isArray(deck.cards)) {
-    return invalidLibraryResponse(`${path}.cards`);
+  if (!Array.isArray(previewCards)) {
+    return invalidLibraryResponse(`${path}.preview_cards`);
   }
 
   if (totalWordsCount < 0) {
-    return invalidLibraryResponse(`${path}.deck_words_count`);
+    return invalidLibraryResponse(`${deckPath}.words_count`);
   }
   if (accuracy < 0 || accuracy > 100) {
-    return invalidLibraryResponse(`${path}.user_accuracy`);
+    return invalidLibraryResponse(`${viewerStatePath}.accuracy`);
   }
 
   return {
-    uuid: readUuid(deck.deck_uuid, `${path}.deck_uuid`),
-    ownerUuid: readUuid(deck.owner_uuid, `${path}.owner_uuid`),
-    title: readString(deck.title, `${path}.title`),
-    description: readNullableString(deck.description, `${path}.description`),
+    uuid: readUuid(deck.uuid, `${deckPath}.uuid`),
+    ownerUuid: readUuid(deck.owner_uuid, `${deckPath}.owner_uuid`),
+    title: readString(deck.title, `${deckPath}.title`),
+    description: readNullableString(deck.description, `${deckPath}.description`),
     totalWordsCount,
     accuracy,
-    isFavourite: readBoolean(deck.is_favourite, `${path}.is_favourite`),
-    updatedAt: readNullableDateTime(deck.updated_at, `${path}.updated_at`),
-    cards: deck.cards.map((card, cardIndex) =>
-      parsePreviewCard(card, `${path}.cards[${cardIndex}]`),
+    isFavourite: readBoolean(viewerState.is_favourite, `${viewerStatePath}.is_favourite`),
+    updatedAt: readNullableDateTime(deck.updated_at, `${deckPath}.updated_at`),
+    cards: previewCards.map((card, cardIndex) =>
+      parsePreviewCard(card, `${path}.preview_cards[${cardIndex}]`),
     ),
   };
 }

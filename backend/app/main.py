@@ -3,8 +3,6 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from redis.asyncio import Redis
-
 import app.models  # noqa: F401 # sqlalchemy models registration
 from app.auth.router import router as auth_router
 from app.bff.router import router as bff_router

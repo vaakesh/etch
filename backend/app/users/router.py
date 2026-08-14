@@ -4,33 +4,34 @@ from uuid import UUID
 from app.auth.cookies import clear_tokens_cookie
 from app.auth.deps import AuthServiceDeps, CurrentUser
 from app.cards.deps import CardServiceDeps
-from app.cards.schemas import CardDetail
+from app.cards.schemas import CardResponse
 from app.decks.deps import DeckServiceDeps, UserDeckServiceDeps
-from app.decks.schemas import CursorPage, DeckDetail, DeckWithUserState
+from app.decks.schemas import DeckListItemResponse, DeckResponse
 from app.training_sessions.deps import (
     TrainingSessionServiceDeps,
 )
 from app.training_sessions.schemas import (
-    TrainingSessionOut,
+    TrainingSessionResponse,
 )
 from app.users.deps import UserServiceDeps
 from app.users.schemas import (
-    ChangePassword,
-    PrivateUserOut,
-    PublicUserOut,
+    ChangePasswordRequest,
+    PrivateUserResponse,
+    PublicUserResponse,
     SearchQuery,
-    UserCreate,
-    UserSettingsOut,
+    CreateUserRequest,
+    UserSettingsResponse,
     UserSettingsUpdate,
-    UserUpdate,
+    UpdateUserRequest,
 )
 from fastapi import APIRouter, Query, Response, status
 
 from app.training_sessions.models import TrainingSessionStatus
+from app.common.schemas import CursorPage
 
 router = APIRouter(prefix="/users")
 
-@router.get("/me", response_model=PrivateUserOut)
+@router.get("/me", response_model=PrivateUserResponse)
 async def get_me(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -39,19 +40,19 @@ async def get_me(
         user_id=current_user.id,
         for_update=False,
     )
-    return PrivateUserOut(
+    return PrivateUserResponse(
         uuid=current_user.uuid,
         username=current_user.username,
         email=current_user.email,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
-        user_settings=UserSettingsOut(
+        settings=UserSettingsResponse(
             locale=user_settings.locale,
             theme=user_settings.theme,
         )
     )
 
-@router.patch("/me/settings", response_model=UserSettingsOut)
+@router.patch("/me/settings", response_model=UserSettingsResponse)
 async def change_settings(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -66,7 +67,7 @@ async def change_settings(
 
 @router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
-    payload: ChangePassword,
+    payload: ChangePasswordRequest,
     current_user: CurrentUser,
     auth_service: AuthServiceDeps,
 ):
@@ -79,7 +80,7 @@ async def change_password(
     clear_tokens_cookie(response=response)
     return response
 
-@router.get("/me/decks", response_model=CursorPage[DeckDetail])
+@router.get("/me/decks", response_model=CursorPage[DeckResponse])
 async def get_my_decks(
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
@@ -96,13 +97,13 @@ async def get_my_decks(
         current_user_id=current_user.id,
     )
 
-    return CursorPage[DeckDetail](
+    return CursorPage[DeckResponse](
         items=decks,
         next_cursor=next_cursor,
         has_more=has_more,
     )
 
-@router.get("/me/cards", response_model=CursorPage[CardDetail])
+@router.get("/me/cards", response_model=CursorPage[CardResponse])
 async def get_my_cards(
     current_user: CurrentUser,
     card_service: CardServiceDeps,
@@ -115,13 +116,13 @@ async def get_my_cards(
         limit=limit,
     )
 
-    return CursorPage[CardDetail](
+    return CursorPage[CardResponse](
         items=cards,
         next_cursor=next_cursor,
         has_more=has_more,
     )
 
-@router.get("/me/training-sessions", response_model=CursorPage[TrainingSessionOut])
+@router.get("/me/training-sessions", response_model=CursorPage[TrainingSessionResponse])
 async def get_my_training_sessions(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
@@ -137,19 +138,19 @@ async def get_my_training_sessions(
             limit=limit,
         )
     )
-    return CursorPage[TrainingSessionOut](
+    return CursorPage[TrainingSessionResponse](
         items=training_sessions,
         next_cursor=next_cursor,
         has_more=has_more,
     )
 
-@router.get("/me/decks/followed", response_model=list[DeckWithUserState])
+@router.get("/me/decks/followed", response_model=list[DeckListItemResponse])
 async def get_my_followed_decks(
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-) -> list[DeckWithUserState]:
+) -> list[DeckListItemResponse]:
     followed_decks = await user_deck_service.get_page_of_followed_decks_by_user_id(
         user_id=current_user.id,
         page=page,
@@ -158,7 +159,7 @@ async def get_my_followed_decks(
 
     return followed_decks
 
-@router.get("/{user_uuid}", response_model=PublicUserOut)
+@router.get("/{user_uuid}", response_model=PublicUserResponse)
 async def get_public_user(
     user_uuid: UUID,
     user_service: UserServiceDeps,
@@ -171,29 +172,29 @@ async def get_public_user(
 
 @router.post(
     "/create", 
-    response_model=PrivateUserOut,
+    response_model=PrivateUserResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_user(
-    payload: UserCreate,
+    payload: CreateUserRequest,
     user_service: UserServiceDeps,
 ):
     new_user, user_settings = await user_service.create_user(payload)
-    return PrivateUserOut(
+    return PrivateUserResponse(
         uuid=new_user.uuid,
         username=new_user.username,
         email=new_user.email,
         created_at=new_user.created_at,
         updated_at=new_user.updated_at,
-        user_settings=UserSettingsOut(
+        settings=UserSettingsResponse(
             locale=user_settings.locale,
             theme=user_settings.theme,
         )
     )
 
-@router.patch("/me", response_model=PrivateUserOut)
+@router.patch("/me", response_model=PrivateUserResponse)
 async def update_user(
-    payload: UserUpdate,
+    payload: UpdateUserRequest,
     current_user: CurrentUser,
     user_service: UserServiceDeps,
 ):
@@ -219,7 +220,7 @@ async def delete_user(
 
 @router.get(
     "/{user_uuid}/training-sessions", 
-    response_model=CursorPage[TrainingSessionOut]
+    response_model=CursorPage[TrainingSessionResponse]
 )
 async def get_public_training_sessions_by_user(
     user_uuid: UUID,
@@ -230,18 +231,18 @@ async def get_public_training_sessions_by_user(
     training_sessions, next_cursor, has_more = (
         await training_session_service.get_all_by_user_uuid(
             user_uuid=user_uuid,
-            status=TrainingSessionStatus.FINISHED,
+            status=TrainingSessionStatus.COMPLETED,
             cursor=cursor,
             limit=limit,
         )
     )
-    return CursorPage[TrainingSessionOut](
+    return CursorPage[TrainingSessionResponse](
         items=training_sessions,
         next_cursor=next_cursor,
         has_more=has_more,
     )
 
-@router.get("/{user_uuid}/decks", response_model=CursorPage[DeckDetail])
+@router.get("/{user_uuid}/decks", response_model=CursorPage[DeckResponse])
 async def get_public_decks_by_user(
     user_uuid: UUID,
     deck_service: DeckServiceDeps,
@@ -258,7 +259,7 @@ async def get_public_decks_by_user(
         current_user_id=None,
     )
 
-    return CursorPage[DeckDetail](
+    return CursorPage[DeckResponse](
         items=decks,
         next_cursor=next_cursor,
         has_more=has_more,
