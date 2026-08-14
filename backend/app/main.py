@@ -23,7 +23,7 @@ from app.logging_config import (
 from app.redis.deps import get_redis
 from app.training_sessions.router import router as training_sessions_router
 from app.users.router import router as users_router
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response
 
 
 
@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     redis = get_redis()
     setup_logging(
         use_colors=True,
-        log_sql=False,
+        log_sql=True,
         log_sql_parameters=False,
         slow_query_ms=200,
     )

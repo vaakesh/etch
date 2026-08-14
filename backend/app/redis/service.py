@@ -1,11 +1,11 @@
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 import random
 from uuid import UUID
 
 import orjson
 from app.cards.models import Card
-from app.decks.models import Deck
+from app.decks.models import Deck, UserDeck
 from app.redis.keys import (
     make_card_cache_key,
     make_deck_cache_key,
@@ -14,8 +14,9 @@ from app.redis.keys import (
     make_library_cards_page_generation_cache_key,
     make_library_deck_page_cache_key,
     make_library_deck_page_generation_cache_key,
+    make_user_deck_cache_key,
 )
-from app.redis.schemas import CachedCard, CachedDeck, CachedLibraryPage, CacheLookupResult, LibraryPageCacheLookup
+from app.redis.schemas import CachedCard, CachedDeck, CachedLibraryPage, CacheLookupResult, CachedUserDeck, LibraryPageCacheLookup, UserDeckIdentity
 from app.users.schemas import NormalizedSearch
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -25,6 +26,7 @@ GENERATION_TTL = LIBRARY_PAGE_TTL * 3
 DECK_CARDS_TTL = 60 * 60
 CARD_TTL = 60 * 30
 DECK_TTL = 60 * 30
+USER_DECK_TTL = 60 * 10
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +148,7 @@ class RedisCacheService:
         self,
         user_uuid: UUID,
         key_generation_factory: Callable[[UUID], str],
-    ) -> str:
+    ) -> int | None:
         """
         returns valid generation starting from 0
         or returns None if error has occured
@@ -255,6 +257,45 @@ class RedisCacheService:
 
 
     # cache operations
+
+    async def cache_user_decks(
+        self,
+        user_id: int,
+        user_decks: list[UserDeck],
+    ) -> None:
+        entries = {
+            make_user_deck_cache_key(
+                identity=(user_deck.user_id, user_deck.deck_id)
+            ): CachedUserDeck.model_validate(user_deck).model_dump_json()
+            for user_deck in user_decks
+        }
+
+        await self._safe_set_many(
+            entries=entries,
+            ex=USER_DECK_TTL,
+        )
+
+    async def get_cached_user_decks(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+    ) -> CacheLookupResult[UserDeckIdentity, CachedUserDeck]:
+        identities: list[UserDeckIdentity] = [(user_id, deck_id) for deck_id in deck_ids]
+        result = await self._get_many(
+            identities=identities,
+            key_factory=make_user_deck_cache_key,
+            deserializer=CachedUserDeck.model_validate_json
+        )
+        return result
+
+    async def invalidate_user_decks(
+        self,
+        identities: list[UserDeckIdentity],
+    ) -> None:
+        await self._invalidate_many(
+            identities=identities,
+            key_factory=make_user_deck_cache_key,
+        )
 
     async def cache_library_cards_page(
         self,
@@ -452,7 +493,7 @@ class RedisCacheService:
         card_uuids: list[UUID],
     ) -> None:
         await self._invalidate_many(
-            uuids=card_uuids,
+            identities=card_uuids,
             key_factory=make_card_cache_key,
         )
 
@@ -461,7 +502,7 @@ class RedisCacheService:
         deck_uuids: list[UUID],
     ) -> None:
         await self._invalidate_many(
-            uuids=deck_uuids,
+            identities=deck_uuids,
             key_factory=make_deck_cache_key,
         )
 
@@ -470,22 +511,22 @@ class RedisCacheService:
         deck_uuids: list[UUID],
     ) -> None:
         await self._invalidate_many(
-            uuids=deck_uuids,
+            identities=deck_uuids,
             key_factory=make_deck_cards_cache_key,
         )
 
-    async def _invalidate_many(
+    async def _invalidate_many[K](
         self,
-        uuids: list[UUID],
-        key_factory: Callable[[UUID], str],
+        identities: list[K],
+        key_factory: Callable[[K], str],
     ) -> None:
-        if not uuids:
+        if not identities:
             return
 
         await self._safe_delete_many(
             keys=[
-                key_factory(uuid)
-                for uuid in uuids
+                key_factory(identity)
+                for identity in identities
             ]
         )
 
@@ -538,9 +579,9 @@ class RedisCacheService:
     async def get_cached_deck_cards(
         self,
         deck_uuids: list[UUID],
-    ) -> CacheLookupResult[list[UUID]]:
+    ) -> CacheLookupResult[UUID, list[UUID]]:
         result = await self._get_many(
-            uuids=deck_uuids,
+            identities=deck_uuids,
             key_factory=make_deck_cards_cache_key,
             deserializer=self._deserialize_uuid_list,
         )
@@ -575,9 +616,9 @@ class RedisCacheService:
     async def get_cached_cards(
         self,
         card_uuids: list[UUID],
-    ) -> CacheLookupResult[CachedCard]:
+    ) -> CacheLookupResult[UUID, CachedCard]:
         result = await self._get_many(
-            uuids=card_uuids,
+            identities=card_uuids,
             key_factory=make_card_cache_key,
             deserializer=CachedCard.model_validate_json,
         )
@@ -612,29 +653,29 @@ class RedisCacheService:
     async def get_cached_decks(
         self,
         deck_uuids: list[UUID],
-    ) -> CacheLookupResult[CachedDeck]:
+    ) -> CacheLookupResult[UUID, CachedDeck]:
         result = await self._get_many(
-            uuids=deck_uuids,
+            identities=deck_uuids,
             key_factory=make_deck_cache_key,
             deserializer=CachedDeck.model_validate_json,
         )
         return result
 
-    async def _get_many[T](
+    async def _get_many[K: Hashable, T](
         self,
-        uuids: list[UUID],
-        key_factory: Callable[[UUID], str],
+        identities: list[K],
+        key_factory: Callable[[K], str],
         deserializer: Callable[[bytes | str], T],
-    ) -> CacheLookupResult[T]:
-        if not uuids:
-            return CacheLookupResult[T](
+    ) -> CacheLookupResult[K, T]:
+        if not identities:
+            return CacheLookupResult(
                 cached={},
                 missing=[],
             )
 
         keys = [
-            key_factory(item_uuid)
-            for item_uuid in uuids
+            key_factory(identity)
+            for identity in identities
         ]
         values = await self._safe_mget(
             keys=keys,
@@ -643,16 +684,16 @@ class RedisCacheService:
         if values is None:
             return CacheLookupResult(
                 cached={},
-                missing=uuids,
+                missing=identities,
             )
 
-        cached: dict[UUID, T] = {}
-        missing: list[UUID] = []
+        cached: dict[K, T] = {}
+        missing: list[K] = []
         corrupted_keys: list[str] = []
 
-        for item_uuid, key, value in zip(uuids, keys, values):
+        for identity, key, value in zip(identities, keys, values):
             if value is None:
-                missing.append(item_uuid)
+                missing.append(identity)
                 continue
 
             item = self._deserialize_cached_value(
@@ -662,11 +703,11 @@ class RedisCacheService:
             )
 
             if item is None:
-                missing.append(item_uuid)
+                missing.append(identity)
                 corrupted_keys.append(key)
                 continue
 
-            cached[item_uuid] = item
+            cached[identity] = item
 
         await self._safe_delete_many(
             keys=corrupted_keys,

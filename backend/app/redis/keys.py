@@ -4,6 +4,7 @@ from uuid import UUID
 import orjson
 
 from app.users.schemas import NormalizedSearch
+from app.redis.schemas import UserDeckIdentity
 
 
 def make_deck_cache_key(deck_uuid: UUID) -> str:
@@ -14,6 +15,12 @@ def make_card_cache_key(card_uuid: UUID) -> str:
 
 def make_deck_cards_cache_key(deck_uuid: UUID) -> str:
     return f"deck:{deck_uuid}:card-uuids"
+
+def make_user_deck_cache_key(
+    identity: UserDeckIdentity,
+) -> str:
+    user_id, deck_id = identity
+    return f"deck:user-deck:{user_id}:{deck_id}"
 
 def make_library_deck_page_generation_cache_key(
     user_uuid: UUID,

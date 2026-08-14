@@ -25,6 +25,7 @@ from app.redis.service import (
 )
 from app.training_sessions.service import TrainingSessionService
 from app.users.schemas import SearchQuery
+from app.redis.schemas import CachedUserDeck, UserDeckIdentity
 
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
@@ -53,7 +54,10 @@ class BffService:
             uow_factory=uow_factory,
             cache_service=cache_service,
         )
-        training_session_service = TrainingSessionService(uow_factory=self.uow_factory)
+        self.training_session_service = TrainingSessionService(
+            uow_factory=self.uow_factory,
+            cache_service=cache_service,
+        )
 
     @staticmethod
     def _build_library_deck(
@@ -191,6 +195,35 @@ class BffService:
 
         return fetched_by_deck
 
+    async def _get_user_decks_by_deck_ids(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+    ) -> dict[UserDeckIdentity, CachedUserDeck]:
+        lookup_user_decks = await self.cache_service.get_cached_user_decks(
+            user_id=user_id,
+            deck_ids=deck_ids,
+        )
+        user_decks: dict[UserDeckIdentity, UserDeck] = lookup_user_decks.cached
+        if lookup_user_decks.missing:
+            identities = lookup_user_decks.missing
+            missing_deck_ids: list[int] = []
+            for identity in identities:
+                missing_deck_ids.append(identity[1])
+            fetched_user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
+                deck_ids=missing_deck_ids,
+                user_id=user_id,
+            )
+            await self.cache_service.cache_user_decks(
+                user_id=user_id,
+                user_decks=fetched_user_decks,
+            )
+            for fetched_user_deck in fetched_user_decks:
+                user_decks[
+                    (fetched_user_deck.user_id, fetched_user_deck.deck_id)
+                ] = fetched_user_deck
+        return user_decks
+
     async def _fetch_and_cache_library_deck_page_decks(
         self,
         user_id: int,
@@ -278,19 +311,14 @@ class BffService:
                 user_id=user_id,
                 deck_uuids=[deck.uuid for deck in decks],
             ),
-            self.user_deck_service.get_user_decks_by_deck_ids(
-                deck_ids=[deck.id for deck in decks],
+            self._get_user_decks_by_deck_ids(
                 user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
             )
         )
-
-        user_decks_by_deck_id: dict[int, UserDeck] = {
-            user_deck.deck_id: user_deck
-            for user_deck in user_decks
-        }
         # проверка, что все UserDecks существуют
         for deck in decks:
-            if deck.id not in user_decks_by_deck_id:
+            if (user_id, deck.id) not in user_decks:
                 raise UserDeckNotFoundError()
 
 
@@ -298,7 +326,7 @@ class BffService:
             items=[
                 self._build_library_deck(
                     deck=deck,
-                    user_deck=user_decks_by_deck_id[deck.id],
+                    user_deck=user_decks[(user_id, deck.id)],
                     cards=cards_by_deck[deck.uuid]
                 ) for deck in decks
             ],

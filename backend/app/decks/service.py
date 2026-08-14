@@ -193,18 +193,26 @@ class DeckService:
     ) -> Deck:
         try:
             async with self.uow_factory() as uow:
-                deck = await self._get_by_uuid(uow, deck_uuid)
+                deck = await self._get_by_uuid(
+                    uow=uow, 
+                    deck_uuid=deck_uuid,
+                    for_update=True,
+                )
 
                 if deck.user_id != user_id:
                     raise PermissionDeniedError()
 
                 update_data = payload.model_dump(exclude_unset=True)
-
+                update_data["version"] = deck.version + 1
                 for field, value in update_data.items():
                     setattr(deck, field, value)
 
                 await uow.commit()
                 await uow.deck_repo.refresh(deck)
+
+                await self.cache_service.invalidate_user_decks(
+                    identities=[(user_id, deck.id)]
+                )
 
                 await self.cache_service.invalidate_decks(
                     deck_uuids=[deck.uuid],
@@ -233,6 +241,10 @@ class DeckService:
 
             await uow.deck_repo.delete(deck)
             await uow.commit()
+
+            await self.cache_service.invalidate_user_decks(
+                identities=[(user_id, deck.id)]
+            )
 
             await self.cache_service.invalidate_decks(
                 deck_uuids=[deck.uuid],
@@ -334,6 +346,7 @@ class DeckService:
                     raise DeckCardAlreadyExistsError()
 
                 deck.words_count += 1
+                deck.version += 1
 
                 max_position = await uow.deck_card_repo.get_max_position(
                     deck_id=deck.id,
@@ -352,6 +365,10 @@ class DeckService:
                 uow.deck_card_repo.add(deck_card)
 
                 await uow.commit()
+
+                await self.cache_service.invalidate_user_decks(
+                    identities=[(user_id, deck.id)]
+                )
 
                 await self.cache_service.invalidate_library_deck_page(
                     user_uuid=user_uuid,
@@ -408,6 +425,7 @@ class DeckService:
 
 
             deck.words_count -= 1
+            deck.version += 1
 
             await uow.deck_card_repo.delete(deck_card)
             await uow.flush()
@@ -416,6 +434,10 @@ class DeckService:
                 deleted_position=deck_card.position,
             )
             await uow.commit()
+
+            await self.cache_service.invalidate_user_decks(
+                identities=[(user_id, deck.id)]
+            )
 
             await self.cache_service.invalidate_library_deck_page(
                 user_uuid=user_uuid,
@@ -514,6 +536,10 @@ class UserDeckService:
                 user_deck.is_following = False
             await uow.commit()
 
+            await self.cache_service.invalidate_user_decks(
+                identities=[(user_deck.user_id, user_deck.deck_id)],
+            )
+
             await self.cache_service.invalidate_library_deck_page(
                 user_uuid=user_uuid,
             )
@@ -548,6 +574,10 @@ class UserDeckService:
             else:
                 user_deck.is_following = True
             await uow.commit()
+
+            await self.cache_service.invalidate_user_decks(
+                identities=[(user_deck.user_id, user_deck.deck_id)],
+            )
 
             await self.cache_service.invalidate_library_deck_page(
                 user_uuid=user_uuid,
@@ -627,6 +657,10 @@ class UserDeckService:
             user_deck.is_favourite = value
             
             await uow.commit()
+
+            await self.cache_service.invalidate_user_decks(
+                identities=[(user_deck.user_id, user_deck.deck_id)],
+            )
 
             await self.cache_service.invalidate_library_deck_page(
                 user_uuid=user_uuid,

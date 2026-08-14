@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Hashable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, PastDatetime
@@ -10,11 +11,12 @@ from app.decks.models import Deck
 from app.training_sessions.schemas import Counter, PositiveInt
 from app.decks.schemas import DeckDescription, DeckTitle
 
+type UserDeckIdentity = tuple[int, int]
 
 @dataclass(slots=True)
-class CacheLookupResult[T]:
-    cached: dict[UUID, T]
-    missing: list[UUID]
+class CacheLookupResult[K: Hashable, T]:
+    cached: dict[K, T]
+    missing: list[K]
 
 class CachedLibraryPage(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -26,6 +28,20 @@ class CachedLibraryPage(BaseModel):
 class LibraryPageCacheLookup:
     page: CachedLibraryPage | None
     generation: int | None
+
+class CachedUserDeck(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    deck_id: int
+    sessions_count: Counter
+    correct_count: Counter
+    wrong_count: Counter
+    last_studied_at: PastDatetime | None
+    is_favourite: bool
+    is_following: bool
+    last_seen_version: int | None
+    added_at: PastDatetime
 
 class CachedCard(BaseModel):
     id: int

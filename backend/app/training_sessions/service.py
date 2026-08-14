@@ -20,11 +20,17 @@ from app.users.errors import UserNotFoundError
 from app.utils import decode_cursor, encode_cursor, utcnow
 from app.bff.schemas import PracticeCard, PracticeSessionResponse
 from app.decks.models import UserDeck
+from app.redis.service import RedisCacheService
 
 
 class TrainingSessionService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(
+        self,
+        uow_factory: Callable[[], UnitOfWork],
+        cache_service: RedisCacheService,
+    ) -> None:
         self.uow_factory = uow_factory
+        self.cache_service = cache_service
 
     async def get_session_history(
         self,
@@ -67,6 +73,7 @@ class TrainingSessionService:
             user_answer: UserAnswer,
     ) -> SubmitAnswerResponse:
         async with self.uow_factory() as uow:
+            user_deck_changed = False
             training_session = await uow.training_session_repo.get_by_uuid(
                 training_session_uuid,
                 for_update=True,
@@ -125,6 +132,7 @@ class TrainingSessionService:
             if user_answer.action == "answer":
                 item.user_typed_text = user_answer.answer
 
+            # в статистику идут только завершенные сессии
             if (
                 training_session.actual_count == training_session.requested_count 
                 and 
@@ -137,6 +145,7 @@ class TrainingSessionService:
                         user_id=user_id,
                         training_session=training_session,
                     )
+                user_deck_changed = True
 
             response = SubmitAnswerResponse(
                     is_correct=item.is_correct, 
@@ -154,6 +163,11 @@ class TrainingSessionService:
                 )
 
             await uow.commit()
+
+            if user_deck_changed:
+                await self.cache_service.invalidate_user_decks(
+                    identities=[(training_session.user_id, training_session.deck_id)],
+                )
             
             return response
 
@@ -314,6 +328,7 @@ class TrainingSessionService:
                     sessions_count=0,
                     correct_count=0,
                     wrong_count=0,
+                    last_seen_version=deck.version,
                 )
                 uow.user_deck_repo.add(user_deck)
 
