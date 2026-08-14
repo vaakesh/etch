@@ -10,6 +10,16 @@ export function hasSessionExpiredNotice(state: unknown): boolean {
   return isRecord(state) && state.notice === SESSION_EXPIRED_NOTICE;
 }
 
+export function withoutSessionExpiredNotice(state: unknown): unknown {
+  if (!hasSessionExpiredNotice(state) || !isRecord(state)) {
+    return state;
+  }
+
+  const nextState = { ...state };
+  delete nextState.notice;
+  return Object.keys(nextState).length > 0 ? nextState : null;
+}
+
 export function getSafeReturnPath(state: unknown, fallback = HOME_PATH): string {
   if (!isRecord(state) || typeof state.from !== "string") {
     return fallback;

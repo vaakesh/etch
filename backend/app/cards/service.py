@@ -103,6 +103,7 @@ class CardService:
         self,
         payload: CreateCardRequest,
         user_id: int,
+        user_uuid: UUID,
     ) -> Card:
         try:
             async with self.uow_factory() as uow:
@@ -115,6 +116,10 @@ class CardService:
 
                 await uow.commit()
                 await uow.card_repo.refresh(card)
+
+                await self.cache_service.invalidate_library_card_page(
+                    user_uuid=user_uuid,
+                )
 
                 return card
 
@@ -156,6 +161,7 @@ class CardService:
     async def delete_card(
             self, 
             user_id: int,
+            user_uuid: UUID,
             card_uuid: UUID,
         ) -> None:
         async with self.uow_factory() as uow:
@@ -176,6 +182,10 @@ class CardService:
 
             await self.cache_service.invalidate_cards(
                 card_uuids=[card.uuid],
+            )
+
+            await self.cache_service.invalidate_library_card_page(
+                user_uuid=user_uuid,
             )
 
             await self.cache_service.invalidate_deck_cards(

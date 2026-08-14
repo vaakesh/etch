@@ -15,7 +15,11 @@ async def create_card(
     card_service: CardService = Depends(get_card_service),
     current_user: User = Depends(get_current_user),
 ):
-    return await card_service.create_card(payload, current_user.id)
+    return await card_service.create_card(
+        payload=payload,
+        user_id=current_user.id,
+        user_uuid=current_user.uuid,
+    )
 
 
 @router.patch("/{card_uuid}", response_model=CardResponse)
@@ -40,6 +44,7 @@ async def delete_card(
 ):
     await card_service.delete_card(
         user_id=current_user.id,
+        user_uuid=current_user.uuid,
         card_uuid=card_uuid,
     )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)

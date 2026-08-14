@@ -534,6 +534,24 @@ class RedisCacheService:
             ]
         )
 
+    async def invalidate_library_card_page(
+        self,
+        user_uuid: UUID,
+    ) -> None:
+        key = make_library_cards_page_generation_cache_key(
+            user_uuid=user_uuid,
+        )
+
+        try:
+            pipe = self.redis.pipeline(transaction=True)
+            pipe.incr(key)
+            pipe.expire(key, GENERATION_TTL)
+            await pipe.execute()
+        except RedisError:
+            self._log_redis_error(
+                operation=f"INCR {key}",
+            )
+
     async def invalidate_library_deck_page(
         self,
         user_uuid: UUID,

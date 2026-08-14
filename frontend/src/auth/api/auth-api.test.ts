@@ -8,11 +8,11 @@ vi.mock("../../api", () => ({
     logout: "/auth/logout",
     refresh: "/auth/refresh",
   },
-  USER_ENDPOINTS: { me: "/users/me" },
+  USER_ENDPOINTS: { create: "/users/create", me: "/users/me" },
   apiFetch,
 }));
 
-import { getCurrentUser, loginRequest, refreshSessionRequest } from "./auth-api";
+import { getCurrentUser, loginRequest, refreshSessionRequest, registerRequest } from "./auth-api";
 
 describe("auth API", () => {
   beforeEach(() => {
@@ -52,6 +52,39 @@ describe("auth API", () => {
       retryOnUnauthorized: false,
     });
     expect(options.body).toEqual({ username: "alice", password: "password" });
+  });
+
+  it("creates a user through the public registration endpoint", async () => {
+    apiFetch.mockResolvedValue({
+      uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
+      username: "alice",
+      email: "alice@example.com",
+      created_at: "2026-08-14T12:00:00Z",
+      updated_at: "2026-08-14T12:00:00Z",
+      settings: { locale: "ru-RU", theme: "light" },
+    });
+
+    await expect(
+      registerRequest({
+        username: "alice",
+        email: "alice@example.com",
+        password: "password",
+      }),
+    ).resolves.toMatchObject({
+      username: "alice",
+      email: "alice@example.com",
+    });
+    expect(apiFetch).toHaveBeenCalledWith("/users/create", {
+      method: "POST",
+      body: {
+        username: "alice",
+        email: "alice@example.com",
+        password: "password",
+      },
+      auth: false,
+      retryOnUnauthorized: false,
+      signal: undefined,
+    });
   });
 
   it("refreshes the cookie session without exposing response tokens", async () => {

@@ -4,6 +4,7 @@ import {
   hasSessionExpiredNotice,
   HOME_PATH,
   SESSION_EXPIRED_NOTICE,
+  withoutSessionExpiredNotice,
 } from "./navigation-state";
 
 describe("navigation state", () => {
@@ -30,5 +31,18 @@ describe("navigation state", () => {
     expect(hasSessionExpiredNotice({ notice: SESSION_EXPIRED_NOTICE })).toBe(true);
     expect(hasSessionExpiredNotice({ notice: "server-error" })).toBe(false);
     expect(hasSessionExpiredNotice(null)).toBe(false);
+  });
+
+  it("removes a consumed session notice while preserving the return path", () => {
+    expect(
+      withoutSessionExpiredNotice({
+        from: "/practice?deck=missing",
+        notice: SESSION_EXPIRED_NOTICE,
+      }),
+    ).toEqual({ from: "/practice?deck=missing" });
+    expect(withoutSessionExpiredNotice({ notice: SESSION_EXPIRED_NOTICE })).toBeNull();
+    expect(withoutSessionExpiredNotice({ notice: "server-error" })).toEqual({
+      notice: "server-error",
+    });
   });
 });

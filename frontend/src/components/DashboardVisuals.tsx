@@ -5,6 +5,7 @@ export type DashboardIconName =
   | "practice"
   | "chart"
   | "settings"
+  | "logout"
   | "plus"
   | "chevron"
   | "target"
@@ -71,6 +72,14 @@ export function DashboardIcon({ name, className }: DashboardIconProps) {
         <>
           <circle cx="12" cy="12" r="3.2" />
           <path d="M19.3 13.4c.1-.5.1-1 0-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.4-.8L15.2 4h-4l-.4 3.1a8 8 0 0 0-1.4.8L7 6.9l-2 3.5 2 1.5a7 7 0 0 0 0 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.4.8l.4 2.8h4l.4-2.8a8 8 0 0 0 1.4-.8l2.4 1 2-3.5z" />
+        </>
+      );
+      break;
+    case "logout":
+      content = (
+        <>
+          <path d="M9 5H6.5A2.5 2.5 0 0 0 4 7.5v9A2.5 2.5 0 0 0 6.5 19H9" />
+          <path d="M13 8l4 4-4 4M17 12H8.5" />
         </>
       );
       break;

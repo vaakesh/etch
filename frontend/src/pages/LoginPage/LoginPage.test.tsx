@@ -11,10 +11,10 @@ vi.mock("../../auth/hooks/useAuth", () => ({
 
 import { LoginPage } from "./LoginPage";
 
-function renderLogin(state?: unknown, locale: AppLocale = "ru-RU"): string {
+function renderLogin(state?: unknown, locale: AppLocale = "ru-RU", search = ""): string {
   return renderToStaticMarkup(
     <LocaleProvider initialLocale={locale}>
-      <MemoryRouter initialEntries={[{ pathname: "/login", state }]}>
+      <MemoryRouter initialEntries={[{ pathname: "/login", search, state }]}>
         <LoginPage />
       </MemoryRouter>
     </LocaleProvider>,
@@ -26,6 +26,8 @@ describe("LoginPage", () => {
     const markup = renderLogin();
 
     expect(markup).toContain("С возвращением");
+    expect(markup).toContain('aria-label="Выберите действие"');
+    expect(markup).toContain("Регистрация");
     expect(markup).toContain("Имя пользователя");
     expect(markup.match(/aria-hidden="true">\*<\/span>/g)).toHaveLength(2);
     expect(markup).toContain('name="username"');
@@ -40,6 +42,23 @@ describe("LoginPage", () => {
     expect(markup.match(/readonly=""/gi)).toHaveLength(2);
     expect(markup).not.toMatch(/autocomplete="(?:username|current-password)"/i);
     expect(markup).not.toContain('type="email"');
+  });
+
+  it("renders the registration form on the login page", () => {
+    const markup = renderLogin(undefined, "ru-RU", "?mode=register");
+
+    expect(markup).toContain("Начните с Etch");
+    expect(markup).toContain("Создать аккаунт");
+    expect(markup.match(/aria-hidden="true">\*<\/span>/g)).toHaveLength(3);
+    expect(markup).toContain('name="username"');
+    expect(markup).toContain('autoComplete="username"');
+    expect(markup).toContain('name="email"');
+    expect(markup).toContain('type="email"');
+    expect(markup).toContain('autoComplete="email"');
+    expect(markup).toContain('autoComplete="new-password"');
+    expect(markup).toContain("3–18 символов, без пробелов.");
+    expect(markup).toContain("8–128 символов, без пробелов.");
+    expect(markup).not.toContain('readonly=""');
   });
 
   it("explains why an expired session redirected the user to login", () => {

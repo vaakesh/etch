@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LocaleProvider, type AppLocale } from "../../i18n";
+
+vi.mock("../../auth/hooks/useAuth", () => ({
+  useAuth: () => ({ logout: vi.fn(async () => undefined) }),
+}));
+
 import { AppShell } from "./AppShell";
 
 const suspendedPage = new Promise<void>(() => undefined);

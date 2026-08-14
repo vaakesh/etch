@@ -1,6 +1,20 @@
 import { AUTH_ENDPOINTS, USER_ENDPOINTS, apiFetch } from "../../api";
-import type { LoginCredentials, User } from "../model/auth-types";
+import type { LoginCredentials, RegistrationCredentials, User } from "../model/auth-types";
 import { parseCurrentUser } from "./auth-contract";
+
+export async function registerRequest(
+  credentials: RegistrationCredentials,
+  signal?: AbortSignal,
+): Promise<User> {
+  const response = await apiFetch<unknown, RegistrationCredentials>(USER_ENDPOINTS.create, {
+    method: "POST",
+    body: credentials,
+    auth: false,
+    retryOnUnauthorized: false,
+    signal,
+  });
+  return parseCurrentUser(response);
+}
 
 export async function loginRequest(
   credentials: LoginCredentials,

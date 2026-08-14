@@ -1251,7 +1251,7 @@ function AnswerArea({
         {liveMessage}
       </span>
       <form className={styles.answerForm} onSubmit={handleSubmit}>
-        <label className={styles.visuallyHidden} htmlFor={inputId}>
+        <label className={styles.answerLabel} htmlFor={inputId}>
           {messages.yourAnswer}
         </label>
         <div className={styles.answerControls}>

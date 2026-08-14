@@ -5,6 +5,7 @@ export const AUTH_ENDPOINTS = {
 } as const;
 
 export const USER_ENDPOINTS = {
+  create: "/users/create",
   me: "/users/me",
   settings: "/users/me/settings",
 } as const;

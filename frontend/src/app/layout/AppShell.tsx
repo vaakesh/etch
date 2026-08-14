@@ -1,5 +1,16 @@
-import { Suspense, useState, type CSSProperties } from "react";
+import {
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type PointerEvent,
+  type SyntheticEvent,
+} from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../../auth/hooks/useAuth";
 import {
   DashboardIcon,
   DeckIllustration,
@@ -31,6 +42,14 @@ const MESSAGES = defineMessages(
     unavailable: "Раздел пока не подключён",
     expand: "Развернуть боковое меню",
     collapse: "Свернуть боковое меню",
+    logout: "Выйти",
+    logoutEyebrow: "Аккаунт",
+    logoutTitle: "Выйти из Etch?",
+    logoutDescription:
+      "Сессия на этом устройстве завершится. Ваши колоды и прогресс останутся на месте.",
+    logoutCancel: "Остаться",
+    logoutConfirm: "Выйти",
+    logoutPending: "Выходим…",
   },
   {
     navigation: {
@@ -46,6 +65,14 @@ const MESSAGES = defineMessages(
     unavailable: "This section is not available yet",
     expand: "Expand sidebar",
     collapse: "Collapse sidebar",
+    logout: "Sign out",
+    logoutEyebrow: "Account",
+    logoutTitle: "Sign out of Etch?",
+    logoutDescription:
+      "Your session on this device will end. Your decks and progress will stay right where they are.",
+    logoutCancel: "Stay signed in",
+    logoutConfirm: "Sign out",
+    logoutPending: "Signing out…",
   },
 );
 
@@ -72,7 +99,12 @@ function isNavigationItemActive(pathname: string, item: NavigationItem): boolean
     : pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-function Sidebar({ collapsed }: { collapsed: boolean }) {
+interface SidebarProps {
+  collapsed: boolean;
+  onRequestLogout: () => void;
+}
+
+function Sidebar({ collapsed, onRequestLogout }: SidebarProps) {
   const messages = useLocalizedMessages(MESSAGES);
   const { pathname } = useLocation();
   const activeIndex = NAVIGATION_ITEMS.findIndex((item) => isNavigationItemActive(pathname, item));
@@ -99,7 +131,7 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
             const label = messages.navigation[item.key];
 
             return (
-              <li key={item.key}>
+              <li className={item.to ? undefined : styles.navigationUnavailable} key={item.key}>
                 {item.to ? (
                   <NavLink
                     aria-label={label}
@@ -132,19 +164,119 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
         </ul>
       </nav>
 
-      <div aria-hidden="true" className={styles.sidebarArtwork}>
-        <DeckIllustration className={styles.sidebarIllustration} variant={5} />
-        <span className={styles.artBook} />
-        <span className={styles.artBookSecondary} />
+      <div className={styles.sidebarFooter}>
+        <button
+          aria-haspopup="dialog"
+          aria-label={messages.logout}
+          className={styles.logoutButton}
+          onClick={onRequestLogout}
+          title={collapsed ? messages.logout : undefined}
+          type="button"
+        >
+          <DashboardIcon className={styles.logoutIcon} name="logout" />
+          <span className={styles.logoutLabel}>{messages.logout}</span>
+        </button>
+
+        <div aria-hidden="true" className={styles.sidebarArtwork}>
+          <DeckIllustration className={styles.sidebarIllustration} variant={5} />
+          <span className={styles.artBook} />
+          <span className={styles.artBookSecondary} />
+        </div>
       </div>
     </aside>
   );
 }
 
+interface LogoutDialogProps {
+  isPending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+function LogoutDialog({ isPending, onClose, onConfirm }: LogoutDialogProps) {
+  const messages = useLocalizedMessages(MESSAGES);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (dialog !== null && !dialog.open) {
+      dialog.showModal();
+    }
+  }, []);
+
+  function closeDialog(): void {
+    if (!isPending) {
+      dialogRef.current?.close();
+    }
+  }
+
+  function handleBackdropPointerDown(event: PointerEvent<HTMLDialogElement>): void {
+    if (event.target === event.currentTarget) {
+      closeDialog();
+    }
+  }
+
+  function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
+    if (isPending) {
+      event.preventDefault();
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    onConfirm();
+  }
+
+  return (
+    <dialog
+      aria-describedby={descriptionId}
+      aria-labelledby={titleId}
+      aria-modal="true"
+      className={styles.logoutDialog}
+      onCancel={handleCancel}
+      onClose={onClose}
+      onPointerDown={handleBackdropPointerDown}
+      ref={dialogRef}
+    >
+      <form className={styles.logoutDialogShell} onSubmit={handleSubmit}>
+        <div className={styles.logoutDialogBody}>
+          <span aria-hidden="true" className={styles.logoutDialogMark}>
+            <DashboardIcon name="logout" />
+          </span>
+          <span className={styles.logoutDialogEyebrow}>{messages.logoutEyebrow}</span>
+          <h2 id={titleId}>{messages.logoutTitle}</h2>
+          <p id={descriptionId}>{messages.logoutDescription}</p>
+        </div>
+
+        <div className={styles.logoutDialogActions}>
+          <button
+            autoFocus
+            className={styles.logoutDialogCancel}
+            disabled={isPending}
+            onClick={closeDialog}
+            type="button"
+          >
+            {messages.logoutCancel}
+          </button>
+          <button className={styles.logoutDialogConfirm} disabled={isPending} type="submit">
+            {isPending ? messages.logoutPending : messages.logoutConfirm}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
 export function AppShell() {
   const messages = useLocalizedMessages(MESSAGES);
+  const { logout } = useAuth();
   const { pathname } = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [isLogoutPending, setIsLogoutPending] = useState(false);
   const isLibraryRoute = pathname === "/library" || pathname.startsWith("/library/");
   const shellClassName = [
     styles.shell,
@@ -153,6 +285,13 @@ export function AppShell() {
   ]
     .filter((className) => className !== null)
     .join(" ");
+
+  function handleLogout(): void {
+    setIsLogoutPending(true);
+    void logout().catch(() => {
+      setIsLogoutPending(false);
+    });
+  }
 
   return (
     <div className={shellClassName}>
@@ -168,13 +307,21 @@ export function AppShell() {
         <DashboardIcon className={styles.sidebarToggleIcon} name="chevron" />
       </button>
 
-      <Sidebar collapsed={isSidebarCollapsed} />
+      <Sidebar collapsed={isSidebarCollapsed} onRequestLogout={() => setIsLogoutDialogOpen(true)} />
 
       <div className={styles.content}>
         <Suspense fallback={<PageLoader contained tone="light" />}>
           <Outlet />
         </Suspense>
       </div>
+
+      {isLogoutDialogOpen ? (
+        <LogoutDialog
+          isPending={isLogoutPending}
+          onClose={() => setIsLogoutDialogOpen(false)}
+          onConfirm={handleLogout}
+        />
+      ) : null}
     </div>
   );
 }
