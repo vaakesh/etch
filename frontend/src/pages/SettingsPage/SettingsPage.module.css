@@ -32,18 +32,22 @@
 }
 
 :global(html[data-theme="dark"]) .page {
-  --settings-ink: #f2edff;
-  --settings-muted: #aea6bd;
-  --settings-line: rgb(216 205 250 / 13%);
-  --settings-panel: rgb(31 27 48 / 78%);
-  --settings-control: rgb(48 42 68 / 82%);
-  --settings-control-hover: rgb(58 50 82 / 92%);
-  --settings-accent: #a48ce9;
-  --settings-accent-strong: #c8b8f4;
-  --settings-selected: rgb(122 101 184 / 32%);
-  --settings-shadow: rgb(3 2 10 / 25%);
+  --settings-ink: var(--dark-text);
+  --settings-muted: var(--dark-text-muted);
+  --settings-line: var(--dark-border);
+  --settings-panel: var(--dark-surface);
+  --settings-control: var(--dark-surface-raised);
+  --settings-control-hover: var(--dark-surface-hover);
+  --settings-accent: var(--dark-cta);
+  --settings-accent-strong: var(--dark-cta);
+  --settings-selected: var(--dark-cta);
+  --settings-shadow: var(--dark-shadow);
   color-scheme: dark;
-  background: linear-gradient(105deg, #171426 0%, #183137 48%, #322033 100%);
+  background:
+    radial-gradient(circle at 88% 4%, rgb(168 218 220 / 8%), transparent 28rem),
+    radial-gradient(circle at 8% 96%, rgb(255 193 204 / 6%), transparent 28rem),
+    var(--dark-background);
+  scrollbar-color: var(--dark-cta-medium) transparent;
 }
 
 .page *,
@@ -89,7 +93,11 @@
 }
 
 :global(html[data-theme="dark"]) .form {
-  border-color: var(--settings-line);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 22px 52px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 5%);
 }
 
 .settingsList {
@@ -208,7 +216,8 @@
 }
 
 :global(html[data-theme="dark"]) .themeSwitch {
-  background: rgb(8 6 16 / 22%);
+  background: var(--dark-background);
+  border-color: var(--dark-border);
 }
 
 .themeOption {
@@ -288,7 +297,7 @@
 }
 
 :global(html[data-theme="dark"]) .successMessage {
-  color: #91d9d1;
+  color: var(--dark-cyan);
 }
 
 .errorMessage {
@@ -296,7 +305,47 @@
 }
 
 :global(html[data-theme="dark"]) .errorMessage {
-  color: #f2a7c2;
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .selectControl select:hover:not(:disabled) {
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .selectControl select:focus-visible {
+  border-color: var(--dark-cyan);
+  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .themeSwitch::before {
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+}
+
+:global(html[data-theme="dark"]) .themeOption input:checked + span {
+  color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .themeOption input:focus-visible + span,
+:global(html[data-theme="dark"]) .resetButton:focus-visible,
+:global(html[data-theme="dark"]) .saveButton:focus-visible {
+  outline-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .saveButton {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  box-shadow: 0 7px 16px rgb(0 0 0 / 22%);
+}
+
+:global(html[data-theme="dark"]) .saveButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  box-shadow: 0 9px 20px rgb(0 0 0 / 28%);
+}
+
+:global(html[data-theme="dark"]) .spinner {
+  border-color: rgb(44 44 44 / 30%);
+  border-top-color: var(--dark-background);
 }
 
 .actions {

@@ -667,8 +667,10 @@
     linear-gradient(180deg, rgb(226 217 249 / 98%), rgb(192 178 229 / 96%));
   border-color: rgb(236 230 255 / 86%);
   box-shadow:
-    0 8px 20px rgb(68 50 120 / 23%), 0 0 15px rgb(150 128 242 / 24%),
-    inset 0 1px 1px rgb(255 255 255 / 72%), inset 0 -1px 2px rgb(88 68 146 / 18%);
+    0 8px 20px rgb(68 50 120 / 23%),
+    0 0 15px rgb(150 128 242 / 24%),
+    inset 0 1px 1px rgb(255 255 255 / 72%),
+    inset 0 -1px 2px rgb(88 68 146 / 18%);
 }
 
 .historyRepeatButton:disabled {
@@ -1863,8 +1865,10 @@
     linear-gradient(145deg, rgb(224 215 249 / 100%), rgb(178 160 225 / 98%));
   border-color: rgb(246 242 255 / 94%);
   box-shadow:
-    0 16px 30px rgb(68 50 120 / 30%), 0 0 0 1px rgb(255 255 255 / 38%),
-    0 0 30px rgb(143 119 240 / 34%), 0 0 18px rgb(155 232 224 / 20%),
+    0 16px 30px rgb(68 50 120 / 30%),
+    0 0 0 1px rgb(255 255 255 / 38%),
+    0 0 30px rgb(143 119 240 / 34%),
+    0 0 18px rgb(155 232 224 / 20%),
     inset 0 1px 1px rgb(255 255 255 / 82%);
 }
 
@@ -1875,7 +1879,8 @@
     linear-gradient(145deg, #d7faf6, #90e2d8);
   border-color: rgb(38 158 131 / 38%);
   box-shadow:
-    0 13px 25px rgb(38 158 131 / 22%), 0 0 18px rgb(145 227 217 / 28%),
+    0 13px 25px rgb(38 158 131 / 22%),
+    0 0 18px rgb(145 227 217 / 28%),
     inset 0 1px 1px rgb(255 255 255 / 76%);
 }
 
@@ -1886,7 +1891,8 @@
     linear-gradient(145deg, #fee8f3, #f1acd4);
   border-color: rgb(196 79 121 / 36%);
   box-shadow:
-    0 13px 25px rgb(196 79 121 / 21%), 0 0 18px rgb(241 172 212 / 27%),
+    0 13px 25px rgb(196 79 121 / 21%),
+    0 0 18px rgb(241 172 212 / 27%),
     inset 0 1px 1px rgb(255 255 255 / 74%);
 }
 
@@ -1901,7 +1907,8 @@
 .paginationArrow:active:not(:disabled),
 .pageNumber:active:not(:disabled) {
   box-shadow:
-    0 4px 10px rgb(54 43 85 / 18%), inset 0 2px 5px rgb(73 56 115 / 18%),
+    0 4px 10px rgb(54 43 85 / 18%),
+    inset 0 2px 5px rgb(73 56 115 / 18%),
     inset 0 1px 1px rgb(255 255 255 / 48%);
   filter: saturate(1.02);
   transform: translate3d(0, 0, 0) scale(0.97);
@@ -2427,4 +2434,614 @@
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* Dark theme */
+
+:global(html[data-theme="dark"]) .page {
+  --practice-lavender: var(--dark-background);
+  --practice-aqua: var(--dark-cyan);
+  --practice-pink: var(--dark-pink);
+  --practice-purple: var(--dark-cta);
+  --practice-purple-deep: var(--dark-cta);
+  --practice-brown: var(--dark-cta);
+  --practice-blue: var(--dark-cyan);
+  --practice-canvas: var(--dark-background);
+  --practice-paper: var(--dark-surface-raised);
+  --practice-paper-muted: var(--dark-surface);
+  --practice-ink: var(--dark-text);
+  --practice-muted: var(--dark-text-muted);
+  --practice-faint: var(--dark-text-faint);
+  --practice-line: var(--dark-border);
+  --practice-line-strong: rgb(228 228 228 / 18%);
+  --practice-accent: var(--dark-cta);
+  --practice-accent-dark: var(--dark-cta);
+  --practice-accent-soft: var(--dark-cta-soft);
+  --practice-success: var(--dark-cyan);
+  --practice-success-soft: var(--dark-cyan-soft);
+  --practice-action-bright: var(--dark-cyan);
+  --practice-action-deep: var(--dark-cyan);
+  --practice-action-soft: var(--dark-cyan-soft);
+  --practice-button-ink: var(--dark-text);
+  --practice-button-surface: var(--dark-surface-raised);
+  --practice-button-surface-hover: var(--dark-surface-hover);
+  --practice-button-border: var(--dark-border);
+  --practice-button-shadow: 0 7px 18px var(--dark-shadow);
+  --practice-button-shadow-hover: 0 10px 24px var(--dark-shadow);
+  --practice-error: var(--dark-pink);
+  --practice-error-soft: var(--dark-pink-soft);
+  color: var(--dark-text);
+  color-scheme: dark;
+  background: var(--dark-background);
+  scrollbar-color: var(--dark-cta-medium) transparent;
+}
+
+:global(html[data-theme="dark"]) .page button:focus-visible,
+:global(html[data-theme="dark"]) .page input:focus-visible,
+:global(html[data-theme="dark"]) .page a:focus-visible {
+  outline-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .ambientWash {
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-border);
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+:global(html[data-theme="dark"]) .ambientRule {
+  background: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .ambientLetter {
+  color: color-mix(in srgb, var(--dark-text-faint) 12%, transparent);
+}
+
+:global(html[data-theme="dark"]) .paperPanel,
+:global(html[data-theme="dark"]) .historyPanel,
+:global(html[data-theme="dark"]) .setupPanel {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: 0 20px 48px var(--dark-shadow);
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .historyCard,
+:global(html[data-theme="dark"]) .historyMessage,
+:global(html[data-theme="dark"]) .settingsCard,
+:global(html[data-theme="dark"]) .setupPreview,
+:global(html[data-theme="dark"]) .progressPanel,
+:global(html[data-theme="dark"]) .practiceCard,
+:global(html[data-theme="dark"]) .feedback,
+:global(html[data-theme="dark"]) .pagination,
+:global(html[data-theme="dark"]) .sessionLoader {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: 0 12px 30px var(--dark-shadow);
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .historyFilters,
+:global(html[data-theme="dark"]) .historyCardActions,
+:global(html[data-theme="dark"]) .sideOptions {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .historyCard:hover {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta-medium);
+  box-shadow: 0 14px 32px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .historyFilter {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .historyFilterActive {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .historyStartError,
+:global(html[data-theme="dark"]) .inlineError,
+:global(html[data-theme="dark"]) .submitError {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+  border-left-color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .historyStatus_completed {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .historyStatus_in_progress {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .historyStatus_abandoned {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  border-color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .directionLabel > .directionMark,
+:global(html[data-theme="dark"]) .historyDirection .directionMark {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyRed,
+:global(html[data-theme="dark"]) .historyAccuracyOrange {
+  --accuracy-tone: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyYellow,
+:global(html[data-theme="dark"]) .historyAccuracyPurple {
+  --accuracy-tone: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyGreen,
+:global(html[data-theme="dark"]) .historyAccuracyTurquoise {
+  --accuracy-tone: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracy:hover {
+  background: color-mix(in srgb, var(--accuracy-tone) 14%, transparent);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracy:focus-visible {
+  outline-color: var(--dark-cta);
+  box-shadow: 0 0 0 4px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyTooltip {
+  color: var(--dark-text);
+  background: var(--dark-background);
+  border: 1px solid var(--dark-border);
+  box-shadow: 0 12px 28px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyTooltip::before {
+  background: var(--dark-background);
+  border-top: 1px solid var(--dark-border);
+  border-left: 1px solid var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .historyAccuracyTooltip span {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .historyDetailsButton,
+:global(html[data-theme="dark"]) .historyRepeatButton,
+:global(html[data-theme="dark"]) .secondaryAction,
+:global(html[data-theme="dark"]) .paginationArrow,
+:global(html[data-theme="dark"]) .pageNumber {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .primaryAction,
+:global(html[data-theme="dark"]) .historyRepeatButtonAccent,
+:global(html[data-theme="dark"]) .submitButton,
+:global(html[data-theme="dark"]) .answerMeta button,
+:global(html[data-theme="dark"]) .continueButton {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .historySkeletons > span {
+  background: linear-gradient(
+    100deg,
+    var(--dark-surface) 20%,
+    var(--dark-surface-hover) 38%,
+    var(--dark-surface) 56%
+  );
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .historyEmptyVisual span {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .historyEmptyVisual span:last-child {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .settingsCard,
+:global(html[data-theme="dark"]) .setupPreview {
+  background: var(--dark-surface-raised);
+}
+
+:global(html[data-theme="dark"]) .settingGroup legend,
+:global(html[data-theme="dark"]) .setupPreview h2 {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .scopeGroup {
+  border-top-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .sideOptionThumb {
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .sideOption {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .sideOptionSelected,
+:global(html[data-theme="dark"]) .sideOptionSelected .directionLabel > .directionMark {
+  color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .sideOption:has(input:focus-visible) {
+  outline-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .scopeOption {
+  color: var(--dark-text-faint);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .scopeOptionSelected {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .scopeInput {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .scopeInput:hover:not(:disabled) {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .scopeInput:focus-visible {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+  box-shadow: 0 0 0 3px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .settingGroup:disabled .sideOptions,
+:global(html[data-theme="dark"]) .settingGroup:disabled .scopeOptions {
+  opacity: 0.55;
+}
+
+:global(html[data-theme="dark"]) .previewStage {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .previewAnswer {
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-cyan-medium);
+}
+
+:global(html[data-theme="dark"]) .previewFlow {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .previewFlow::before {
+  background: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .previewFlow .directionMark {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .previewInput {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan-medium);
+  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .previewInput i {
+  background: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .buttonSpinner {
+  border-color: rgb(44 44 44 / 24%);
+  border-top-color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .progressCopy strong {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .progressTrack {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .progressTrack > span {
+  background: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .scoreChips > span {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .scoreChips > .correctChip {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .scoreChips > .wrongChip {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .practiceCardCorrect {
+  border-color: var(--dark-cyan-medium);
+  box-shadow:
+    inset 4px 0 0 var(--dark-cyan),
+    0 12px 30px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .practiceCardWrong {
+  border-color: var(--dark-pink-medium);
+  box-shadow:
+    inset 4px 0 0 var(--dark-pink),
+    0 12px 30px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardNumber {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .languageFlow {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .languageFlow span:first-child {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .answerControls textarea {
+  color: var(--dark-text);
+  caret-color: var(--dark-cta);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .answerControls textarea::placeholder {
+  color: var(--dark-text-faint);
+}
+
+:global(html[data-theme="dark"]) .answerControls textarea:hover:not(:disabled) {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .answerControls textarea:focus {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+  box-shadow: 0 0 0 3px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .answerControls textarea:disabled {
+  color: var(--dark-text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:global(html[data-theme="dark"]) .feedbackCorrect .feedbackIcon {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .feedbackWrong .feedbackIcon {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .feedbackCorrect .feedbackCopy strong {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .feedbackWrong .feedbackCopy strong {
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .paginationArrow,
+:global(html[data-theme="dark"]) .pageNumber {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .pageNumberCurrent {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .pageNumberCorrect,
+:global(html[data-theme="dark"]) .pageNumberCorrect.pageNumberCurrent {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .pageNumberWrong,
+:global(html[data-theme="dark"]) .pageNumberWrong.pageNumberCurrent {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  border-color: var(--dark-pink);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .historyFilter:not(.historyFilterActive):hover:not(:disabled),
+:global(html[data-theme="dark"]) .historyDetailsButton:hover:not(:disabled),
+:global(html[data-theme="dark"])
+  .historyRepeatButton:not(.historyRepeatButtonAccent):hover:not(:disabled),
+:global(html[data-theme="dark"]) .secondaryAction:hover:not(:disabled),
+:global(html[data-theme="dark"]) .paginationArrow:hover:not(:disabled),
+:global(html[data-theme="dark"])
+  .pageNumber:not(.pageNumberCorrect):not(.pageNumberWrong):not(.pageNumberCurrent):hover:not(
+    :disabled
+  ) {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta-medium);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+  filter: none;
+}
+
+:global(html[data-theme="dark"]) .primaryAction:hover:not(:disabled),
+:global(html[data-theme="dark"]) .historyFilterActive:hover:not(:disabled),
+:global(html[data-theme="dark"]) .historyRepeatButtonAccent:hover:not(:disabled),
+:global(html[data-theme="dark"]) .submitButton:hover:not(:disabled),
+:global(html[data-theme="dark"]) .answerMeta button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .continueButton:hover:not(:disabled) {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  border-color: var(--dark-cta);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+  filter: none;
+}
+
+:global(html[data-theme="dark"]) .pageNumberCorrect:hover:not(:disabled) {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-cyan) 86%, var(--dark-text));
+  border-color: var(--dark-cyan);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+  filter: none;
+}
+
+:global(html[data-theme="dark"]) .pageNumberWrong:hover:not(:disabled) {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-pink) 86%, var(--dark-text));
+  border-color: var(--dark-pink);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+  filter: none;
+}
+
+:global(html[data-theme="dark"]) .pageNumberCorrect.pageNumberCurrent,
+:global(html[data-theme="dark"]) .pageNumberWrong.pageNumberCurrent {
+  box-shadow: 0 0 0 3px var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .historyFilter:active:not(:disabled),
+:global(html[data-theme="dark"]) .historyDetailsButton:active:not(:disabled),
+:global(html[data-theme="dark"]) .historyRepeatButton:active:not(:disabled),
+:global(html[data-theme="dark"]) .primaryAction:active:not(:disabled),
+:global(html[data-theme="dark"]) .secondaryAction:active:not(:disabled),
+:global(html[data-theme="dark"]) .submitButton:active:not(:disabled),
+:global(html[data-theme="dark"]) .answerMeta button:active:not(:disabled),
+:global(html[data-theme="dark"]) .continueButton:active:not(:disabled),
+:global(html[data-theme="dark"]) .paginationArrow:active:not(:disabled),
+:global(html[data-theme="dark"]) .pageNumber:active:not(:disabled) {
+  box-shadow: none;
+  filter: none;
+}
+
+:global(html[data-theme="dark"]) .primaryAction:disabled,
+:global(html[data-theme="dark"]) .historyRepeatButton:disabled,
+:global(html[data-theme="dark"]) .submitButton:disabled,
+:global(html[data-theme="dark"]) .answerMeta button:disabled,
+:global(html[data-theme="dark"]) .paginationArrow:disabled,
+:global(html[data-theme="dark"]) .pageNumber:disabled {
+  box-shadow: none;
+  opacity: 0.45;
+}
+
+:global(html[data-theme="dark"]) .loaderCore {
+  border-color: var(--dark-cta-soft);
+  border-top-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .errorPanel {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .completionPanel {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-cyan-medium);
+}
+
+:global(html[data-theme="dark"]) .completionHalo {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .completionStats > div {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div + div {
+  border-left-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(1) {
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-cyan-medium);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(1) dd {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(2) {
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(2) dd {
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(3) {
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .completionStats > div:nth-child(3) dd {
+  color: var(--dark-cta);
 }

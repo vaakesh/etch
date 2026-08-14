@@ -144,11 +144,12 @@ interface DeckIllustrationProps {
   variant: number;
 }
 
-const ink = "#18313a";
-const teal = "#72aaa5";
-const paleTeal = "#dbe9e5";
-const coral = "#ee8b64";
-const cream = "#f4eadb";
+const ink = "var(--illustration-ink, #18313a)";
+const teal = "var(--illustration-teal, #72aaa5)";
+const paleTeal = "var(--illustration-pale-teal, #dbe9e5)";
+const coral = "var(--illustration-coral, #ee8b64)";
+const cream = "var(--illustration-cream, #f4eadb)";
+const paper = "var(--illustration-paper, #fffdf8)";
 
 export function DeckIllustration({ className, variant }: DeckIllustrationProps) {
   const commonProps = {
@@ -166,7 +167,7 @@ export function DeckIllustration({ className, variant }: DeckIllustrationProps) 
         <>
           <path
             d="M22 79c20-10 35-8 50 3 15-11 30-13 50-3v34c-18-8-34-7-50 4-16-11-32-12-50-4Z"
-            fill="#fffdf8"
+            fill={paper}
             {...commonProps}
           />
           <path
@@ -184,7 +185,7 @@ export function DeckIllustration({ className, variant }: DeckIllustrationProps) 
     case 1:
       content = (
         <>
-          <rect x="35" y="50" width="72" height="64" rx="8" fill="#fffdf8" {...commonProps} />
+          <rect x="35" y="50" width="72" height="64" rx="8" fill={paper} {...commonProps} />
           <path
             d="M51 50v-9c0-6 5-10 11-10h18c6 0 11 4 11 10v9M48 55v54M94 55v54"
             {...commonProps}
@@ -208,7 +209,7 @@ export function DeckIllustration({ className, variant }: DeckIllustrationProps) 
         <>
           <path
             d="M74 112C50 96 35 79 35 61c0-14 9-24 22-24 9 0 15 5 19 13 4-8 10-13 19-13 13 0 22 10 22 24 0 18-16 35-43 51Z"
-            fill="#f58c69"
+            fill={coral}
             {...commonProps}
           />
           <circle cx="61" cy="67" r="2.2" fill={ink} />
@@ -230,7 +231,7 @@ export function DeckIllustration({ className, variant }: DeckIllustrationProps) 
       content = (
         <>
           <path d="M28 99h83l10 15H18Z" fill={paleTeal} {...commonProps} />
-          <rect x="36" y="49" width="69" height="52" rx="4" fill="#fffdf8" {...commonProps} />
+          <rect x="36" y="49" width="69" height="52" rx="4" fill={paper} {...commonProps} />
           <rect
             x="45"
             y="58"
@@ -258,14 +259,14 @@ export function DeckIllustration({ className, variant }: DeckIllustrationProps) 
     case 4:
       content = (
         <>
-          <path d="m61 23 13 8-25 43-13-8z" fill="#fffdf8" {...commonProps} />
+          <path d="m61 23 13 8-25 43-13-8z" fill={paper} {...commonProps} />
           <path d="m53 37 13 8M45 63l13 8M55 75c18 8 28 22 27 42M34 117h77" {...commonProps} />
           <path d="M74 77c20 5 31 18 31 40" {...commonProps} />
           <path d="M70 96c-14 0-22 8-22 21" {...commonProps} />
           <path d="M43 117h68l-5 8H48Z" fill={paleTeal} {...commonProps} />
           <path
             d="M115 59h14v11l7 37c1 6-3 10-9 10h-10c-6 0-10-4-9-10l7-37Z"
-            fill="#fffdf8"
+            fill={paper}
             {...commonProps}
           />
           <path d="M112 99h20" stroke={teal} strokeWidth="4" />

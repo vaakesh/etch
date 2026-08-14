@@ -410,75 +410,103 @@ a.navigationItem:not(.navigationItemActive):hover {
 }
 
 :global(html[data-theme="dark"]) .shell {
-  --canvas: #171426;
-  --surface: #211d31;
-  --surface-muted: rgb(216 205 250 / 8%);
-  --ink: #f1ecff;
-  --muted: #bbb2ce;
-  --line: rgb(216 205 250 / 15%);
-  --teal: #a48ce9;
-  --teal-dark: #d8cdfa;
-  --teal-soft: rgb(164 140 233 / 18%);
+  --canvas: var(--dark-background);
+  --surface: var(--dark-surface);
+  --surface-muted: var(--dark-surface-raised);
+  --ink: var(--dark-text);
+  --muted: var(--dark-text-muted);
+  --line: var(--dark-border);
+  --teal: var(--dark-cyan);
+  --teal-dark: var(--dark-cyan);
+  --teal-soft: var(--dark-cyan-soft);
+  color: var(--dark-text);
   color-scheme: dark;
+  background: var(--dark-background);
 }
 
 :global(html[data-theme="dark"]) .shell .sidebar {
-  color: #f1ecff;
-  background: linear-gradient(165deg, #29233e 0%, #211d31 52%, #173136 100%);
-  border-right-color: rgb(216 205 250 / 14%);
+  color: var(--dark-text);
+  background:
+    radial-gradient(circle at 12% 84%, var(--dark-cyan-soft), transparent 15rem),
+    var(--dark-surface);
+  border-right-color: var(--dark-border);
   box-shadow:
-    10px 0 32px rgb(2 1 8 / 28%),
-    inset -1px 0 0 rgb(216 205 250 / 7%);
+    10px 0 32px var(--dark-shadow),
+    inset -1px 0 0 rgb(228 228 228 / 4%);
 }
 
 :global(html[data-theme="dark"]) .shell .brandName,
 :global(html[data-theme="dark"]) .shell .navigationItem {
-  color: #f1ecff;
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .shell .brandName {
+  color: var(--dark-cyan);
 }
 
 :global(html[data-theme="dark"]) .shell .navigationThumb,
 :global(html[data-theme="dark"]) .shell .navigationItemActive {
-  color: #fff;
-  background: linear-gradient(135deg, #6d57aa, #8e73d1 72%, #6bb9b4);
-  border-color: rgb(255 255 255 / 16%);
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: transparent;
   box-shadow:
-    0 10px 24px rgb(2 1 8 / 36%),
-    inset 0 1px 0 rgb(255 255 255 / 14%);
+    0 10px 24px rgb(0 0 0 / 24%),
+    inset 0 1px 0 rgb(228 228 228 / 16%);
 }
 
 :global(html[data-theme="dark"]) .shell a.navigationItem:not(.navigationItemActive):hover {
-  color: #fff;
-  background: rgb(216 205 250 / 9%);
-  border-color: rgb(216 205 250 / 12%);
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
 }
 
 :global(html[data-theme="dark"]) .shell .sidebarToggle {
-  color: #f1ecff;
-  background: linear-gradient(135deg, #44385f, #245258);
-  border-color: rgb(216 205 250 / 18%);
+  color: var(--dark-cyan);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
   box-shadow:
-    0 9px 22px rgb(2 1 8 / 36%),
-    inset 0 1px 0 rgb(255 255 255 / 10%);
+    0 9px 22px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 6%);
 }
 
 :global(html[data-theme="dark"]) .shell .sidebarToggle:hover {
-  background: linear-gradient(135deg, #6d57aa, #8e73d1);
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .shell .sidebarToggle:focus-visible,
+:global(html[data-theme="dark"]) .shell .navigationItem:focus-visible,
+:global(html[data-theme="dark"]) .shell .brand:focus-visible {
+  outline-color: var(--dark-cyan);
 }
 
 :global(html[data-theme="dark"]) .shell .artBook {
-  background: #7b4d72;
-  border-color: #d8cdfa;
-  box-shadow: inset -9px 0 #392c43;
+  background: var(--dark-pink);
+  border-color: var(--dark-text);
+  box-shadow: inset -9px 0 var(--dark-pink-medium);
 }
 
 :global(html[data-theme="dark"]) .shell .artBookSecondary {
-  background: #367c78;
-  border-color: #d8cdfa;
+  background: var(--dark-cyan);
+  border-color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .shell .sidebarIllustration {
+  --illustration-ink: var(--dark-cyan);
+  --illustration-teal: var(--dark-cta);
+  --illustration-pale-teal: var(--dark-cyan-soft);
+  --illustration-coral: var(--dark-pink);
+  --illustration-cream: var(--dark-pink-medium);
+  --illustration-paper: var(--dark-surface-raised);
 }
 
 :global(html[data-theme="dark"]) .shell .content,
 :global(html[data-theme="dark"]) .shellLibrary .content {
-  background: linear-gradient(105deg, #171426 0%, #183137 48%, #322033 100%);
+  background:
+    radial-gradient(circle at 92% 4%, rgb(168 218 220 / 8%), transparent 30rem),
+    radial-gradient(circle at 6% 94%, rgb(255 193 204 / 6%), transparent 28rem),
+    var(--dark-background);
 }
 
 .shellCollapsed .sidebar {

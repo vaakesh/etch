@@ -5926,3 +5926,964 @@ a.navigationItem:hover {
     transition-duration: 1ms !important;
   }
 }
+
+/* Dark theme. Keep this block last: the library stylesheet contains legacy
+   shared card/dialog rules and a later page redesign that both need one
+   authoritative dark palette. */
+
+:global(html[data-theme="dark"]) .page {
+  --canvas: var(--dark-background);
+  --surface: var(--dark-surface);
+  --surface-muted: var(--dark-surface-raised);
+  --ink: var(--dark-text);
+  --muted: var(--dark-text-muted);
+  --line: var(--dark-border);
+  --teal: var(--dark-cyan);
+  --teal-dark: var(--dark-cyan);
+  --coral: var(--dark-pink);
+  --library-gradient-lavender: var(--dark-cta);
+  --library-gradient-aqua: var(--dark-cyan);
+  --library-gradient-pink: var(--dark-pink);
+  --library-brown: var(--dark-cta);
+  --library-brown-deep: var(--dark-cta);
+  --library-brown-soft: var(--dark-cta-soft);
+  --library-blue: var(--dark-cyan);
+  --library-blue-soft: var(--dark-cyan-soft);
+  --library-blue-pale: var(--dark-surface-raised);
+  --library-canvas: var(--dark-background);
+  --library-ink: var(--dark-text);
+  --library-ink-deep: var(--dark-text);
+  --library-muted: var(--dark-text-muted);
+  --library-line: var(--dark-border);
+  --library-line-strong: rgb(228 228 228 / 18%);
+  --library-success: var(--dark-cyan);
+  --library-error: var(--dark-pink);
+  color: var(--dark-text);
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 88% -8%, var(--dark-cta-soft), transparent 32rem),
+    radial-gradient(circle at 2% 102%, var(--dark-cyan-soft), transparent 28rem),
+    var(--dark-background);
+  scrollbar-color: var(--dark-text-faint) transparent;
+}
+
+:global(html[data-theme="dark"]) .page button:focus-visible,
+:global(html[data-theme="dark"]) .page input:focus-visible,
+:global(html[data-theme="dark"]) .page textarea:focus-visible,
+:global(html[data-theme="dark"]) .page a:focus-visible,
+:global(html[data-theme="dark"]) .page [role="meter"]:focus-visible {
+  outline-color: rgb(168 218 220 / 52%);
+}
+
+:global(html[data-theme="dark"]) .page .libraryHeader h1::after {
+  background: var(--dark-pink);
+  box-shadow: 0 4px 12px var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .page .newDeckButton,
+:global(html[data-theme="dark"]) .page .startButton,
+:global(html[data-theme="dark"]) .page .loadMoreButton,
+:global(html[data-theme="dark"]) .page .stateMessage button,
+:global(html[data-theme="dark"]) .page .cardEditorSave,
+:global(html[data-theme="dark"]) .page .cardDeckState button {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 10px 24px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .newDeckButton:not(:disabled):hover,
+:global(html[data-theme="dark"]) .page .newDeckButton:not(:disabled):focus-visible,
+:global(html[data-theme="dark"]) .page .startButton:hover,
+:global(html[data-theme="dark"]) .page .startButton:focus-visible,
+:global(html[data-theme="dark"]) .page .loadMoreButton:not(:disabled):hover,
+:global(html[data-theme="dark"]) .page .stateMessage button:hover,
+:global(html[data-theme="dark"]) .page .cardEditorSave:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardDeckState button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardDeckState button:focus-visible {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  box-shadow: 0 13px 28px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .newDeckButton:disabled,
+:global(html[data-theme="dark"]) .page .startButton:disabled,
+:global(html[data-theme="dark"]) .page .startButton:disabled:hover,
+:global(html[data-theme="dark"]) .page .loadMoreButton:disabled,
+:global(html[data-theme="dark"]) .page .cardEditorSave:disabled {
+  color: var(--dark-text-faint);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-border);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .page .newDeckButton svg,
+:global(html[data-theme="dark"]) .page .startButton svg {
+  color: var(--dark-background);
+  background: rgb(44 44 44 / 12%);
+}
+
+:global(html[data-theme="dark"]) .page .librarySwitch {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 8px 22px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .switchThumb {
+  background: var(--dark-cta);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .switchTab {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .switchTab:not([aria-selected="true"]):hover {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+}
+
+:global(html[data-theme="dark"]) .page .switchTab[aria-selected="true"] {
+  color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .page .deckSearchField input {
+  color: var(--dark-text);
+  caret-color: var(--dark-cyan);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 7px 18px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .deckSearchField input::placeholder {
+  color: var(--dark-text-faint);
+}
+
+:global(html[data-theme="dark"]) .page .deckSearchField input:hover {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .deckSearchField input:focus {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 9px 22px var(--dark-shadow),
+    0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .page .favouritesFilter,
+:global(html[data-theme="dark"]) .page .favouritesFilterActive {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: 0 7px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .favouritesFilter:hover {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+  box-shadow: 0 9px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .favouritesFilterActive,
+:global(html[data-theme="dark"]) .page .favouritesFilterActive:hover {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .summary svg,
+:global(html[data-theme="dark"]) .page .cardsSummary svg {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .cardsPanel:focus-visible {
+  outline-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .deckFilterLoading {
+  color: var(--dark-text-muted);
+  background: linear-gradient(105deg, var(--dark-cta-soft), var(--dark-cyan-soft));
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .deckFilterSpinner {
+  border-color: var(--dark-cta-soft);
+  border-top-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .page .deckCard,
+:global(html[data-theme="dark"]) .page .skeleton {
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .deckCard {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  box-shadow:
+    0 13px 32px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+@media (hover: hover) {
+  :global(html[data-theme="dark"]) .page .deckCard:hover {
+    background: var(--dark-surface-raised);
+    border-color: var(--dark-border-accent);
+    box-shadow:
+      0 18px 42px var(--dark-shadow),
+      0 0 0 3px var(--dark-cyan-soft);
+  }
+}
+
+:global(html[data-theme="dark"]) .page .favourite,
+:global(html[data-theme="dark"]) .page .favouriteActive {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .favouriteActive,
+:global(html[data-theme="dark"]) .page .favourite:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .favouriteActive:hover:not(:disabled) {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .page .favouriteError,
+:global(html[data-theme="dark"]) .page .deckDeleteError,
+:global(html[data-theme="dark"]) .page .cardMutationError,
+:global(html[data-theme="dark"]) .page .loadMoreError,
+:global(html[data-theme="dark"]) .page .cardEditorError {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .page .accuracygreen,
+:global(html[data-theme="dark"]) .page .accuracyturquoise {
+  --accuracy-tone: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .accuracyyellow,
+:global(html[data-theme="dark"]) .page .accuracypurple {
+  --accuracy-tone: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .page .accuracyorange,
+:global(html[data-theme="dark"]) .page .accuracyred {
+  --accuracy-tone: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .page .accuracyTooltip,
+:global(html[data-theme="dark"]) .page .accuracyTooltip::before {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+}
+
+:global(html[data-theme="dark"]) .page .accuracyTooltip {
+  border: 1px solid var(--dark-border);
+  box-shadow: 0 12px 28px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .accuracyTooltip span {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .previewList li,
+:global(html[data-theme="dark"]) .page .previewList li + li {
+  color: var(--dark-text);
+  background: linear-gradient(135deg, var(--dark-cyan-soft), rgb(168 218 220 / 6%));
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 5px 14px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .previewList li:has(.cardTextOverflow:hover),
+:global(html[data-theme="dark"]) .page .previewList li:has(.cardTextOverflow:focus-within) {
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 12px 28px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 5%);
+}
+
+@media (hover: hover) {
+  :global(html[data-theme="dark"]) .page .previewList li:not(.previewPlaceholder):hover {
+    border-color: var(--dark-cyan);
+    box-shadow:
+      0 12px 28px var(--dark-shadow),
+      inset 0 1px 0 rgb(228 228 228 / 5%);
+  }
+}
+
+:global(html[data-theme="dark"]) .page .previewList .previewPlaceholder,
+:global(html[data-theme="dark"]) .page .previewList .previewPlaceholderEnd {
+  color: var(--dark-text-faint);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .previewContinuation,
+:global(html[data-theme="dark"]) .page .previewContinuationEnd {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .emptyPreview {
+  color: var(--dark-text-muted);
+  background: linear-gradient(120deg, var(--dark-cyan-soft), var(--dark-pink-soft));
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .cardAssignedToast {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 16px 36px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 5%);
+}
+
+:global(html[data-theme="dark"]) .page .cardAssignedToastIcon {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .editButton,
+:global(html[data-theme="dark"]) .page .deleteButton {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .page .editButton:hover:not(:disabled) {
+  color: var(--dark-cta);
+  background: var(--dark-cta-medium);
+  border-color: var(--dark-cta);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .deleteButton:hover:not(:disabled) {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .editButton:disabled,
+:global(html[data-theme="dark"]) .page .editButton:disabled:hover,
+:global(html[data-theme="dark"]) .page .deleteButton:disabled,
+:global(html[data-theme="dark"]) .page .deleteButton:disabled:hover {
+  color: var(--dark-text-faint);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardRow,
+:global(html[data-theme="dark"]) .cardSkeleton,
+:global(html[data-theme="dark"]) .page .cardRow,
+:global(html[data-theme="dark"]) .page .cardSkeleton {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: 0 10px 26px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardRow:has(.cardActionsMenu:popover-open),
+:global(html[data-theme="dark"]) .page .cardRow:has(.cardActionsMenu:popover-open) {
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 3px var(--dark-cyan-soft),
+    0 12px 28px var(--dark-shadow);
+}
+
+@media (hover: hover) {
+  :global(html[data-theme="dark"]) .cardRow:hover,
+  :global(html[data-theme="dark"]) .page .cardRow:hover {
+    background: var(--dark-surface-raised);
+    border-color: var(--dark-border-accent);
+    box-shadow: 0 14px 32px var(--dark-shadow);
+  }
+}
+
+:global(html[data-theme="dark"]) .page .cardFaceSource {
+  background: var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .page .cardFaceTarget {
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .languageBadge,
+:global(html[data-theme="dark"]) .page .languageBadge {
+  color: var(--dark-text);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .page .cardFaceSource .languageBadge {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+  box-shadow: 0 5px 12px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .cardFaceTarget .languageBadge {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  border-color: var(--dark-pink);
+  box-shadow: 0 5px 12px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardWord,
+:global(html[data-theme="dark"]) .cardTranslation,
+:global(html[data-theme="dark"]) .page .cardWord,
+:global(html[data-theme="dark"]) .page .cardTranslation {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .page .cardTextTooltip {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 16px 34px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .cardTextTooltip::before {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .cardTextTooltipLabel {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .cardActionsTrigger,
+:global(html[data-theme="dark"]) .page .cardActionsTrigger {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardActionsTrigger:hover,
+:global(html[data-theme="dark"]) .cardActionsTrigger:focus-visible,
+:global(html[data-theme="dark"]) .cardActionsTrigger:has(+ .cardActionsMenu:popover-open),
+:global(html[data-theme="dark"]) .page .cardActionsTrigger:hover,
+:global(html[data-theme="dark"]) .page .cardActionsTrigger:focus-visible,
+:global(html[data-theme="dark"]) .page .cardActionsTrigger:has(+ .cardActionsMenu:popover-open) {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardActionsMenu,
+:global(html[data-theme="dark"]) .page .cardActionsMenu {
+  color: var(--dark-text);
+  color-scheme: dark;
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 20px 48px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):hover,
+:global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):focus-visible,
+:global(html[data-theme="dark"]) .page .cardActionsMenu button:not(:disabled):hover,
+:global(html[data-theme="dark"]) .page .cardActionsMenu button:not(:disabled):focus-visible {
+  color: var(--dark-cyan);
+  background: var(--dark-surface-hover);
+}
+
+:global(html[data-theme="dark"]) .cardActionsDivider,
+:global(html[data-theme="dark"]) .page .cardActionsDivider {
+  background: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardActionsMenu .cardDeleteAction,
+:global(html[data-theme="dark"]) .cardActionsMenu .cardDeleteAction svg,
+:global(html[data-theme="dark"]) .page .cardActionsMenu .cardDeleteAction,
+:global(html[data-theme="dark"]) .page .cardActionsMenu .cardDeleteAction svg {
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .cardActionsMenu .cardEditAction svg,
+:global(html[data-theme="dark"]) .cardActionsMenu .cardAddAction svg,
+:global(html[data-theme="dark"]) .page .cardActionsMenu .cardEditAction svg,
+:global(html[data-theme="dark"]) .page .cardActionsMenu .cardAddAction svg {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .cardMutationError,
+:global(html[data-theme="dark"]) .page .cardMutationError {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .skeleton,
+:global(html[data-theme="dark"]) .cardSkeleton,
+:global(html[data-theme="dark"]) .page .skeleton,
+:global(html[data-theme="dark"]) .page .cardSkeleton,
+:global(html[data-theme="dark"]) .page .cardDeckSkeletons > span {
+  background: linear-gradient(
+    100deg,
+    var(--dark-surface) 20%,
+    var(--dark-surface-hover) 49%,
+    var(--dark-surface) 78%
+  );
+  background-size: 230% 100%;
+  border-color: var(--dark-border);
+  box-shadow: 0 10px 26px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .stateMessage {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow: 0 13px 32px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .stateMessage p {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteDialog,
+:global(html[data-theme="dark"]) .page .cardEditorDialog {
+  color: var(--dark-text);
+  color-scheme: dark;
+  box-shadow: 0 28px 72px rgb(0 0 0 / 46%);
+  scrollbar-color: var(--dark-text-faint) transparent;
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteDialog::backdrop,
+:global(html[data-theme="dark"]) .page .cardEditorDialog::backdrop {
+  background: rgb(44 44 44 / 80%);
+  backdrop-filter: blur(8px) saturate(0.72);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteShell {
+  background: var(--dark-surface);
+  border-color: var(--dark-pink-medium);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 5%);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteHeader {
+  background: linear-gradient(125deg, var(--dark-pink-soft), var(--dark-cta-soft));
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteMark {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  border-color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteEyebrow,
+:global(html[data-theme="dark"]) .page .deckDeleteBody .deckDeleteWarning {
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteBody p {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteName {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteActions {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteCancel {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: rgb(228 228 228 / 18%);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteCancel:hover,
+:global(html[data-theme="dark"]) .page .deckDeleteCancel:focus-visible {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteConfirm {
+  color: var(--dark-background);
+  background: var(--dark-pink);
+  border-color: var(--dark-pink);
+  box-shadow: 0 8px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .deckDeleteConfirm:hover,
+:global(html[data-theme="dark"]) .page .deckDeleteConfirm:focus-visible {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-pink) 86%, var(--dark-text));
+  border-color: color-mix(in srgb, var(--dark-pink) 86%, var(--dark-text));
+  box-shadow: 0 10px 22px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorDialog,
+:global(html[data-theme="dark"]) .page .cardEditorDialog {
+  color: var(--dark-text);
+  color-scheme: dark;
+  background: transparent;
+  border-color: var(--dark-border);
+  box-shadow: 0 28px 72px rgb(0 0 0 / 46%);
+}
+
+:global(html[data-theme="dark"]) .cardEditorDialog::backdrop,
+:global(html[data-theme="dark"]) .page .cardEditorDialog::backdrop {
+  background: rgb(44 44 44 / 80%);
+}
+
+:global(html[data-theme="dark"]) .cardEditorShell,
+:global(html[data-theme="dark"]) .page .cardEditorShell {
+  background: var(--dark-surface);
+}
+
+:global(html[data-theme="dark"]) .cardEditorGlow,
+:global(html[data-theme="dark"]) .page .cardEditorGlow {
+  background: radial-gradient(circle, var(--dark-cyan-medium), transparent 68%);
+}
+
+:global(html[data-theme="dark"]) .cardEditorHeader,
+:global(html[data-theme="dark"]) .page .cardEditorHeader {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardEditorMark,
+:global(html[data-theme="dark"]) .page .cardEditorMark {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorEyebrow,
+:global(html[data-theme="dark"]) .page .cardEditorEyebrow {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .cardEditorHeader h2,
+:global(html[data-theme="dark"]) .page .cardEditorHeader h2 {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .cardEditorHeader p,
+:global(html[data-theme="dark"]) .page .cardEditorHeader p,
+:global(html[data-theme="dark"]) .cardEditorFooter > p,
+:global(html[data-theme="dark"]) .page .cardEditorFooter > p,
+:global(html[data-theme="dark"]) .deckCreatorOptional,
+:global(html[data-theme="dark"]) .page .deckCreatorOptional {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .cardEditorClose,
+:global(html[data-theme="dark"]) .page .cardEditorClose {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardEditorClose:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardEditorClose:hover:not(:disabled) {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .cardEditorForm,
+:global(html[data-theme="dark"]) .page .cardEditorForm {
+  background: var(--dark-surface);
+}
+
+:global(html[data-theme="dark"]) .cardEditorLabel,
+:global(html[data-theme="dark"]) .page .cardEditorLabel,
+:global(html[data-theme="dark"]) .deckCreatorPrivacy legend,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacy legend {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .cardEditorLabel strong,
+:global(html[data-theme="dark"]) .page .cardEditorLabel strong,
+:global(html[data-theme="dark"]) .deckCreatorPrivacy legend strong,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacy legend strong {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .cardEditorLabel code,
+:global(html[data-theme="dark"]) .page .cardEditorLabel code,
+:global(html[data-theme="dark"]) .deckCreatorPrivacy legend code,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacy legend code,
+:global(html[data-theme="dark"]) .cardEditorField > small,
+:global(html[data-theme="dark"]) .page .cardEditorField > small {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .cardEditorField textarea,
+:global(html[data-theme="dark"]) .cardEditorField input,
+:global(html[data-theme="dark"]) .page .cardEditorField textarea,
+:global(html[data-theme="dark"]) .page .cardEditorField input {
+  color: var(--dark-text);
+  caret-color: var(--dark-cyan);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 16%);
+}
+
+:global(html[data-theme="dark"]) .cardEditorField textarea:hover,
+:global(html[data-theme="dark"]) .cardEditorField input:hover,
+:global(html[data-theme="dark"]) .page .cardEditorField textarea:hover,
+:global(html[data-theme="dark"]) .page .cardEditorField input:hover {
+  background: var(--dark-surface-hover);
+  border-color: rgb(228 228 228 / 18%);
+}
+
+:global(html[data-theme="dark"]) .cardEditorField textarea:focus,
+:global(html[data-theme="dark"]) .cardEditorField input:focus,
+:global(html[data-theme="dark"]) .page .cardEditorField textarea:focus,
+:global(html[data-theme="dark"]) .page .cardEditorField input:focus {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 3px var(--dark-cyan-soft),
+    inset 0 1px 2px rgb(0 0 0 / 16%);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption > span,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption > span {
+  color: var(--dark-text-muted);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption strong,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption strong {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:hover > span,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:hover > span {
+  background: var(--dark-surface-hover);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:focus-visible) > span,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:focus-visible) > span {
+  border-color: var(--dark-cyan);
+  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:checked) > span {
+  color: var(--dark-text);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta);
+  box-shadow: inset 0 0 0 1px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span small,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:checked) > span small {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption > span::before,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption > span::before {
+  border-color: rgb(228 228 228 / 24%);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span::before,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:checked) > span::before {
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 0 0 2px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span::after,
+:global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:checked) > span::after {
+  background: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .cardEditorCancel,
+:global(html[data-theme="dark"]) .page .cardEditorCancel {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardEditorCancel:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardEditorCancel:hover:not(:disabled) {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .cardEditorSave,
+:global(html[data-theme="dark"]) .page .cardEditorSave {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 8px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorSave:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardEditorSave:hover:not(:disabled) {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  box-shadow: 0 10px 22px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorSpinner,
+:global(html[data-theme="dark"]) .page .cardEditorSpinner {
+  border-color: rgb(44 44 44 / 30%);
+  border-top-color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .cardDeckCardName,
+:global(html[data-theme="dark"]) .page .cardDeckCardName,
+:global(html[data-theme="dark"]) .cardDeckTitle,
+:global(html[data-theme="dark"]) .page .cardDeckTitle {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .cardDeckOptions,
+:global(html[data-theme="dark"]) .page .cardDeckOptions {
+  scrollbar-color: var(--dark-text-faint) transparent;
+}
+
+:global(html[data-theme="dark"]) .cardDeckOption,
+:global(html[data-theme="dark"]) .page .cardDeckOption {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 3%);
+}
+
+:global(html[data-theme="dark"]) .cardDeckCheck,
+:global(html[data-theme="dark"]) .page .cardDeckCheck {
+  color: transparent;
+  background: var(--dark-background);
+  border-color: rgb(228 228 228 / 24%);
+}
+
+:global(html[data-theme="dark"]) .cardDeckOption:hover,
+:global(html[data-theme="dark"]) .page .cardDeckOption:hover {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border-accent);
+  box-shadow: 0 7px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardDeckOption:has(input:focus-visible),
+:global(html[data-theme="dark"]) .page .cardDeckOption:has(input:focus-visible) {
+  color: var(--dark-text);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 2px var(--dark-cyan-soft),
+    0 7px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardDeckOption:has(input:checked),
+:global(html[data-theme="dark"]) .page .cardDeckOption:has(input:checked) {
+  color: var(--dark-text);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .cardDeckOption input:checked + .cardDeckCheck,
+:global(html[data-theme="dark"]) .page .cardDeckOption input:checked + .cardDeckCheck {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 0 0 3px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .cardDeckDialog .cardDeckOption[data-assignment-state="completed"],
+:global(html[data-theme="dark"])
+  .page
+  .cardDeckDialog
+  .cardDeckOption[data-assignment-state="completed"] {
+  color: var(--dark-text);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-cyan);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .cardDeckDialog .cardDeckOption[data-assignment-state="failed"],
+:global(html[data-theme="dark"])
+  .page
+  .cardDeckDialog
+  .cardDeckOption[data-assignment-state="failed"] {
+  color: var(--dark-text);
+  background: var(--dark-pink-soft);
+  border-color: var(--dark-pink);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .cardDeckCount,
+:global(html[data-theme="dark"]) .page .cardDeckCount {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .cardDeckRetryLabel,
+:global(html[data-theme="dark"]) .page .cardDeckRetryLabel {
+  color: var(--dark-pink);
+  background: var(--dark-pink-soft);
+}
+
+:global(html[data-theme="dark"]) .cardDeckState,
+:global(html[data-theme="dark"]) .page .cardDeckState {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardDeckState strong,
+:global(html[data-theme="dark"]) .page .cardDeckState strong {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .cardDeckState p,
+:global(html[data-theme="dark"]) .page .cardDeckState p {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .cardDeckState button,
+:global(html[data-theme="dark"]) .page .cardDeckState button {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .cardDeckState button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .cardDeckState button:focus-visible,
+:global(html[data-theme="dark"]) .page .cardDeckState button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .page .cardDeckState button:focus-visible {
+  color: var(--dark-background);
+  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+}

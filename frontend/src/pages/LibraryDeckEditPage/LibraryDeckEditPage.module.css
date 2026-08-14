@@ -1589,3 +1589,414 @@
     animation: none;
   }
 }
+
+/* Dark editor palette. Keep this after the redesign and responsive rules because
+   the editor root also carries LibraryPage's shared theme class. */
+
+:global(html[data-theme="dark"]) .page {
+  --canvas: var(--dark-background);
+  --surface: var(--dark-surface);
+  --surface-muted: var(--dark-surface-raised);
+  --ink: var(--dark-text);
+  --muted: var(--dark-text-muted);
+  --line: var(--dark-border);
+  --teal: var(--dark-cyan);
+  --teal-dark: var(--dark-cyan);
+  --coral: var(--dark-pink);
+  --editor-gradient-lavender: var(--dark-cta);
+  --editor-gradient-aqua: var(--dark-cyan);
+  --editor-gradient-pink: var(--dark-pink);
+  --editor-purple: var(--dark-cta);
+  --editor-purple-deep: var(--dark-cta);
+  --editor-purple-soft: var(--dark-cta-soft);
+  --editor-aqua-soft: var(--dark-cyan-soft);
+  --editor-ink: var(--dark-text);
+  --editor-ink-deep: var(--dark-text);
+  --editor-muted: var(--dark-text-muted);
+  --editor-line: var(--dark-border);
+  --editor-line-strong: var(--dark-border-accent);
+  --editor-error: var(--dark-pink);
+  color: var(--dark-text);
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 92% 4%, var(--dark-cyan-soft), transparent 30rem),
+    radial-gradient(circle at 4% 72%, var(--dark-pink-soft), transparent 26rem),
+    var(--dark-background);
+  scrollbar-color: var(--dark-cta-medium) transparent;
+}
+
+:global(html[data-theme="dark"]) .page button:focus-visible,
+:global(html[data-theme="dark"]) .page a:focus-visible,
+:global(html[data-theme="dark"]) .page input:focus-visible,
+:global(html[data-theme="dark"]) .page textarea:focus-visible {
+  outline-color: var(--dark-cyan-medium);
+}
+
+:global(html[data-theme="dark"]) .page .backLink {
+  color: var(--dark-cyan);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 10px 24px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .backLink:hover,
+:global(html[data-theme="dark"]) .page .backLink:focus-visible {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+  box-shadow: 0 13px 28px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .eyebrow,
+:global(html[data-theme="dark"]) .page .formEyebrow,
+:global(html[data-theme="dark"]) .page .sectionHeading > div > span {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .header h1,
+:global(html[data-theme="dark"]) .page .formHeading h2,
+:global(html[data-theme="dark"]) .page .field strong,
+:global(html[data-theme="dark"]) .page .privacyControlCopy strong,
+:global(html[data-theme="dark"]) .page .sectionHeading h2,
+:global(html[data-theme="dark"]) .page .emptyCards,
+:global(html[data-theme="dark"]) .page .pageState h1 {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .page .headerCopy > p,
+:global(html[data-theme="dark"]) .page .formHeadingCopy p,
+:global(html[data-theme="dark"]) .page .field small,
+:global(html[data-theme="dark"]) .page .privacyControlCopy small,
+:global(html[data-theme="dark"]) .page .emptyCards p,
+:global(html[data-theme="dark"]) .page .pageState p {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .headerMetric {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 5px 14px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .headerMetric svg,
+:global(html[data-theme="dark"]) .page .headerMetric strong {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .headerMetric > span,
+:global(html[data-theme="dark"]) .page .headerMetric small {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .detailsForm {
+  background: linear-gradient(145deg, var(--dark-cyan-soft), transparent 42%), var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 18px 44px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .detailsForm::before {
+  background: linear-gradient(90deg, var(--dark-cta), var(--dark-cyan), var(--dark-pink));
+}
+
+:global(html[data-theme="dark"]) .page .formHeading {
+  background:
+    linear-gradient(145deg, var(--dark-cyan-soft), var(--dark-cta-soft) 58%, var(--dark-pink-soft)),
+    var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .formHeading::after {
+  border-color: var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .page .abstractVisual {
+  background: var(--dark-background);
+  border: 1px solid var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .abstractVisual::before {
+  background-image:
+    linear-gradient(var(--dark-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dark-border) 1px, transparent 1px);
+}
+
+:global(html[data-theme="dark"]) .page .abstractGlow {
+  background: radial-gradient(
+    circle,
+    var(--dark-cyan-medium),
+    var(--dark-cta-soft) 52%,
+    transparent 72%
+  );
+}
+
+:global(html[data-theme="dark"]) .page .abstractOrbit {
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .abstractOrbit i {
+  background: var(--dark-pink);
+  border-color: var(--dark-surface-raised);
+  box-shadow: 0 5px 12px var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .page .abstractCard {
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 16px 30px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .abstractCard i {
+  background: var(--dark-text-faint);
+}
+
+:global(html[data-theme="dark"]) .page .abstractCardBack {
+  background:
+    linear-gradient(155deg, var(--dark-cyan-medium), var(--dark-cyan-soft)),
+    var(--dark-surface-raised);
+}
+
+:global(html[data-theme="dark"]) .page .abstractCardFront {
+  background:
+    linear-gradient(150deg, var(--dark-cta-medium), var(--dark-pink-soft)),
+    var(--dark-surface-raised);
+}
+
+:global(html[data-theme="dark"]) .page .abstractSpark {
+  background: var(--dark-cta);
+  box-shadow:
+    132px 112px 0 -2px var(--dark-cyan),
+    18px 126px 0 -3px var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .page .formMark {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 9px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .visibilityBadge {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+  box-shadow: 0 6px 16px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .visibilityBadge[data-public="true"] {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-cyan-medium);
+}
+
+:global(html[data-theme="dark"]) .page .field input,
+:global(html[data-theme="dark"]) .page .field textarea {
+  color: var(--dark-text);
+  caret-color: var(--dark-cyan);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow:
+    inset 0 1px 2px var(--dark-shadow),
+    0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .field textarea::placeholder {
+  color: var(--dark-text-faint);
+}
+
+:global(html[data-theme="dark"]) .page .field input:hover,
+:global(html[data-theme="dark"]) .page .field textarea:hover {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .field input:focus,
+:global(html[data-theme="dark"]) .page .field textarea:focus {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 3px var(--dark-cyan-soft),
+    0 8px 18px var(--dark-shadow),
+    inset 0 1px 2px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .field:focus-within strong,
+:global(html[data-theme="dark"]) .page .field:focus-within small {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .privacyControl {
+  background:
+    linear-gradient(105deg, var(--dark-cyan-soft), var(--dark-cta-soft)), var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .privacyTrack {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    inset 0 1px 2px var(--dark-shadow),
+    0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .privacyThumb {
+  background: var(--dark-cta);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .privacyChoice {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .privacyChoice[aria-pressed="false"]:hover {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"])
+  .page
+  .privacyToggle[data-public="false"]
+  .privacyChoice:first-of-type,
+:global(html[data-theme="dark"])
+  .page
+  .privacyToggle[data-public="true"]
+  .privacyChoice:nth-of-type(2) {
+  color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .page .privacyToggle[data-public="true"] .privacyThumb {
+  background: var(--dark-cyan);
+  box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .privacyToggle:hover .privacyTrack {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    inset 0 1px 2px var(--dark-shadow),
+    0 5px 14px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"])
+  .page
+  .privacyToggle:has(.privacyChoice:focus-visible)
+  .privacyTrack {
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 3px var(--dark-cyan-soft),
+    inset 0 1px 2px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .formFooter {
+  border-top-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .formError,
+:global(html[data-theme="dark"]) .page .loadMoreError {
+  color: var(--dark-pink);
+}
+
+:global(html[data-theme="dark"]) .page .savedNotice {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .formFooter > button {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 10px 22px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .formFooter > button:not(:disabled):hover,
+:global(html[data-theme="dark"]) .page .formFooter > button:not(:disabled):focus-visible {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 14px 30px var(--dark-shadow),
+    0 0 0 3px var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .page .formFooter > button:disabled {
+  color: var(--dark-text-faint);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .spinner {
+  border-color: var(--dark-shadow);
+  border-top-color: var(--dark-background);
+}
+
+:global(html[data-theme="dark"]) .page .emptyCards {
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 13px 32px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .emptyCards > span {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-cyan-medium);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .emptyCards a {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .loadingHeading,
+:global(html[data-theme="dark"]) .page .loadingForm,
+:global(html[data-theme="dark"]) .page .loadingCards > span {
+  background: linear-gradient(
+    105deg,
+    var(--dark-surface) 20%,
+    var(--dark-surface-hover) 49%,
+    var(--dark-surface) 78%
+  );
+  background-size: 300% 100%;
+  border-color: var(--dark-border);
+  box-shadow: 0 10px 26px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .stateMark {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 10px 10px 0 var(--dark-pink-medium);
+}
+
+:global(html[data-theme="dark"]) .page .pageState a {
+  color: var(--dark-cyan);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .pageState a:hover,
+:global(html[data-theme="dark"]) .page .pageState a:focus-visible {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .pageState button {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .page .pageState button:hover,
+:global(html[data-theme="dark"]) .page .pageState button:focus-visible {
+  color: var(--dark-background);
+  background: var(--dark-cta);
+  border-color: var(--dark-cyan);
+  box-shadow: 0 10px 22px var(--dark-shadow);
+}

@@ -10,6 +10,34 @@ body,
   min-height: 100%;
 }
 
+html[data-theme="dark"] {
+  --dark-background: #2c2c2c;
+  --dark-surface: #343434;
+  --dark-surface-raised: #3a3a3a;
+  --dark-surface-hover: #404040;
+  --dark-text: #e4e4e4;
+  --dark-text-muted: rgb(228 228 228 / 68%);
+  --dark-text-faint: rgb(228 228 228 / 48%);
+  --dark-cyan: #a8dadc;
+  --dark-cyan-soft: rgb(168 218 220 / 12%);
+  --dark-cyan-medium: rgb(168 218 220 / 22%);
+  --dark-pink: #ffc1cc;
+  --dark-pink-soft: rgb(255 193 204 / 12%);
+  --dark-pink-medium: rgb(255 193 204 / 22%);
+  --dark-cta: #b39cd0;
+  --dark-cta-soft: rgb(179 156 208 / 16%);
+  --dark-cta-medium: rgb(179 156 208 / 28%);
+  --dark-border: rgb(228 228 228 / 11%);
+  --dark-border-accent: rgb(168 218 220 / 24%);
+  --dark-shadow: rgb(0 0 0 / 30%);
+  accent-color: var(--dark-cta);
+}
+
+html[data-theme="dark"] ::selection {
+  color: var(--dark-text);
+  background: var(--dark-cta-medium);
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -25,8 +53,8 @@ body {
 }
 
 html[data-theme="dark"] body {
-  color: #f1ecff;
-  background: var(--loader-background, #171426);
+  color: var(--dark-text);
+  background: var(--loader-background, var(--dark-background));
 }
 
 .page-loader {
@@ -48,9 +76,9 @@ html[data-theme="dark"] body {
 
 html[data-theme="dark"] .page-loader,
 html[data-theme="dark"] .page-loader--light {
-  --loader-background: #171426;
-  --loader-track: rgb(216 205 250 / 16%);
-  --loader-accent: #a48ce9;
+  --loader-background: #2c2c2c;
+  --loader-track: rgb(168 218 220 / 16%);
+  --loader-accent: #b39cd0;
 }
 
 .page-loader--contained {

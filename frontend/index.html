@@ -46,7 +46,7 @@
       document.documentElement.dataset.bootPalette = usesLightBootPalette ? "light" : "dark";
       document.documentElement.style.colorScheme = resolvedTheme;
       if (resolvedTheme === "dark") {
-        document.getElementById("theme-color")?.setAttribute("content", "#171426");
+        document.getElementById("theme-color")?.setAttribute("content", "#2c2c2c");
       } else if (usesLightBootPalette) {
         document.getElementById("theme-color")?.setAttribute("content", "#f6f2eb");
       }
@@ -70,9 +70,9 @@
       }
 
       :root[data-theme="dark"] {
-        --loader-background: #171426;
-        --loader-track: rgb(216 205 250 / 16%);
-        --loader-accent: #a48ce9;
+        --loader-background: #2c2c2c;
+        --loader-track: rgb(168 218 220 / 16%);
+        --loader-accent: #b39cd0;
       }
 
       html,
