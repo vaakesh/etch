@@ -25,6 +25,7 @@ from app.users.errors import UserNotFoundError
 from app.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.models import UserDeck
 from app.redis.service import RedisCacheService
+from app.bff.schemas import UserProgressResponse
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,15 @@ class TrainingSessionService:
             for id, id_datetime in result:
                 count_by_day[id_datetime.date()] += 1
             return count_by_day
+
+    async def get_user_progress(
+        self,
+        user_id: int,
+    ) -> UserProgressResponse:
+        async with self.uow_factory() as uow:
+            return await uow.training_session_item_repo.get_user_progress(
+                user_id=user_id,
+            )
 
 
     async def get_session_history(

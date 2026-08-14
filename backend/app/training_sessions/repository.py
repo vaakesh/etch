@@ -1,14 +1,17 @@
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
 from app.cards.models import Card
 from app.decks.models import Deck, DeckCard
 from app.training_sessions.models import TrainingSession, TrainingSessionItem, TrainingSessionStatus
-from sqlalchemy import and_, false, func, insert, literal, null, or_, select
+from sqlalchemy import Date, Integer, and_, case, cast, false, func, insert, literal, null, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+
+from app.bff.schemas import UserProgressResponse
+from app.utils import utcnow
 
 
 class TrainingSessionItemRepository:
@@ -17,6 +20,161 @@ class TrainingSessionItemRepository:
 
     def add(self, training_session_item: TrainingSessionItem) -> None:
         self.session.add(training_session_item)
+
+    async def get_user_progress(
+        self,
+        user_id: int,
+    ) -> UserProgressResponse:
+        timezone_name = "UTC"
+
+        completed_items = (
+            select(
+                TrainingSessionItem.original_card_uuid,
+                TrainingSessionItem.is_correct,
+                TrainingSessionItem.answered_at,
+            )
+            .join(
+                TrainingSession,
+                TrainingSession.id == TrainingSessionItem.training_session_id,
+            )
+            .where(
+                TrainingSession.user_id == user_id,
+                TrainingSession.status == TrainingSessionStatus.COMPLETED,
+                TrainingSessionItem.is_answered.is_(True),
+            )
+            .cte("completed_items")
+        )
+
+        week_cutoff = datetime.combine(
+            utcnow().date() - timedelta(days=6),
+            time.min
+        )
+
+        weekly_answered = func.count().filter(
+            completed_items.c.answered_at >= week_cutoff,
+        )
+
+        weekly_correct = func.count().filter(
+            completed_items.c.answered_at >= week_cutoff,
+            completed_items.c.is_correct.is_(True),
+        )
+
+        item_stats = (
+            select(
+                func.count(
+                    func.distinct(completed_items.c.original_card_uuid)
+                ).label("user_words_explored"),
+                weekly_answered.label("weekly_answered"),
+                weekly_correct.label("weekly_correct"),
+            )
+            .cte("item_stats")
+        )
+
+        session_stats = (
+            select(
+                func.coalesce(
+                    cast(
+                        func.sum(
+                            func.extract(
+                                "epoch",
+                                TrainingSession.finished_at
+                                - TrainingSession.started_at,
+                            )
+                        ),
+                        Integer,
+                    ),
+                    0,
+                ).label("user_total_study_time")
+            )
+            .where(
+                TrainingSession.user_id == user_id,
+                TrainingSession.status == TrainingSessionStatus.COMPLETED,
+                TrainingSession.finished_at.is_not(None),
+            )
+            .cte("session_stats")
+        )
+
+        activity_day = cast(
+            func.timezone(
+                timezone_name,
+                completed_items.c.answered_at,
+            ),
+            Date,
+        ).label("activity_day")
+
+        activity_days = (
+            select(activity_day)
+            .distinct()
+            .cte("activity_days")
+        )
+
+        numbered_days = (
+            select(
+                activity_days.c.activity_day,
+                (
+                    activity_days.c.activity_day
+                    - cast(
+                        func.row_number().over(
+                            order_by=activity_days.c.activity_day
+                        ),
+                        Integer,
+                    )
+                ).label("island"),
+            )
+            .cte("numbered_days")
+        )
+
+        streaks = (
+            select(
+                func.max(
+                    numbered_days.c.activity_day
+                ).label("last_day"),
+                func.count().label("streak"),
+            )
+            .group_by(numbered_days.c.island)
+            .cte("streaks")
+        )
+
+        today = cast(
+            func.timezone(timezone_name, func.now()),
+            Date,
+        )
+
+        current_streak = func.coalesce(
+            select(streaks.c.streak)
+            .where(streaks.c.last_day >= today - 1)
+            .order_by(streaks.c.last_day.desc())
+            .limit(1)
+            .scalar_subquery(),
+            0,
+        )
+
+        stmt = (
+            select(
+                item_stats.c.user_words_explored,
+                case(
+                    (item_stats.c.weekly_answered == 0, 0),
+                    else_=cast(
+                        func.round(
+                            item_stats.c.weekly_correct
+                            * 100.0
+                            / item_stats.c.weekly_answered
+                        ),
+                        Integer,
+                    ),
+                ).label("user_weekly_accuracy"),
+                current_streak.label("user_current_streak"),
+                session_stats.c.user_total_study_time,
+            )
+            .select_from(item_stats)
+            .join(session_stats, true())
+        )
+
+        result = await self.session.execute(stmt)
+        row = result.mappings().one()
+        
+        return UserProgressResponse.model_validate(row)
+
 
     async def get_user_daily_activity(
         self,

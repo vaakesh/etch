@@ -144,11 +144,8 @@ class BffService:
                     updated_at=deck.updated_at,
                 ) for deck in decks
             ],
-            progress=UserProgressResponse(
-                user_words_explored=67,
-                user_weekly_accuracy=55,
-                user_current_streak=6,
-                user_total_study_time=120,
+            progress=await self.training_session_service.get_user_progress(
+                user_id=user_id,
             ),
             user_weekly_activity=user_weekly_activity,
         )
