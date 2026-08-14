@@ -1,4 +1,7 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
+import logging
+import time
 from typing import Literal
 from uuid import UUID
 
@@ -25,8 +28,10 @@ from app.redis.schemas import UserDeckIdentity
 from app.cards.schemas import CardResponse, InternalCard
 from app.training_sessions.schemas import PracticeSessionResponse
 from app.common.schemas import CursorPage
-from app.utils import calculate_accuracy
+from app.utils import calculate_accuracy, utcnow
 
+
+logger = logging.getLogger(__name__)
 
 def get_is_favourite(user_deck: UserDeck) -> bool:
     if user_deck is None:
@@ -105,16 +110,25 @@ class BffService:
             for user_deck in user_decks
         }
 
-        user_weekly_activity = [
-            { "date": "2026-07-12", "percent": 55 },
-            { "date": "2026-07-13", "percent": 67 },
-            { "date": "2026-07-14", "percent": 32 },
-            { "date": "2026-07-15", "percent": 12 },
-            { "date": "2026-07-16", "percent": 0 },
-            { "date": "2026-07-17", "percent": 38 },
-            { "date": "2026-07-18", "percent": 100 }
-        ]
+        today = utcnow().date()
+        from_date = today - timedelta(days=6)
+        to_date = today + timedelta(days=1)
 
+        daily_activities = await self.training_session_service.user_daily_activity(
+            user_id=user_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        max_value = 0
+        for value in list(daily_activities.values()):
+            max_value = max(value, max_value)
+
+        user_weekly_activity = []
+        while from_date < to_date:
+            user_weekly_activity.append({"date": from_date, "percent": daily_activities[from_date] * 100 / max_value}) 
+                
+            from_date += timedelta(days=1)
 
         result = HomeDashboardResponse(
             decks=[

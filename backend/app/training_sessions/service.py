@@ -1,4 +1,7 @@
+from collections import defaultdict
 from collections.abc import Callable
+from datetime import date, datetime
+import logging
 from typing import Literal
 from uuid import UUID
 
@@ -24,6 +27,8 @@ from app.decks.models import UserDeck
 from app.redis.service import RedisCacheService
 
 
+logger = logging.getLogger(__name__)
+
 class TrainingSessionService:
     def __init__(
         self,
@@ -32,6 +37,25 @@ class TrainingSessionService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+
+
+    async def user_daily_activity(
+        self,
+        user_id: int,
+        from_date: datetime,
+        to_date: datetime | None,
+    ) -> dict[date: int]:
+        async with self.uow_factory() as uow:
+            result = await uow.training_session_item_repo.get_user_daily_activity(
+                user_id=user_id,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            count_by_day: dict[date: int] = defaultdict(int)
+            for id, id_datetime in result:
+                count_by_day[id_datetime.date()] += 1
+            return count_by_day
+
 
     async def get_session_history(
         self,
@@ -64,9 +88,6 @@ class TrainingSessionService:
                 raise TrainingSessionNotFinishedYet()
 
             return items
-
-            
-            
 
     async def submit_answer(
             self,

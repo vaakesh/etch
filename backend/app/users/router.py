@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -50,6 +51,21 @@ async def get_me(
             locale=user_settings.locale,
             theme=user_settings.theme,
         )
+    )
+
+@router.get(
+    "/me/daily-activity",
+)
+async def get_user_daily_activity(
+    current_user: CurrentUser,
+    training_session_service: TrainingSessionServiceDeps,
+    from_date: datetime,
+    to_date: datetime | None = None,
+):
+    return await training_session_service.user_daily_activity(
+        user_id=current_user.id,
+        from_date=from_date,
+        to_date=to_date,
     )
 
 @router.patch("/me/settings", response_model=UserSettingsResponse)

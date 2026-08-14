@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
@@ -13,7 +14,6 @@ from app.training_sessions.schemas import (
 from fastapi import APIRouter, Path, Query
 
 router = APIRouter(prefix="/training-sessions")
-
 
 @router.get(
     "/{session_uuid}", 

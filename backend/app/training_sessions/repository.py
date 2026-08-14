@@ -18,6 +18,30 @@ class TrainingSessionItemRepository:
     def add(self, training_session_item: TrainingSessionItem) -> None:
         self.session.add(training_session_item)
 
+    async def get_user_daily_activity(
+        self,
+        user_id: int,
+        from_date: datetime,
+        to_date: datetime | None,
+    ) -> list[tuple[int, datetime]]:
+        stmt = (
+            select(TrainingSessionItem.id, TrainingSessionItem.answered_at)
+            .join(TrainingSession, TrainingSessionItem.training_session_id == TrainingSession.id)
+            .where(
+                and_(
+                    TrainingSession.status == TrainingSessionStatus.COMPLETED,
+                    TrainingSessionItem.is_answered.is_(True),
+                    TrainingSession.user_id == user_id,
+                    TrainingSession.started_at >= from_date,
+                )
+            )
+        )
+        if to_date is not None:
+            stmt = stmt.where(TrainingSession.started_at < to_date)
+        result = await self.session.execute(stmt)
+        rows = result.tuples().all()
+        return rows
+
     async def get_session_history(
         self,
         user_id: int,
