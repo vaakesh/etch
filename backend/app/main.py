@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     redis = get_redis()
     setup_logging(
         use_colors=True,
-        log_sql=False,
+        log_sql=True,
         log_sql_parameters=False,
         slow_query_ms=200,
     )

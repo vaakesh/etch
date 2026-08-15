@@ -15,13 +15,13 @@ from app.cards.errors import (
     PermissionDeniedError as CardPermissionDeniedError,
 )
 from app.decks.errors import (
-    CannotFollowOwnDeckError,
+    CannotSaveOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
     DeckIsEmptyError,
     DeckIsNotFavouriteError,
-    DeckIsNotFollowedError,
+    DeckIsNotSavedError,
     DeckNotFoundError,
     InvalidDeckCardPositionError,
     UserDeckNotFoundError,
@@ -295,9 +295,9 @@ async def user_deck_not_found_handler(
     )
 
 
-async def deck_is_not_followed_handler(
+async def deck_is_not_saved_handler(
     request: Request,
-    exc: DeckIsNotFollowedError,
+    exc: DeckIsNotSavedError,
 ):
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
@@ -319,9 +319,9 @@ async def deck_is_not_favourite_handler(
     )
 
 
-async def cannot_follow_own_deck_handler(
+async def cannot_save_own_deck_handler(
     request: Request,
-    exc: CannotFollowOwnDeckError,
+    exc: CannotSaveOwnDeckError,
 ):
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
@@ -493,9 +493,9 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(DeckCardAlreadyExistsError, deck_card_already_exists_handler)
     app.add_exception_handler(DeckPermissionDeniedError, deck_permission_denied_handler)
     app.add_exception_handler(UserDeckNotFoundError, user_deck_not_found_handler)
-    app.add_exception_handler(DeckIsNotFollowedError, deck_is_not_followed_handler)
+    app.add_exception_handler(DeckIsNotSavedError, deck_is_not_saved_handler)
     app.add_exception_handler(DeckIsNotFavouriteError, deck_is_not_favourite_handler)
-    app.add_exception_handler(CannotFollowOwnDeckError, cannot_follow_own_deck_handler)
+    app.add_exception_handler(CannotSaveOwnDeckError, cannot_save_own_deck_handler)
 
     app.add_exception_handler(
         TrainingSessionNotFoundError,

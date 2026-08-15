@@ -7,6 +7,7 @@ from uuid import UUID
 
 
 from app.bff.schemas import (
+    CatalogDeckItemResponse,
     HomeDeckItemResponse,
     LibraryCardItemResponse,
     LibraryDeckItemResponse,
@@ -29,6 +30,7 @@ from app.cards.schemas import CardResponse, InternalCard
 from app.training_sessions.schemas import PracticeSessionResponse
 from app.common.schemas import CursorPage
 from app.utils import calculate_accuracy, utcnow
+from app.common.utils import make_user_deck_identity
 
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,50 @@ class BffService:
         return LibraryCardItemResponse(
             card=CardResponse.model_validate(card),
         )
+
+    async def get_catalog_page(
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> list[CatalogDeckItemResponse]:
+        decks = await self.deck_service.get_public_decks(
+            search_query=search_query,
+            page=page,
+            limit=limit,
+        )
+        user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
+            deck_ids=[deck.id for deck in decks],
+            user_id=user_id,
+        )
+        user_decks_by_identity: dict[tuple[int, int], InternalUserDeck] = {}
+        for user_deck in user_decks:
+            user_decks_by_identity[
+                make_user_deck_identity(
+                    user_id=user_deck.user_id,
+                    deck_id=user_deck.deck_id,
+                )
+            ] = user_deck
+        
+        return [
+            CatalogDeckItemResponse(
+                deck=DeckResponse.model_validate(deck),
+                viewer_state=DeckViewerStateResponse.validate(
+                    user_deck=user_decks_by_identity[
+                        make_user_deck_identity(
+                            user_id=user_id,
+                            deck_id=deck.id,
+                        )
+                    ]
+                ) if make_user_deck_identity(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                ) in user_decks_by_identity else None
+            )
+            for deck in decks
+        ]
+
 
     async def get_home_dashboard(
             self,
@@ -534,11 +580,13 @@ class BffService:
         self,
         user_id: int,
         user_uuid: UUID,
+        search_query: SearchQuery = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> CursorPage[InternalCard]:
         cards_page_lookup = await self.cache_service.get_cached_library_cards_page(
             user_uuid=user_uuid,
+            search_query=search_query,
             cursor=cursor,
             limit=limit,
         )
@@ -549,6 +597,7 @@ class BffService:
                 user_id=user_id,
                 user_uuid=user_uuid,
                 expected_generation=cards_page_lookup.generation,
+                search_query=search_query,
                 cursor=cursor,
                 limit=limit,
             )
@@ -591,6 +640,7 @@ class BffService:
                     user_id=user_id,
                     user_uuid=user_uuid,
                     expected_generation=cards_page_lookup.generation,
+                    search_query=search_query,
                     cursor=cursor,
                     limit=limit,
                 )
@@ -609,6 +659,7 @@ class BffService:
         user_id: int,
         user_uuid: UUID,
         expected_generation: int | None,
+        search_query: SearchQuery = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> CursorPage[InternalCard]:
@@ -616,6 +667,7 @@ class BffService:
         # no cache -> get from db
         cards, next_cursor, has_more = await self.card_service.get_all_by_user_id(
             user_id=user_id,
+            search_query=search_query,
             cursor=cursor,
             limit=limit,
         )
@@ -626,6 +678,7 @@ class BffService:
                 user_uuid=user_uuid,
                 card_uuids=[card.uuid for card in cards],
                 expected_generation=expected_generation,
+                search_query=search_query,
                 cursor=cursor,
                 limit=limit,
                 next_cursor=next_cursor,
@@ -646,12 +699,14 @@ class BffService:
             self,
             user_id: int,
             user_uuid: UUID,
+            search_query: SearchQuery = None,
             cursor: str | None = None,
             limit: int = 50,
     ) -> CursorPage[LibraryCardItemResponse]:
         cards_page = await self._get_cards_library_card_page(
             user_id=user_id,
             user_uuid=user_uuid,
+            search_query=search_query,
             cursor=cursor,
             limit=limit,
         )

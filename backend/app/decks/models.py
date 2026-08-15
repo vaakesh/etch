@@ -62,6 +62,13 @@ class Deck(Base):
         nullable=False,
     )
 
+    saves_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
     version: Mapped[int] = mapped_column(
         Integer,
         default=1,
@@ -189,8 +196,8 @@ class UserDeck(Base):
         server_default=text("false"),
         nullable=False,
     )
-    is_following: Mapped[bool] = mapped_column(
-        Boolean, 
+    is_saved: Mapped[bool] = mapped_column(
+        Boolean,
         default=False, 
         server_default=text("false"),
         nullable=False,

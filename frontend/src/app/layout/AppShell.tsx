@@ -83,7 +83,7 @@ interface NavigationStyle extends CSSProperties {
 const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { key: "home", icon: "home", to: "/", end: true },
   { key: "library", icon: "book", to: "/library" },
-  { key: "catalog", icon: "decks" },
+  { key: "catalog", icon: "decks", to: "/catalog" },
   { key: "practice", icon: "practice", to: "/practice" },
   { key: "statistics", icon: "chart" },
   { key: "settings", icon: "settings", to: "/settings" },
@@ -277,7 +277,8 @@ export function AppShell() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLogoutPending, setIsLogoutPending] = useState(false);
-  const isLibraryRoute = pathname === "/library" || pathname.startsWith("/library/");
+  const isLibraryRoute =
+    pathname === "/catalog" || pathname === "/library" || pathname.startsWith("/library/");
   const shellClassName = [
     styles.shell,
     isSidebarCollapsed ? styles.shellCollapsed : null,

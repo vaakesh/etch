@@ -527,7 +527,7 @@ export function useLibraryDecks(
     searchQueryRef.current = normalizedSearchQuery;
     const timer = window.setTimeout(() => {
       loadFirstPage(onlyFavouritesRef.current, normalizedSearchQuery);
-    }, 300);
+    }, 450);
 
     return () => window.clearTimeout(timer);
   }, [loadFirstPage, normalizedSearchQuery]);

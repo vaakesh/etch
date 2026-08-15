@@ -13,6 +13,7 @@ export interface AppRouteDefinition {
 const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const HomePage = lazy(() => import("../../pages/HomePage"));
 const LibraryPage = lazy(() => import("../../pages/LibraryPage"));
+const CatalogPage = lazy(() => import("../../pages/CatalogPage"));
 const LibraryDeckEditPage = lazy(() => import("../../pages/LibraryDeckEditPage"));
 const PracticePage = lazy(() => import("../../pages/PracticePage"));
 const SessionHistoryPage = lazy(() => import("../../pages/SessionHistoryPage"));
@@ -37,6 +38,12 @@ export const appRoutes: readonly AppRouteDefinition[] = [
     access: "protected",
     title: { "ru-RU": "Библиотека — Etch", "en-US": "Library — Etch" },
     Component: LibraryPage,
+  },
+  {
+    path: "/catalog",
+    access: "protected",
+    title: { "ru-RU": "Каталог — Etch", "en-US": "Catalog — Etch" },
+    Component: CatalogPage,
   },
   {
     path: "/library/:deck_uuid/edit",

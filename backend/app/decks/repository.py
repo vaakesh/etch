@@ -16,6 +16,42 @@ class DeckRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def get_public_decks(
+        self,
+        search_query: SearchQuery = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Sequence[Deck]:
+        stmt = (
+            select(Deck)
+            .options(
+                joinedload(Deck.user).load_only(User.uuid)
+            )
+            .where(Deck.is_public)
+        )
+
+        if search_query:
+            terms = search_query.split(" ")
+            stmt = (
+                stmt.where(
+                    *(
+                        Deck.title.icontains(term, autoescape=True)
+                        for term in terms
+                    )
+                )
+            )
+
+        stmt = (
+            stmt
+            .order_by(Deck.saves_count.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        return rows
+
+
     async def _get_by_uuids(
         self,
         deck_uuids: list[UUID],
@@ -504,7 +540,7 @@ class UserDeckRepository:
         
         return rows[:limit], has_more
 
-    async def get_followed_decks_by_user_id(
+    async def get_saved_decks_by_user_id(
             self,
             user_id: int,
             offset: int,
@@ -520,7 +556,7 @@ class UserDeckRepository:
             .join(User, UserDeck.user_id == User.id)
             .where(
                 UserDeck.user_id == user_id,
-                UserDeck.is_following.is_(True),
+                UserDeck.is_saved.is_(True),
                 or_(
                     Deck.is_public.is_(True),
                     and_(

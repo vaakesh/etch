@@ -24,10 +24,11 @@ Frontend является минимальным auth-aware UI-приложен�
 * `AppRouter`, `RouteGuard` и конфигурация маршрутов;
 * защищённая главная страница с данными из `GET /bff/home` и feature-слоем `src/features/home`.
 * защищённая библиотека с cursor-пагинацией из `GET /bff/library/decks` и `GET /bff/library/cards`, а также feature-слоем `src/features/library`.
+* защищённый каталог публичных колод на `/catalog` из `GET /bff/catalog` и feature-слоем `src/features/catalog`;
 * защищённая практика на `/practice`: настройка новой сессии по `?deck=...`, восстановление по `?session=...`, список тренировочных сессий и feature-слой `src/features/practice`;
 * защищённая история карточек тренировочной сессии на `/practice/sessions/:session_uuid/history`.
 
-Сейчас зарегистрированы guest-маршрут `/login`, protected-маршруты `/`, `/library`, `/library/:deck_uuid/edit`, `/practice`, `/practice/sessions/:session_uuid/history` и `/settings`, а также публичный wildcard-маршрут `*` со страницей 404. Их route-pages расположены в `src/pages/LoginPage`, `src/pages/HomePage`, `src/pages/LibraryPage`, `src/pages/LibraryDeckEditPage`, `src/pages/PracticePage`, `src/pages/SessionHistoryPage`, `src/pages/SettingsPage` и `src/pages/NotFoundPage`. Остальных маршрутов и страниц пока нет.
+Сейчас зарегистрированы guest-маршрут `/login`, protected-маршруты `/`, `/library`, `/library/:deck_uuid/edit`, `/catalog`, `/practice`, `/practice/sessions/:session_uuid/history` и `/settings`, а также публичный wildcard-маршрут `*` со страницей 404. Их route-pages расположены в `src/pages/LoginPage`, `src/pages/HomePage`, `src/pages/LibraryPage`, `src/pages/LibraryDeckEditPage`, `src/pages/CatalogPage`, `src/pages/PracticePage`, `src/pages/SessionHistoryPage`, `src/pages/SettingsPage` и `src/pages/NotFoundPage`. Остальных маршрутов и страниц пока нет.
 
 Не считай страницу, маршрут или фичу существующими только потому, что путь встречается в redirect, константе или примере. Источники истины — текущее дерево, `route-config.ts`, backend-код и OpenAPI.
 

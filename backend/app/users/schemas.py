@@ -44,7 +44,7 @@ type NormalizedSearch = Annotated[
         strip_whitespace=True,
         to_lower=True,
         min_length=1,
-        max_length=150,
+        max_length=50,
     ),
 ]
 

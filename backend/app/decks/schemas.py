@@ -20,12 +20,13 @@ class InternalDeck(BaseModel):
     description: DeckDescription
     words_count: Counter
     is_public: bool
+    saves_count: Counter
     version: PositiveInt
     created_at: PastDatetime
     updated_at: PastDatetime
 
     @classmethod
-    def from_entity(cls, deck: Deck) -> "InternalDeck":
+    def from_entity(cls, deck: Deck) -> InternalDeck:
         return cls(
             id=deck.id,
             uuid=deck.uuid,
@@ -34,6 +35,7 @@ class InternalDeck(BaseModel):
             description=deck.description,
             words_count=deck.words_count,
             is_public=deck.is_public,
+            saves_count=deck.saves_count,
             version=deck.version,
             created_at=deck.created_at,
             updated_at=deck.updated_at,
@@ -49,7 +51,7 @@ class InternalUserDeck(BaseModel):
     wrong_count: Counter
     last_studied_at: PastDatetime | None
     is_favourite: bool
-    is_following: bool
+    is_saved: bool
     last_seen_version: int | None
     added_at: PastDatetime
 
@@ -100,6 +102,7 @@ class DeckResponse(BaseModel):
     description: DeckDescription = None
     words_count: Counter
     is_public: bool
+    saves_count: Counter
     updated_at: PastDatetime | None = None
 
 class DeckListItemResponse(BaseModel):
@@ -113,7 +116,7 @@ class DeckViewerStateResponse(BaseModel):
     accuracy: Percent
     last_studied_at: datetime | None
     is_favourite: bool
-    is_following: bool
+    is_saved: bool
 
     @classmethod
     def validate(cls, user_deck: InternalUserDeck) -> DeckViewerStateResponse:
@@ -126,7 +129,7 @@ class DeckViewerStateResponse(BaseModel):
             ),
             last_studied_at=user_deck.last_studied_at,
             is_favourite=user_deck.is_favourite,
-            is_following=user_deck.is_following,
+            is_saved=user_deck.is_saved,
         )
 
 class ReorderCards(BaseModel):

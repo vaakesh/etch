@@ -11,6 +11,7 @@ import type {
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
 import {
+  LIBRARY_CARD_SEARCH_MAX_LENGTH,
   useLibraryCards,
   type UseLibraryCardsResult,
 } from "../../features/library/model/useLibraryCards";
@@ -109,6 +110,11 @@ const MESSAGES = defineMessages(
     title: "Библиотека",
     searchLabel: "Поиск по названию колоды",
     searchPlaceholder: "Поиск по колодам",
+    cardSearchLabel: "Поиск по тексту карточек",
+    cardSearchPlaceholder: "Найти слово или перевод",
+    cardSearchEmptyTitle: "Карточки не найдены",
+    cardSearchEmptyDescription: "Попробуйте изменить запрос или проверить написание.",
+    clearCardSearch: "Очистить поиск по карточкам",
     favouritesOnly: "Только любимые",
     searchUnavailable: "Поиск недоступен",
     favouritesLoadError: "Любимые колоды не загрузились",
@@ -194,6 +200,11 @@ const MESSAGES = defineMessages(
     title: "Library",
     searchLabel: "Search by deck title",
     searchPlaceholder: "Search decks",
+    cardSearchLabel: "Search card text",
+    cardSearchPlaceholder: "Find a word or translation",
+    cardSearchEmptyTitle: "No cards found",
+    cardSearchEmptyDescription: "Try a different query or check the spelling.",
+    clearCardSearch: "Clear card search",
     favouritesOnly: "Favorites only",
     searchUnavailable: "Search is unavailable",
     favouritesLoadError: "Favorite decks didn't load",
@@ -1095,10 +1106,12 @@ function StateMessage({ title, description, actionLabel, onAction }: StateMessag
 
 export function LibraryCardsPanel({
   cardLibrary,
+  isSearchActive = false,
   isHidden,
   onCardAssigned,
 }: {
   cardLibrary: UseLibraryCardsResult;
+  isSearchActive?: boolean;
   isHidden: boolean;
   onCardAssigned?: () => void;
 }) {
@@ -1127,8 +1140,10 @@ export function LibraryCardsPanel({
       cardLibrary.cards.length === 0 &&
       !cardLibrary.hasMore ? (
         <StateMessage
-          description={messages.cardsEmptyDescription}
-          title={messages.cardsEmptyTitle}
+          description={
+            isSearchActive ? messages.cardSearchEmptyDescription : messages.cardsEmptyDescription
+          }
+          title={isSearchActive ? messages.cardSearchEmptyTitle : messages.cardsEmptyTitle}
         />
       ) : null}
       {cardLibrary.status === "success" && (cardLibrary.cards.length > 0 || cardLibrary.hasMore) ? (
@@ -1246,14 +1261,18 @@ export function LibraryPage() {
   const [isCardImportOpen, setIsCardImportOpen] = useState(false);
   const [useCompactDeckLoading, setUseCompactDeckLoading] = useState(false);
   const [deckSearchQuery, setDeckSearchQuery] = useState("");
+  const [cardSearchQuery, setCardSearchQuery] = useState("");
   const [cardAssignedNoticeKey, setCardAssignedNoticeKey] = useState<number | null>(null);
+  const cardSearchInputRef = useRef<HTMLInputElement | null>(null);
   const cardAssignedNoticeSequenceRef = useRef(0);
   const cardAssignedNoticeTimeoutRef = useRef<number | null>(null);
   const isDeckSearchActive = deckSearchQuery.trim().length > 0;
+  const isCardSearchActive = cardSearchQuery.trim().length > 0;
   const library = useLibraryDecks(currentUserUuid, deckSearchQuery);
   const cardLibrary = useLibraryCards({
     enabled: hasOpenedCards,
     onDeleteSuccess: library.retry,
+    ...(hasOpenedCards ? { searchQuery: cardSearchQuery } : {}),
   });
   const loadedDeckCount = localizeCount(
     library.decks.length,
@@ -1385,6 +1404,58 @@ export function LibraryPage() {
             </div>
           ) : (
             <div className={`${styles.toolbarDetails} ${styles.cardsToolbarDetails}`}>
+              <div className={styles.cardSearchField}>
+                <label>
+                  <span className={styles.visuallyHidden}>{messages.cardSearchLabel}</span>
+                  <svg
+                    aria-hidden="true"
+                    className={styles.cardSearchIcon}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.8"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle cx="10.8" cy="10.8" r="6.7" />
+                    <path d="m16 16 4.2 4.2" />
+                  </svg>
+                  <input
+                    aria-controls="library-cards-panel"
+                    autoComplete="off"
+                    maxLength={LIBRARY_CARD_SEARCH_MAX_LENGTH}
+                    name="card_search"
+                    onChange={(event) => {
+                      setCardSearchQuery(event.currentTarget.value);
+                    }}
+                    placeholder={messages.cardSearchPlaceholder}
+                    ref={cardSearchInputRef}
+                    type="search"
+                    value={cardSearchQuery}
+                  />
+                </label>
+                {cardSearchQuery.length > 0 ? (
+                  <button
+                    aria-label={messages.clearCardSearch}
+                    className={styles.cardSearchClear}
+                    onClick={() => {
+                      setCardSearchQuery("");
+                      cardSearchInputRef.current?.focus();
+                    }}
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="m7.5 7.5 9 9m0-9-9 9" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
               {cardLibrary.status === "success" ? (
                 <div aria-live="polite" className={styles.cardsSummary}>
                   <Glyph name="sparkles" />
@@ -1489,6 +1560,7 @@ export function LibraryPage() {
         {hasOpenedCards ? (
           <LibraryCardsPanel
             cardLibrary={cardLibrary}
+            isSearchActive={isCardSearchActive}
             isHidden={activeView !== "cards"}
             onCardAssigned={handleCardAssigned}
           />

@@ -306,6 +306,7 @@ class RedisCacheService:
         user_uuid: UUID,
         card_uuids: list[UUID],
         expected_generation: int | None,
+        search_query: NormalizedSearch | None = None,
         cursor: str | None = None,
         limit: int = 50,
         next_cursor: str | None = None,
@@ -317,6 +318,7 @@ class RedisCacheService:
         key = make_library_cards_page_cache_key(
             user_uuid=user_uuid,
             generation=expected_generation,
+            search_query=search_query,
             cursor=cursor,
             limit=limit,
         )
@@ -336,6 +338,7 @@ class RedisCacheService:
     async def get_cached_library_cards_page(
         self,
         user_uuid: UUID,
+        search_query: NormalizedSearch | None = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> LibraryPageCacheLookup:
@@ -358,6 +361,7 @@ class RedisCacheService:
         key = make_library_cards_page_cache_key(
             user_uuid=user_uuid,
             generation=generation,
+            search_query=search_query,
             cursor=cursor,
             limit=limit,
         )

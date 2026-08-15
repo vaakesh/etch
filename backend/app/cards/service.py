@@ -11,6 +11,8 @@ from app.service import UnitOfWork
 from app.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
+from app.users.schemas import SearchQuery
+
 from .models import Card
 from .schemas import CreateCardRequest, UpdateCardRequest
 
@@ -76,6 +78,7 @@ class CardService:
     async def get_all_by_user_id(
         self,
         user_id: int,
+        search_query: SearchQuery = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> tuple[list[Card], str | None, bool]:
@@ -85,6 +88,7 @@ class CardService:
             )
             cards, has_more = await uow.card_repo.get_all_by_user_id(
                 user_id=user_id,
+                search_query=search_query,
                 cursor_updated_at=cursor_updated_at,
                 cursor_id=cursor_id,
                 limit=limit,

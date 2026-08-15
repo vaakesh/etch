@@ -1,8 +1,11 @@
 from uuid import UUID
 
+from pydantic import Field
+
 from app.auth.deps import CurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
+    CatalogDeckItemResponse,
     LibraryCardItemResponse,
     LibraryDeckItemResponse,
     HomeDashboardResponse,
@@ -29,6 +32,21 @@ async def get_home_dashboard(
     )
     return result
 
+@router.get("/catalog", response_model=list[CatalogDeckItemResponse])
+async def get_catalog_page(
+    current_user: CurrentUser,
+    search_query: SearchQuery = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    bff_service: BffService = Depends(get_bff_service),
+):
+    return await bff_service.get_catalog_page(
+        user_id=current_user.id,
+        search_query=search_query,
+        page=page,
+        limit=limit,
+    )
+
 
 @router.get("/library/decks", response_model=CursorPage[LibraryDeckItemResponse])
 async def get_decks_library_page(
@@ -53,6 +71,7 @@ async def get_decks_library_page(
 @router.get("/library/cards", response_model=CursorPage[LibraryCardItemResponse])
 async def get_cards_library_page(
     current_user: CurrentUser,
+    search_query: SearchQuery = None,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50),
     bff_service: BffService = Depends(get_bff_service),
@@ -60,6 +79,7 @@ async def get_cards_library_page(
     result = await bff_service.get_cards_library_page(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
+        search_query=search_query,
         cursor=cursor,
         limit=limit,
     )

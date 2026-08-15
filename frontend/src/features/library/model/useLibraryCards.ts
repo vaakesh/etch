@@ -27,6 +27,8 @@ export interface UseLibraryCardsResult extends LibraryCardsState {
   deleteCard: (cardUuid: string) => Promise<void>;
 }
 
+export const LIBRARY_CARD_SEARCH_MAX_LENGTH = 50;
+
 const INITIAL_STATE: LibraryCardsState = {
   status: "loading",
   cards: [],
@@ -40,7 +42,12 @@ const INITIAL_STATE: LibraryCardsState = {
 type LibraryCardsStateUpdate =
   LibraryCardsState | ((currentState: LibraryCardsState) => LibraryCardsState);
 
-let cachedLibraryCards: LibraryCardsState | null = null;
+interface LibraryCardsCache {
+  searchQuery: string;
+  state: LibraryCardsState;
+}
+
+let cachedLibraryCards: LibraryCardsCache | null = null;
 
 function appendUniqueCards(
   currentCards: readonly LibraryCard[],
@@ -54,8 +61,15 @@ function appendUniqueCards(
 export function useLibraryCards({
   enabled = true,
   onDeleteSuccess,
-}: { enabled?: boolean; onDeleteSuccess?: () => void } = {}): UseLibraryCardsResult {
-  const cachedStateAtMount = cachedLibraryCards;
+  searchQuery = "",
+}: {
+  enabled?: boolean;
+  onDeleteSuccess?: () => void;
+  searchQuery?: string;
+} = {}): UseLibraryCardsResult {
+  const normalizedSearchQuery = searchQuery.trim().slice(0, LIBRARY_CARD_SEARCH_MAX_LENGTH);
+  const cachedStateAtMount =
+    cachedLibraryCards?.searchQuery === normalizedSearchQuery ? cachedLibraryCards.state : null;
   const hasLoadedOrStartedRef = useRef(cachedStateAtMount !== null);
   const [state, setState] = useState<LibraryCardsState>(cachedStateAtMount ?? INITIAL_STATE);
   const initialControllerRef = useRef<AbortController | null>(null);
@@ -65,66 +79,81 @@ export function useLibraryCards({
   const deleteControllersRef = useRef(new Map<string, AbortController>());
   const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);
+  const searchQueryRef = useRef(normalizedSearchQuery);
+  const loadedSearchQueryRef = useRef(normalizedSearchQuery);
+  const previousSearchQueryRef = useRef(normalizedSearchQuery);
 
   const setCachedState = useCallback((update: LibraryCardsStateUpdate): void => {
     setState((currentState) => {
       const nextState = typeof update === "function" ? update(currentState) : update;
-      cachedLibraryCards = nextState;
+      cachedLibraryCards = {
+        searchQuery: loadedSearchQueryRef.current,
+        state: nextState,
+      };
       return nextState;
     });
   }, []);
 
-  const loadFirstPage = useCallback((): void => {
-    initialControllerRef.current?.abort();
-    loadMoreControllerRef.current?.abort();
-    createControllerRef.current?.abort();
-    updateControllersRef.current.forEach((controller) => controller.abort());
-    updateControllersRef.current.clear();
-    deleteControllersRef.current.forEach((controller) => controller.abort());
-    deleteControllersRef.current.clear();
+  const loadFirstPage = useCallback(
+    (loadSearchQuery = searchQueryRef.current): void => {
+      initialControllerRef.current?.abort();
+      loadMoreControllerRef.current?.abort();
+      createControllerRef.current?.abort();
+      updateControllersRef.current.forEach((controller) => controller.abort());
+      updateControllersRef.current.clear();
+      deleteControllersRef.current.forEach((controller) => controller.abort());
+      deleteControllersRef.current.clear();
 
-    const controller = new AbortController();
-    const requestRevision = requestRevisionRef.current + 1;
-    requestRevisionRef.current = requestRevision;
-    cachedLibraryCards = null;
-    initialControllerRef.current = controller;
-    loadMoreControllerRef.current = null;
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current + 1;
+      const requestedSearchQuery = loadSearchQuery;
+      requestRevisionRef.current = requestRevision;
+      loadedSearchQueryRef.current = requestedSearchQuery;
+      cachedLibraryCards = null;
+      initialControllerRef.current = controller;
+      loadMoreControllerRef.current = null;
 
-    queueMicrotask(() => {
-      if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-        setState(INITIAL_STATE);
-      }
-    });
-
-    void getLibraryCardPage(null, controller.signal)
-      .then((page) => {
+      queueMicrotask(() => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setCachedState({
-            status: "success",
-            cards: page.cards,
-            nextCursor: page.nextCursor,
-            hasMore: page.hasMore,
-            error: null,
-            isLoadingMore: false,
-            loadMoreError: null,
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setCachedState({
-            ...INITIAL_STATE,
-            status: "error",
-            error,
-          });
-        }
-      })
-      .finally(() => {
-        if (initialControllerRef.current === controller) {
-          initialControllerRef.current = null;
+          setState(INITIAL_STATE);
         }
       });
-  }, [setCachedState]);
+
+      void getLibraryCardPage(
+        null,
+        controller.signal,
+        requestedSearchQuery.length === 0 ? null : requestedSearchQuery,
+      )
+        .then((page) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setCachedState({
+              status: "success",
+              cards: page.cards,
+              nextCursor: page.nextCursor,
+              hasMore: page.hasMore,
+              error: null,
+              isLoadingMore: false,
+              loadMoreError: null,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setCachedState({
+              ...INITIAL_STATE,
+              status: "error",
+              error,
+            });
+          }
+        })
+        .finally(() => {
+          if (initialControllerRef.current === controller) {
+            initialControllerRef.current = null;
+          }
+        });
+    },
+    [setCachedState],
+  );
 
   const loadMore = useCallback((): void => {
     if (
@@ -148,7 +177,11 @@ export function useLibraryCards({
       loadMoreError: null,
     }));
 
-    void getLibraryCardPage(cursor, controller.signal)
+    void getLibraryCardPage(
+      cursor,
+      controller.signal,
+      loadedSearchQueryRef.current.length === 0 ? null : loadedSearchQueryRef.current,
+    )
       .then((page) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
           setCachedState((currentState) => ({
@@ -222,19 +255,23 @@ export function useLibraryCards({
           return;
         }
 
-        setCachedState((currentState) => ({
-          ...currentState,
-          cards: currentState.cards.map((card) =>
-            card.uuid === cardUuid ? { ...card, ...updatedCard } : card,
-          ),
-        }));
+        if (loadedSearchQueryRef.current.length > 0) {
+          loadFirstPage();
+        } else {
+          setCachedState((currentState) => ({
+            ...currentState,
+            cards: currentState.cards.map((card) =>
+              card.uuid === cardUuid ? { ...card, ...updatedCard } : card,
+            ),
+          }));
+        }
       } finally {
         if (updateControllersRef.current.get(cardUuid) === controller) {
           updateControllersRef.current.delete(cardUuid);
         }
       }
     },
-    [setCachedState],
+    [loadFirstPage, setCachedState],
   );
 
   const deleteCard = useCallback(
@@ -266,6 +303,26 @@ export function useLibraryCards({
     },
     [onDeleteSuccess, setCachedState],
   );
+
+  useEffect(() => {
+    searchQueryRef.current = normalizedSearchQuery;
+
+    if (!enabled) {
+      return;
+    }
+
+    if (previousSearchQueryRef.current === normalizedSearchQuery) {
+      return;
+    }
+
+    previousSearchQueryRef.current = normalizedSearchQuery;
+
+    const timer = window.setTimeout(() => {
+      loadFirstPage(normalizedSearchQuery);
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [enabled, loadFirstPage, normalizedSearchQuery]);
 
   useEffect(() => {
     const updateControllers = updateControllersRef.current;

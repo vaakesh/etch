@@ -28,8 +28,8 @@ class PermissionDeniedError(Exception):
         super().__init__(message)
 
 
-class DeckIsNotFollowedError(Exception):
-    def __init__(self, message: str = "Deck is not followed"):
+class DeckIsNotSavedError(Exception):
+    def __init__(self, message: str = "Deck is not saved"):
         super().__init__(message)
 
 
@@ -38,8 +38,8 @@ class DeckIsNotFavouriteError(Exception):
         super().__init__(message)
 
 
-class CannotFollowOwnDeckError(Exception):
-    def __init__(self, message: str = "You cannot follow your own deck"):
+class CannotSaveOwnDeckError(Exception):
+    def __init__(self, message: str = "You cannot save your own deck"):
         super().__init__(message)
 
 

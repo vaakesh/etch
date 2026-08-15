@@ -3047,7 +3047,10 @@ a.navigationItem:hover {
 }
 
 .page .toolbarDetails.cardsToolbarDetails {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto;
   justify-content: flex-end;
+  gap: 14px;
 }
 
 .page .deckSearchField {
@@ -3100,6 +3103,120 @@ a.navigationItem:hover {
 
 .page .deckSearchField input::-webkit-search-cancel-button {
   cursor: pointer;
+}
+
+.page .cardSearchField {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.page .cardSearchField > label {
+  display: block;
+}
+
+.page .cardSearchField input {
+  width: 100%;
+  height: 46px;
+  min-width: 0;
+  padding: 0 50px 0 42px;
+  color: var(--library-ink-deep);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 580;
+  caret-color: var(--library-brown-deep);
+  background: rgb(255 255 255 / 66%);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: 14px;
+  box-shadow:
+    0 9px 24px rgb(73 56 115 / 9%),
+    inset 0 1px 0 rgb(255 255 255 / 82%);
+  backdrop-filter: blur(18px) saturate(1.12);
+  appearance: none;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.page .cardSearchField input::placeholder {
+  color: color-mix(in srgb, var(--library-muted) 86%, transparent);
+  font-weight: 520;
+  opacity: 1;
+}
+
+.page .cardSearchIcon {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: color-mix(in srgb, var(--library-brown-deep) 72%, var(--library-muted));
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    color 180ms ease,
+    transform 200ms var(--library-spring);
+}
+
+.page .cardSearchField:hover input {
+  background: rgb(255 255 255 / 80%);
+  border-color: rgb(118 98 207 / 30%);
+}
+
+.page .cardSearchField:focus-within input {
+  background: rgb(255 255 255 / 94%);
+  border-color: rgb(118 98 207 / 55%);
+  box-shadow:
+    0 12px 28px rgb(73 56 115 / 13%),
+    0 0 0 3px rgb(118 98 207 / 11%);
+}
+
+.page .cardSearchField:focus-within .cardSearchIcon {
+  color: var(--library-brown-deep);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.page .cardSearchField input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.page .cardSearchClear {
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  color: var(--library-muted);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 13px;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.page .cardSearchClear:hover,
+.page .cardSearchClear:focus-visible {
+  color: var(--library-brown-deep);
+  background: rgb(118 98 207 / 10%);
+}
+
+.page .cardSearchClear:active {
+  transform: scale(0.92);
+}
+
+.page .cardSearchClear svg {
+  width: 17px;
+  height: 17px;
 }
 
 .page .favouritesFilter,
@@ -6012,6 +6129,11 @@ a.navigationItem:hover {
     flex-basis: 100%;
   }
 
+  .page .toolbarDetails.cardsToolbarDetails {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .page .deckCard,
   .page .skeleton {
     min-height: 330px;
@@ -6083,6 +6205,15 @@ a.navigationItem:hover {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 12px 18px;
+  }
+
+  .page .toolbarDetails.cardsToolbarDetails {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .page .cardsToolbarDetails .cardsSummary {
+    justify-self: end;
   }
 
   .page .summary {
@@ -6544,6 +6675,51 @@ a.navigationItem:hover {
   box-shadow:
     0 9px 22px var(--dark-shadow),
     0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchField input {
+  color: var(--dark-text);
+  caret-color: var(--dark-cyan);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 9px 24px var(--dark-shadow),
+    inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchField input::placeholder {
+  color: var(--dark-text-faint);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchIcon {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchField:hover input {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchField:focus-within input {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 12px 28px var(--dark-shadow),
+    0 0 0 3px var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchField:focus-within .cardSearchIcon {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchClear {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .cardSearchClear:hover,
+:global(html[data-theme="dark"]) .page .cardSearchClear:focus-visible {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
 }
 
 :global(html[data-theme="dark"]) .page .favouritesFilter,

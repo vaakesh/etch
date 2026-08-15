@@ -32,7 +32,6 @@ async def get_deck(
         current_user_id=current_user.id if current_user else None,
     )
 
-
 @router.post("/create", response_model=DeckResponse)
 async def create_deck(
     payload: CreateDeckRequest,
@@ -44,7 +43,6 @@ async def create_deck(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
     )
-
 
 @router.patch("/{deck_uuid}", response_model=DeckResponse)
 async def update_deck(
@@ -59,7 +57,6 @@ async def update_deck(
         deck_uuid=deck_uuid,
         payload=payload,
     )
-
 
 @router.delete("/{deck_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_deck(
@@ -198,15 +195,15 @@ async def set_favourite(
 
 
 @router.post(
-    "/{deck_uuid}/follow",
+    "/{deck_uuid}/save",
     status_code=status.HTTP_200_OK,
 )
-async def follow_deck(
+async def save_deck(
     deck_uuid: UUID,
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
 ):
-    await user_deck_service.follow_deck(
+    await user_deck_service.save_deck(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
@@ -215,15 +212,15 @@ async def follow_deck(
     return response
 
 @router.post(
-    "/{deck_uuid}/unfollow",
+    "/{deck_uuid}/unsave",
     status_code=status.HTTP_200_OK,
 )
-async def unfollow_deck(
+async def unsave_deck(
     deck_uuid: UUID,
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
 ):
-    await user_deck_service.unfollow_deck(
+    await user_deck_service.unsave_deck(
         user_id=current_user.id,
         user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,

@@ -124,11 +124,13 @@ async def get_my_decks(
 async def get_my_cards(
     current_user: CurrentUser,
     card_service: CardServiceDeps,
+    search_query: SearchQuery = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ):
     cards, next_cursor, has_more = await card_service.get_all_by_user_id(
         user_id=current_user.id,
+        search_query=search_query,
         cursor=cursor,
         limit=limit,
     )
@@ -161,20 +163,20 @@ async def get_my_training_sessions(
         has_more=has_more,
     )
 
-@router.get("/me/decks/followed", response_model=list[DeckListItemResponse])
-async def get_my_followed_decks(
+@router.get("/me/decks/saved", response_model=list[DeckListItemResponse])
+async def get_my_saved_decks(
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ) -> list[DeckListItemResponse]:
-    followed_decks = await user_deck_service.get_page_of_followed_decks_by_user_id(
+    saved_decks = await user_deck_service.get_page_of_saved_decks_by_user_id(
         user_id=current_user.id,
         page=page,
         page_size=page_size,
     )
 
-    return followed_decks
+    return saved_decks
 
 @router.get("/{user_uuid}", response_model=PublicUserResponse)
 async def get_public_user(

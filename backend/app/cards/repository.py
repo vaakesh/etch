@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from uuid import UUID
 
 from app.cards.models import Card
@@ -7,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cards.schemas import InternalCard
 from app.decks.models import Deck, DeckCard
+from app.users.schemas import SearchQuery
 
+logger = logging.getLogger(__name__)
 
 class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -41,6 +44,7 @@ class CardRepository:
     async def get_all_by_user_id(
         self,
         user_id: int,
+        search_query: SearchQuery = None,
         cursor_updated_at: datetime | None = None,
         cursor_id: int | None = None,
         limit: int = 50,
@@ -62,6 +66,22 @@ class CardRepository:
                     )
                 )
             )
+
+        logger.info("entered here")
+        if search_query:
+            logger.info(f"has search_query = '{search_query}'")
+            terms = search_query.split()
+
+            stmt = stmt.where(
+                *(
+                    or_(
+                        Card.front_text.icontains(term, autoescape=True),
+                        Card.back_text.icontains(term, autoescape=True),
+                    )
+                    for term in terms
+                )
+            )
+
 
         stmt = stmt.order_by(Card.updated_at.desc(), Card.id.desc())
         stmt = stmt.limit(limit + 1)

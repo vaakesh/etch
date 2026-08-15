@@ -44,6 +44,12 @@ class HomeDashboardResponse(BaseModel):
     progress: UserProgressResponse
     user_weekly_activity: list[DailyActivityResponse]
 
+class CatalogDeckItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    deck: DeckResponse
+    viewer_state: DeckViewerStateResponse | None
+
 class LibraryDeckItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

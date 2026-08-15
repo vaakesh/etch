@@ -13,12 +13,12 @@ from sqlalchemy.exc import IntegrityError
 from app.cards.schemas import CreateCardRequest, LoadCardsResponse, LoadedCardResponse
 
 from .errors import (
-    CannotFollowOwnDeckError,
+    CannotSaveOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
     DeckIsNotFavouriteError,
-    DeckIsNotFollowedError,
+    DeckIsNotSavedError,
     DeckNotFoundError,
     InvalidDeckCardPositionError,
     PermissionDeniedError,
@@ -32,6 +32,7 @@ from .schemas import (
     DeckViewerStateResponse,
     InternalDeck,
     InternalDeckCard,
+    InternalUserDeck,
     UpdateDeckRequest,
 )
 
@@ -44,6 +45,21 @@ class DeckService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+
+    async def get_public_decks(
+        self,
+        search_query: SearchQuery = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> list[InternalDeck]:
+        async with self.uow_factory() as uow:
+            offset = (page - 1) * limit
+            decks = await uow.deck_repo.get_public_decks(
+                search_query=search_query,
+                limit=limit,
+                offset=offset,
+            )
+            return [InternalDeck.from_entity(deck) for deck in decks]
 
     async def load_cards_to_deck(
         self,
@@ -305,6 +321,7 @@ class DeckService:
                     title=deck.title,
                     description=deck.description,
                     words_count=deck.words_count,
+                    saves_count=deck.saves_count,
                     is_public=deck.is_public,
                     version=deck.version,
                     created_at=deck.created_at,
@@ -597,7 +614,7 @@ class UserDeckService:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
 
-    async def unfollow_deck(
+    async def unsave_deck(
         self,
         user_id: int,
         user_uuid: UUID,
@@ -608,16 +625,16 @@ class UserDeckService:
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
             if deck.user_id == user_id:
-                raise CannotFollowOwnDeckError()
+                raise CannotSaveOwnDeckError()
             
             user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
                 deck_id=deck.id,
             )
             if user_deck is None:
-                raise DeckIsNotFollowedError()
+                raise DeckIsNotSavedError()
             else:
-                user_deck.is_following = False
+                user_deck.is_saved = False
             await uow.commit()
 
             await self.cache_service.invalidate_user_decks(
@@ -630,7 +647,7 @@ class UserDeckService:
 
             return user_deck
 
-    async def follow_deck(
+    async def save_deck(
             self,
             user_id: int,
             user_uuid: UUID,
@@ -641,7 +658,7 @@ class UserDeckService:
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
             if deck.user_id == user_id:
-                raise CannotFollowOwnDeckError()
+                raise CannotSaveOwnDeckError()
             
             user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
@@ -652,11 +669,11 @@ class UserDeckService:
                     user_id=user_id,
                     deck_id=deck.id,
                     last_seen_version=deck.version,
-                    is_following=True,
+                    is_saved=True,
                 )
                 uow.user_deck_repo.add(user_deck)
             else:
-                user_deck.is_following = True
+                user_deck.is_saved = True
             await uow.commit()
 
             await self.cache_service.invalidate_user_decks(
@@ -669,7 +686,7 @@ class UserDeckService:
 
             return user_deck
         
-    async def get_page_of_followed_decks_by_user_id(
+    async def get_page_of_saved_decks_by_user_id(
             self,
             user_id: int,
             page: int,
@@ -679,7 +696,7 @@ class UserDeckService:
             offset = (page - 1) * page_size
             rows = (
                 await uow.user_deck_repo.
-                get_followed_decks_by_user_id(
+                get_saved_decks_by_user_id(
                     user_id=user_id,
                     offset=offset,
                     limit=page_size,
@@ -695,7 +712,8 @@ class UserDeckService:
                             title=deck.title,
                             description=deck.description,
                             words_count=deck.words_count,
-                            is_public=deck.is_public
+                            saves_count=deck.saves_count,
+                            is_public=deck.is_public,
                         ),
                         viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck)
                     )
@@ -726,7 +744,7 @@ class UserDeckService:
                         deck_id=deck.id,
                         last_seen_version=deck.version,
                         is_favourite=True,
-                        is_following=True,
+                        is_saved=True,
                     )
                     uow.user_deck_repo.add(user_deck=user_deck)
                 else:
@@ -746,17 +764,22 @@ class UserDeckService:
 
             return user_deck
 
+    # todo: отдавать (fetched, missing)
     async def get_user_decks_by_deck_ids(
         self,
         deck_ids: list[int],
         user_id: int,
-    ) -> list[UserDeck]:
+    ) -> list[InternalUserDeck]:
         async with self.uow_factory() as uow:
             user_decks = await uow.user_deck_repo.get_user_decks_by_deck_ids(
                 deck_ids=deck_ids,
                 user_id=user_id,
             )
-            return user_decks
+            return [
+                InternalUserDeck.model_validate(user_deck)
+                for user_deck in user_decks
+            ]
+
 
     async def get_my_favourite_decks(
         self,

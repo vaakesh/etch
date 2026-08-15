@@ -35,12 +35,14 @@ def make_library_cards_page_generation_cache_key(
 def make_library_cards_page_cache_key(
     user_uuid: UUID,
     generation: int,
+    search_query: NormalizedSearch | None = None,
     cursor: str | None = None,
     limit: int = 50,
 ):
     fingerprint = hashlib.sha256(
         orjson.dumps(
             [
+                search_query,
                 cursor,
                 limit,
             ]

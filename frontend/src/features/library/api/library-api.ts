@@ -251,9 +251,14 @@ export async function getFavouriteLibraryDeckPage(
 export async function getLibraryCardPage(
   cursor: string | null,
   signal?: AbortSignal,
+  searchQuery: string | null = null,
 ): Promise<LibraryCardPage> {
   const payload = await apiFetch<unknown>(LIBRARY_CARDS_PATH, {
-    query: { cursor, limit: LIBRARY_PAGE_SIZE },
+    query: {
+      cursor,
+      limit: LIBRARY_PAGE_SIZE,
+      ...(searchQuery === null ? {} : { q: searchQuery.trim() }),
+    },
     signal,
   });
 
