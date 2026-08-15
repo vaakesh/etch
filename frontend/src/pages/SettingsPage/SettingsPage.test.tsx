@@ -9,7 +9,7 @@ vi.mock("../../auth/hooks/useAuth", () => ({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", theme: "system" },
+      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "system" },
     },
     applyUserSettings: vi.fn(),
   }),
@@ -33,6 +33,11 @@ describe("SettingsPage", () => {
     expect(markup).toContain('value="dark"');
     expect(markup).toMatch(/name="theme" checked="" value="system"/);
     expect(markup).toContain('data-active-theme="system"');
+    expect(markup).toContain('name="show_previews_for_long"');
+    expect(markup).toMatch(/name="show_previews_for_long"[^>]*checked=""/);
+    expect(markup).toContain("Предпросмотр длинного текста");
+    expect(markup).toContain("Показывать полный текст при наведении или фокусе");
+    expect(markup).toContain("Включено");
     expect(markup).toContain("Сохранить");
     expect(markup).not.toContain("Привет");
     expect(markup).not.toContain("Настройте Etch");
@@ -49,6 +54,8 @@ describe("SettingsPage", () => {
     expect(markup).toContain("Settings");
     expect(markup).toContain(">Language<");
     expect(markup).toContain("Appearance");
+    expect(markup).toContain("Long text previews");
+    expect(markup).toContain("Show the full text on hover or focus");
     expect(markup).toContain("Save");
     expect(markup).not.toContain("Hello");
     expect(markup).not.toContain("Choose the locale");

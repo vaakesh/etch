@@ -68,6 +68,7 @@ class UserSettingsResponse(BaseModel):
 
     locale: str
     theme: str
+    show_previews_for_long: bool
 
 class PrivateUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -95,3 +96,4 @@ class ChangePasswordRequest(BaseModel):
 class UserSettingsUpdate(BaseModel):
     locale: Locale | None = None
     theme: Theme | None = None
+    show_previews_for_long: bool | None = None

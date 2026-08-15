@@ -15,12 +15,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseUserSettings(payload: unknown): UserSettings {
-  if (!isRecord(payload) || !isSupportedLocale(payload.locale) || !isAppTheme(payload.theme)) {
+  if (
+    !isRecord(payload) ||
+    !isSupportedLocale(payload.locale) ||
+    !isAppTheme(payload.theme) ||
+    typeof payload.show_previews_for_long !== "boolean"
+  ) {
     throw new SettingsContractError("The backend returned an unexpected settings shape.");
   }
 
   return {
     locale: payload.locale,
+    showPreviewsForLong: payload.show_previews_for_long,
     theme: payload.theme,
   };
 }

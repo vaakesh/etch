@@ -5,6 +5,7 @@ import type {
   LibraryCard,
 } from "../../features/library/model/library-types";
 import { useCardDeckAssignment } from "../../features/library/model/useCardDeckAssignment";
+import { useLongTextPreviewsEnabled } from "../../features/settings/model/useLongTextPreviewsEnabled";
 import {
   DECKS_LEFT_TO_SAVE_COUNT_FORMS,
   SELECTED_DECK_COUNT_FORMS,
@@ -182,6 +183,7 @@ function DeckAssignmentGlyph({ name }: { name: "check" | "close" | "deck" | "sav
 export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeckDialogProps) {
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
+  const longTextPreviewsEnabled = useLongTextPreviewsEnabled();
   const assignment = useCardDeckAssignment(card.uuid);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const isMountedRef = useRef(true);
@@ -407,7 +409,10 @@ export function AddCardToDeckDialog({ card, onAssigned, onClose }: AddCardToDeck
                       <span aria-hidden="true" className={styles.cardDeckCheck}>
                         <DeckAssignmentGlyph name="check" />
                       </span>
-                      <strong className={styles.cardDeckTitle} title={deck.title}>
+                      <strong
+                        className={styles.cardDeckTitle}
+                        title={longTextPreviewsEnabled ? deck.title : undefined}
+                      >
                         {deck.title}
                       </strong>
                       <span className={styles.cardDeckMeta}>

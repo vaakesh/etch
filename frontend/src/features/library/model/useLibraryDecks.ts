@@ -4,11 +4,14 @@ import {
   deleteLibraryDeck,
   getFavouriteLibraryDeckPage,
   getLibraryDeckPage,
+  importLibraryDeckCards,
   setLibraryDeckFavourite,
 } from "../api/library-api";
 import type {
   CreateLibraryDeckInput,
   CreatedLibraryDeck,
+  ImportLibraryCardsInput,
+  ImportLibraryCardsResult,
   LibraryDeck,
   LibraryDeckItem,
 } from "./library-types";
@@ -35,6 +38,10 @@ export interface UseLibraryDecksResult extends LibraryDecksState {
   retry: () => void;
   loadMore: () => void;
   createDeck: (input: CreateLibraryDeckInput) => Promise<void>;
+  importCards: (
+    deckUuid: string,
+    input: ImportLibraryCardsInput,
+  ) => Promise<ImportLibraryCardsResult>;
   deleteDeck: (deckUuid: string) => void;
   setOnlyFavourites: (value: boolean) => void;
   setFavourite: (deckUuid: string, value: boolean) => void;
@@ -108,6 +115,7 @@ export function useLibraryDecks(
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);
+  const importControllerRef = useRef<AbortController | null>(null);
   const favouriteControllerRefs = useRef(new Map<string, AbortController>());
   const deleteControllerRefs = useRef(new Map<string, AbortController>());
   const cleanupTimerRef = useRef<number | null>(null);
@@ -478,6 +486,38 @@ export function useLibraryDecks(
     [currentUserUuid, loadFirstPage, setCachedState],
   );
 
+  const importCards = useCallback(
+    async (deckUuid: string, input: ImportLibraryCardsInput): Promise<ImportLibraryCardsResult> => {
+      importControllerRef.current?.abort();
+
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current;
+      importControllerRef.current = controller;
+
+      try {
+        const result = await importLibraryDeckCards(deckUuid, input, controller.signal);
+
+        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+          setCachedState((currentState) => ({
+            ...currentState,
+            decks: currentState.decks.map((deck) =>
+              deck.uuid === deckUuid
+                ? { ...deck, totalWordsCount: deck.totalWordsCount + result.importedCount }
+                : deck,
+            ),
+          }));
+        }
+
+        return result;
+      } finally {
+        if (importControllerRef.current === controller) {
+          importControllerRef.current = null;
+        }
+      }
+    },
+    [setCachedState],
+  );
+
   useEffect(() => {
     if (previousSearchQueryRef.current === normalizedSearchQuery) {
       return;
@@ -511,12 +551,14 @@ export function useLibraryDecks(
         initialControllerRef.current?.abort();
         loadMoreControllerRef.current?.abort();
         createControllerRef.current?.abort();
+        importControllerRef.current?.abort();
         favouriteControllers.forEach((controller) => controller.abort());
         favouriteControllers.clear();
         deleteControllers.forEach((controller) => controller.abort());
         deleteControllers.clear();
         initialControllerRef.current = null;
         loadMoreControllerRef.current = null;
+        importControllerRef.current = null;
         cleanupTimerRef.current = null;
       }, 0);
     };
@@ -533,6 +575,7 @@ export function useLibraryDecks(
     retry,
     loadMore,
     createDeck,
+    importCards,
     deleteDeck,
     setOnlyFavourites,
     setFavourite,

@@ -4,6 +4,7 @@ import {
   parseCreatedLibraryDeck,
   parseDeckCardPage,
   parseEditableLibraryDeck,
+  parseImportLibraryCardsResult,
   parseLibraryCardPage,
   parseLibraryDeckOptionPage,
   parseLibraryDeckPage,
@@ -21,6 +22,8 @@ import type {
   LibraryDeckOption,
   LibraryDeckPage,
   LibraryFavouriteResult,
+  ImportLibraryCardsInput,
+  ImportLibraryCardsResult,
   UpdatedLibraryCard,
   UpdateLibraryCardInput,
   UpdateLibraryDeckInput,
@@ -186,6 +189,27 @@ export async function createLibraryCard(
   });
 
   return parseCreatedLibraryCard(payload);
+}
+
+export async function importLibraryDeckCards(
+  deckUuid: string,
+  input: ImportLibraryCardsInput,
+  signal?: AbortSignal,
+): Promise<ImportLibraryCardsResult> {
+  const payload = await apiFetch<unknown>(`/decks/${deckUuid}/cards/import`, {
+    method: "POST",
+    body: {
+      cards: input.cards.map((card) => ({
+        front_text: card.frontText,
+        back_text: card.backText,
+        front_lang: card.frontLang,
+        back_lang: card.backLang,
+      })),
+    },
+    signal,
+  });
+
+  return parseImportLibraryCardsResult(payload);
 }
 
 export async function getLibraryDeckPage(

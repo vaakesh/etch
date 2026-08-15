@@ -9,24 +9,10 @@ import { LocaleProvider, type AppLocale } from "../../i18n";
 const useLibraryDecksMock = vi.hoisted(() => vi.fn());
 const useLibraryCardsMock = vi.hoisted(() => vi.fn());
 const useCardDeckAssignmentMock = vi.hoisted(() => vi.fn());
+const useAuthMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../auth/hooks/useAuth", () => ({
-  useAuth: () => ({
-    status: "authorized",
-    user: {
-      uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
-      username: "etch-user",
-      email: "etch@example.com",
-      settings: { locale: "ru-RU", theme: "light" },
-    },
-    error: null,
-    isAuthenticated: true,
-    initialize: vi.fn(),
-    login: vi.fn(),
-    logout: vi.fn(),
-    refresh: vi.fn(),
-    applyUserSettings: vi.fn(),
-  }),
+  useAuth: useAuthMock,
 }));
 vi.mock("../../features/library/model/useLibraryDecks", () => ({
   useLibraryDecks: useLibraryDecksMock,
@@ -95,6 +81,7 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
     retry: vi.fn(),
     loadMore: vi.fn(),
     createDeck: vi.fn(async () => undefined),
+    importCards: vi.fn(async () => ({ importedCount: 1, cards: [] })),
     deleteDeck: vi.fn(),
     setOnlyFavourites: vi.fn(),
     setFavourite: vi.fn(),
@@ -156,9 +143,15 @@ function createCardDeckAssignmentResult(
 }
 
 import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
+import { CardImportDialog } from "./CardImportDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
-import { LibraryCardsPanel, LibraryCreateButton, LibraryPage } from "./LibraryPage";
+import {
+  LibraryCardsPanel,
+  LibraryCreateButton,
+  LibraryImportButton,
+  LibraryPage,
+} from "./LibraryPage";
 
 function renderLibraryPage(state?: unknown, locale: AppLocale = "ru-RU"): string {
   return renderToStaticMarkup(
@@ -172,12 +165,29 @@ function renderLibraryPage(state?: unknown, locale: AppLocale = "ru-RU"): string
 
 describe("LibraryPage", () => {
   beforeEach(() => {
+    useAuthMock.mockReset();
     useLibraryDecksMock.mockReset();
     useLibraryCardsMock.mockReset();
     useCardDeckAssignmentMock.mockReset();
     useLibraryDecksMock.mockReturnValue(createLibraryResult());
     useLibraryCardsMock.mockReturnValue(createCardLibraryResult());
     useCardDeckAssignmentMock.mockReturnValue(createCardDeckAssignmentResult());
+    useAuthMock.mockReturnValue({
+      status: "authorized",
+      user: {
+        uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+        username: "etch-user",
+        email: "etch@example.com",
+        settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "light" },
+      },
+      error: null,
+      isAuthenticated: true,
+      initialize: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      refresh: vi.fn(),
+      applyUserSettings: vi.fn(),
+    });
   });
 
   it("renders deck card previews, empty previews, actions, and accessible tabs", () => {
@@ -203,6 +213,7 @@ describe("LibraryPage", () => {
     );
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup.match(/Описание колоды:/g)).toHaveLength(2);
     expect(markup.match(/<article/g)).toHaveLength(2);
     expect(markup.match(/role="meter"/g)).toHaveLength(2);
     expect(markup).toContain('aria-label="Удалить из избранного: «Daily Words»"');
@@ -241,7 +252,10 @@ describe("LibraryPage", () => {
       onDeleteSuccess: expect.any(Function),
     });
     expect(markup).toContain("Новая колода");
+    expect(markup).toContain("Импорт");
+    expect(markup).toContain('title="Импортировать карточки из JSON"');
     expect(markup).not.toContain('data-deck-creator="new"');
+    expect(markup).not.toContain('data-card-import="true"');
   });
 
   it("opens the existing deck creator after navigation from the home action", () => {
@@ -250,6 +264,30 @@ describe("LibraryPage", () => {
     expect(markup).toContain('data-deck-creator="new"');
     expect(markup).toContain('aria-modal="true"');
     expect(markup).toContain("Новая колода");
+  });
+
+  it("removes long-text title previews when they are disabled in user settings", () => {
+    useAuthMock.mockReturnValue({
+      status: "authorized",
+      user: {
+        uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+        username: "etch-user",
+        email: "etch@example.com",
+        settings: { locale: "ru-RU", showPreviewsForLong: false, theme: "light" },
+      },
+      error: null,
+      isAuthenticated: true,
+      initialize: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      refresh: vi.fn(),
+      applyUserSettings: vi.fn(),
+    });
+
+    const markup = renderLibraryPage();
+
+    expect(markup).not.toContain('<h2 title="Daily Words">');
+    expect(markup).toContain("Daily Words");
   });
 
   it("refreshes deck counts after a card is deleted successfully", () => {
@@ -290,6 +328,35 @@ describe("LibraryPage", () => {
     expect(cardsMarkup).not.toContain("Новая колода");
     expect(cardsMarkup).not.toContain("disabled");
     expect(cardsMarkup).toContain('title="Создать новую карточку"');
+  });
+
+  it("renders the compact JSON import action", () => {
+    const markup = renderToStaticMarkup(<LibraryImportButton onImport={vi.fn()} />);
+
+    expect(markup).toContain("Импорт");
+    expect(markup).toContain('title="Импортировать карточки из JSON"');
+    expect(markup).toContain('type="button"');
+  });
+
+  it("starts the import dialog with help and the already loaded deck options", () => {
+    const markup = renderToStaticMarkup(
+      <LocaleProvider initialLocale="ru-RU">
+        <CardImportDialog
+          decks={createLibraryResult().decks.slice(0, 1)}
+          onClose={vi.fn()}
+          onImport={vi.fn(async () => ({ importedCount: 1, cards: [] }))}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(markup).toContain('data-card-import="true"');
+    expect(markup).toContain('aria-modal="true"');
+    expect(markup).toContain("Как это работает");
+    expect(markup).toContain("Формат JSON");
+    expect(markup).toContain("Daily Words");
+    expect(markup).toContain("48 слов");
+    expect(markup).toContain('name="deck_uuid"');
+    expect(markup).not.toContain("Travel Essentials");
   });
 
   it("renders accessible compact cards and active actions after the panel is opened", () => {

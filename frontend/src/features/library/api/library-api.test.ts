@@ -11,6 +11,7 @@ import {
   getLibraryDeckCardPage,
   getLibraryDeckOptions,
   getLibraryDeckPage,
+  importLibraryDeckCards,
   removeLibraryCardFromDeck,
   setLibraryDeckFavourite,
   updateEditableLibraryDeck,
@@ -75,6 +76,53 @@ describe("getEditableLibraryDeck", () => {
     await expect(getEditableLibraryDeck(DECK_UUID)).rejects.toMatchObject({
       status: 0,
       code: "INVALID_LIBRARY_RESPONSE",
+    });
+  });
+});
+
+describe("importLibraryDeckCards", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetch).mockResolvedValue({
+      imported_count: 2,
+      cards: [
+        { uuid: CARD_UUID, position: 49 },
+        { uuid: "28dd615b-a6cb-4471-8238-b41c25556bb0", position: 50 },
+      ],
+    });
+  });
+
+  it("posts the mapped JSON body to the exact deck import route", async () => {
+    const controller = new AbortController();
+
+    await expect(
+      importLibraryDeckCards(
+        DECK_UUID,
+        {
+          cards: [
+            { frontText: "привет", backText: "hello", frontLang: "ru", backLang: "en" },
+            { frontText: "пока", backText: "goodbye", frontLang: "ru", backLang: "en" },
+          ],
+        },
+        controller.signal,
+      ),
+    ).resolves.toEqual({
+      importedCount: 2,
+      cards: [
+        { uuid: CARD_UUID, position: 49 },
+        { uuid: "28dd615b-a6cb-4471-8238-b41c25556bb0", position: 50 },
+      ],
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(`/decks/${DECK_UUID}/cards/import`, {
+      method: "POST",
+      body: {
+        cards: [
+          { front_text: "привет", back_text: "hello", front_lang: "ru", back_lang: "en" },
+          { front_text: "пока", back_text: "goodbye", front_lang: "ru", back_lang: "en" },
+        ],
+      },
+      signal: controller.signal,
     });
   });
 });

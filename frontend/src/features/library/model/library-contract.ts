@@ -12,6 +12,7 @@ import type {
   LibraryDeckOptionPage,
   LibraryDeckPage,
   LibraryPreviewCard,
+  ImportLibraryCardsResult,
   UpdatedLibraryCard,
 } from "./library-types";
 
@@ -209,6 +210,37 @@ export function parseCreatedLibraryDeck(value: unknown): CreatedLibraryDeck {
     isPublic: readBoolean(deck.is_public, "deck.is_public"),
     updatedAt: readNullableDateTime(deck.updated_at, "deck.updated_at"),
   };
+}
+
+export function parseImportLibraryCardsResult(value: unknown): ImportLibraryCardsResult {
+  const result = readRecord(value, "cardImport");
+  const importedCount = readInteger(result.imported_count, "cardImport.imported_count");
+  const cards = result.cards;
+
+  if (importedCount < 1 || importedCount > 500 || !Array.isArray(cards)) {
+    return invalidLibraryResponse("cardImport");
+  }
+
+  const importedCards = cards.map((value, index) => {
+    const path = `cardImport.cards[${index}]`;
+    const card = readRecord(value, path);
+    const position = readInteger(card.position, `${path}.position`);
+
+    if (position < 1) {
+      return invalidLibraryResponse(`${path}.position`);
+    }
+
+    return {
+      uuid: readUuid(card.uuid, `${path}.uuid`),
+      position,
+    };
+  });
+
+  if (importedCards.length !== importedCount) {
+    return invalidLibraryResponse("cardImport.cards");
+  }
+
+  return { importedCount, cards: importedCards };
 }
 
 function parseDeck(value: unknown, index: number): LibraryDeck {

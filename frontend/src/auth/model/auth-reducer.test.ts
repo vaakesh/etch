@@ -7,7 +7,11 @@ const authorizedState = {
     uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
     username: "alice",
     email: "alice@example.com",
-    settings: { locale: "ru-RU" as const, theme: "light" as const },
+    settings: {
+      locale: "ru-RU" as const,
+      showPreviewsForLong: true,
+      theme: "light" as const,
+    },
   },
   error: null,
 };
@@ -17,13 +21,13 @@ describe("auth reducer settings", () => {
     expect(
       authReducer(authorizedState, {
         type: "settings-updated",
-        settings: { locale: "en-US", theme: "system" },
+        settings: { locale: "en-US", showPreviewsForLong: false, theme: "system" },
       }),
     ).toEqual({
       ...authorizedState,
       user: {
         ...authorizedState.user,
-        settings: { locale: "en-US", theme: "system" },
+        settings: { locale: "en-US", showPreviewsForLong: false, theme: "system" },
       },
     });
   });
@@ -32,7 +36,7 @@ describe("auth reducer settings", () => {
     expect(
       authReducer(initialAuthState, {
         type: "settings-updated",
-        settings: { locale: "en-US", theme: "dark" },
+        settings: { locale: "en-US", showPreviewsForLong: false, theme: "dark" },
       }),
     ).toBe(initialAuthState);
   });

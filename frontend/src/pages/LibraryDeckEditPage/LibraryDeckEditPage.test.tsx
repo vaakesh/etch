@@ -7,6 +7,18 @@ import { LocaleProvider, type AppLocale } from "../../i18n";
 
 const useDeckEditorMock = vi.hoisted(() => vi.fn());
 
+vi.mock("../../auth/hooks/useAuth", () => ({
+  useAuth: () => ({
+    status: "authorized",
+    user: {
+      uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+      username: "etch-user",
+      email: "etch@example.com",
+      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "light" },
+    },
+  }),
+}));
+
 vi.mock("../../features/library/model/useDeckEditor", () => ({
   useDeckEditor: useDeckEditorMock,
 }));

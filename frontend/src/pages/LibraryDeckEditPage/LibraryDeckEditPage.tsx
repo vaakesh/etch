@@ -10,6 +10,7 @@ import {
   useDeckEditor,
   type UseDeckEditorResult,
 } from "../../features/library/model/useDeckEditor";
+import { useLongTextPreviewsEnabled } from "../../features/settings/model/useLongTextPreviewsEnabled";
 import {
   CARD_COUNT_FORMS,
   defineMessages,
@@ -556,6 +557,7 @@ export function LibraryDeckEditPage() {
   const { deck_uuid: deckUuid = "" } = useParams<{ deck_uuid: string }>();
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
+  const longTextPreviewsEnabled = useLongTextPreviewsEnabled();
   const editor = useDeckEditor(deckUuid);
   const deckCardCount = localizeCount(editor.deck?.totalWordsCount ?? 0, CARD_COUNT_FORMS, locale);
 
@@ -584,7 +586,9 @@ export function LibraryDeckEditPage() {
                     </span>
                   </div>
                 </div>
-                <h1 title={editor.deck.title}>{editor.deck.title}</h1>
+                <h1 title={longTextPreviewsEnabled ? editor.deck.title : undefined}>
+                  {editor.deck.title}
+                </h1>
                 <p>{messages.lead}</p>
               </div>
             </header>

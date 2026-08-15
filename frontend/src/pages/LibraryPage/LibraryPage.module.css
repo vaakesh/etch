@@ -2761,6 +2761,7 @@ a.navigationItem:hover {
 
 .page button:focus-visible,
 .page input:focus-visible,
+.page select:focus-visible,
 .page textarea:focus-visible,
 .page a:focus-visible,
 .page [role="meter"]:focus-visible {
@@ -2835,6 +2836,59 @@ a.navigationItem:hover {
   background: var(--library-gradient-pink);
   border-radius: 3px;
   box-shadow: 0 4px 12px rgb(117 77 157 / 30%);
+}
+
+.page .libraryHeader > .libraryHeaderActions {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.page .importCardsButton {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  color: var(--library-brown-deep);
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  background: rgb(255 255 255 / 56%);
+  border: 1px solid var(--library-line-strong);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease,
+    transform 170ms var(--library-spring);
+}
+
+.page .importCardsButton svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.page .importCardsButton:hover,
+.page .importCardsButton:focus-visible {
+  color: var(--library-ink-deep);
+  background: var(--library-blue-soft);
+  border-color: rgb(118 98 207 / 42%);
+  box-shadow:
+    0 7px 18px rgb(73 56 115 / 11%),
+    inset 0 1px 0 rgb(255 255 255 / 78%);
+  transform: translateY(-1px);
+}
+
+.page .importCardsButton:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .page .newDeckButton {
@@ -3510,7 +3564,8 @@ a.navigationItem:hover {
 
 .page .deckHero {
   display: block;
-  min-height: 66px;
+  height: 104px;
+  min-height: 104px;
   margin: 10px 0 12px;
 }
 
@@ -3544,6 +3599,23 @@ a.navigationItem:hover {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
+}
+
+.page .deckDescription[data-overflowing="true"] {
+  cursor: help;
+}
+
+.page .deckDescription[data-overflowing="true"]:focus-visible {
+  outline: 3px solid rgb(118 98 207 / 28%);
+  outline-offset: 3px;
+  border-radius: 5px;
+}
+
+.page .deckHero .cardTextTooltip {
+  max-height: min(280px, calc(100vh - 160px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .page .deckPreview {
@@ -3697,8 +3769,8 @@ a.navigationItem:hover {
   transform: translateY(-1px);
 }
 
-.page .deckCard:has(.deckPreview .cardTextOverflow:hover),
-.page .deckCard:has(.deckPreview .cardTextOverflow:focus-within) {
+.page .deckCard:has(.cardTextOverflow:hover),
+.page .deckCard:has(.cardTextOverflow:focus-within) {
   z-index: 20;
 }
 
@@ -5439,6 +5511,336 @@ a.navigationItem:hover {
   transform: translateY(-1px);
 }
 
+.page .cardImportDialog {
+  width: min(860px, calc(100vw - 32px));
+}
+
+.page .cardImportForm {
+  gap: 18px;
+}
+
+.page .cardImportStep {
+  display: grid;
+  gap: 16px;
+}
+
+.page .cardImportSuccess p {
+  margin: 5px 0 0;
+  color: var(--library-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.page .cardImportHelp {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+.page .cardImportHelp > div {
+  display: grid;
+  min-height: 224px;
+  min-width: 0;
+  align-content: start;
+  padding: 20px;
+  background: var(--library-blue-soft);
+  border: 1px solid var(--library-line);
+  border-radius: 13px;
+}
+
+.page .cardImportHelp > div > strong,
+.page .cardImportExample > strong {
+  color: var(--library-ink-deep);
+  font-size: 0.75rem;
+  font-weight: 680;
+}
+
+.page .cardImportHelp > div > p {
+  margin: 10px 0 0;
+  color: var(--library-ink);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.page .cardImportExample p {
+  margin: 7px 0 10px;
+  color: var(--library-muted);
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+
+.page .cardImportExample pre {
+  margin: 0;
+  padding: 12px 13px;
+  overflow: visible;
+  color: #e9e3ff;
+  font:
+    0.65rem/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  background: #30264b;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.page .cardImportDeckOptions {
+  max-height: min(255px, 32dvh);
+  padding: 0 6px 3px 3px;
+}
+
+.page .cardImportDeckOptions legend {
+  margin-bottom: 9px;
+  padding: 0;
+  color: var(--library-ink-deep);
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.page .cardImportDeckOptions .cardDeckOption {
+  background: rgb(255 255 255 / 62%);
+}
+
+.page .cardImportDeckOptions .cardDeckOption:has(input:checked) {
+  background: linear-gradient(105deg, rgb(238 234 255 / 94%), rgb(221 248 245 / 94%));
+}
+
+.page .cardImportFieldHeader > label:first-child {
+  color: var(--library-ink-deep);
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.page .cardImportEmpty {
+  padding: 18px;
+  color: var(--library-ink-deep);
+  text-align: center;
+  background: var(--library-blue-soft);
+  border: 1px solid var(--library-line);
+  border-radius: 13px;
+}
+
+.page .cardImportEmpty strong {
+  font-size: 0.82rem;
+}
+
+.page .cardImportEmpty p {
+  max-width: 500px;
+  margin: 7px auto 0;
+  color: var(--library-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.page .cardImportSelectedDeck {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--library-ink-deep);
+  font-size: 0.7rem;
+  background: var(--library-blue-soft);
+  border: 1px solid var(--library-line);
+  border-radius: 999px;
+}
+
+.page .cardImportSelectedDeck svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: #267762;
+  stroke-width: 2.1;
+}
+
+.page .cardImportSelectedDeck strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page .cardImportFieldHeader {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: -10px;
+}
+
+.page .cardImportFileButton {
+  position: relative;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  color: var(--library-brown-deep);
+  font-size: 0.68rem;
+  font-weight: 650;
+  cursor: pointer;
+  background: var(--library-blue-soft);
+  border: 1px solid var(--library-line-strong);
+  border-radius: 10px;
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    transform 170ms ease;
+}
+
+.page .cardImportFileButton input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.page .cardImportFileButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.page .cardImportFileButton:hover,
+.page .cardImportFileButton:has(input:focus-visible) {
+  color: var(--library-ink-deep);
+  background: var(--library-blue);
+  border-color: rgb(118 98 207 / 42%);
+  transform: translateY(-1px);
+}
+
+.page .cardImportTextarea {
+  width: 100%;
+  min-height: 290px;
+  padding: 15px 16px;
+  resize: vertical;
+  color: var(--library-ink-deep);
+  caret-color: var(--library-brown-deep);
+  font:
+    0.76rem/1.58 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  tab-size: 2;
+  background: rgb(255 255 255 / 72%);
+  border: 1px solid var(--library-line);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 2px rgb(73 56 115 / 4%);
+  outline: none;
+  transition:
+    background-color 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.page .cardImportTextarea:hover {
+  background: var(--library-blue-pale);
+  border-color: var(--library-line-strong);
+}
+
+.page .cardImportTextarea:focus {
+  background: #fff;
+  border-color: var(--library-brown-deep);
+  box-shadow:
+    0 0 0 3px rgb(118 98 207 / 16%),
+    inset 0 1px 2px rgb(73 56 115 / 4%);
+}
+
+.page .cardImportTextarea[aria-invalid="true"] {
+  border-color: var(--library-error);
+  box-shadow: 0 0 0 3px rgb(196 79 121 / 12%);
+}
+
+.page .cardImportFieldMeta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -10px;
+  color: var(--library-muted);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.page .cardImportFieldMeta small:last-child {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.page .cardImportFileStatus {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -5px 0 0;
+  color: #267762;
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.page .cardImportFileStatus svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 2.1;
+}
+
+.page .cardImportSuccess {
+  display: grid;
+  min-height: 310px;
+  align-content: center;
+  justify-items: center;
+  padding: 32px;
+  text-align: center;
+  background: linear-gradient(135deg, rgb(238 234 255 / 70%), rgb(221 248 245 / 78%));
+  border: 1px solid var(--library-line);
+  border-radius: 16px;
+}
+
+.page .cardImportSuccessMark {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #267762, #493873);
+  border-radius: 24px;
+  box-shadow: 0 14px 30px rgb(73 56 115 / 22%);
+  transform: rotate(-3deg);
+}
+
+.page .cardImportSuccessMark svg {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
+}
+
+.page .cardImportSuccess > strong {
+  margin-top: 10px;
+  color: var(--library-ink-deep);
+  font-size: clamp(1.15rem, 3vw, 1.45rem);
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+.page .cardImportSuccess p {
+  max-width: 470px;
+}
+
+.page .cardImportFooter {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
 @keyframes libraryPageEnter {
   from {
     opacity: 0;
@@ -5581,6 +5983,15 @@ a.navigationItem:hover {
     border-radius: 9px;
   }
 
+  .page .libraryHeader > .libraryHeaderActions {
+    gap: 8px;
+  }
+
+  .page .importCardsButton {
+    min-height: 48px;
+    padding-inline: 11px;
+  }
+
   .page .toolbar {
     grid-template-columns: minmax(0, 1fr);
     gap: 15px;
@@ -5637,6 +6048,18 @@ a.navigationItem:hover {
 
   .page .cardEditorLanguageGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page .cardImportHelp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page .cardImportHelp > div {
+    min-height: 0;
+  }
+
+  .page .cardImportTextarea {
+    min-height: 260px;
   }
 }
 
@@ -5756,6 +6179,11 @@ a.navigationItem:hover {
     display: grid;
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   }
+
+  .page .cardImportFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 420px) {
@@ -5774,8 +6202,23 @@ a.navigationItem:hover {
 
   .page .newDeckButton {
     width: 100%;
+    min-width: 0;
     min-height: 48px;
     font-size: 0.82rem;
+  }
+
+  .page .libraryHeader > .libraryHeaderActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page .libraryHeaderActionsWithImport {
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  }
+
+  .page .importCardsButton {
+    width: 100%;
   }
 
   .page .favouritesFilter,
@@ -5878,6 +6321,32 @@ a.navigationItem:hover {
   .page .cardEditorCancel,
   .page .cardEditorSave {
     width: 100%;
+  }
+
+  .page .cardImportHelp > div {
+    padding: 14px;
+  }
+
+  .page .cardImportFieldHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: -8px;
+  }
+
+  .page .cardImportFileButton {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .page .cardImportTextarea {
+    min-height: 230px;
+    padding: 13px;
+    font-size: 0.7rem;
+  }
+
+  .page .cardImportSuccess {
+    min-height: 280px;
+    padding: 24px 18px;
   }
 
   .page .cardDeckOption {
@@ -6886,4 +7355,101 @@ a.navigationItem:hover {
   color: var(--dark-background);
   background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
   border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+}
+
+:global(html[data-theme="dark"]) .page .importCardsButton {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+}
+
+:global(html[data-theme="dark"]) .page .importCardsButton:hover,
+:global(html[data-theme="dark"]) .page .importCardsButton:focus-visible {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+  box-shadow: 0 7px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportHelp > div > strong,
+:global(html[data-theme="dark"]) .page .cardImportExample > strong,
+:global(html[data-theme="dark"]) .page .cardImportFieldHeader > label:first-child,
+:global(html[data-theme="dark"]) .page .cardImportEmpty,
+:global(html[data-theme="dark"]) .page .cardImportSuccess > strong {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportSuccess p,
+:global(html[data-theme="dark"]) .page .cardImportExample p,
+:global(html[data-theme="dark"]) .page .cardImportEmpty p,
+:global(html[data-theme="dark"]) .page .cardImportFieldMeta {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportHelp > div,
+:global(html[data-theme="dark"]) .page .cardImportEmpty,
+:global(html[data-theme="dark"]) .page .cardImportSelectedDeck {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportSelectedDeck svg {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportTextarea {
+  color: var(--dark-text);
+  caret-color: var(--dark-cyan);
+  color-scheme: dark;
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 16%);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportTextarea:hover {
+  background: var(--dark-surface-hover);
+  border-color: rgb(228 228 228 / 18%);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportTextarea:focus {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+  box-shadow:
+    0 0 0 3px var(--dark-cyan-soft),
+    inset 0 1px 2px rgb(0 0 0 / 16%);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportTextarea[aria-invalid="true"] {
+  border-color: var(--dark-pink);
+  box-shadow: 0 0 0 3px var(--dark-pink-soft);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportFileButton {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportFileButton:hover,
+:global(html[data-theme="dark"]) .page .cardImportFileButton:has(input:focus-visible) {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  border-color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportFileStatus {
+  color: var(--dark-cyan);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportSuccess {
+  background: linear-gradient(135deg, var(--dark-cta-soft), var(--dark-cyan-soft));
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .page .cardImportSuccessMark {
+  color: var(--dark-background);
+  background: var(--dark-cyan);
+  box-shadow: 0 14px 30px var(--dark-shadow);
 }

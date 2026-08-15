@@ -17,17 +17,28 @@ describe("settings API", () => {
     apiFetch.mockReset();
   });
 
-  it("updates both required settings through the backend contract", async () => {
-    apiFetch.mockResolvedValue({ locale: "en-US", theme: "system" });
-
-    await expect(updateUserSettingsRequest({ locale: "en-US", theme: "system" })).resolves.toEqual({
+  it("updates all user settings through the backend contract", async () => {
+    apiFetch.mockResolvedValue({
       locale: "en-US",
+      theme: "system",
+      show_previews_for_long: false,
+    });
+
+    await expect(
+      updateUserSettingsRequest({
+        locale: "en-US",
+        showPreviewsForLong: false,
+        theme: "system",
+      }),
+    ).resolves.toEqual({
+      locale: "en-US",
+      showPreviewsForLong: false,
       theme: "system",
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/users/me/settings", {
       method: "PATCH",
-      body: { locale: "en-US", theme: "system" },
+      body: { locale: "en-US", show_previews_for_long: false, theme: "system" },
       signal: undefined,
     });
   });

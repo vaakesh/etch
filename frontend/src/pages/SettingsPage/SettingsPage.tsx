@@ -24,6 +24,10 @@ const MESSAGES = defineMessages(
     title: "Настройки",
     language: "Язык",
     appearance: "Оформление",
+    longTextPreviews: "Предпросмотр длинного текста",
+    longTextPreviewsHint: "Показывать полный текст при наведении или фокусе",
+    enabled: "Включено",
+    disabled: "Выключено",
     themeNames: { light: "Светлая", dark: "Тёмная", system: "Системная" },
     success: "Сохранено",
     dirty: "Есть изменения",
@@ -35,6 +39,10 @@ const MESSAGES = defineMessages(
     title: "Settings",
     language: "Language",
     appearance: "Appearance",
+    longTextPreviews: "Long text previews",
+    longTextPreviewsHint: "Show the full text on hover or focus",
+    enabled: "On",
+    disabled: "Off",
     themeNames: { light: "Light", dark: "Dark", system: "System" },
     success: "Saved",
     dirty: "Unsaved changes",
@@ -144,10 +152,59 @@ function ThemePicker({
   );
 }
 
+function LongTextPreviewToggle({
+  disabled,
+  enabled,
+  onChange,
+}: {
+  disabled: boolean;
+  enabled: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  const messages = useLocalizedMessages(MESSAGES);
+
+  return (
+    <div className={styles.settingRow}>
+      <span className={styles.settingCopy}>
+        <span className={styles.settingLabel} id="settings-long-text-previews-label">
+          {messages.longTextPreviews}
+        </span>
+        <span className={styles.settingHint} id="settings-long-text-previews-hint">
+          {messages.longTextPreviewsHint}
+        </span>
+      </span>
+      <label className={styles.previewToggle}>
+        <input
+          aria-describedby="settings-long-text-previews-hint"
+          aria-labelledby="settings-long-text-previews-label"
+          checked={enabled}
+          disabled={disabled}
+          name="show_previews_for_long"
+          onChange={(event) => onChange(event.currentTarget.checked)}
+          type="checkbox"
+        />
+        <span aria-hidden="true" className={styles.previewToggleTrack} />
+        <span aria-hidden="true" className={styles.previewToggleState}>
+          {enabled ? messages.enabled : messages.disabled}
+        </span>
+      </label>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const messages = useLocalizedMessages(MESSAGES);
-  const { draft, errorMessage, isDirty, reset, save, setLocale, setTheme, status } =
-    useUserSettings();
+  const {
+    draft,
+    errorMessage,
+    isDirty,
+    reset,
+    save,
+    setLocale,
+    setShowPreviewsForLong,
+    setTheme,
+    status,
+  } = useUserSettings();
   const isSaving = status === "saving";
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -166,6 +223,11 @@ export function SettingsPage() {
           <div className={styles.settingsList}>
             <LocalePicker disabled={isSaving} locale={draft.locale} onChange={setLocale} />
             <ThemePicker disabled={isSaving} onChange={setTheme} theme={draft.theme} />
+            <LongTextPreviewToggle
+              disabled={isSaving}
+              enabled={draft.showPreviewsForLong}
+              onChange={setShowPreviewsForLong}
+            />
           </div>
 
           <footer className={styles.formFooter}>

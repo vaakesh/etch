@@ -215,7 +215,6 @@ class DeckCardRepository:
             )
             await self.session.execute(stmt)
 
-
     async def delete(self, deck_card: DeckCard) -> None:
         await self.session.delete(deck_card)
 
@@ -415,6 +414,9 @@ class DeckCardRepository:
             cards_by_deck[deck_uuid].append(card)
 
         return cards_by_deck
+
+    def add_all(self, deck_cards: list[DeckCard]) -> None:
+        self.session.add_all(deck_cards)
 
     def add(self, deck_card: DeckCard) -> None:
         self.session.add(deck_card)

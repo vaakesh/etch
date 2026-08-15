@@ -24,14 +24,14 @@ describe("auth API", () => {
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", theme: "light" },
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
     });
 
     await expect(getCurrentUser()).resolves.toEqual({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", theme: "light" },
+      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "light" },
     });
     expect(apiFetch).toHaveBeenCalledWith("/users/me", {
       signal: undefined,
@@ -61,7 +61,7 @@ describe("auth API", () => {
       email: "alice@example.com",
       created_at: "2026-08-14T12:00:00Z",
       updated_at: "2026-08-14T12:00:00Z",
-      settings: { locale: "ru-RU", theme: "light" },
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
     });
 
     await expect(

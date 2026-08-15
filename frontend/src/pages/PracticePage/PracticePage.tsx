@@ -49,7 +49,7 @@ function getPracticeTextSize(text: string): PracticeTextSize {
   if (characterCount > 64 || longestWordLength > 28) {
     return "compact";
   }
-  if (characterCount > 30 || longestWordLength > 18) {
+  if (characterCount > 30 || longestWordLength > 14) {
     return "medium";
   }
 

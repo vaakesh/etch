@@ -1,7 +1,10 @@
+from typing import Annotated
 from uuid import UUID
 
+from pydantic import Field
+
 from app.auth.deps import CurrentUser, OptionalCurrentUser
-from app.cards.schemas import CardResponse
+from app.cards.schemas import CardResponse, CreateCardRequest, LoadCardsRequest, LoadCardsResponse
 from fastapi import APIRouter, Query, Response, status
 
 from app.cards.deps import CardServiceDeps
@@ -137,6 +140,24 @@ async def reorder_deck_cards(
             deck_uuid=deck_uuid,
             card_uuid=payload.card_uuid,
             to_position=payload.to_position,
+    )
+
+@router.post(
+    "/{deck_uuid}/cards/import",
+    response_model=LoadCardsResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def load_cards_to_deck(
+    deck_uuid: UUID,
+    payload: LoadCardsRequest,
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+):
+    return await deck_service.load_cards_to_deck(
+        deck_uuid=deck_uuid,
+        cards=payload.cards,
+        user_id=current_user.id,
+        user_uuid=current_user.uuid,
     )
 
 @router.post(

@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.database import Base
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, func, text
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,12 @@ class UserSettings(Base):
         String(10),
         default="system",
         server_default="system",
+    )
+    show_previews_for_long: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

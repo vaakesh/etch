@@ -58,6 +58,7 @@ class UserRepository:
                 joinedload(User.settings).load_only(
                     UserSettings.locale,
                     UserSettings.theme,
+                    UserSettings.show_previews_for_long,
                 )
             )
 

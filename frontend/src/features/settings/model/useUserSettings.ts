@@ -18,6 +18,7 @@ export interface UseUserSettingsResult {
   errorMessage: string | null;
   isDirty: boolean;
   setLocale: (locale: AppLocale) => void;
+  setShowPreviewsForLong: (value: boolean) => void;
   setTheme: (theme: AppTheme) => void;
   reset: () => void;
   save: () => Promise<void>;
@@ -26,6 +27,7 @@ export interface UseUserSettingsResult {
 
 const FALLBACK_SETTINGS: UserSettings = {
   locale: DEFAULT_LOCALE,
+  showPreviewsForLong: true,
   theme: DEFAULT_THEME,
 };
 
@@ -35,7 +37,7 @@ const ERROR_MESSAGES = defineMessages(
     invalidResponse: "Сервер сохранил настройки, но вернул данные в неожиданном формате.",
     forbidden: "У этой учётной записи нет доступа к изменению настроек.",
     notFound: "Настройки учётной записи не найдены на сервере.",
-    validation: "Сервер не поддерживает выбранные значения локали или темы.",
+    validation: "Сервер не поддерживает выбранные настройки.",
     network: "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.",
     server: "Сервер временно не может сохранить настройки. Попробуйте немного позже.",
   },
@@ -44,7 +46,7 @@ const ERROR_MESSAGES = defineMessages(
     invalidResponse: "The server saved your settings but returned an unexpected response.",
     forbidden: "This account does not have permission to change settings.",
     notFound: "The server could not find settings for this account.",
-    validation: "The server does not support the selected locale or theme.",
+    validation: "The server does not support the selected settings.",
     network: "We couldn't reach the server. Check your connection and try again.",
     server: "The server cannot save your settings right now. Try again later.",
   },
@@ -110,6 +112,11 @@ export function useUserSettings(): UseUserSettingsResult {
 
   const setTheme = useCallback((theme: AppTheme): void => updateDraft({ theme }), [updateDraft]);
 
+  const setShowPreviewsForLong = useCallback(
+    (showPreviewsForLong: boolean): void => updateDraft({ showPreviewsForLong }),
+    [updateDraft],
+  );
+
   const reset = useCallback((): void => {
     activeControllerRef.current?.abort("settings-reset");
     activeControllerRef.current = null;
@@ -156,7 +163,10 @@ export function useUserSettings(): UseUserSettingsResult {
   }, [applyUserSettings, draft, messages, status]);
 
   const isDirty = useMemo(
-    () => draft.locale !== savedSettings.locale || draft.theme !== savedSettings.theme,
+    () =>
+      draft.locale !== savedSettings.locale ||
+      draft.theme !== savedSettings.theme ||
+      draft.showPreviewsForLong !== savedSettings.showPreviewsForLong,
     [draft, savedSettings],
   );
 
@@ -167,6 +177,7 @@ export function useUserSettings(): UseUserSettingsResult {
     reset,
     save,
     setLocale,
+    setShowPreviewsForLong,
     setTheme,
     status,
   };

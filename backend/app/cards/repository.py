@@ -103,6 +103,8 @@ class CardRepository:
         rows = result.one_or_none()
         return rows
 
+    def add_all(self, cards: list[Card]) -> None:
+        self.session.add_all(cards)
 
     def add(self, card: Card) -> None:
         self.session.add(card)

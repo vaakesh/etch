@@ -3,6 +3,7 @@ import { isApiError } from "../../../api";
 import {
   parseDeckCardPage,
   parseEditableLibraryDeck,
+  parseImportLibraryCardsResult,
   parseLibraryCardPage,
   parseLibraryDeckOptionPage,
   parseLibraryDeckPage,
@@ -93,6 +94,35 @@ describe("parseEditableLibraryDeck", () => {
 
     expect(() => parseEditableLibraryDeck({ ...VALID_DECK_DETAIL, words_count: -1 })).toThrow();
     expect(() => parseEditableLibraryDeck({ ...VALID_DECK_DETAIL, uuid: "not-a-uuid" })).toThrow();
+  });
+});
+
+describe("parseImportLibraryCardsResult", () => {
+  it("maps the import count and card positions", () => {
+    expect(
+      parseImportLibraryCardsResult({
+        imported_count: 1,
+        cards: [{ uuid: CARD_UUID, position: 49 }],
+      }),
+    ).toEqual({
+      importedCount: 1,
+      cards: [{ uuid: CARD_UUID, position: 49 }],
+    });
+  });
+
+  it("rejects mismatched counts and invalid positions", () => {
+    expect(() =>
+      parseImportLibraryCardsResult({
+        imported_count: 2,
+        cards: [{ uuid: CARD_UUID, position: 1 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseImportLibraryCardsResult({
+        imported_count: 1,
+        cards: [{ uuid: CARD_UUID, position: 0 }],
+      }),
+    ).toThrow();
   });
 });
 

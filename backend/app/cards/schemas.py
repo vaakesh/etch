@@ -1,9 +1,11 @@
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, PastDatetime
+from pydantic import BaseModel, ConfigDict, Field, PastDatetime
 
 from app.cards.models import Card
 from app.cards.types import CardLang, CardText
+from app.training_sessions.schemas import PositiveInt
 
 
 
@@ -56,3 +58,17 @@ class CardResponse(BaseModel):
     back_lang: CardLang
 
     updated_at: PastDatetime
+
+class LoadCardsRequest(BaseModel):
+    cards: Annotated[
+        list[CreateCardRequest],
+        Field(min_length=1, max_length=500),
+    ]
+
+class LoadedCardResponse(BaseModel):
+    uuid: UUID
+    position: PositiveInt
+
+class LoadCardsResponse(BaseModel):
+    imported_count: int
+    cards: list[LoadedCardResponse]

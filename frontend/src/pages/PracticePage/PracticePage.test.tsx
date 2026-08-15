@@ -271,6 +271,30 @@ describe("PracticePage", () => {
     expect(markup).toContain("карточек пропущено");
   });
 
+  it("reduces the prompt size before a long word wraps by a few characters", () => {
+    usePracticeSessionMock.mockReturnValue(
+      createPracticeResult(
+        createReadyState({
+          session: createSession({
+            cards: [
+              {
+                sequenceNumber: 1,
+                promptText: "приостанавливать",
+                promptLanguage: "ru",
+                answerLanguage: "en",
+              },
+            ],
+            totalCount: 1,
+          }),
+        }),
+      ),
+    );
+
+    const markup = renderPractice(`/practice?session=${SESSION_UUID}`);
+
+    expect(markup).toMatch(/<h1[^>]*data-text-size="medium"[^>]*>приостанавливать<\/h1>/);
+  });
+
   it("does not offer a futile retry when resume reports a finished session", () => {
     const retryResume = vi.fn();
     usePracticeSessionMock.mockReturnValue({

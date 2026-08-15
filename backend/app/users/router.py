@@ -50,6 +50,7 @@ async def get_me(
         settings=UserSettingsResponse(
             locale=user_settings.locale,
             theme=user_settings.theme,
+            show_previews_for_long=user_settings.show_previews_for_long,
         )
     )
 
@@ -205,6 +206,7 @@ async def create_user(
         settings=UserSettingsResponse(
             locale=user_settings.locale,
             theme=user_settings.theme,
+            show_previews_for_long=user_settings.show_previews_for_long,
         )
     )
 

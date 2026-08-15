@@ -1399,7 +1399,8 @@
 .promptArea h1 {
   max-width: 850px;
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
   color: var(--practice-ink);
   font-size: clamp(2.5rem, 7vw, 6.5rem);
   font-weight: 650;
@@ -1630,7 +1631,8 @@
 
 .feedbackAnswer {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
   color: var(--practice-ink);
   font-size: 1.125rem;
   font-weight: 600;

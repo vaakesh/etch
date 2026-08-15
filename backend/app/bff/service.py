@@ -126,7 +126,14 @@ class BffService:
 
         user_weekly_activity = []
         while from_date < to_date:
-            user_weekly_activity.append({"date": from_date, "percent": daily_activities[from_date] * 100 / max_value}) 
+            user_weekly_activity.append(
+                {
+                    "date": from_date, 
+                    "percent": round(
+                        daily_activities[from_date] * 100 / max_value
+                    ) if max_value > 0 else 0
+                }
+            ) 
                 
             from_date += timedelta(days=1)
 

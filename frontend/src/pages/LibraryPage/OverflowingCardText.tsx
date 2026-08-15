@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useLongTextPreviewsEnabled } from "../../features/settings/model/useLongTextPreviewsEnabled";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
 import styles from "./LibraryPage.module.css";
 
@@ -7,7 +8,7 @@ const MESSAGES = defineMessages({ fullText: "Полный текст" }, { fullT
 interface OverflowingCardTextProps {
   className: string;
   label: string;
-  language: string;
+  language?: string;
   text: string;
 }
 
@@ -18,11 +19,16 @@ export function OverflowingCardText({
   text,
 }: OverflowingCardTextProps) {
   const messages = useLocalizedMessages(MESSAGES);
+  const previewsEnabled = useLongTextPreviewsEnabled();
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const tooltipId = useId();
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
+    if (!previewsEnabled) {
+      return;
+    }
+
     const element = textRef.current;
 
     if (element === null) {
@@ -50,26 +56,28 @@ export function OverflowingCardText({
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [text]);
+  }, [previewsEnabled, text]);
+
+  const showFullText = previewsEnabled && isOverflowing;
 
   return (
     <div className={styles.cardTextOverflow}>
       <p
-        aria-describedby={isOverflowing ? tooltipId : undefined}
+        aria-describedby={showFullText ? tooltipId : undefined}
         className={className}
-        data-overflowing={isOverflowing}
+        data-overflowing={showFullText}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.currentTarget.blur();
           }
         }}
         ref={textRef}
-        tabIndex={isOverflowing ? 0 : undefined}
+        tabIndex={showFullText ? 0 : undefined}
       >
         <span className={styles.visuallyHidden}>{label}: </span>
         <span lang={language}>{text}</span>
       </p>
-      {isOverflowing ? (
+      {showFullText ? (
         <span className={styles.cardTextTooltip} id={tooltipId} role="tooltip">
           <span className={styles.cardTextTooltipLabel}>{messages.fullText}</span>
           <span lang={language}>{text}</span>

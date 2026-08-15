@@ -4,6 +4,7 @@ import { isApiError } from "../../api";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import { shouldOpenDeckCreator } from "../../features/library/model/library-navigation";
+import { useLongTextPreviewsEnabled } from "../../features/settings/model/useLongTextPreviewsEnabled";
 import type {
   LibraryCard,
   LibraryDeckItem,
@@ -26,6 +27,7 @@ import {
   type AppLocale,
 } from "../../i18n";
 import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
+import { CardImportDialog } from "./CardImportDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { DeckDeleteDialog } from "./DeckDeleteDialog";
@@ -65,6 +67,7 @@ const MESSAGES = defineMessages(
     deleteDeck: (title: string) => `Удалить колоду «${title}»`,
     deleting: "Удаляем…",
     noDescription: "Без описания",
+    deckDescription: "Описание колоды",
     deckPreview: (title: string) => `Первые карточки колоды «${title}»`,
     translation: "Перевод",
     word: "Слово",
@@ -100,6 +103,8 @@ const MESSAGES = defineMessages(
     newCard: "Новая карточка",
     createDeck: "Создать новую колоду",
     createCard: "Создать новую карточку",
+    importCards: "Импорт",
+    openImport: "Импортировать карточки из JSON",
     eyebrow: "Ваше пространство",
     title: "Библиотека",
     searchLabel: "Поиск по названию колоды",
@@ -147,6 +152,7 @@ const MESSAGES = defineMessages(
     deleteDeck: (title: string) => `Delete “${title}”`,
     deleting: "Deleting…",
     noDescription: "No description",
+    deckDescription: "Deck description",
     deckPreview: (title: string) => `First cards in “${title}”`,
     translation: "Translation",
     word: "Word",
@@ -182,6 +188,8 @@ const MESSAGES = defineMessages(
     newCard: "New card",
     createDeck: "Create a new deck",
     createCard: "Create a new card",
+    importCards: "Import",
+    openImport: "Import cards from JSON",
     eyebrow: "Your space",
     title: "Library",
     searchLabel: "Search by deck title",
@@ -481,6 +489,7 @@ function DeckCard({
 }: DeckCardProps) {
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
+  const longTextPreviewsEnabled = useLongTextPreviewsEnabled();
   const previewCards = deck.cards.slice(0, 2);
   const hasMoreCards = deck.totalWordsCount > previewCards.length;
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -561,8 +570,12 @@ function DeckCard({
 
       <div className={styles.deckHero}>
         <div className={styles.deckCopy}>
-          <h2 title={deck.title}>{deck.title}</h2>
-          <p>{deck.description ?? messages.noDescription}</p>
+          <h2 title={longTextPreviewsEnabled ? deck.title : undefined}>{deck.title}</h2>
+          <OverflowingCardText
+            className={styles.deckDescription}
+            label={messages.deckDescription}
+            text={deck.description ?? messages.noDescription}
+          />
         </div>
       </div>
 
@@ -1179,6 +1192,39 @@ export function LibraryCreateButton({
   );
 }
 
+function LibraryImportGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5" />
+      <path d="M5 16.5V21h14v-4.5" />
+    </svg>
+  );
+}
+
+export function LibraryImportButton({ onImport }: { onImport: () => void }) {
+  const messages = useLocalizedMessages(MESSAGES);
+
+  return (
+    <button
+      className={styles.importCardsButton}
+      onClick={onImport}
+      title={messages.openImport}
+      type="button"
+    >
+      <LibraryImportGlyph />
+      <span>{messages.importCards}</span>
+    </button>
+  );
+}
+
 export function LibraryPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -1197,6 +1243,7 @@ export function LibraryPage() {
   );
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(openDeckCreatorFromNavigation);
+  const [isCardImportOpen, setIsCardImportOpen] = useState(false);
   const [useCompactDeckLoading, setUseCompactDeckLoading] = useState(false);
   const [deckSearchQuery, setDeckSearchQuery] = useState("");
   const [cardAssignedNoticeKey, setCardAssignedNoticeKey] = useState<number | null>(null);
@@ -1216,6 +1263,7 @@ export function LibraryPage() {
     locale,
   );
   const loadedCardCount = localizeCount(cardLibrary.cards.length, CARDS_LOADED_COUNT_FORMS, locale);
+  const importDecks = library.decks.filter((deck) => deck.ownerUuid === currentUserUuid);
 
   useEffect(() => {
     if (!openDeckCreatorFromNavigation) {
@@ -1274,11 +1322,22 @@ export function LibraryPage() {
             <span className={styles.eyebrow}>{messages.eyebrow}</span>
             <h1>{messages.title}</h1>
           </div>
-          <LibraryCreateButton
-            activeView={activeView}
-            onCreateCard={() => setIsCreateCardOpen(true)}
-            onCreateDeck={() => setIsCreateDeckOpen(true)}
-          />
+          <div
+            className={
+              activeView === "decks"
+                ? `${styles.libraryHeaderActions} ${styles.libraryHeaderActionsWithImport}`
+                : styles.libraryHeaderActions
+            }
+          >
+            {activeView === "decks" ? (
+              <LibraryImportButton onImport={() => setIsCardImportOpen(true)} />
+            ) : null}
+            <LibraryCreateButton
+              activeView={activeView}
+              onCreateCard={() => setIsCreateCardOpen(true)}
+              onCreateDeck={() => setIsCreateDeckOpen(true)}
+            />
+          </div>
         </header>
 
         <div className={styles.toolbar}>
@@ -1454,6 +1513,13 @@ export function LibraryPage() {
           <DeckCreatorDialog
             onClose={() => setIsCreateDeckOpen(false)}
             onSave={library.createDeck}
+          />
+        ) : null}
+        {isCardImportOpen ? (
+          <CardImportDialog
+            decks={importDecks}
+            onClose={() => setIsCardImportOpen(false)}
+            onImport={library.importCards}
           />
         ) : null}
       </section>

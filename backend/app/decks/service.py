@@ -10,6 +10,8 @@ from app.users.schemas import SearchQuery
 from app.utils import calculate_accuracy, decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
+from app.cards.schemas import CreateCardRequest, LoadCardsResponse, LoadedCardResponse
+
 from .errors import (
     CannotFollowOwnDeckError,
     DeckAlreadyExistsError,
@@ -42,6 +44,68 @@ class DeckService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+
+    async def load_cards_to_deck(
+        self,
+        deck_uuid: UUID,
+        cards: list[CreateCardRequest],
+        user_id: int,
+        user_uuid: UUID,
+    ):
+        async with self.uow_factory() as uow:
+            deck = await self._get_by_uuid(
+                uow=uow,
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
+
+            if deck.user_id != user_id:
+                raise PermissionDeniedError()
+
+            max_position = await uow.deck_card_repo.get_max_position(
+                deck_id=deck.id,
+            )
+            first_position = (max_position or 0) + 1
+
+            card_entities = [
+                Card(
+                    user_id=user_id,
+                    **card.model_dump()
+                )
+                for card in cards
+            ]
+
+            uow.card_repo.add_all(card_entities)
+            await uow.flush()
+
+            links = [
+                DeckCard(
+                    deck_id=deck.id,
+                    card_id=card.id,
+                    position=first_position + index,
+                )
+                for index, card in enumerate(card_entities)
+            ]
+
+            uow.deck_card_repo.add_all(links)
+
+            deck.words_count += len(card_entities)
+            deck.version += 1
+
+            await uow.commit()
+
+            return LoadCardsResponse(
+                imported_count=len(card_entities),
+                cards=[
+                    LoadedCardResponse(
+                        uuid=card.uuid,
+                        position=link.position,
+                    )
+                    for card, link in zip(card_entities, links, strict=True)
+                ]
+            )
+
+
 
     async def get_by_uuids(
         self,

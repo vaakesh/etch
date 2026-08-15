@@ -115,3 +115,24 @@ export type LibraryDeckItem = LibraryDeck;
 export interface LibraryFavouriteResult {
   isFavourite: boolean;
 }
+
+export interface ImportLibraryCardInput {
+  frontText: string;
+  backText: string;
+  frontLang: string;
+  backLang: string;
+}
+
+export interface ImportLibraryCardsInput {
+  cards: readonly ImportLibraryCardInput[];
+}
+
+export interface ImportedLibraryCard {
+  uuid: string;
+  position: number;
+}
+
+export interface ImportLibraryCardsResult {
+  importedCount: number;
+  cards: readonly ImportedLibraryCard[];
+}

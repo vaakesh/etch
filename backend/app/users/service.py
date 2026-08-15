@@ -90,6 +90,7 @@ class UserService:
                     user_id=user.id,
                     locale="ru-RU",
                     theme="light",
+                    show_previews_for_long=True,
                 )
                 uow.user_settings_repo.add(user_settings)
                 await uow.commit()
