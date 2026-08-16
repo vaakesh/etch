@@ -23,7 +23,7 @@ from app.config import AuthTokensConfig
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
-from app.utils import utcnow
+from app.common.utils import utcnow
 
 
 class AuthTokensService:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.bff.schemas import UserProgressResponse
-from app.utils import utcnow
+from app.common.utils import utcnow
 
 
 class TrainingSessionItemRepository:

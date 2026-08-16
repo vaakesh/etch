@@ -29,7 +29,7 @@ from app.redis.schemas import UserDeckIdentity
 from app.cards.schemas import CardResponse, InternalCard
 from app.training_sessions.schemas import PracticeSessionResponse
 from app.common.schemas import CursorPage
-from app.utils import calculate_accuracy, utcnow
+from app.common.utils import calculate_accuracy, utcnow
 from app.common.utils import make_user_deck_identity
 
 

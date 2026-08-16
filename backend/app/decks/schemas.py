@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, PastDatetime, model_validator
 from app.training_sessions.schemas import Counter, Percent, PositiveInt
 from app.decks.models import Deck
 from app.decks.types import DeckDescription, DeckTitle
-from app.utils import calculate_accuracy
+from app.common.utils import calculate_accuracy
 
 class InternalDeck(BaseModel):
     model_config = ConfigDict(from_attributes=True)

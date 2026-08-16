@@ -22,7 +22,7 @@ from app.training_sessions.schemas import (
     UserAnswer,
 )
 from app.users.errors import UserNotFoundError
-from app.utils import decode_cursor, encode_cursor, utcnow
+from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.models import UserDeck
 from app.redis.service import RedisCacheService
 from app.bff.schemas import UserProgressResponse

@@ -8,7 +8,7 @@ from app.cards.errors import (
 )
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
-from app.utils import decode_cursor, encode_cursor
+from app.common.utils import decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
 from app.users.schemas import SearchQuery

@@ -7,7 +7,7 @@ from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.schemas import SearchQuery
-from app.utils import calculate_accuracy, decode_cursor, encode_cursor
+from app.common.utils import calculate_accuracy, decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
 
 from app.cards.schemas import CreateCardRequest, LoadCardsResponse, LoadedCardResponse
@@ -120,8 +120,6 @@ class DeckService:
                     for card, link in zip(card_entities, links, strict=True)
                 ]
             )
-
-
 
     async def get_by_uuids(
         self,
@@ -779,7 +777,6 @@ class UserDeckService:
                 InternalUserDeck.model_validate(user_deck)
                 for user_deck in user_decks
             ]
-
 
     async def get_my_favourite_decks(
         self,
