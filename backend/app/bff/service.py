@@ -113,7 +113,7 @@ class BffService:
                     deck_id=user_deck.deck_id,
                 )
             ] = user_deck
-        
+
         return [
             CatalogDeckItemResponse(
                 deck=DeckResponse.model_validate(deck),

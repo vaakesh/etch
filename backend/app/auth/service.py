@@ -106,6 +106,8 @@ class AuthService:
                 for_update=True,
             )
 
+            if user is None:
+                raise InvalidLoginCredentials()
 
             if not verify_password(
                 password=current_password,

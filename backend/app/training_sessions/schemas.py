@@ -18,6 +18,40 @@ type Percent = Annotated[
     Field(ge=0, le=100),
 ]
 
+class InternalTrainingSession(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    user_id: int
+    deck_id: int
+    status: TrainingSessionStatus
+    requested_count: Counter
+    actual_count: Counter
+    correct_count: Counter
+    wrong_count: Counter
+    prompt_side: CardSide
+    answer_side: CardSide
+    started_at: PastDatetime
+    finished_at: PastDatetime | None
+
+class InternalTrainingSessionItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    training_session_id: int
+    sequence_number: int
+    original_card_uuid: UUID
+    user_typed_text: str | None
+    prompt_text: CardText
+    answer_text: CardText
+    prompt_lang: CardLang
+    answer_lang: CardLang
+    is_answered: bool
+    is_correct: bool
+    answered_at: PastDatetime | None
+
 class PracticeCardResponse(BaseModel):
     sequence_number: int = Field(ge=1)
 

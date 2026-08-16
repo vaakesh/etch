@@ -13,8 +13,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.users.schemas import SearchQuery
 
-from .models import Card
-from .schemas import CreateCardRequest, UpdateCardRequest
+from app.cards.models import Card
+from app.cards.schemas import CreateCardRequest, InternalCard, UpdateCardRequest
 
 
 class CardService:
@@ -31,7 +31,7 @@ class CardService:
         card_uuid: UUID,
         deck_uuid: UUID,
         viewer_id: int | None,
-    ):
+    ) -> InternalCard:
         async with self.uow_factory() as uow:
             card = await uow.card_repo.get_card_in_deck(
                 deck_uuid=deck_uuid,
@@ -43,25 +43,28 @@ class CardService:
             if card is None:
                 raise CardNotFoundError()
 
-            return card
+            return InternalCard.model_validate(card)
 
     async def get_by_uuids(
         self,
         card_uuids: list[UUID],
-    ) -> list[Card]:
+    ) -> list[InternalCard]:
         async with self.uow_factory() as uow:
             cards = await uow.card_repo.get_by_uuids(
                 card_uuids=card_uuids,
             )
-            return cards
+            return [
+                InternalCard.model_validate(card)
+                for card in cards
+            ]
 
     async def get_by_uuid(
             self, 
             card_uuid: UUID,
-        ) -> Card:
+        ) -> InternalCard:
         async with self.uow_factory() as uow:
             card = await self._get_by_uuid(uow, card_uuid)
-            return card
+            return InternalCard.model_validate(card)
 
     async def _get_by_uuid(
         self,
@@ -81,7 +84,7 @@ class CardService:
         search_query: SearchQuery = None,
         cursor: str | None = None,
         limit: int = 50,
-    ) -> tuple[list[Card], str | None, bool]:
+    ) -> tuple[list[InternalCard], str | None, bool]:
         async with self.uow_factory() as uow:
             cursor_updated_at, cursor_id = (
                 decode_cursor(cursor) if cursor is not None else (None, None)
@@ -101,14 +104,18 @@ class CardService:
                     entity_id=cards[-1].id,
                 )
 
-            return cards, next_cursor, has_more
+            return (
+                [InternalCard.model_validate(card) for card in cards],
+                next_cursor, 
+                has_more
+            )
 
     async def create_card(
         self,
         payload: CreateCardRequest,
         user_id: int,
         user_uuid: UUID,
-    ) -> Card:
+    ) -> InternalCard:
         try:
             async with self.uow_factory() as uow:
                 card = Card(
@@ -125,7 +132,7 @@ class CardService:
                     user_uuid=user_uuid,
                 )
 
-                return card
+                return InternalCard.model_validate(card)
 
         except IntegrityError as e:
             raise CardAlreadyExistsError() from e
@@ -135,7 +142,7 @@ class CardService:
         card_uuid: UUID,
         user_id: int,
         payload: UpdateCardRequest,
-    ) -> Card:
+    ) -> InternalCard:
         try:
             async with self.uow_factory() as uow:
                 card = await self._get_by_uuid(uow, card_uuid)
@@ -157,7 +164,7 @@ class CardService:
                     card_uuids=[card.uuid],
                 )
 
-                return card
+                return InternalCard.model_validate(card)
 
         except IntegrityError as e:
             raise CardAlreadyExistsError() from e

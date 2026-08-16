@@ -15,6 +15,8 @@ from app.training_sessions.errors import (
 )
 from app.training_sessions.models import TrainingSession, TrainingSessionItem
 from app.training_sessions.schemas import (
+    InternalTrainingSession,
+    InternalTrainingSessionItem,
     PracticeCardResponse,
     PracticeSessionResponse,
     SubmitAnswerResponse,
@@ -66,7 +68,6 @@ class TrainingSessionService:
                 user_id=user_id,
             )
 
-
     async def get_session_history(
         self,
         user_id: int,
@@ -74,7 +75,7 @@ class TrainingSessionService:
         only_answered_items: bool = False,
         page_size: int = 30,
         page_number: int = 1,
-    ) -> list[TrainingSessionItem] | None:
+    ) -> list[InternalTrainingSessionItem] | None:
         async with self.uow_factory() as uow:
 
             rows = await uow.training_session_item_repo.get_session_history(
@@ -88,11 +89,11 @@ class TrainingSessionService:
             )
             if not rows:
                 raise TrainingSessionNotFoundError()
-            items = []
+            items: list[InternalTrainingSessionItem] = []
             status = rows[0][1]
             for item, _ in rows:
                 if item is not None:
-                    items.append(item)
+                    items.append(InternalTrainingSessionItem.model_validate(obj=item))
 
             if status == TrainingSessionStatus.IN_PROGRESS:
                 raise TrainingSessionNotFinishedYet()
@@ -210,7 +211,7 @@ class TrainingSessionService:
         uow: UnitOfWork,
         user_id: int,
         training_session: TrainingSession,
-    ):
+    ) -> None:
         user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
             user_id=user_id,
             deck_id=training_session.deck_id,
@@ -229,7 +230,7 @@ class TrainingSessionService:
             self, 
             session_uuid: UUID,
             current_user_id: int | None = None,
-        ) -> TrainingSession:
+        ) -> InternalTrainingSession:
         async with self.uow_factory() as uow:
             training_session = await self._get_by_uuid(uow, session_uuid)
 
@@ -238,7 +239,7 @@ class TrainingSessionService:
                 if current_user_id is None or current_user_id != training_session.user_id:
                     raise TrainingSessionNotFoundError()
             
-            return training_session
+            return InternalTrainingSession.model_validate(training_session)
 
     async def _get_by_uuid(
         self,
@@ -260,7 +261,7 @@ class TrainingSessionService:
         status: TrainingSessionStatus | None = None,
         cursor: str | None = None,
         limit: int = 10,
-    ) -> tuple[list[TrainingSession], str | None, bool]:
+    ) -> tuple[list[InternalTrainingSession], str | None, bool]:
         async with self.uow_factory() as uow:
             user = await uow.user_repo.get_by_uuid(
                 user_uuid=user_uuid,
@@ -330,7 +331,7 @@ class TrainingSessionService:
                             training_sessions[-1].id,
                         )
             
-            return training_sessions, next_cursor, has_more
+            return [InternalTrainingSession.model_validate(training_sessions)], next_cursor, has_more
 
     async def start_training_session(
         self,

@@ -10,7 +10,7 @@ from app.users.errors import (
     UserNotFoundError,
 )
 from app.users.models import User, UserSettings
-from app.users.schemas import CreateUserRequest, UserSettingsUpdate, UpdateUserRequest
+from app.users.schemas import CreateUserRequest, InternalUser, UserSettingsUpdate, UpdateUserRequest
 from sqlalchemy.exc import IntegrityError
 
 
@@ -48,14 +48,14 @@ class UserService:
             self, 
             user_uuid: UUID,
             for_update: bool = False,
-        ) -> User:
+        ) -> InternalUser:
         async with self.uow_factory() as uow:
             user = await self._get_by_uuid(
                 uow=uow, 
                 user_uuid=user_uuid,
                 for_update=for_update,
             )
-            return user
+            return InternalUser.model_validate(obj=user)
 
     async def _get_by_uuid(
             self, 
@@ -95,7 +95,7 @@ class UserService:
                 uow.user_settings_repo.add(user_settings)
                 await uow.commit()
                 await uow.user_settings_repo.refresh(user_settings)
-                return user, user_settings
+                return InternalUser.model_validate(obj=user), user_settings
         except IntegrityError as e:
             raise UserAlreadyExistsError() from e
 
@@ -126,7 +126,6 @@ class UserService:
             await uow.commit()
             return user_settings
 
-        
     async def update_user(
             self,
             target_user_uuid: UUID,
@@ -160,7 +159,7 @@ class UserService:
                 await uow.user_repo.refresh(target_user)
                 await uow.commit()
 
-                return target_user
+                return InternalUser.model_validate(obj=target_user)
         except IntegrityError as e:
             raise UserAlreadyExistsError() from e
         

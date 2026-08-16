@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, PastDatetime, StringConstraints
 
 from app.users.types import Locale, Theme
 
@@ -55,6 +55,17 @@ type SearchQuery = Annotated[
 
 
 # SCHEMAS
+
+class InternalUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    username: Username
+    email: EmailStr
+    hashed_password: str
+    created_at: PastDatetime
+    updated_at: PastDatetime
 
 class PublicUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
