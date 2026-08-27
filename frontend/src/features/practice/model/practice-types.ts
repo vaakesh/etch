@@ -54,8 +54,14 @@ export interface PracticeSessionHistoryItem {
   isCorrect: boolean | null;
 }
 
+export interface PracticeDeckSummary {
+  uuid: string;
+  wordsCount: number;
+}
+
 export interface StartPracticeSessionInput {
   promptSide: CardSide;
+  wordsPerSession: number;
 }
 
 export type SubmitPracticeAnswerInput =

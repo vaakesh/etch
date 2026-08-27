@@ -5,6 +5,8 @@ import logging
 from typing import Literal
 from uuid import UUID
 
+from pydantic import PositiveInt
+
 from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
@@ -331,12 +333,20 @@ class TrainingSessionService:
                             training_sessions[-1].id,
                         )
             
-            return [InternalTrainingSession.model_validate(training_sessions)], next_cursor, has_more
+            return (
+                [
+                    InternalTrainingSession.model_validate(training_session)
+                    for training_session in training_sessions
+                ],
+                next_cursor,
+                has_more
+            )
 
     async def start_training_session(
         self,
         user_id: int,
         deck_uuid: UUID,
+        words_per_session: PositiveInt,
         prompt_side: Literal["front", "back"],
     ) -> PracticeSessionResponse:
         async with self.uow_factory() as uow:
@@ -372,7 +382,7 @@ class TrainingSessionService:
             training_session = TrainingSession(
                 user_id=user_id,
                 deck_id=deck.id,
-                requested_count=0,
+                requested_count=words_per_session,
                 actual_count=0,
                 correct_count=0,
                 wrong_count=0,
@@ -388,6 +398,7 @@ class TrainingSessionService:
                 deck_id=deck.id,
                 prompt_side=prompt_side,
                 answer_side=answer_side,
+                words_per_session=words_per_session,
             )
             if not training_session_items:
                 raise DeckIsEmptyError()

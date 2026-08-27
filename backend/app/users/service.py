@@ -76,7 +76,7 @@ class UserService:
     async def create_user(
             self,
             payload: CreateUserRequest,
-    ) -> tuple[User, UserSettings]:
+    ) -> tuple[InternalUser, UserSettings]:
         try:
             async with self.uow_factory() as uow:
                 user_data = payload.model_dump(exclude={"password"})
@@ -131,7 +131,7 @@ class UserService:
             target_user_uuid: UUID,
             current_user_id: int,
             payload: UpdateUserRequest,
-    ) -> User:
+    ) -> InternalUser:
         try:
             async with self.uow_factory() as uow:
                 update_data = payload.model_dump(exclude_unset=True, exclude_none=True)

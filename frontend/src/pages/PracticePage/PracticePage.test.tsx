@@ -122,7 +122,8 @@ describe("PracticePage", () => {
     usePracticeSessionMock.mockReturnValue(createPracticeResult());
     usePracticeDeckAvailabilityMock.mockReset();
     usePracticeDeckAvailabilityMock.mockImplementation((deckUuid: string | null) => ({
-      state: deckUuid === null ? { status: "idle" } : { status: "ready", deckUuid },
+      state:
+        deckUuid === null ? { status: "idle" } : { status: "ready", deckUuid, wordsCount: 120 },
       retry: vi.fn(),
     }));
     usePracticeHistoryMock.mockReset();
@@ -155,7 +156,7 @@ describe("PracticePage", () => {
     expect(markup).toContain("Your practice sessions will appear here");
   });
 
-  it("renders session setup with disabled future card limits", () => {
+  it("renders active preset and custom session limits", () => {
     const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
 
     expect(markup).toContain("Настройка сессии");
@@ -169,6 +170,12 @@ describe("PracticePage", () => {
     expect(markup).toContain("50 карточек");
     expect(markup).toContain("100 карточек");
     expect(markup).toContain("Своё значение");
+    expect(markup.match(/<input[^>]*value="50"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(markup.match(/<input[^>]*value="100"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(markup.match(/<input[^>]*value="custom"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(markup.match(/<input[^>]*aria-label="Количество карточек"[^>]*>/)?.[0]).not.toContain(
+      "disabled",
+    );
     expect(markup).toContain("Начать");
     expect(usePracticeSessionMock).toHaveBeenCalledWith(null, DECK_UUID);
     expect(usePracticeDeckAvailabilityMock).toHaveBeenCalledWith(DECK_UUID);
@@ -378,7 +385,7 @@ describe("PracticePage", () => {
     const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
 
     expect(markup).toContain('aria-busy="true"');
-    expect(markup.match(/<fieldset[^>]*disabled=""/g)).toHaveLength(1);
+    expect(markup.match(/<fieldset[^>]*disabled=""/g)).toHaveLength(2);
   });
 
   it("restores the completion summary from navigation history state", () => {

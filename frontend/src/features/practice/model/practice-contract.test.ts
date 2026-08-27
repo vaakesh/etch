@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
 import {
-  parsePracticeDeckUuid,
+  parsePracticeDeckSummary,
   parsePracticeHistoryPage,
   parsePracticeSession,
   parsePracticeSessionHistory,
@@ -174,13 +174,20 @@ describe("parsePracticeSession", () => {
   });
 });
 
-describe("parsePracticeDeckUuid", () => {
-  it("reads the canonical UUID from a deck detail response", () => {
-    expect(parsePracticeDeckUuid({ uuid: DECK_UUID, title: "French" })).toBe(DECK_UUID);
+describe("parsePracticeDeckSummary", () => {
+  it("reads the canonical UUID and card count from a deck detail response", () => {
+    expect(
+      parsePracticeDeckSummary({ uuid: DECK_UUID, title: "French", words_count: 120 }),
+    ).toEqual({ uuid: DECK_UUID, wordsCount: 120 });
   });
 
-  it.each([null, {}, { uuid: "not-a-uuid" }])("rejects an invalid deck response", (payload) => {
-    expectInvalidPracticeResponse(() => parsePracticeDeckUuid(payload));
+  it.each([
+    null,
+    {},
+    { uuid: "not-a-uuid", words_count: 10 },
+    { uuid: DECK_UUID, words_count: -1 },
+  ])("rejects an invalid deck response", (payload) => {
+    expectInvalidPracticeResponse(() => parsePracticeDeckSummary(payload));
   });
 });
 

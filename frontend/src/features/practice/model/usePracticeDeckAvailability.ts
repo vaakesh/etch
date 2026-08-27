@@ -13,6 +13,7 @@ interface LoadingPracticeDeckState {
 interface ReadyPracticeDeckState {
   status: "ready";
   deckUuid: string;
+  wordsCount: number;
 }
 
 interface ErrorPracticeDeckState {
@@ -98,9 +99,13 @@ export function usePracticeDeckAvailability(
     });
 
     void validatePracticeDeck(deckUuid, controller.signal)
-      .then(() => {
+      .then((deck) => {
         if (!controller.signal.aborted) {
-          const nextState: PracticeDeckAvailabilityState = { status: "ready", deckUuid };
+          const nextState: PracticeDeckAvailabilityState = {
+            status: "ready",
+            deckUuid,
+            wordsCount: deck.wordsCount,
+          };
           cachedPracticeDeckAvailability.set(deckUuid, nextState);
           setState(nextState);
         }

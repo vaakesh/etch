@@ -3,10 +3,12 @@ from datetime import datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
+from pydantic import PositiveInt
+
 from app.cards.models import Card
 from app.decks.models import Deck, DeckCard
 from app.training_sessions.models import TrainingSession, TrainingSessionItem, TrainingSessionStatus
-from sqlalchemy import Date, Integer, and_, case, cast, false, func, insert, literal, null, or_, select, true
+from sqlalchemy import Boolean, Date, DateTime, Integer, and_, case, cast, false, func, insert, literal, null, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -285,10 +287,11 @@ class TrainingSessionItemRepository:
 
     async def create_snapshot(
             self,
-            training_session_id: int,
-            deck_id: int,
+            training_session_id: PositiveInt,
+            deck_id: PositiveInt,
             prompt_side: Literal["front", "back"],
             answer_side: Literal["front", "back"],
+            words_per_session: PositiveInt,
     ) -> list[TrainingSessionItem]:
         """
         создает снимок карточек в случайном порядке
@@ -306,24 +309,32 @@ class TrainingSessionItemRepository:
             func.row_number().over(order_by=func.random())
         )
 
-        snapshot_query = (
+
+        ranked_cards = (
             select(
-                literal(training_session_id),
-                sequence_number,
-                Card.uuid,
-                prompt_text_column,
-                answer_text_column,
-                prompt_lang_column,
-                answer_lang_column,
-                false(),
-                null(),
-                null(),
+                literal(training_session_id).label("training_session_id"),
+                sequence_number.label("sequence_number"),
+                Card.uuid.label("original_card_uuid"),
+                prompt_text_column.label("prompt_text"),
+                answer_text_column.label("answer_text"),
+                prompt_lang_column.label("prompt_lang"),
+                answer_lang_column.label("answer_lang"),
+                false().label("is_answered"),
+                cast(null(), Boolean).label("is_correct"),
+                cast(null(), DateTime(timezone=True)).label("answered_at"),
             )
             .select_from(DeckCard)
             .join(Card, Card.id == DeckCard.card_id)
             .where(DeckCard.deck_id == deck_id)
+            .subquery("ranked_cards")
         )
-        
+
+        snapshot_query = (
+            select(ranked_cards)
+            .order_by(ranked_cards.c.sequence_number)
+            .limit(words_per_session)
+        )
+
         stmt = (
             insert(TrainingSessionItem)
             .from_select(

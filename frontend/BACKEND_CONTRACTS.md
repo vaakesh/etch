@@ -387,8 +387,8 @@ type TrainingSessionItemOut = {
 - **Frontend:** <code>/practice?deck={deck_uuid}</code>, запуск после выбора стороны вопроса.
 - **Auth:** обязателен.
 - **Path:** <code>deck_uuid: UUID</code>; query отсутствует.
-- **Body, JSON:** <code>{ prompt_side: CardSide }</code>, поле обязательно. <code>answer_side</code> backend выбирает как противоположную сторону.
-- **Количество карточек:** параметра количества в текущем контракте нет. Backend создаёт snapshot всех карточек колоды в порядке их позиций; frontend предлагает только вариант «Все карточки».
+- **Body, JSON:** <code>{ prompt_side: CardSide, words_per_session: int }</code>, оба поля обязательны. <code>words_per_session</code> — положительное целое число; <code>answer_side</code> backend выбирает как противоположную сторону.
+- **Количество карточек:** frontend предлагает всю колоду, 50, 100 или своё положительное целое значение. Для всей колоды используется <code>words_count</code> из <code>GET /decks/{deck_uuid}</code>. Если запрошено больше карточек, чем есть в колоде, backend создаёт snapshot из доступных карточек и возвращает фактическое количество в <code>total_count</code>.
 - **Success:** <code>200 PracticeSessionResponse</code>. При <code>prompt_side="front"</code> вопрос и его язык берутся из <code>front_text/source_lang</code>, ответ — из <code>back_text/target_lang</code>; при <code>"back"</code> стороны меняются местами.
 - **Важно:** <code>cards</code> содержит текст вопроса и языки, но не содержит правильный ответ. <code>sequence_number</code> является устойчивой исходной позицией карточки в колоде: после удалений номера могут иметь пропуски и быть больше <code>total_count</code>.
 - **Ошибки:** <code>401</code>; <code>403</code> чужая приватная колода; <code>404</code> колода не найдена; <code>409</code> пустая колода; <code>422</code> UUID/body; <code>500</code>.

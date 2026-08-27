@@ -51,7 +51,11 @@ export type PracticeSessionState =
 export interface UsePracticeSessionResult {
   state: PracticeSessionState;
   retryResume: () => void;
-  start: (deckUuid: string, promptSide: CardSide) => Promise<PracticeSession | null>;
+  start: (
+    deckUuid: string,
+    promptSide: CardSide,
+    wordsPerSession: number,
+  ) => Promise<PracticeSession | null>;
   submit: (
     sequenceNumber: number,
     input: SubmitPracticeAnswerInput,
@@ -183,7 +187,11 @@ export function usePracticeSession(
   }, [resumeAttempt, sessionUuid, setupDeckUuid]);
 
   const start = useCallback(
-    async (deckUuid: string, promptSide: CardSide): Promise<PracticeSession | null> => {
+    async (
+      deckUuid: string,
+      promptSide: CardSide,
+      wordsPerSession: number,
+    ): Promise<PracticeSession | null> => {
       const normalizedDeckUuid = deckUuid.toLowerCase();
       if (
         setupDeckUuidRef.current !== null &&
@@ -204,7 +212,11 @@ export function usePracticeSession(
       setState({ status: "loading", operation: "start" });
 
       try {
-        const session = await startPracticeSession(deckUuid, { promptSide }, controller.signal);
+        const session = await startPracticeSession(
+          deckUuid,
+          { promptSide, wordsPerSession },
+          controller.signal,
+        );
         if (
           controller.signal.aborted ||
           loadRevisionRef.current !== revision ||

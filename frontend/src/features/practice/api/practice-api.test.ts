@@ -17,6 +17,7 @@ vi.mock("../../../api", async (importOriginal) => {
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const SESSION_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac10";
 const OTHER_UUID = "f9b7ced5-fbea-4741-82fd-33ea144dab7c";
+const START_INPUT = { promptSide: "front", wordsPerSession: 50 } as const;
 
 const SESSION_RESPONSE = {
   training_session_uuid: SESSION_UUID,
@@ -233,20 +234,23 @@ describe("getPracticeSessionItemsHistory", () => {
 describe("validatePracticeDeck", () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
-    vi.mocked(apiFetch).mockResolvedValue({ uuid: DECK_UUID });
+    vi.mocked(apiFetch).mockResolvedValue({ uuid: DECK_UUID, words_count: 120 });
   });
 
   it("checks the exact backend deck path before rendering practice setup", async () => {
     const controller = new AbortController();
 
-    await expect(validatePracticeDeck(DECK_UUID, controller.signal)).resolves.toBeUndefined();
+    await expect(validatePracticeDeck(DECK_UUID, controller.signal)).resolves.toEqual({
+      uuid: DECK_UUID,
+      wordsCount: 120,
+    });
     expect(apiFetch).toHaveBeenCalledWith(`/decks/${DECK_UUID}`, {
       signal: controller.signal,
     });
   });
 
   it("rejects a response for a different deck", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({ uuid: OTHER_UUID });
+    vi.mocked(apiFetch).mockResolvedValue({ uuid: OTHER_UUID, words_count: 120 });
 
     await expect(validatePracticeDeck(DECK_UUID)).rejects.toMatchObject({
       status: 0,
@@ -261,11 +265,11 @@ describe("startPracticeSession", () => {
     vi.mocked(apiFetch).mockResolvedValue(SESSION_RESPONSE);
   });
 
-  it("posts the selected prompt side to the exact BFF start path", async () => {
+  it("posts the selected prompt side and word count to the exact BFF start path", async () => {
     const controller = new AbortController();
 
     await expect(
-      startPracticeSession(DECK_UUID, { promptSide: "front" }, controller.signal),
+      startPracticeSession(DECK_UUID, START_INPUT, controller.signal),
     ).resolves.toMatchObject({
       uuid: SESSION_UUID,
       deckUuid: DECK_UUID,
@@ -275,7 +279,7 @@ describe("startPracticeSession", () => {
     expect(apiFetch).toHaveBeenCalledOnce();
     expect(apiFetch).toHaveBeenCalledWith(`/bff/practice/${DECK_UUID}/start`, {
       method: "POST",
-      body: { prompt_side: "front" },
+      body: { prompt_side: "front", words_per_session: 50 },
       signal: controller.signal,
     });
   });
@@ -283,7 +287,7 @@ describe("startPracticeSession", () => {
   it("rejects a session returned for a different deck", async () => {
     vi.mocked(apiFetch).mockResolvedValue({ ...SESSION_RESPONSE, deck_uuid: OTHER_UUID });
 
-    await expect(startPracticeSession(DECK_UUID, { promptSide: "front" })).rejects.toMatchObject({
+    await expect(startPracticeSession(DECK_UUID, START_INPUT)).rejects.toMatchObject({
       status: 0,
       code: "INVALID_PRACTICE_RESPONSE",
     });
@@ -296,7 +300,7 @@ describe("startPracticeSession", () => {
       answer_side: "front",
     });
 
-    await expect(startPracticeSession(DECK_UUID, { promptSide: "front" })).rejects.toMatchObject({
+    await expect(startPracticeSession(DECK_UUID, START_INPUT)).rejects.toMatchObject({
       status: 0,
       code: "INVALID_PRACTICE_RESPONSE",
     });
@@ -308,16 +312,25 @@ describe("startPracticeSession", () => {
       cards: [SESSION_RESPONSE.cards[1]],
     });
 
-    await expect(startPracticeSession(DECK_UUID, { promptSide: "front" })).rejects.toMatchObject({
+    await expect(startPracticeSession(DECK_UUID, START_INPUT)).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
+    });
+  });
+
+  it("rejects a session containing more cards than requested", async () => {
+    await expect(
+      startPracticeSession(DECK_UUID, { promptSide: "front", wordsPerSession: 1 }),
+    ).rejects.toMatchObject({
       status: 0,
       code: "INVALID_PRACTICE_RESPONSE",
     });
   });
 
   it("correlates canonical UUID values without case sensitivity", async () => {
-    await expect(
-      startPracticeSession(DECK_UUID.toUpperCase(), { promptSide: "front" }),
-    ).resolves.toMatchObject({ deckUuid: DECK_UUID });
+    await expect(startPracticeSession(DECK_UUID.toUpperCase(), START_INPUT)).resolves.toMatchObject(
+      { deckUuid: DECK_UUID },
+    );
   });
 });
 

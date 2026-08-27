@@ -16,6 +16,8 @@ from app.users.models import User
 from app.users.service import UserService
 from fastapi import Depends, Request
 
+from app.users.schemas import InternalUser
+
 
 @lru_cache
 def get_auth_tokens_service() -> AuthTokensService:
@@ -54,7 +56,7 @@ async def get_current_user(
     user_service: UserService = Depends(get_user_service),
     access_token: str | None = Depends(auth_user),
     auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
-) -> User: 
+) -> InternalUser: 
     if access_token is None:
         raise AccessTokenNotFoundError()
     
@@ -69,7 +71,7 @@ async def get_optional_current_user(
     user_service: UserServiceDeps,
     access_token: str | None = Depends(auth_user),
     auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
-) -> User | None:
+) -> InternalUser | None:
     if access_token is None:
         return None
 

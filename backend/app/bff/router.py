@@ -99,6 +99,7 @@ async def start_practice_session(
         user_id=current_user.id,
         deck_uuid=deck_uuid,
         prompt_side=payload.prompt_side,
+        words_per_session=payload.words_per_session,
     )
 
 @router.get(

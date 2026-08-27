@@ -6,5 +6,3 @@ down:
 	docker compose -f docker-compose.yml down
 config:
 	docker compose -f docker-compose.yml config
-
-	

@@ -2,6 +2,7 @@ import { ApiError } from "../../../api";
 import type {
   CardSide,
   PracticeCard,
+  PracticeDeckSummary,
   PracticeHistoryPage,
   PracticeHistorySession,
   PracticeSession,
@@ -233,9 +234,18 @@ export function parsePracticeSession(value: unknown): PracticeSession {
   };
 }
 
-export function parsePracticeDeckUuid(value: unknown): string {
+export function parsePracticeDeckSummary(value: unknown): PracticeDeckSummary {
   const deck = readRecord(value, "practiceDeck");
-  return readUuid(deck.uuid, "practiceDeck.uuid");
+  const wordsCount = readInteger(deck.words_count, "practiceDeck.words_count");
+
+  if (wordsCount < 0) {
+    return invalidPracticeResponse("practiceDeck.words_count");
+  }
+
+  return {
+    uuid: readUuid(deck.uuid, "practiceDeck.uuid"),
+    wordsCount,
+  };
 }
 
 function parsePracticeHistorySession(value: unknown, index: number): PracticeHistorySession {

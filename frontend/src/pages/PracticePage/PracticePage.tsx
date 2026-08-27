@@ -571,21 +571,55 @@ function PracticeHistoryView({
 
 interface SetupViewProps {
   deckUuid: string;
+  deckWordsCount: number;
   practice: UsePracticeSessionResult;
   onStarted: (session: PracticeSession) => void;
 }
 
-export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewProps) {
+type PracticeSessionScope = "all" | "50" | "100" | "custom";
+
+function getWordsPerSession(
+  scope: PracticeSessionScope,
+  deckWordsCount: number,
+  customWordsCount: string,
+): number | null {
+  if (scope === "all") {
+    return Math.max(deckWordsCount, 1);
+  }
+  if (scope === "50") {
+    return 50;
+  }
+  if (scope === "100") {
+    return 100;
+  }
+
+  const parsedCount = Number(customWordsCount);
+  return Number.isSafeInteger(parsedCount) && parsedCount > 0 ? parsedCount : null;
+}
+
+export function PracticeSetupView({
+  deckUuid,
+  deckWordsCount,
+  onStarted,
+  practice,
+}: SetupViewProps) {
   const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const [promptSide, setPromptSide] = useState<CardSide>("front");
+  const [sessionScope, setSessionScope] = useState<PracticeSessionScope>("all");
+  const [customWordsCount, setCustomWordsCount] = useState("");
   const isStarting = practice.state.status === "loading" && practice.state.operation === "start";
+  const wordsPerSession = getWordsPerSession(sessionScope, deckWordsCount, customWordsCount);
   const startError =
     practice.state.status === "error" && practice.state.operation === "start"
       ? practice.state.error
       : null;
 
   const handleStart = async () => {
-    const session = await practice.start(deckUuid, promptSide);
+    if (wordsPerSession === null) {
+      return;
+    }
+
+    const session = await practice.start(deckUuid, promptSide, wordsPerSession);
     if (session !== null) {
       onStarted(session);
     }
@@ -640,31 +674,93 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
               </div>
             </fieldset>
 
-            <fieldset className={`${styles.settingGroup} ${styles.scopeGroup}`}>
+            <fieldset
+              className={`${styles.settingGroup} ${styles.scopeGroup}`}
+              disabled={isStarting}
+            >
               <legend>{messages.scope}</legend>
               <div className={styles.scopeOptions}>
-                <label className={`${styles.scopeOption} ${styles.scopeOptionSelected}`}>
-                  <input checked name="session_scope" readOnly type="radio" value="all" />
+                <label
+                  className={
+                    sessionScope === "all"
+                      ? `${styles.scopeOption} ${styles.scopeOptionSelected}`
+                      : styles.scopeOption
+                  }
+                >
+                  <input
+                    checked={sessionScope === "all"}
+                    name="session_scope"
+                    onChange={() => setSessionScope("all")}
+                    type="radio"
+                    value="all"
+                  />
                   <span>{messages.entireDeck}</span>
                 </label>
-                <label className={styles.scopeOption}>
-                  <input disabled name="session_scope" type="radio" value="50" />
+                <label
+                  className={
+                    sessionScope === "50"
+                      ? `${styles.scopeOption} ${styles.scopeOptionSelected}`
+                      : styles.scopeOption
+                  }
+                >
+                  <input
+                    checked={sessionScope === "50"}
+                    name="session_scope"
+                    onChange={() => setSessionScope("50")}
+                    type="radio"
+                    value="50"
+                  />
                   <span>{messages.fiftyCards}</span>
                 </label>
-                <label className={styles.scopeOption}>
-                  <input disabled name="session_scope" type="radio" value="100" />
+                <label
+                  className={
+                    sessionScope === "100"
+                      ? `${styles.scopeOption} ${styles.scopeOptionSelected}`
+                      : styles.scopeOption
+                  }
+                >
+                  <input
+                    checked={sessionScope === "100"}
+                    name="session_scope"
+                    onChange={() => setSessionScope("100")}
+                    type="radio"
+                    value="100"
+                  />
                   <span>{messages.hundredCards}</span>
                 </label>
-                <label className={`${styles.scopeOption} ${styles.customScopeOption}`}>
-                  <input disabled name="session_scope" type="radio" value="custom" />
+                <label
+                  className={[
+                    styles.scopeOption,
+                    styles.customScopeOption,
+                    sessionScope === "custom" ? styles.scopeOptionSelected : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <input
+                    checked={sessionScope === "custom"}
+                    name="session_scope"
+                    onChange={() => setSessionScope("custom")}
+                    type="radio"
+                    value="custom"
+                  />
                   <span>{messages.customCount}</span>
                   <input
                     aria-label={messages.cardCount}
+                    aria-invalid={
+                      sessionScope === "custom" &&
+                      customWordsCount !== "" &&
+                      wordsPerSession === null
+                        ? true
+                        : undefined
+                    }
                     className={styles.scopeInput}
-                    disabled
                     min="1"
-                    placeholder="—"
+                    onChange={(event) => setCustomWordsCount(event.target.value)}
+                    onFocus={() => setSessionScope("custom")}
+                    step="1"
                     type="number"
+                    value={customWordsCount}
                   />
                 </label>
               </div>
@@ -710,7 +806,7 @@ export function PracticeSetupView({ deckUuid, onStarted, practice }: SetupViewPr
             </Link>
             <button
               className={styles.primaryAction}
-              disabled={isStarting}
+              disabled={isStarting || wordsPerSession === null}
               onClick={() => void handleStart()}
               type="button"
             >
@@ -1559,14 +1655,22 @@ export function PracticePage() {
       ) : (
         <PracticeDeckLoadErrorView error={practiceDeck.state.error} onRetry={practiceDeck.retry} />
       );
-    } else {
+    } else if (practiceDeck.state.status === "ready") {
       content = (
         <PracticeSetupView
           deckUuid={deckUuid}
+          deckWordsCount={practiceDeck.state.wordsCount}
           onStarted={(session) => {
             setSearchParams({ session: session.uuid }, { replace: true });
           }}
           practice={practice}
+        />
+      );
+    } else {
+      content = (
+        <SessionLoadingView
+          ariaLabel={messages.checkingDeck}
+          message={messages.checkingDeckMessage}
         />
       );
     }
@@ -1583,7 +1687,11 @@ export function PracticePage() {
           setSearchParams({ session: historySession.uuid }, { replace: true });
         }}
         onRepeat={async (historySession) => {
-          const session = await practice.start(historySession.deckUuid, historySession.promptSide);
+          const session = await practice.start(
+            historySession.deckUuid,
+            historySession.promptSide,
+            Math.max(historySession.requestedCount, 1),
+          );
           if (session !== null) {
             setSearchParams({ session: session.uuid }, { replace: true });
           }

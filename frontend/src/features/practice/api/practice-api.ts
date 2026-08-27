@@ -1,6 +1,6 @@
 import { ApiError, apiFetch } from "../../../api";
 import {
-  parsePracticeDeckUuid,
+  parsePracticeDeckSummary,
   parsePracticeHistoryPage,
   parsePracticeSession,
   parsePracticeSessionHistory,
@@ -9,6 +9,7 @@ import {
 import type {
   PracticeHistoryFilter,
   PracticeHistorySession,
+  PracticeDeckSummary,
   PracticeSession,
   PracticeSessionHistoryItem,
   StartPracticeSessionInput,
@@ -29,11 +30,15 @@ function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: 
   }
 }
 
-export async function validatePracticeDeck(deckUuid: string, signal?: AbortSignal): Promise<void> {
+export async function validatePracticeDeck(
+  deckUuid: string,
+  signal?: AbortSignal,
+): Promise<PracticeDeckSummary> {
   const payload = await apiFetch<unknown>(`/decks/${deckUuid}`, { signal });
-  const responseDeckUuid = parsePracticeDeckUuid(payload);
+  const deck = parsePracticeDeckSummary(payload);
 
-  assertExpectedUuid(deckUuid, responseDeckUuid, "a different deck");
+  assertExpectedUuid(deckUuid, deck.uuid, "a different deck");
+  return deck;
 }
 
 export async function getPracticeSessionHistory(
@@ -131,7 +136,10 @@ export async function startPracticeSession(
 ): Promise<PracticeSession> {
   const payload = await apiFetch<unknown>(`/bff/practice/${deckUuid}/start`, {
     method: "POST",
-    body: { prompt_side: input.promptSide },
+    body: {
+      prompt_side: input.promptSide,
+      words_per_session: input.wordsPerSession,
+    },
     signal,
   });
   const session = parsePracticeSession(payload);
@@ -139,6 +147,7 @@ export async function startPracticeSession(
   assertExpectedUuid(deckUuid, session.deckUuid, "a practice session for a different deck");
   if (
     session.promptSide !== input.promptSide ||
+    session.totalCount > input.wordsPerSession ||
     session.answeredCount !== 0 ||
     session.correctCount !== 0 ||
     session.wrongCount !== 0

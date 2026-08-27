@@ -120,7 +120,7 @@ class CardRepository:
             stmt = stmt.with_for_update(of=Card)
 
         result = await self.session.execute(stmt)
-        rows = result.one_or_none()
+        rows = result.scalar_one_or_none()
         return rows
 
     def add_all(self, cards: list[Card]) -> None:

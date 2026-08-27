@@ -5,6 +5,8 @@ import time
 from typing import Literal
 from uuid import UUID
 
+from pydantic import PositiveInt
+
 
 from app.bff.schemas import (
     CatalogDeckItemResponse,
@@ -721,14 +723,16 @@ class BffService:
 
     async def start_practice_session(
             self,
-            user_id: int,
+            user_id: PositiveInt,
             deck_uuid: UUID,
+            words_per_session: PositiveInt,
             prompt_side: Literal["front", "back"],
     ) -> PracticeSessionResponse:
         response = await self.training_session_service.start_training_session(
             user_id=user_id,
             deck_uuid=deck_uuid,
             prompt_side=prompt_side,
+            words_per_session=words_per_session,
         )
         return response
 

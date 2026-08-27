@@ -10,6 +10,8 @@ from app.training_sessions.schemas import PositiveInt
 
 
 class InternalCard(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     uuid: UUID
     front_text: CardText

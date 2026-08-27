@@ -110,6 +110,18 @@ class DeckService:
 
             await uow.commit()
 
+            await self.cache_service.invalidate_deck_cards(
+                deck_uuids=[deck_uuid],
+            )
+
+            await self.cache_service.invalidate_decks(
+                deck_uuids=[deck_uuid],
+            )
+
+            await self.cache_service.invalidate_library_card_page(
+                user_uuid=user_uuid,
+            )
+
             return LoadCardsResponse(
                 imported_count=len(card_entities),
                 cards=[
@@ -130,7 +142,7 @@ class DeckService:
                 deck_uuids=deck_uuids,
                 for_update=False,
             )
-            return InternalDeck.model_validate(decks)
+            return [InternalDeck.model_validate(deck) for deck in decks]
 
     async def get_by_uuid(
             self, 
@@ -265,6 +277,7 @@ class DeckService:
                     description=deck.description,
                     words_count=deck.words_count,
                     is_public=deck.is_public,
+                    saves_count=deck.saves_count,
                     version=deck.version,
                     created_at=deck.created_at,
                     updated_at=deck.updated_at,
@@ -633,9 +646,9 @@ class UserDeckService:
             )
             if user_deck is None:
                 raise DeckIsNotSavedError()
-            else:
+            if user_deck.is_saved is True:
                 user_deck.is_saved = False
-            deck.saves_count -= 1
+                deck.saves_count -= 1
 
             await uow.commit()
 
@@ -671,12 +684,13 @@ class UserDeckService:
                     user_id=user_id,
                     deck_id=deck.id,
                     last_seen_version=deck.version,
-                    is_saved=True,
+                    is_saved=False,
                 )
                 uow.user_deck_repo.add(user_deck)
-            else:
+            if user_deck.is_saved is False:
                 user_deck.is_saved = True
-            deck.saves_count += 1
+                deck.saves_count += 1
+
             await uow.commit()
 
             await self.cache_service.invalidate_user_decks(

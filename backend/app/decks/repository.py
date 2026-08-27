@@ -553,7 +553,7 @@ class UserDeckRepository:
                 UserDeck,
             )
             .join(Deck, UserDeck.deck_id == Deck.id)
-            .join(User, UserDeck.user_id == User.id)
+            .join(User, Deck.user_id == User.id)
             .where(
                 UserDeck.user_id == user_id,
                 UserDeck.is_saved.is_(True),

@@ -24,7 +24,7 @@ class InternalTrainingSession(BaseModel):
     id: int
     uuid: UUID
     user_id: int
-    deck_id: int
+    deck_uuid: UUID
     status: TrainingSessionStatus
     requested_count: Counter
     actual_count: Counter
@@ -139,6 +139,7 @@ type PositiveInt = Annotated[
 ]
 class StartPracticeSessionRequest(BaseModel):
     prompt_side: Literal["front", "back"]
+    words_per_session: PositiveInt
 
 class TrainingSessionHistoryItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
