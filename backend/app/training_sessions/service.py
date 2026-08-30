@@ -1,13 +1,16 @@
+import logging
 from collections import defaultdict
 from collections.abc import Callable
 from datetime import date, datetime
-import logging
 from typing import Literal
 from uuid import UUID
 
-from pydantic import PositiveInt
-
+from app.bff.schemas import UserProgressResponse
+from app.common.types import PositiveInt
+from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
+from app.decks.models import UserDeck
+from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
     TrainingSessionAlreadyFinishedError,
@@ -23,14 +26,9 @@ from app.training_sessions.schemas import (
     PracticeSessionResponse,
     SubmitAnswerResponse,
     TrainingSessionStatus,
-    UserAnswer,
 )
+from app.training_sessions.types import UserAnswer
 from app.users.errors import UserNotFoundError
-from app.common.utils import decode_cursor, encode_cursor, utcnow
-from app.decks.models import UserDeck
-from app.redis.service import RedisCacheService
-from app.bff.schemas import UserProgressResponse
-
 
 logger = logging.getLogger(__name__)
 

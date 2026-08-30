@@ -1,39 +1,39 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
-from pydantic import PositiveInt
-
-
 from app.bff.schemas import (
     CatalogDeckItemResponse,
+    HomeDashboardResponse,
     HomeDeckItemResponse,
     LibraryCardItemResponse,
     LibraryDeckItemResponse,
-    HomeDashboardResponse,
     UserProgressResponse,
 )
+from app.cards.schemas import CardResponse, InternalCard
 from app.cards.service import CardService
+from app.common.schemas import CursorPage
+from app.common.types import PositiveInt, SearchQuery
+from app.common.utils import calculate_accuracy, make_user_deck_identity, utcnow
 from app.decks.errors import UserDeckNotFoundError
 from app.decks.models import UserDeck
-from app.decks.schemas import DeckResponse, DeckViewerStateResponse, InternalDeck, InternalUserDeck
+from app.decks.schemas import (
+    DeckResponse,
+    DeckViewerStateResponse,
+    InternalDeck,
+    InternalUserDeck,
+)
 from app.decks.service import DeckService, UserDeckService
 from app.deps import UoWFactory
+from app.redis.schemas import UserDeckIdentity
 from app.redis.service import (
     RedisCacheService,
 )
-from app.training_sessions.service import TrainingSessionService
-from app.users.schemas import SearchQuery
-from app.redis.schemas import UserDeckIdentity
-from app.cards.schemas import CardResponse, InternalCard
 from app.training_sessions.schemas import PracticeSessionResponse
-from app.common.schemas import CursorPage
-from app.common.utils import calculate_accuracy, utcnow
-from app.common.utils import make_user_deck_identity
-
+from app.training_sessions.service import TrainingSessionService
 
 logger = logging.getLogger(__name__)
 

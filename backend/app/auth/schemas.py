@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.users.schemas import Password, Username
+from app.common.types import Password, Username
 from pydantic import BaseModel, ConfigDict, PastDatetime
 
 

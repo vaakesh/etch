@@ -3,14 +3,18 @@ from uuid import UUID
 
 from app.cards.errors import CardNotFoundError
 from app.cards.models import Card
+from app.cards.schemas import (
+    CreateCardRequest,
+    InternalCard,
+    LoadCardsResponse,
+    LoadedCardResponse,
+)
+from app.common.types import SearchQuery
+from app.common.utils import calculate_accuracy, decode_cursor, encode_cursor
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
-from app.users.schemas import SearchQuery
-from app.common.utils import calculate_accuracy, decode_cursor, encode_cursor
 from sqlalchemy.exc import IntegrityError
-
-from app.cards.schemas import CreateCardRequest, InternalCard, LoadCardsResponse, LoadedCardResponse
 
 from .errors import (
     CannotSaveOwnDeckError,

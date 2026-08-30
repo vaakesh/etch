@@ -1,24 +1,8 @@
 from typing import Annotated
 
-from pydantic import StringConstraints
+from pydantic import Field
 
-
-type CardText = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True,
-        to_lower=True,
-        min_length=1,
-        max_length=255,
-    )
-]
-
-type CardLang = Annotated[
-    str,
-    StringConstraints(
-        strip_whitespace=True,
-        to_lower=True,
-        min_length=2,
-        max_length=3,
-    )
+type CardImportBatch[T] = Annotated[
+    list[T],
+    Field(min_length=1, max_length=500),
 ]

@@ -1,21 +1,21 @@
-from typing import Annotated
 from uuid import UUID
 
-from pydantic import Field
-
 from app.auth.deps import CurrentUser, OptionalCurrentUser
-from app.cards.schemas import CardResponse, CreateCardRequest, LoadCardsRequest, LoadCardsResponse
-from fastapi import APIRouter, Query, Response, status
-
 from app.cards.deps import CardServiceDeps
+from app.cards.schemas import (
+    CardResponse,
+    LoadCardsRequest,
+    LoadCardsResponse,
+)
+from fastapi import APIRouter, Query, Response, status
 
 from .deps import DeckServiceDeps, UserDeckServiceDeps
 from .schemas import (
     CreateDeckRequest,
     DeckCardResponse,
     DeckResponse,
-    UpdateDeckRequest,
     ReorderCards,
+    UpdateDeckRequest,
 )
 
 router = APIRouter(prefix="/decks")

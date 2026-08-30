@@ -1,22 +1,22 @@
 from uuid import UUID
 
-from pydantic import Field
-
 from app.auth.deps import CurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
     CatalogDeckItemResponse,
+    HomeDashboardResponse,
     LibraryCardItemResponse,
     LibraryDeckItemResponse,
-    HomeDashboardResponse,
 )
 from app.bff.service import BffService
+from app.common.schemas import CursorPage
+from app.common.types import PageLimit, PaginationCursor, SearchQuery
+from app.training_sessions.schemas import (
+    PracticeSessionResponse,
+    StartPracticeSessionRequest,
+)
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
-
-from app.users.schemas import SearchQuery
-from app.common.schemas import CursorPage
-from app.training_sessions.schemas import PracticeSessionResponse, StartPracticeSessionRequest
 
 router = APIRouter(prefix="/bff")
 
@@ -37,7 +37,7 @@ async def get_catalog_page(
     current_user: CurrentUser,
     search_query: SearchQuery = None,
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: PageLimit = 50,
     bff_service: BffService = Depends(get_bff_service),
 ):
     return await bff_service.get_catalog_page(
@@ -52,9 +52,9 @@ async def get_catalog_page(
 async def get_decks_library_page(
     current_user: CurrentUser,
     search_query: SearchQuery = None,
-    cursor: str | None = Query(default=None),
+    cursor: PaginationCursor = None,
     is_favourite: bool | None = Query(default=False),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: PageLimit = 50,
     bff_service: BffService = Depends(get_bff_service),
 ):
     result = await bff_service.get_decks_library_page(
@@ -72,8 +72,8 @@ async def get_decks_library_page(
 async def get_cards_library_page(
     current_user: CurrentUser,
     search_query: SearchQuery = None,
-    cursor: str | None = Query(default=None),
-    limit: int = Query(default=50),
+    cursor: PaginationCursor = None,
+    limit: PageLimit = 50,
     bff_service: BffService = Depends(get_bff_service),
 ) -> CursorPage[LibraryCardItemResponse]:
     result = await bff_service.get_cards_library_page(

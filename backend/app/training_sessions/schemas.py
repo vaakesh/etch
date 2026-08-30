@@ -1,22 +1,11 @@
-from datetime import datetime
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID
 
+from app.common.types import CardLang, CardText, Counter, PositiveInt, Seconds
 from app.errors import RequestValueError
-from pydantic import BaseModel, ConfigDict, Field, field_validator, PastDatetime
-
 from app.training_sessions.models import CardSide, TrainingSessionStatus
-from app.cards.schemas import CardLang, CardText
+from pydantic import BaseModel, ConfigDict, PastDatetime, field_validator
 
-type Counter = Annotated[
-    int,
-    Field(ge=0),
-]
-
-type Percent = Annotated[
-    int,
-    Field(ge=0, le=100),
-]
 
 class InternalTrainingSession(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -41,38 +30,38 @@ class InternalTrainingSessionItem(BaseModel):
     id: int
     uuid: UUID
     training_session_id: int
-    sequence_number: int
+    sequence_number: PositiveInt
     original_card_uuid: UUID
-    user_typed_text: str | None
+    user_typed_text: CardText | None
     prompt_text: CardText
     answer_text: CardText
     prompt_lang: CardLang
     answer_lang: CardLang
     is_answered: bool
-    is_correct: bool
+    is_correct: bool | None
     answered_at: PastDatetime | None
 
 class PracticeCardResponse(BaseModel):
-    sequence_number: int = Field(ge=1)
+    sequence_number: PositiveInt
 
-    prompt_text: str
-    prompt_language: str
-    answer_language: str
+    prompt_text: CardText
+    prompt_language: CardLang
+    answer_language: CardLang
 
 class PracticeSessionResponse(BaseModel):
     training_session_uuid: UUID
 
     deck_uuid: UUID
 
-    prompt_side: Literal["front", "back"]
-    answer_side: Literal["front", "back"]
+    prompt_side: CardSide
+    answer_side: CardSide
 
-    total_count: int
-    answered_count: int
-    correct_count: int
-    wrong_count: int
+    total_count: Counter
+    answered_count: Counter
+    correct_count: Counter
+    wrong_count: Counter
 
-    started_at: datetime
+    started_at: PastDatetime
     cards: list[PracticeCardResponse]
 
 class TrainingSessionResponse(BaseModel):
@@ -114,16 +103,6 @@ class SubmittedAnswerRequest(BaseModel):
             )
         return value
 
-type UserAnswer = Annotated[
-    SkipAnswerRequest | SubmittedAnswerRequest,
-    Field(discriminator="action"),
-]
-
-type Seconds = Annotated[
-    int,
-    Field(ge=0),
-]
-
 class SubmitAnswerResponse(BaseModel):
     is_correct: bool
     answer_text: CardText
@@ -131,14 +110,10 @@ class SubmitAnswerResponse(BaseModel):
     correct_count: Counter
     total_count: Counter
     is_finished: bool
-    time_to_complete: Seconds | None 
+    time_to_complete: Seconds | None
 
-type PositiveInt = Annotated[
-    int,
-    Field(ge=1),
-]
 class StartPracticeSessionRequest(BaseModel):
-    prompt_side: Literal["front", "back"]
+    prompt_side: CardSide
     words_per_session: PositiveInt
 
 class TrainingSessionHistoryItemResponse(BaseModel):

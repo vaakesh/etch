@@ -1,11 +1,15 @@
 import logging
-from collections.abc import Callable, Hashable
 import random
+from collections.abc import Callable, Hashable
 from uuid import UUID
 
 import orjson
 from app.cards.models import Card
+from app.cards.schemas import InternalCard
+from app.common.schemas import CursorPage
+from app.common.types import NormalizedSearch
 from app.decks.models import Deck, UserDeck
+from app.decks.schemas import InternalDeck, InternalUserDeck
 from app.redis.keys import (
     make_card_cache_key,
     make_deck_cache_key,
@@ -17,13 +21,8 @@ from app.redis.keys import (
     make_user_deck_cache_key,
 )
 from app.redis.schemas import CacheLookupResult, LibraryPageCacheLookup, UserDeckIdentity
-from app.users.schemas import NormalizedSearch
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-
-from app.cards.schemas import InternalCard
-from app.decks.schemas import InternalDeck, InternalUserDeck
-from app.common.schemas import CursorPage
 
 LIBRARY_PAGE_TTL = 60 * 5
 GENERATION_TTL = LIBRARY_PAGE_TTL * 3

@@ -3,17 +3,35 @@ from datetime import datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
-from pydantic import PositiveInt
-
+from app.bff.schemas import UserProgressResponse
 from app.cards.models import Card
+from app.common.types import PositiveInt
+from app.common.utils import utcnow
 from app.decks.models import Deck, DeckCard
-from app.training_sessions.models import TrainingSession, TrainingSessionItem, TrainingSessionStatus
-from sqlalchemy import Boolean, Date, DateTime, Integer, and_, case, cast, false, func, insert, literal, null, or_, select, true
+from app.training_sessions.models import (
+    TrainingSession,
+    TrainingSessionItem,
+    TrainingSessionStatus,
+)
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Integer,
+    and_,
+    case,
+    cast,
+    false,
+    func,
+    insert,
+    literal,
+    null,
+    or_,
+    select,
+    true,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-
-from app.bff.schemas import UserProgressResponse
-from app.common.utils import utcnow
 
 
 class TrainingSessionItemRepository:

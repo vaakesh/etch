@@ -8,10 +8,9 @@ from datetime import date as Date
 from uuid import UUID
 
 from app.cards.schemas import CardResponse
+from app.common.types import Counter, DeckDescription, DeckTitle, Percent, Seconds
+from app.decks.schemas import DeckResponse, DeckViewerStateResponse
 from pydantic import BaseModel, ConfigDict, PastDatetime
-
-from app.decks.schemas import DeckResponse, DeckTitle, DeckDescription, DeckViewerStateResponse
-from app.training_sessions.schemas import Counter, Percent, Seconds
 
 
 class HomeDeckItemResponse(BaseModel):

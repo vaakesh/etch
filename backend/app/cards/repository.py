@@ -1,14 +1,13 @@
-from datetime import datetime
 import logging
+from datetime import datetime
 from uuid import UUID
 
 from app.cards.models import Card
+from app.cards.schemas import InternalCard
+from app.common.types import SearchQuery
+from app.decks.models import Deck, DeckCard
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.cards.schemas import InternalCard
-from app.decks.models import Deck, DeckCard
-from app.users.schemas import SearchQuery
 
 logger = logging.getLogger(__name__)
 

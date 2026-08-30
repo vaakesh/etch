@@ -1,14 +1,12 @@
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from app.common.types import Counter, DeckDescription, DeckTitle, Percent, PositiveInt
+from app.common.utils import calculate_accuracy
+from app.decks.models import Deck
 from app.errors import RequestValueError
 from pydantic import BaseModel, ConfigDict, PastDatetime, model_validator
 
-from app.training_sessions.schemas import Counter, Percent, PositiveInt
-from app.decks.models import Deck
-from app.decks.types import DeckDescription, DeckTitle
-from app.common.utils import calculate_accuracy
 
 class InternalDeck(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -52,7 +50,7 @@ class InternalUserDeck(BaseModel):
     last_studied_at: PastDatetime | None
     is_favourite: bool
     is_saved: bool
-    last_seen_version: int | None
+    last_seen_version: PositiveInt | None
     added_at: PastDatetime
 
 class InternalDeckCard(BaseModel):
@@ -61,14 +59,14 @@ class InternalDeckCard(BaseModel):
     uuid: UUID
     deck_id: int
     card_id: int
-    position: int
+    position: PositiveInt
     created_at: PastDatetime
     updated_at: PastDatetime
 
 class DeckCardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     uuid: UUID
-    position: int
+    position: PositiveInt
 
 class CreateDeckRequest(BaseModel):
     title: DeckTitle
@@ -114,7 +112,7 @@ class DeckViewerStateResponse(BaseModel):
     correct_count: Counter
     wrong_count: Counter
     accuracy: Percent
-    last_studied_at: datetime | None
+    last_studied_at: PastDatetime | None
     is_favourite: bool
     is_saved: bool
 

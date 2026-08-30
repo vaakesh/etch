@@ -1,34 +1,32 @@
 from datetime import datetime
-from typing import Annotated
 from uuid import UUID
 
 from app.auth.cookies import clear_tokens_cookie
 from app.auth.deps import AuthServiceDeps, CurrentUser
 from app.cards.deps import CardServiceDeps
 from app.cards.schemas import CardResponse
+from app.common.schemas import CursorPage
+from app.common.types import PageLimit, PaginationCursor, SearchQuery
 from app.decks.deps import DeckServiceDeps, UserDeckServiceDeps
 from app.decks.schemas import DeckListItemResponse, DeckResponse
 from app.training_sessions.deps import (
     TrainingSessionServiceDeps,
 )
+from app.training_sessions.models import TrainingSessionStatus
 from app.training_sessions.schemas import (
     TrainingSessionResponse,
 )
 from app.users.deps import UserServiceDeps
 from app.users.schemas import (
     ChangePasswordRequest,
+    CreateUserRequest,
     PrivateUserResponse,
     PublicUserResponse,
-    SearchQuery,
-    CreateUserRequest,
+    UpdateUserRequest,
     UserSettingsResponse,
     UserSettingsUpdate,
-    UpdateUserRequest,
 )
 from fastapi import APIRouter, Query, Response, status
-
-from app.training_sessions.models import TrainingSessionStatus
-from app.common.schemas import CursorPage
 
 router = APIRouter(prefix="/users")
 
@@ -101,9 +99,9 @@ async def change_password(
 async def get_my_decks(
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
-    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    limit: PageLimit = 30,
     search_query: SearchQuery = None,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    cursor: PaginationCursor = None,
 ):
     decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
         user_uuid=current_user.uuid,
@@ -125,8 +123,8 @@ async def get_my_cards(
     current_user: CurrentUser,
     card_service: CardServiceDeps,
     search_query: SearchQuery = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: PageLimit = 50,
+    cursor: PaginationCursor = None,
 ):
     cards, next_cursor, has_more = await card_service.get_all_by_user_id(
         user_id=current_user.id,
@@ -145,9 +143,9 @@ async def get_my_cards(
 async def get_my_training_sessions(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: PageLimit = 20,
     status: TrainingSessionStatus | None = None,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    cursor: PaginationCursor = None,
 ):
     training_sessions, next_cursor, has_more = (
         await training_session_service.get_all_by_user_uuid(
@@ -245,8 +243,8 @@ async def delete_user(
 async def get_public_training_sessions_by_user(
     user_uuid: UUID,
     training_session_service: TrainingSessionServiceDeps,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: PaginationCursor = None,
+    limit: PageLimit = 20,
 ):
     training_sessions, next_cursor, has_more = (
         await training_session_service.get_all_by_user_uuid(
@@ -267,8 +265,8 @@ async def get_public_decks_by_user(
     user_uuid: UUID,
     deck_service: DeckServiceDeps,
     search_query: SearchQuery = None,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    cursor: PaginationCursor = None,
+    limit: PageLimit = 30,
 ):
     decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
         user_uuid=user_uuid,

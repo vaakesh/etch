@@ -3,11 +3,11 @@ from datetime import datetime
 from uuid import UUID
 
 from app.cards.models import Card
-from app.users.schemas import SearchQuery
+from app.common.types import SearchQuery
+from app.users.models import User
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from app.users.models import User
 
 from .models import Deck, DeckCard, UserDeck
 

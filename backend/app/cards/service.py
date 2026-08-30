@@ -6,15 +6,13 @@ from app.cards.errors import (
     CardNotFoundError,
     PermissionDeniedError,
 )
-from app.redis.service import RedisCacheService
-from app.service import UnitOfWork
-from app.common.utils import decode_cursor, encode_cursor
-from sqlalchemy.exc import IntegrityError
-
-from app.users.schemas import SearchQuery
-
 from app.cards.models import Card
 from app.cards.schemas import CreateCardRequest, InternalCard, UpdateCardRequest
+from app.common.types import SearchQuery
+from app.common.utils import decode_cursor, encode_cursor
+from app.redis.service import RedisCacheService
+from app.service import UnitOfWork
+from sqlalchemy.exc import IntegrityError
 
 
 class CardService:

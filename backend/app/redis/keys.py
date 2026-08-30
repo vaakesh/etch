@@ -2,8 +2,7 @@ import hashlib
 from uuid import UUID
 
 import orjson
-
-from app.users.schemas import NormalizedSearch
+from app.common.types import NormalizedSearch
 from app.redis.schemas import UserDeckIdentity
 
 
