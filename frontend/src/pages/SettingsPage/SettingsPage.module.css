@@ -43,11 +43,8 @@
   --settings-selected: var(--dark-cta);
   --settings-shadow: var(--dark-shadow);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 88% 4%, rgb(168 218 220 / 8%), transparent 28rem),
-    radial-gradient(circle at 8% 96%, rgb(255 193 204 / 6%), transparent 28rem),
-    var(--dark-background);
-  scrollbar-color: var(--dark-cta-medium) transparent;
+  background: var(--dark-page-background);
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 .page *,
@@ -97,7 +94,8 @@
   border-color: var(--dark-border);
   box-shadow:
     0 22px 52px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 5%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 .settingsList {
@@ -230,11 +228,11 @@
 }
 
 :global(html[data-theme="dark"]) .previewToggle input:checked + .previewToggleTrack::after {
-  background: var(--dark-background);
+  background: var(--dark-on-cta);
 }
 
 :global(html[data-theme="dark"]) .previewToggle input:focus-visible + .previewToggleTrack {
-  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+  box-shadow: 0 0 0 3px var(--dark-focus-ring);
 }
 
 .selectControl {
@@ -401,7 +399,7 @@
 }
 
 :global(html[data-theme="dark"]) .successMessage {
-  color: var(--dark-cyan);
+  color: var(--dark-success);
 }
 
 .errorMessage {
@@ -409,7 +407,7 @@
 }
 
 :global(html[data-theme="dark"]) .errorMessage {
-  color: var(--dark-pink);
+  color: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .selectControl select:hover:not(:disabled) {
@@ -417,39 +415,39 @@
 }
 
 :global(html[data-theme="dark"]) .selectControl select:focus-visible {
-  border-color: var(--dark-cyan);
-  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+  border-color: var(--dark-focus);
+  box-shadow: 0 0 0 3px var(--dark-focus-ring);
 }
 
 :global(html[data-theme="dark"]) .themeSwitch::before {
   border-color: transparent;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+  box-shadow: 0 4px 14px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .themeOption input:checked + span {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
 }
 
 :global(html[data-theme="dark"]) .themeOption input:focus-visible + span,
 :global(html[data-theme="dark"]) .resetButton:focus-visible,
 :global(html[data-theme="dark"]) .saveButton:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--dark-focus);
 }
 
 :global(html[data-theme="dark"]) .saveButton {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
-  box-shadow: 0 7px 16px rgb(0 0 0 / 22%);
+  box-shadow: 0 7px 16px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .saveButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
-  box-shadow: 0 9px 20px rgb(0 0 0 / 28%);
+  background: var(--dark-cta-hover);
+  box-shadow: 0 9px 20px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .spinner {
-  border-color: rgb(44 44 44 / 30%);
-  border-top-color: var(--dark-background);
+  border-color: color-mix(in srgb, var(--dark-on-cta) 30%, transparent);
+  border-top-color: var(--dark-on-cta);
 }
 
 .actions {

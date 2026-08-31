@@ -4,10 +4,14 @@ from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.cards.deps import CardServiceDeps, get_card_service
 from app.cards.schemas import CreateCardRequest, CardResponse, UpdateCardRequest
 from app.cards.service import CardService
+from app.redis.rate_limiters import cards_rate_limit
 from app.users.models import User
 from fastapi import APIRouter, Depends, Response, status
 
-router = APIRouter(prefix="/cards")
+router = APIRouter(
+    prefix="/cards",
+    dependencies=[Depends(cards_rate_limit)],
+)
 
 @router.post("/", response_model=CardResponse)
 async def create_card(

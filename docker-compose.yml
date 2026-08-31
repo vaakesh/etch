@@ -28,7 +28,7 @@ services:
     volumes:
       - pgdata18:/var/lib/postgresql
     ports:
-      - "${db_port}:${db_port}"
+      - "${db_port}:5432"
 
   frontend:
     container_name: etch-frontend

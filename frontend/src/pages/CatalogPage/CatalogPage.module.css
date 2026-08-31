@@ -1162,230 +1162,223 @@
 }
 
 :global(html[data-theme="dark"]) .page {
-  --catalog-lavender: #a995ff;
-  --catalog-aqua: #56d7cc;
-  --catalog-pink: #ff8fac;
-  --catalog-ink: #dfe5f5;
-  --catalog-ink-deep: #f7f8ff;
-  --catalog-muted: #a9b2ca;
-  --catalog-purple: #b2a2ff;
-  --catalog-purple-soft: rgb(169 149 255 / 14%);
-  --catalog-aqua-soft: rgb(86 215 204 / 12%);
-  --catalog-line: rgb(195 205 242 / 13%);
-  --catalog-night: #080b14;
-  --catalog-night-soft: #0d1220;
-  --catalog-surface: #121827;
-  --catalog-surface-raised: #182136;
-  --catalog-surface-hover: #1d2840;
-  --catalog-border: rgb(195 205 242 / 13%);
-  --catalog-border-strong: rgb(169 149 255 / 34%);
-  --catalog-shadow: rgb(0 0 0 / 46%);
-  color: var(--catalog-ink);
+  --catalog-lavender: var(--dark-cta);
+  --catalog-aqua: var(--dark-info);
+  --catalog-pink: var(--dark-pink);
+  --catalog-ink: var(--dark-text);
+  --catalog-ink-deep: var(--dark-text);
+  --catalog-muted: var(--dark-text-muted);
+  --catalog-purple: var(--dark-cta);
+  --catalog-purple-soft: var(--dark-cta-soft);
+  --catalog-aqua-soft: var(--dark-info-soft);
+  --catalog-line: var(--dark-border);
+  color: var(--dark-text);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 82% -18%, rgb(139 116 232 / 20%), transparent 38rem),
-    radial-gradient(circle at -8% 96%, rgb(45 180 170 / 13%), transparent 34rem),
-    linear-gradient(180deg, #0c101c 0%, var(--catalog-night) 72%);
-  scrollbar-color: #56617b transparent;
+  background: var(--dark-page-background);
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .page button:focus-visible,
 :global(html[data-theme="dark"]) .page input:focus-visible {
-  outline-color: rgb(178 162 255 / 72%);
+  outline-color: var(--dark-focus);
 }
 
 :global(html[data-theme="dark"]) .header h1::after {
-  background: var(--catalog-aqua);
-  box-shadow: 0 0 20px rgb(86 215 204 / 48%);
+  background: var(--dark-info);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .deckCard::before,
+:global(html[data-theme="dark"]) .deckCard:nth-child(2n)::before,
+:global(html[data-theme="dark"]) .deckCard:nth-child(3n)::before {
+  background: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .searchField input {
-  color: var(--catalog-ink-deep);
-  caret-color: var(--catalog-aqua);
-  background: rgb(18 24 39 / 84%);
-  border-color: var(--catalog-border);
+  color: var(--dark-text);
+  caret-color: var(--dark-info);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
   box-shadow:
-    0 14px 36px rgb(0 0 0 / 24%),
-    inset 0 1px 0 rgb(255 255 255 / 4%);
-  backdrop-filter: blur(22px) saturate(1.16);
+    0 14px 36px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .searchField input::placeholder {
-  color: #7f89a3;
+  color: var(--dark-text-faint);
 }
 
 :global(html[data-theme="dark"]) .searchField input:hover,
 :global(html[data-theme="dark"]) .searchField input:focus {
-  background: rgb(24 33 54 / 94%);
-  border-color: var(--catalog-border-strong);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-border-accent);
   box-shadow:
-    0 16px 42px rgb(0 0 0 / 30%),
-    0 0 0 3px rgb(169 149 255 / 10%);
+    0 16px 42px var(--dark-shadow),
+    0 0 0 3px var(--dark-focus-ring);
 }
 
 :global(html[data-theme="dark"]) .clearSearch {
-  color: #8993ad;
+  color: var(--dark-text-muted);
 }
 
 :global(html[data-theme="dark"]) .clearSearch:hover {
-  color: var(--catalog-aqua);
-  background: rgb(86 215 204 / 10%);
+  color: var(--dark-info);
+  background: var(--dark-info-soft);
 }
 
 :global(html[data-theme="dark"]) .deckCard,
 :global(html[data-theme="dark"]) .stateMessage {
-  color: var(--catalog-ink);
-  background: rgb(18 24 39 / 92%);
-  border-color: var(--catalog-border);
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
   box-shadow:
-    0 20px 48px rgb(0 0 0 / 30%),
-    inset 0 1px 0 rgb(255 255 255 / 4%);
-  backdrop-filter: blur(24px) saturate(1.1);
+    0 20px 48px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 @media (hover: hover) {
   :global(html[data-theme="dark"]) .deckCard:hover {
-    background: rgb(24 33 54 / 96%);
-    border-color: rgb(169 149 255 / 30%);
+    background: var(--dark-surface-raised);
+    border-color: var(--dark-border-accent);
     box-shadow:
-      0 24px 58px rgb(0 0 0 / 38%),
-      0 0 0 1px rgb(169 149 255 / 7%);
+      0 24px 58px var(--dark-shadow-strong),
+      0 0 0 1px var(--dark-cta-soft);
   }
 }
 
 :global(html[data-theme="dark"]) .saveButton {
-  color: #d8d0ff;
-  background: #20283a;
-  border-color: #38435c;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-strong);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .saveButton:hover:not(:disabled) {
-  color: #f2efff;
-  background: #29334a;
-  border-color: rgb(169 149 255 / 48%);
-  box-shadow: 0 8px 20px rgb(0 0 0 / 26%);
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+  box-shadow: 0 8px 20px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .saveButtonActive {
-  color: #0b0d16;
-  background: #ad9cff;
-  border-color: #ad9cff;
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
   box-shadow:
-    0 10px 24px rgb(94 75 184 / 30%),
-    inset 0 1px 0 rgb(255 255 255 / 28%);
+    0 10px 24px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight-strong);
 }
 
 :global(html[data-theme="dark"]) .saveButtonActive:hover:not(:disabled) {
-  color: #080a12;
-  background: #bdafff;
-  border-color: #bdafff;
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
   box-shadow:
-    0 12px 28px rgb(94 75 184 / 38%),
-    inset 0 1px 0 rgb(255 255 255 / 32%);
+    0 12px 28px var(--dark-shadow-strong),
+    inset 0 1px 0 var(--dark-highlight-strong);
 }
 
 :global(html[data-theme="dark"]) .saveError {
-  color: #ffadc2;
-  background: rgb(91 31 54 / 34%);
-  border-color: rgb(255 143 172 / 25%);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger-medium);
 }
 
 :global(html[data-theme="dark"]) .ownDeckBadge {
-  color: #85e9df;
-  background: #17302f;
-  border-color: rgb(86 215 204 / 27%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  color: var(--dark-info);
+  background: var(--dark-info-soft);
+  border-color: var(--dark-info);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .ownDeckBadge svg {
-  color: #071311;
-  background: var(--catalog-aqua);
+  color: var(--dark-on-accent);
+  background: var(--dark-info);
 }
 
 :global(html[data-theme="dark"]) .stats > span {
-  color: #dcd7f3;
-  background: rgb(169 149 255 / 11%);
-  border-color: rgb(169 149 255 / 18%);
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
 }
 
 :global(html[data-theme="dark"]) .stats > span:last-child {
-  color: #c8f3ef;
-  background: rgb(86 215 204 / 10%);
-  border-color: rgb(86 215 204 / 18%);
+  color: var(--dark-info);
+  background: var(--dark-info-soft);
+  border-color: var(--dark-info);
 }
 
 :global(html[data-theme="dark"]) .owner svg,
 :global(html[data-theme="dark"]) .searchField label > svg {
-  color: var(--catalog-lavender);
+  color: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .stats > span:first-child svg {
-  color: var(--catalog-lavender);
+  color: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .stats > span:last-child svg {
-  color: var(--catalog-aqua);
+  color: var(--dark-info);
 }
 
 :global(html[data-theme="dark"]) .previewButton {
-  color: #dcd6ff;
-  background: #1b2335;
-  border-color: #35405a;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-strong);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .previewButton:hover {
-  color: #f4f1ff;
-  background: #273149;
-  border-color: rgb(169 149 255 / 44%);
-  box-shadow: 0 9px 22px rgb(0 0 0 / 28%);
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+  box-shadow: 0 9px 22px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .previewDialog {
-  color: var(--catalog-ink);
+  color: var(--dark-text);
   box-shadow:
-    0 36px 110px rgb(0 0 0 / 68%),
-    0 0 0 1px rgb(169 149 255 / 13%);
+    0 36px 110px var(--dark-shadow-strong),
+    0 0 0 1px var(--dark-cta-soft);
 }
 
 :global(html[data-theme="dark"]) .previewDialog::backdrop {
-  background: rgb(3 5 10 / 78%);
-  backdrop-filter: blur(12px) saturate(0.72);
+  background: var(--dark-scrim);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .previewShell {
-  background:
-    radial-gradient(circle at 92% 2%, rgb(86 215 204 / 10%), transparent 30rem),
-    radial-gradient(circle at 8% 0%, rgb(169 149 255 / 11%), transparent 28rem),
-    var(--catalog-night-soft);
-  border-color: rgb(195 205 242 / 14%);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .previewTopbar {
-  background: rgb(13 18 32 / 88%);
-  border-color: var(--catalog-border);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 16%);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+  box-shadow: 0 12px 32px var(--dark-shadow);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .previewTopbar button {
-  color: #d9d2ff;
-  background: #1a2234;
-  border-color: #35405a;
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .previewTopbar button:hover {
-  color: #fff;
-  background: #29334b;
-  border-color: rgb(169 149 255 / 46%);
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .previewScrollArea {
-  scrollbar-color: #56617b transparent;
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .previewHero {
-  border-color: var(--catalog-border);
+  border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .previewHero h2,
@@ -1393,7 +1386,7 @@
 :global(html[data-theme="dark"]) .previewCardsHeader h3,
 :global(html[data-theme="dark"]) .previewCardSide p,
 :global(html[data-theme="dark"]) .previewState h2 {
-  color: var(--catalog-ink-deep);
+  color: var(--dark-text);
 }
 
 :global(html[data-theme="dark"]) .previewHero > p,
@@ -1401,90 +1394,90 @@
 :global(html[data-theme="dark"]) .previewCardsHeader > span,
 :global(html[data-theme="dark"]) .previewEmpty,
 :global(html[data-theme="dark"]) .previewState p {
-  color: var(--catalog-muted);
+  color: var(--dark-text-muted);
 }
 
 :global(html[data-theme="dark"]) .previewCardSide > span {
-  color: #7edfd6;
+  color: var(--dark-info);
 }
 
 :global(html[data-theme="dark"]) .previewMeta > div,
 :global(html[data-theme="dark"]) .previewCardList li,
 :global(html[data-theme="dark"]) .previewEmpty {
-  background: rgb(18 24 39 / 90%);
-  border-color: var(--catalog-border);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
   box-shadow:
-    0 10px 28px rgb(0 0 0 / 16%),
-    inset 0 1px 0 rgb(255 255 255 / 4%);
+    0 10px 28px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .previewCardNumber {
-  color: #c7bcff;
-  background: rgb(169 149 255 / 12%);
-  border-color: var(--catalog-border);
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .previewCardSide + .previewCardSide {
-  border-color: var(--catalog-border);
+  border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .previewLoadMore button,
 :global(html[data-theme="dark"]) .previewState button {
-  color: #0a0d16;
-  background: #ad9cff;
-  border-color: #ad9cff;
-  box-shadow: 0 12px 28px rgb(94 75 184 / 28%);
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 12px 28px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .previewLoadMore button:hover:not(:disabled),
 :global(html[data-theme="dark"]) .previewState button:hover {
-  background: #bdafff;
-  border-color: #bdafff;
-  box-shadow: 0 14px 32px rgb(94 75 184 / 38%);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
+  box-shadow: 0 14px 32px var(--dark-shadow-strong);
 }
 
 :global(html[data-theme="dark"]) .previewLoadMore p {
-  color: #ffadc2;
+  color: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .previewLoading span {
   background: linear-gradient(
     110deg,
-    var(--catalog-surface) 8%,
-    var(--catalog-surface-hover) 18%,
-    var(--catalog-surface) 33%
+    var(--dark-surface) 8%,
+    var(--dark-surface-hover) 18%,
+    var(--dark-surface) 33%
   );
   background-size: 220% 100%;
-  border-color: var(--catalog-border);
+  border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .skeleton {
   background: linear-gradient(
     110deg,
-    var(--catalog-surface) 8%,
-    var(--catalog-surface-hover) 18%,
-    var(--catalog-surface) 33%
+    var(--dark-surface) 8%,
+    var(--dark-surface-hover) 18%,
+    var(--dark-surface) 33%
   );
   background-size: 220% 100%;
-  border-color: var(--catalog-border);
-  box-shadow: 0 18px 42px rgb(0 0 0 / 26%);
+  border-color: var(--dark-border);
+  box-shadow: 0 18px 42px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .stateMessage button,
 :global(html[data-theme="dark"]) .loadMoreButton {
-  color: #0a0d16;
-  background: #ad9cff;
-  border-color: #ad9cff;
-  box-shadow: 0 12px 28px rgb(94 75 184 / 28%);
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 12px 28px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .stateMessage button:hover,
 :global(html[data-theme="dark"]) .loadMoreButton:not(:disabled):hover {
-  background: #bdafff;
-  border-color: #bdafff;
-  box-shadow: 0 14px 32px rgb(94 75 184 / 38%);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
+  box-shadow: 0 14px 32px var(--dark-shadow-strong);
 }
 
 :global(html[data-theme="dark"]) .loadMoreArea p {
-  color: #ffadc2;
+  color: var(--dark-danger);
 }

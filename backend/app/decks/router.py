@@ -7,7 +7,12 @@ from app.cards.schemas import (
     LoadCardsRequest,
     LoadCardsResponse,
 )
-from fastapi import APIRouter, Query, Response, status
+from app.redis.rate_limiters import (
+    deck_import_rate_limit,
+    decks_rate_limit,
+    public_decks_rate_limit,
+)
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from .deps import DeckServiceDeps, UserDeckServiceDeps
 from .schemas import (
@@ -21,7 +26,11 @@ from .schemas import (
 router = APIRouter(prefix="/decks")
 
 
-@router.get("/{deck_uuid}", response_model=DeckResponse)
+@router.get(
+    "/{deck_uuid}",
+    response_model=DeckResponse,
+    dependencies=[Depends(public_decks_rate_limit)],
+)
 async def get_deck(
     deck_uuid: UUID,
     current_user: OptionalCurrentUser,
@@ -32,7 +41,11 @@ async def get_deck(
         current_user_id=current_user.id if current_user else None,
     )
 
-@router.post("/create", response_model=DeckResponse)
+@router.post(
+    "/create",
+    response_model=DeckResponse,
+    dependencies=[Depends(decks_rate_limit)],
+)
 async def create_deck(
     payload: CreateDeckRequest,
     current_user: CurrentUser,
@@ -44,7 +57,11 @@ async def create_deck(
         user_uuid=current_user.uuid,
     )
 
-@router.patch("/{deck_uuid}", response_model=DeckResponse)
+@router.patch(
+    "/{deck_uuid}",
+    response_model=DeckResponse,
+    dependencies=[Depends(decks_rate_limit)],
+)
 async def update_deck(
     deck_uuid: UUID,
     payload: UpdateDeckRequest,
@@ -58,7 +75,11 @@ async def update_deck(
         payload=payload,
     )
 
-@router.delete("/{deck_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{deck_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(decks_rate_limit)],
+)
 async def delete_deck(
     deck_uuid: UUID,
     current_user: CurrentUser,
@@ -72,7 +93,11 @@ async def delete_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
-@router.get("/{deck_uuid}/cards", response_model=list[CardResponse])
+@router.get(
+    "/{deck_uuid}/cards",
+    response_model=list[CardResponse],
+    dependencies=[Depends(public_decks_rate_limit)],
+)
 async def get_deck_cards(
     deck_uuid: UUID,
     current_user: OptionalCurrentUser,
@@ -90,6 +115,7 @@ async def get_deck_cards(
 @router.get(
     "/{deck_uuid}/cards/{card_uuid}",
     response_model=CardResponse,
+    dependencies=[Depends(public_decks_rate_limit)],
 )
 async def get_card_in_deck(
     deck_uuid: UUID,
@@ -106,6 +132,7 @@ async def get_card_in_deck(
 @router.post(
     "/{deck_uuid}/cards/remove/{card_uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def remove_card_from_deck(
     deck_uuid: UUID,
@@ -125,6 +152,7 @@ async def remove_card_from_deck(
 # todo: complete the logic of cards reordering
 @router.post(
     "/{deck_uuid}/cards/reorder",
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def reorder_deck_cards(
     deck_uuid: UUID,
@@ -143,6 +171,7 @@ async def reorder_deck_cards(
     "/{deck_uuid}/cards/import",
     response_model=LoadCardsResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(deck_import_rate_limit)],
 )
 async def load_cards_to_deck(
     deck_uuid: UUID,
@@ -160,6 +189,7 @@ async def load_cards_to_deck(
 @router.post(
     "/{deck_uuid}/cards/{card_uuid}",
     response_model=DeckCardResponse,
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def add_card_to_deck(
     deck_uuid: UUID,
@@ -178,6 +208,7 @@ async def add_card_to_deck(
 
 @router.patch(
     "/{deck_uuid}/set-favourite",
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def set_favourite(
     deck_uuid: UUID,
@@ -197,6 +228,7 @@ async def set_favourite(
 @router.post(
     "/{deck_uuid}/save",
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def save_deck(
     deck_uuid: UUID,
@@ -214,6 +246,7 @@ async def save_deck(
 @router.post(
     "/{deck_uuid}/unsave",
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(decks_rate_limit)],
 )
 async def unsave_deck(
     deck_uuid: UUID,

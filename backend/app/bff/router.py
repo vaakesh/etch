@@ -11,6 +11,7 @@ from app.bff.schemas import (
 from app.bff.service import BffService
 from app.common.schemas import CursorPage
 from app.common.types import PageLimit, PaginationCursor, SearchQuery
+from app.redis.rate_limiters import bff_rate_limit, start_practice_rate_limit
 from app.training_sessions.schemas import (
     PracticeSessionResponse,
     StartPracticeSessionRequest,
@@ -18,7 +19,10 @@ from app.training_sessions.schemas import (
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
 
-router = APIRouter(prefix="/bff")
+router = APIRouter(
+    prefix="/bff",
+    dependencies=[Depends(bff_rate_limit)],
+)
 
 
 @router.get("/home", response_model=HomeDashboardResponse)
@@ -88,6 +92,7 @@ async def get_cards_library_page(
 @router.post(
     "/practice/{deck_uuid}/start",
     response_model=PracticeSessionResponse,
+    dependencies=[Depends(start_practice_rate_limit)],
 )
 async def start_practice_session(
     deck_uuid: UUID,

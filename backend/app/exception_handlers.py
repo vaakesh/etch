@@ -32,6 +32,7 @@ from app.decks.errors import (
 from app.errors import (
     RequestValueError,
 )
+from app.redis.errors import RateLimitError
 from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
     TrainingSessionAlreadyExistsError,
@@ -460,6 +461,18 @@ async def request_value_error_handler(
     )
 
 
+async def rate_limit_error_handler(
+    request: Request,
+    exc: RateLimitError,
+):
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "message": str(exc),
+        },
+    )
+
+
 def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(InvalidLoginCredentials, invalid_login_credentials_handler)
     app.add_exception_handler(InvalidTokenError, invalid_token_handler)
@@ -528,4 +541,5 @@ def register_exception_handlers(app: FastAPI):
 
     app.add_exception_handler(RequestValueError, request_value_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(RateLimitError, rate_limit_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

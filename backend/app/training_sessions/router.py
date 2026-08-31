@@ -1,6 +1,11 @@
 from uuid import UUID
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
+from app.redis.rate_limiters import (
+    public_training_sessions_rate_limit,
+    submit_answer_rate_limit,
+    training_sessions_rate_limit,
+)
 from app.training_sessions.deps import (
     TrainingSessionServiceDeps,
 )
@@ -10,13 +15,14 @@ from app.training_sessions.schemas import (
     TrainingSessionResponse,
 )
 from app.training_sessions.types import UserAnswer
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 router = APIRouter(prefix="/training-sessions")
 
 @router.get(
     "/{session_uuid}", 
     response_model=TrainingSessionResponse,
+    dependencies=[Depends(public_training_sessions_rate_limit)],
 )
 async def get_training_session(
     session_uuid: UUID,
@@ -32,6 +38,7 @@ async def get_training_session(
 @router.get(
     "/{session_uuid}/history",
     response_model=list[TrainingSessionHistoryItemResponse],
+    dependencies=[Depends(training_sessions_rate_limit)],
 )
 async def get_training_session_history(
     session_uuid: UUID,
@@ -67,6 +74,7 @@ async def get_training_session_history(
 @router.put(
         "/{training_session_uuid}/items/{sequence_number}/submit",
         response_model=SubmitAnswerResponse,
+        dependencies=[Depends(submit_answer_rate_limit)],
 )
 async def submit_answer(
     training_session_uuid: UUID,

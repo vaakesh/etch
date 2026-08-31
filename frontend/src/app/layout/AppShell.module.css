@@ -635,13 +635,11 @@ a.navigationItem:not(.navigationItemActive):hover {
 
 :global(html[data-theme="dark"]) .shell .sidebar {
   color: var(--dark-text);
-  background:
-    radial-gradient(circle at 12% 84%, var(--dark-cyan-soft), transparent 15rem),
-    var(--dark-surface);
+  background: var(--dark-surface);
   border-right-color: var(--dark-border);
   box-shadow:
     10px 0 32px var(--dark-shadow),
-    inset -1px 0 0 rgb(228 228 228 / 4%);
+    inset -1px 0 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .shell .brandName,
@@ -655,12 +653,12 @@ a.navigationItem:not(.navigationItemActive):hover {
 
 :global(html[data-theme="dark"]) .shell .navigationThumb,
 :global(html[data-theme="dark"]) .shell .navigationItemActive {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: transparent;
   box-shadow:
-    0 10px 24px rgb(0 0 0 / 24%),
-    inset 0 1px 0 rgb(228 228 228 / 16%);
+    0 10px 24px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight-strong);
 }
 
 :global(html[data-theme="dark"]) .shell a.navigationItem:not(.navigationItemActive):hover {
@@ -675,20 +673,20 @@ a.navigationItem:not(.navigationItemActive):hover {
   border-color: var(--dark-border-accent);
   box-shadow:
     0 9px 22px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 6%);
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .shell .sidebarToggle:hover {
-  color: var(--dark-background);
-  background: var(--dark-cta);
-  border-color: var(--dark-cta);
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
 }
 
 :global(html[data-theme="dark"]) .shell .sidebarToggle:focus-visible,
 :global(html[data-theme="dark"]) .shell .navigationItem:focus-visible,
 :global(html[data-theme="dark"]) .shell .brand:focus-visible,
 :global(html[data-theme="dark"]) .shell .logoutButton:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--dark-focus);
 }
 
 :global(html[data-theme="dark"]) .shell .logoutButton {
@@ -726,31 +724,28 @@ a.navigationItem:not(.navigationItemActive):hover {
 
 :global(html[data-theme="dark"]) .shell .content,
 :global(html[data-theme="dark"]) .shellLibrary .content {
-  background:
-    radial-gradient(circle at 92% 4%, rgb(168 218 220 / 8%), transparent 30rem),
-    radial-gradient(circle at 6% 94%, rgb(255 193 204 / 6%), transparent 28rem),
-    var(--dark-background);
+  background: var(--dark-page-background);
 }
 
 :global(html[data-theme="dark"]) .logoutDialog {
   color: var(--dark-text);
   color-scheme: dark;
-  box-shadow: 0 32px 88px rgb(0 0 0 / 52%);
+  box-shadow: 0 32px 88px var(--dark-shadow-strong);
 }
 
 :global(html[data-theme="dark"]) .logoutDialog::backdrop {
-  background: rgb(20 20 20 / 76%);
-  backdrop-filter: blur(10px) saturate(0.72);
+  background: var(--dark-scrim);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .logoutDialogShell {
   background: var(--dark-surface);
   border-color: var(--dark-border);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 5%);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .logoutDialogMark {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: none;
@@ -786,22 +781,22 @@ a.navigationItem:not(.navigationItemActive):hover {
 }
 
 :global(html[data-theme="dark"]) .logoutDialogConfirm {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: 0 9px 22px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .logoutDialogConfirm:hover {
-  color: var(--dark-background);
-  background: var(--dark-cyan);
-  border-color: var(--dark-cyan);
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
   box-shadow: 0 11px 26px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .logoutDialogCancel:focus-visible,
 :global(html[data-theme="dark"]) .logoutDialogConfirm:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--dark-focus);
 }
 
 .shellCollapsed .sidebar {

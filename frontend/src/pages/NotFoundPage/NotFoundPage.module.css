@@ -364,32 +364,25 @@
   --error-ink: var(--dark-text);
   --error-muted: var(--dark-text-muted);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 88% 8%, rgb(168 218 220 / 9%), transparent 32rem),
-    radial-gradient(circle at 6% 92%, rgb(255 193 204 / 7%), transparent 30rem),
-    var(--dark-background);
+  background: var(--dark-page-background);
 }
 
 :global(html[data-theme="dark"]) .ambientOrb {
-  background: linear-gradient(145deg, var(--dark-cta-soft), var(--dark-pink-soft));
-  border-color: var(--dark-border);
-  box-shadow: 0 34px 100px var(--dark-shadow);
+  display: none;
 }
 
-:global(html[data-theme="dark"]) .ambientLetter {
-  color: rgb(168 218 220 / 5%);
-}
-
+:global(html[data-theme="dark"]) .ambientLetter,
 :global(html[data-theme="dark"]) .ambientRule {
-  background: linear-gradient(transparent, var(--dark-border-accent), transparent);
+  display: none;
 }
 
 :global(html[data-theme="dark"]) .content {
-  background: rgb(52 52 52 / 92%);
+  background: var(--dark-surface);
   border-color: var(--dark-border);
   box-shadow:
     0 30px 90px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 5%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .content::after {
@@ -416,7 +409,7 @@
 
 :global(html[data-theme="dark"]) .cardFront::after {
   background: var(--dark-border);
-  box-shadow: 0 -13px 0 rgb(228 228 228 / 7%);
+  box-shadow: 0 -13px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .code {
@@ -424,17 +417,17 @@
 }
 
 :global(html[data-theme="dark"]) .homeLink {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: transparent;
-  box-shadow: 0 13px 28px rgb(0 0 0 / 26%);
+  box-shadow: 0 13px 28px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .homeLink:hover {
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
-  box-shadow: 0 16px 34px rgb(0 0 0 / 32%);
+  background: var(--dark-cta-hover);
+  box-shadow: 0 16px 34px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .homeLink:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--dark-focus);
 }

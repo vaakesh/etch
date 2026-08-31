@@ -91,12 +91,12 @@ class TrainingSessionService:
                 raise TrainingSessionNotFoundError()
             items: list[InternalTrainingSessionItem] = []
             status = rows[0][1]
+            if status == TrainingSessionStatus.IN_PROGRESS:
+                raise TrainingSessionNotFinishedYet()
+
             for item, _ in rows:
                 if item is not None:
                     items.append(InternalTrainingSessionItem.model_validate(obj=item))
-
-            if status == TrainingSessionStatus.IN_PROGRESS:
-                raise TrainingSessionNotFinishedYet()
 
             return items
 

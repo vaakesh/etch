@@ -1298,39 +1298,36 @@
   --home-muted: var(--dark-text-muted);
   --home-line-strong: var(--dark-border-accent);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 92% 4%, rgb(168 218 220 / 8%), transparent 30rem),
-    radial-gradient(circle at 5% 94%, rgb(255 193 204 / 6%), transparent 28rem),
-    var(--dark-background);
-  scrollbar-color: var(--dark-cta-medium) transparent;
+  background: var(--dark-page-background);
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .page button:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .page [role="meter"]:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--dark-focus);
 }
 
 :global(html[data-theme="dark"]) .newDeckButton,
 :global(html[data-theme="dark"]) .progressHeadingIcon,
 :global(html[data-theme="dark"]) .startButton,
 :global(html[data-theme="dark"]) .errorState button {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: transparent;
   box-shadow:
-    0 10px 24px rgb(0 0 0 / 24%),
-    inset 0 1px 0 rgb(228 228 228 / 16%);
+    0 10px 24px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight-strong);
 }
 
 :global(html[data-theme="dark"]) .newDeckButton:hover,
 :global(html[data-theme="dark"]) .startButton:hover,
 :global(html[data-theme="dark"]) .startButton:focus-visible,
 :global(html[data-theme="dark"]) .errorState button:hover {
-  color: var(--dark-background);
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
   border-color: transparent;
-  box-shadow: 0 14px 30px rgb(0 0 0 / 30%);
+  box-shadow: 0 14px 30px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .progressPanel,
@@ -1342,7 +1339,8 @@
   border: 1px solid var(--dark-border);
   box-shadow:
     0 18px 44px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 5%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .progressPanel::after {
@@ -1350,7 +1348,7 @@
 }
 
 :global(html[data-theme="dark"]) .metricsList {
-  background: rgb(44 44 44 / 42%);
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border);
 }
 
@@ -1377,12 +1375,12 @@
 
 :global(html[data-theme="dark"]) .weeklySection {
   color: var(--dark-text);
-  background: var(--dark-cyan-soft);
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border-accent);
 }
 
 :global(html[data-theme="dark"]) .barFill {
-  background: linear-gradient(180deg, var(--dark-cyan), var(--dark-cta));
+  background: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .sectionAction {
@@ -1398,22 +1396,25 @@
   background: var(--dark-surface-raised);
   border-color: var(--dark-border-accent);
   box-shadow:
-    0 20px 46px rgb(0 0 0 / 34%),
+    0 20px 46px var(--dark-shadow),
     0 0 0 2px var(--dark-cyan-soft);
 }
 
 :global(html[data-theme="dark"]) .deckAccuracyRed {
-  --accuracy-tone: var(--dark-pink);
+  --accuracy-tone: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .deckAccuracyOrange,
 :global(html[data-theme="dark"]) .deckAccuracyYellow {
-  --accuracy-tone: color-mix(in srgb, var(--dark-pink) 48%, var(--dark-cta));
+  --accuracy-tone: var(--dark-warning);
 }
 
-:global(html[data-theme="dark"]) .deckAccuracyGreen,
+:global(html[data-theme="dark"]) .deckAccuracyGreen {
+  --accuracy-tone: var(--dark-success);
+}
+
 :global(html[data-theme="dark"]) .deckAccuracyTurquoise {
-  --accuracy-tone: var(--dark-cyan);
+  --accuracy-tone: var(--dark-info);
 }
 
 :global(html[data-theme="dark"]) .deckAccuracyPurple {
@@ -1438,12 +1439,13 @@
 }
 
 :global(html[data-theme="dark"]) .emptyIllustration span {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   box-shadow: 0 14px 28px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .emptyIllustration span:nth-child(2) {
+  color: var(--dark-on-accent);
   background: var(--dark-cyan);
 }
 
@@ -1454,9 +1456,9 @@
 }
 
 :global(html[data-theme="dark"]) .errorIcon {
-  color: var(--dark-cyan);
-  background: var(--dark-cyan-soft);
-  box-shadow: 12px 12px 0 var(--dark-pink-soft);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  box-shadow: 12px 12px 0 var(--dark-cta-soft);
 }
 
 :global(html[data-theme="dark"]) .skeletonHeading,
@@ -1469,7 +1471,7 @@
   background: linear-gradient(
     90deg,
     var(--dark-cta-soft) 20%,
-    rgb(228 228 228 / 12%) 50%,
+    var(--dark-highlight-strong) 50%,
     var(--dark-cta-soft) 80%
   );
   background-size: 220% 100%;

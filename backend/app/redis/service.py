@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 import logging
 import random
 from collections.abc import Callable, Hashable
+from typing import Literal
 from uuid import UUID
 
 import orjson
@@ -10,6 +12,7 @@ from app.common.schemas import CursorPage
 from app.common.types import NormalizedSearch
 from app.decks.models import Deck, UserDeck
 from app.decks.schemas import InternalDeck, InternalUserDeck
+from app.redis.errors import RateLimitError
 from app.redis.keys import (
     make_card_cache_key,
     make_deck_cache_key,
@@ -33,6 +36,76 @@ USER_DECK_TTL = 60 * 10
 
 logger = logging.getLogger(__name__)
 
+type RateLimitIdentity = Literal["user", "ip"]
+
+@dataclass(frozen=True)
+class RateLimitPolicy:
+    route: str
+    requests: int
+    window_seconds: int
+
+
+class RateLimit:
+    def __init__(
+        self,
+        policy: RateLimitPolicy,
+        rate_limiter: RedisRateLimiter,
+        by_identity: RateLimitIdentity,
+        identity_key: str,
+    ):
+        self.policy = policy
+        self.rate_limiter = rate_limiter
+        self.by_identity = by_identity
+        self.identity_key = identity_key
+
+    async def __call__(self):
+        redis_key = (
+            f"rate_limit:"
+            f"{self.by_identity}:"
+            f"{self.identity_key}:"
+            f"{self.policy.route}"
+        )
+
+        if not await self.rate_limiter.check(
+            redis_key=redis_key,
+            requests=self.policy.requests,
+            window_seconds=self.policy.window_seconds,
+        ):
+            raise RateLimitError()
+
+class RedisRateLimiter:
+    def __init__(self, redis: Redis):
+        self.redis = redis
+
+    async def check(
+        self,
+        redis_key: str,
+        requests: int,
+        window_seconds: int,
+    ):
+        value = await self.redis.get(
+            name=redis_key,
+        )
+        if value is None:
+            await self.redis.set(
+                name=redis_key,
+                value="1",
+                ex=window_seconds,
+            )
+            value = 1
+        else:
+            value = await self.redis.incrby(
+                name=redis_key,
+                amount=1,
+            )
+
+        if int(value) > requests:
+            return False
+
+        return True
+        
+        
+    
 
 class RedisCacheService:
     """

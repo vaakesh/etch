@@ -26,11 +26,23 @@ from app.users.schemas import (
     UserSettingsResponse,
     UserSettingsUpdate,
 )
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
+
+from app.redis.rate_limiters import (
+    password_change_rate_limit,
+    profile_rate_limit,
+    public_users_rate_limit,
+    registration_rate_limit,
+    users_rate_limit,
+)
 
 router = APIRouter(prefix="/users")
 
-@router.get("/me", response_model=PrivateUserResponse)
+@router.get(
+    "/me",
+    response_model=PrivateUserResponse,
+    dependencies=[Depends(profile_rate_limit)],
+)
 async def get_me(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -54,6 +66,7 @@ async def get_me(
 
 @router.get(
     "/me/daily-activity",
+    dependencies=[Depends(users_rate_limit)],
 )
 async def get_user_daily_activity(
     current_user: CurrentUser,
@@ -67,7 +80,11 @@ async def get_user_daily_activity(
         to_date=to_date,
     )
 
-@router.patch("/me/settings", response_model=UserSettingsResponse)
+@router.patch(
+    "/me/settings",
+    response_model=UserSettingsResponse,
+    dependencies=[Depends(users_rate_limit)],
+)
 async def change_settings(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -80,7 +97,11 @@ async def change_settings(
     return new_user_settings
     
 
-@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/me/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(password_change_rate_limit)],
+)
 async def change_password(
     payload: ChangePasswordRequest,
     current_user: CurrentUser,
@@ -95,7 +116,11 @@ async def change_password(
     clear_tokens_cookie(response=response)
     return response
 
-@router.get("/me/decks", response_model=CursorPage[DeckResponse])
+@router.get(
+    "/me/decks",
+    response_model=CursorPage[DeckResponse],
+    dependencies=[Depends(users_rate_limit)],
+)
 async def get_my_decks(
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
@@ -118,7 +143,11 @@ async def get_my_decks(
         has_more=has_more,
     )
 
-@router.get("/me/cards", response_model=CursorPage[CardResponse])
+@router.get(
+    "/me/cards",
+    response_model=CursorPage[CardResponse],
+    dependencies=[Depends(users_rate_limit)],
+)
 async def get_my_cards(
     current_user: CurrentUser,
     card_service: CardServiceDeps,
@@ -139,7 +168,11 @@ async def get_my_cards(
         has_more=has_more,
     )
 
-@router.get("/me/training-sessions", response_model=CursorPage[TrainingSessionResponse])
+@router.get(
+    "/me/training-sessions",
+    response_model=CursorPage[TrainingSessionResponse],
+    dependencies=[Depends(users_rate_limit)],
+)
 async def get_my_training_sessions(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
@@ -161,7 +194,11 @@ async def get_my_training_sessions(
         has_more=has_more,
     )
 
-@router.get("/me/decks/saved", response_model=list[DeckListItemResponse])
+@router.get(
+    "/me/decks/saved",
+    response_model=list[DeckListItemResponse],
+    dependencies=[Depends(users_rate_limit)],
+)
 async def get_my_saved_decks(
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
@@ -176,7 +213,11 @@ async def get_my_saved_decks(
 
     return saved_decks
 
-@router.get("/{user_uuid}", response_model=PublicUserResponse)
+@router.get(
+    "/{user_uuid}",
+    response_model=PublicUserResponse,
+    dependencies=[Depends(public_users_rate_limit)],
+)
 async def get_public_user(
     user_uuid: UUID,
     user_service: UserServiceDeps,
@@ -191,6 +232,7 @@ async def get_public_user(
     "/create", 
     response_model=PrivateUserResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(registration_rate_limit)],
 )
 async def create_user(
     payload: CreateUserRequest,
@@ -210,7 +252,11 @@ async def create_user(
         )
     )
 
-@router.patch("/me", response_model=PrivateUserResponse)
+@router.patch(
+    "/me",
+    response_model=PrivateUserResponse,
+    dependencies=[Depends(users_rate_limit)],
+)
 async def update_user(
     payload: UpdateUserRequest,
     current_user: CurrentUser,
@@ -223,7 +269,11 @@ async def update_user(
     )
     return updated_user
 
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(users_rate_limit)],
+)
 async def delete_user(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -238,7 +288,8 @@ async def delete_user(
 
 @router.get(
     "/{user_uuid}/training-sessions", 
-    response_model=CursorPage[TrainingSessionResponse]
+    response_model=CursorPage[TrainingSessionResponse],
+    dependencies=[Depends(public_users_rate_limit)],
 )
 async def get_public_training_sessions_by_user(
     user_uuid: UUID,
@@ -260,7 +311,11 @@ async def get_public_training_sessions_by_user(
         has_more=has_more,
     )
 
-@router.get("/{user_uuid}/decks", response_model=CursorPage[DeckResponse])
+@router.get(
+    "/{user_uuid}/decks",
+    response_model=CursorPage[DeckResponse],
+    dependencies=[Depends(public_users_rate_limit)],
+)
 async def get_public_decks_by_user(
     user_uuid: UUID,
     deck_service: DeckServiceDeps,

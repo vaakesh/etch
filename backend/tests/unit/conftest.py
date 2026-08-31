@@ -27,6 +27,8 @@ from app.decks.service import (
     DeckService,
     UserDeckService,
 )
+from app.redis.deps import get_redis_rate_limiter
+from app.redis.service import RedisRateLimiter
 from tests.unit.factories import (
     make_deck,
     make_deck_card,
@@ -50,6 +52,34 @@ def optional_current_user(
         current_user,
     )
 
+
+@pytest.fixture
+def redis_rate_limiter():
+    rate_limiter = create_autospec(
+        RedisRateLimiter,
+        instance=True,
+    )
+    rate_limiter.check.return_value = True
+    return rate_limiter
+
+
+@pytest.fixture(autouse=True)
+def override_redis_rate_limiter(
+    app: FastAPI,
+    redis_rate_limiter,
+):
+    async def provide_redis_rate_limiter():
+        return redis_rate_limiter
+
+    app.dependency_overrides[get_redis_rate_limiter] = provide_redis_rate_limiter
+
+    yield
+
+    app.dependency_overrides.pop(
+        get_redis_rate_limiter,
+        None,
+    )
+
 @pytest.fixture
 def user_settings(request):
     overrides = getattr(request, "param", {})
@@ -61,12 +91,16 @@ def override_current_users(
     current_user,
     optional_current_user,
 ):
-    app.dependency_overrides[get_current_user] = (
-        lambda: current_user
-    )
-    app.dependency_overrides[get_optional_current_user] = (
-        lambda: optional_current_user
-    )
+    async def provide_current_user():
+        return current_user
+
+    async def provide_optional_current_user():
+        return optional_current_user
+
+    app.dependency_overrides[get_current_user] = provide_current_user
+    app.dependency_overrides[
+        get_optional_current_user
+    ] = provide_optional_current_user
 
     yield
 

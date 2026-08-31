@@ -6555,16 +6555,13 @@ a.navigationItem:hover {
   --library-ink-deep: var(--dark-text);
   --library-muted: var(--dark-text-muted);
   --library-line: var(--dark-border);
-  --library-line-strong: rgb(228 228 228 / 18%);
-  --library-success: var(--dark-cyan);
-  --library-error: var(--dark-pink);
+  --library-line-strong: var(--dark-border-strong);
+  --library-success: var(--dark-success);
+  --library-error: var(--dark-danger);
   color: var(--dark-text);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 88% -8%, var(--dark-cta-soft), transparent 32rem),
-    radial-gradient(circle at 2% 102%, var(--dark-cyan-soft), transparent 28rem),
-    var(--dark-background);
-  scrollbar-color: var(--dark-text-faint) transparent;
+  background: var(--dark-page-background);
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .page button:focus-visible,
@@ -6572,12 +6569,16 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page textarea:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .page [role="meter"]:focus-visible {
-  outline-color: rgb(168 218 220 / 52%);
+  outline-color: var(--dark-focus);
 }
 
 :global(html[data-theme="dark"]) .page .libraryHeader h1::after {
   background: var(--dark-pink);
-  box-shadow: 0 4px 12px var(--dark-pink-medium);
+  box-shadow: none;
+}
+
+:global(html[data-theme="dark"]) .page .deckCard::before {
+  background: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .page .newDeckButton,
@@ -6586,7 +6587,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .stateMessage button,
 :global(html[data-theme="dark"]) .page .cardEditorSave,
 :global(html[data-theme="dark"]) .page .cardDeckState button {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: 0 10px 24px var(--dark-shadow);
@@ -6601,9 +6602,9 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .cardEditorSave:hover:not(:disabled),
 :global(html[data-theme="dark"]) .page .cardDeckState button:hover:not(:disabled),
 :global(html[data-theme="dark"]) .page .cardDeckState button:focus-visible {
-  color: var(--dark-background);
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
-  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
   box-shadow: 0 13px 28px var(--dark-shadow);
 }
 
@@ -6620,8 +6621,8 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .page .newDeckButton svg,
 :global(html[data-theme="dark"]) .page .startButton svg {
-  color: var(--dark-background);
-  background: rgb(44 44 44 / 12%);
+  color: var(--dark-on-cta);
+  background: var(--dark-on-accent-soft);
 }
 
 :global(html[data-theme="dark"]) .page .librarySwitch {
@@ -6629,12 +6630,13 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
   box-shadow:
     0 8px 22px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .page .switchThumb {
   background: var(--dark-cta);
   box-shadow: 0 6px 14px var(--dark-shadow);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .switchTab {
@@ -6647,7 +6649,7 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .switchTab[aria-selected="true"] {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
 }
 
 :global(html[data-theme="dark"]) .page .deckSearchField input {
@@ -6657,7 +6659,8 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
   box-shadow:
     0 7px 18px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .deckSearchField input::placeholder {
@@ -6674,7 +6677,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 9px 22px var(--dark-shadow),
-    0 0 0 3px var(--dark-cyan-soft);
+    0 0 0 3px var(--dark-focus-ring);
 }
 
 :global(html[data-theme="dark"]) .page .cardSearchField input {
@@ -6684,7 +6687,8 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
   box-shadow:
     0 9px 24px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .cardSearchField input::placeholder {
@@ -6705,7 +6709,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 12px 28px var(--dark-shadow),
-    0 0 0 3px var(--dark-cyan-soft);
+    0 0 0 3px var(--dark-focus-ring);
 }
 
 :global(html[data-theme="dark"]) .page .cardSearchField:focus-within .cardSearchIcon {
@@ -6756,7 +6760,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .page .deckFilterLoading {
   color: var(--dark-text-muted);
-  background: linear-gradient(105deg, var(--dark-cta-soft), var(--dark-cyan-soft));
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border);
 }
 
@@ -6775,7 +6779,8 @@ a.navigationItem:hover {
   background: var(--dark-surface);
   box-shadow:
     0 13px 32px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 @media (hover: hover) {
@@ -6798,9 +6803,9 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .favouriteActive,
 :global(html[data-theme="dark"]) .page .favourite:hover:not(:disabled),
 :global(html[data-theme="dark"]) .page .favouriteActive:hover:not(:disabled) {
-  color: var(--dark-pink);
-  background: var(--dark-pink-soft);
-  border-color: var(--dark-pink-medium);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger-medium);
   box-shadow: none;
 }
 
@@ -6809,24 +6814,27 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .cardMutationError,
 :global(html[data-theme="dark"]) .page .loadMoreError,
 :global(html[data-theme="dark"]) .page .cardEditorError {
-  color: var(--dark-pink);
-  background: var(--dark-pink-soft);
-  border-color: var(--dark-pink-medium);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger-medium);
 }
 
 :global(html[data-theme="dark"]) .page .accuracygreen,
 :global(html[data-theme="dark"]) .page .accuracyturquoise {
-  --accuracy-tone: var(--dark-cyan);
+  --accuracy-tone: var(--dark-success);
 }
 
 :global(html[data-theme="dark"]) .page .accuracyyellow,
+:global(html[data-theme="dark"]) .page .accuracyorange {
+  --accuracy-tone: var(--dark-warning);
+}
+
 :global(html[data-theme="dark"]) .page .accuracypurple {
   --accuracy-tone: var(--dark-cta);
 }
 
-:global(html[data-theme="dark"]) .page .accuracyorange,
 :global(html[data-theme="dark"]) .page .accuracyred {
-  --accuracy-tone: var(--dark-pink);
+  --accuracy-tone: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .page .accuracyTooltip,
@@ -6847,11 +6855,11 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .previewList li,
 :global(html[data-theme="dark"]) .page .previewList li + li {
   color: var(--dark-text);
-  background: linear-gradient(135deg, var(--dark-cyan-soft), rgb(168 218 220 / 6%));
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border-accent);
   box-shadow:
     0 5px 14px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .page .previewList li:has(.cardTextOverflow:hover),
@@ -6859,7 +6867,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 12px 28px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 5%);
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 @media (hover: hover) {
@@ -6867,7 +6875,7 @@ a.navigationItem:hover {
     border-color: var(--dark-cyan);
     box-shadow:
       0 12px 28px var(--dark-shadow),
-      inset 0 1px 0 rgb(228 228 228 / 5%);
+      inset 0 1px 0 var(--dark-highlight);
   }
 }
 
@@ -6885,7 +6893,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .page .emptyPreview {
   color: var(--dark-text-muted);
-  background: linear-gradient(120deg, var(--dark-cyan-soft), var(--dark-pink-soft));
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border-accent);
 }
 
@@ -6895,12 +6903,13 @@ a.navigationItem:hover {
   border-color: var(--dark-border-accent);
   box-shadow:
     0 16px 36px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 5%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .cardAssignedToastIcon {
-  color: var(--dark-background);
-  background: var(--dark-cyan);
+  color: var(--dark-on-accent);
+  background: var(--dark-success);
   box-shadow: 0 6px 14px var(--dark-shadow);
 }
 
@@ -6919,9 +6928,9 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .deleteButton:hover:not(:disabled) {
-  color: var(--dark-pink);
-  background: var(--dark-pink-soft);
-  border-color: var(--dark-pink-medium);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger-medium);
   box-shadow: 0 6px 14px var(--dark-shadow);
 }
 
@@ -6942,13 +6951,14 @@ a.navigationItem:hover {
   background: var(--dark-surface);
   border-color: var(--dark-border);
   box-shadow: 0 10px 26px var(--dark-shadow);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .cardRow:has(.cardActionsMenu:popover-open),
 :global(html[data-theme="dark"]) .page .cardRow:has(.cardActionsMenu:popover-open) {
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-cyan-soft),
+    0 0 0 3px var(--dark-focus-ring),
     0 12px 28px var(--dark-shadow);
 }
 
@@ -6978,14 +6988,14 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .cardFaceSource .languageBadge {
-  color: var(--dark-background);
+  color: var(--dark-on-accent);
   background: var(--dark-cyan);
   border-color: var(--dark-cyan);
   box-shadow: 0 5px 12px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .cardFaceTarget .languageBadge {
-  color: var(--dark-background);
+  color: var(--dark-on-accent);
   background: var(--dark-pink);
   border-color: var(--dark-pink);
   box-shadow: 0 5px 12px var(--dark-shadow);
@@ -7004,7 +7014,7 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
   box-shadow:
     0 16px 34px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .page .cardTextTooltip::before {
@@ -7043,7 +7053,8 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
   box-shadow:
     0 20px 48px var(--dark-shadow),
-    inset 0 1px 0 rgb(228 228 228 / 4%);
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):hover,
@@ -7063,7 +7074,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .cardActionsMenu .cardDeleteAction svg,
 :global(html[data-theme="dark"]) .page .cardActionsMenu .cardDeleteAction,
 :global(html[data-theme="dark"]) .page .cardActionsMenu .cardDeleteAction svg {
-  color: var(--dark-pink);
+  color: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .cardActionsMenu .cardEditAction svg,
@@ -7075,9 +7086,9 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardMutationError,
 :global(html[data-theme="dark"]) .page .cardMutationError {
-  color: var(--dark-pink);
-  background: var(--dark-pink-soft);
-  border-color: var(--dark-pink-medium);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger-medium);
 }
 
 :global(html[data-theme="dark"]) .skeleton,
@@ -7101,6 +7112,7 @@ a.navigationItem:hover {
   background: var(--dark-surface);
   border-color: var(--dark-border);
   box-shadow: 0 13px 32px var(--dark-shadow);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .stateMessage p {
@@ -7111,36 +7123,36 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .cardEditorDialog {
   color: var(--dark-text);
   color-scheme: dark;
-  box-shadow: 0 28px 72px rgb(0 0 0 / 46%);
-  scrollbar-color: var(--dark-text-faint) transparent;
+  box-shadow: 0 28px 72px var(--dark-shadow-strong);
+  scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteDialog::backdrop,
 :global(html[data-theme="dark"]) .page .cardEditorDialog::backdrop {
-  background: rgb(44 44 44 / 80%);
-  backdrop-filter: blur(8px) saturate(0.72);
+  background: var(--dark-scrim);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteShell {
   background: var(--dark-surface);
-  border-color: var(--dark-pink-medium);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 5%);
+  border-color: var(--dark-danger-medium);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteHeader {
-  background: linear-gradient(125deg, var(--dark-pink-soft), var(--dark-cta-soft));
+  background: var(--dark-surface-raised);
   border-color: var(--dark-border);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteMark {
-  color: var(--dark-background);
-  background: var(--dark-pink);
-  border-color: var(--dark-pink);
+  color: var(--dark-on-accent);
+  background: var(--dark-danger);
+  border-color: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteEyebrow,
 :global(html[data-theme="dark"]) .page .deckDeleteBody .deckDeleteWarning {
-  color: var(--dark-pink);
+  color: var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteBody p {
@@ -7161,7 +7173,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .deckDeleteCancel {
   color: var(--dark-text);
   background: var(--dark-surface);
-  border-color: rgb(228 228 228 / 18%);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteCancel:hover,
@@ -7172,17 +7184,17 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteConfirm {
-  color: var(--dark-background);
-  background: var(--dark-pink);
-  border-color: var(--dark-pink);
+  color: var(--dark-on-accent);
+  background: var(--dark-danger);
+  border-color: var(--dark-danger);
   box-shadow: 0 8px 18px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .deckDeleteConfirm:hover,
 :global(html[data-theme="dark"]) .page .deckDeleteConfirm:focus-visible {
-  color: var(--dark-background);
-  background: color-mix(in srgb, var(--dark-pink) 86%, var(--dark-text));
-  border-color: color-mix(in srgb, var(--dark-pink) 86%, var(--dark-text));
+  color: var(--dark-on-accent);
+  background: var(--dark-danger-hover);
+  border-color: var(--dark-danger-hover);
   box-shadow: 0 10px 22px var(--dark-shadow);
 }
 
@@ -7192,22 +7204,24 @@ a.navigationItem:hover {
   color-scheme: dark;
   background: transparent;
   border-color: var(--dark-border);
-  box-shadow: 0 28px 72px rgb(0 0 0 / 46%);
+  box-shadow: 0 28px 72px var(--dark-shadow-strong);
 }
 
 :global(html[data-theme="dark"]) .cardEditorDialog::backdrop,
 :global(html[data-theme="dark"]) .page .cardEditorDialog::backdrop {
-  background: rgb(44 44 44 / 80%);
+  background: var(--dark-scrim);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .cardEditorShell,
 :global(html[data-theme="dark"]) .page .cardEditorShell {
   background: var(--dark-surface);
+  backdrop-filter: none;
 }
 
 :global(html[data-theme="dark"]) .cardEditorGlow,
 :global(html[data-theme="dark"]) .page .cardEditorGlow {
-  background: radial-gradient(circle, var(--dark-cyan-medium), transparent 68%);
+  display: none;
 }
 
 :global(html[data-theme="dark"]) .cardEditorHeader,
@@ -7219,7 +7233,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardEditorMark,
 :global(html[data-theme="dark"]) .page .cardEditorMark {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: 0 8px 20px var(--dark-shadow);
@@ -7296,7 +7310,7 @@ a.navigationItem:hover {
   caret-color: var(--dark-cyan);
   background: var(--dark-surface-raised);
   border-color: var(--dark-border);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 16%);
+  box-shadow: inset 0 1px 2px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .cardEditorField textarea:hover,
@@ -7304,7 +7318,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page .cardEditorField textarea:hover,
 :global(html[data-theme="dark"]) .page .cardEditorField input:hover {
   background: var(--dark-surface-hover);
-  border-color: rgb(228 228 228 / 18%);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .cardEditorField textarea:focus,
@@ -7315,7 +7329,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 0 0 3px var(--dark-cyan-soft),
-    inset 0 1px 2px rgb(0 0 0 / 16%);
+    inset 0 1px 2px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption > span,
@@ -7338,7 +7352,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:focus-visible) > span,
 :global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:focus-visible) > span {
   border-color: var(--dark-cyan);
-  box-shadow: 0 0 0 3px var(--dark-cyan-soft);
+  box-shadow: 0 0 0 3px var(--dark-focus-ring);
 }
 
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span,
@@ -7356,7 +7370,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption > span::before,
 :global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption > span::before {
-  border-color: rgb(228 228 228 / 24%);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span::before,
@@ -7387,7 +7401,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardEditorSave,
 :global(html[data-theme="dark"]) .page .cardEditorSave {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: 0 8px 18px var(--dark-shadow);
@@ -7395,16 +7409,16 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardEditorSave:hover:not(:disabled),
 :global(html[data-theme="dark"]) .page .cardEditorSave:hover:not(:disabled) {
-  color: var(--dark-background);
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
-  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
   box-shadow: 0 10px 22px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .cardEditorSpinner,
 :global(html[data-theme="dark"]) .page .cardEditorSpinner {
-  border-color: rgb(44 44 44 / 30%);
-  border-top-color: var(--dark-background);
+  border-color: var(--dark-on-accent-medium);
+  border-top-color: var(--dark-on-cta);
 }
 
 :global(html[data-theme="dark"]) .cardDeckCardName,
@@ -7424,14 +7438,14 @@ a.navigationItem:hover {
   color: var(--dark-text);
   background: var(--dark-surface-raised);
   border-color: var(--dark-border);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 3%);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .cardDeckCheck,
 :global(html[data-theme="dark"]) .page .cardDeckCheck {
   color: transparent;
   background: var(--dark-background);
-  border-color: rgb(228 228 228 / 24%);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .cardDeckOption:hover,
@@ -7447,7 +7461,7 @@ a.navigationItem:hover {
   color: var(--dark-text);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 2px var(--dark-cyan-soft),
+    0 0 0 2px var(--dark-focus-ring),
     0 7px 18px var(--dark-shadow);
 }
 
@@ -7456,12 +7470,12 @@ a.navigationItem:hover {
   color: var(--dark-text);
   background: var(--dark-cta-soft);
   border-color: var(--dark-cta);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .cardDeckOption input:checked + .cardDeckCheck,
 :global(html[data-theme="dark"]) .page .cardDeckOption input:checked + .cardDeckCheck {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
   box-shadow: 0 0 0 3px var(--dark-cta-soft);
@@ -7473,9 +7487,9 @@ a.navigationItem:hover {
   .cardDeckDialog
   .cardDeckOption[data-assignment-state="completed"] {
   color: var(--dark-text);
-  background: var(--dark-cyan-soft);
-  border-color: var(--dark-cyan);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+  background: var(--dark-success-soft);
+  border-color: var(--dark-success);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .cardDeckDialog .cardDeckOption[data-assignment-state="failed"],
@@ -7484,9 +7498,9 @@ a.navigationItem:hover {
   .cardDeckDialog
   .cardDeckOption[data-assignment-state="failed"] {
   color: var(--dark-text);
-  background: var(--dark-pink-soft);
-  border-color: var(--dark-pink);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+  background: var(--dark-danger-soft);
+  border-color: var(--dark-danger);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .cardDeckCount,
@@ -7496,8 +7510,8 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardDeckRetryLabel,
 :global(html[data-theme="dark"]) .page .cardDeckRetryLabel {
-  color: var(--dark-pink);
-  background: var(--dark-pink-soft);
+  color: var(--dark-danger);
+  background: var(--dark-danger-soft);
 }
 
 :global(html[data-theme="dark"]) .cardDeckState,
@@ -7519,7 +7533,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .cardDeckState button,
 :global(html[data-theme="dark"]) .page .cardDeckState button {
-  color: var(--dark-background);
+  color: var(--dark-on-cta);
   background: var(--dark-cta);
   border-color: var(--dark-cta);
 }
@@ -7528,16 +7542,16 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .cardDeckState button:focus-visible,
 :global(html[data-theme="dark"]) .page .cardDeckState button:hover:not(:disabled),
 :global(html[data-theme="dark"]) .page .cardDeckState button:focus-visible {
-  color: var(--dark-background);
-  background: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
-  border-color: color-mix(in srgb, var(--dark-cta) 86%, var(--dark-text));
+  color: var(--dark-on-cta);
+  background: var(--dark-cta-hover);
+  border-color: var(--dark-cta-hover);
 }
 
 :global(html[data-theme="dark"]) .page .importCardsButton {
   color: var(--dark-text);
   background: var(--dark-surface-raised);
   border-color: var(--dark-border);
-  box-shadow: inset 0 1px 0 rgb(228 228 228 / 4%);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .page .importCardsButton:hover,
@@ -7581,25 +7595,25 @@ a.navigationItem:hover {
   color-scheme: dark;
   background: var(--dark-surface-raised);
   border-color: var(--dark-border);
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 16%);
+  box-shadow: inset 0 1px 2px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .cardImportTextarea:hover {
   background: var(--dark-surface-hover);
-  border-color: rgb(228 228 228 / 18%);
+  border-color: var(--dark-border-strong);
 }
 
 :global(html[data-theme="dark"]) .page .cardImportTextarea:focus {
   background: var(--dark-surface-hover);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-cyan-soft),
-    inset 0 1px 2px rgb(0 0 0 / 16%);
+    0 0 0 3px var(--dark-focus-ring),
+    inset 0 1px 2px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .cardImportTextarea[aria-invalid="true"] {
-  border-color: var(--dark-pink);
-  box-shadow: 0 0 0 3px var(--dark-pink-soft);
+  border-color: var(--dark-danger);
+  box-shadow: 0 0 0 3px var(--dark-danger);
 }
 
 :global(html[data-theme="dark"]) .page .cardImportFileButton {
@@ -7610,7 +7624,7 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .page .cardImportFileButton:hover,
 :global(html[data-theme="dark"]) .page .cardImportFileButton:has(input:focus-visible) {
-  color: var(--dark-background);
+  color: var(--dark-on-accent);
   background: var(--dark-cyan);
   border-color: var(--dark-cyan);
 }
@@ -7620,12 +7634,12 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .cardImportSuccess {
-  background: linear-gradient(135deg, var(--dark-cta-soft), var(--dark-cyan-soft));
+  background: var(--dark-success-soft);
   border-color: var(--dark-border-accent);
 }
 
 :global(html[data-theme="dark"]) .page .cardImportSuccessMark {
-  color: var(--dark-background);
-  background: var(--dark-cyan);
+  color: var(--dark-on-accent);
+  background: var(--dark-success);
   box-shadow: 0 14px 30px var(--dark-shadow);
 }

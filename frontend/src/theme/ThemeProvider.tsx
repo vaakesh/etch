@@ -34,7 +34,7 @@ function readPrefersDark(): boolean {
 }
 
 function getThemeColor(theme: ResolvedTheme): string {
-  return theme === "dark" ? "#2c2c2c" : "#c3b8f5";
+  return theme === "dark" ? "#171a18" : "#c3b8f5";
 }
 
 export function ThemeProvider({ children, initialTheme }: ThemeProviderProps) {
