@@ -5,9 +5,9 @@ import pytest
 from fastapi import Request, status
 from httpx import AsyncClient
 
-from app.redis.deps import limit
 from app.redis.errors import RateLimitError
 from app.redis.service import RateLimit, RateLimitPolicy, RedisRateLimiter
+from app.redis.rate_limiters import limit
 
 
 class TestRedisRateLimiterCheck:

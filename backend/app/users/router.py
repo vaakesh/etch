@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.auth.cookies import clear_tokens_cookie
-from app.auth.deps import AuthServiceDeps, CurrentUser
+from app.auth.deps import AuthServiceDeps, CurrentUser, CurrentUserWithSettings
 from app.cards.deps import CardServiceDeps
 from app.cards.schemas import CardResponse
 from app.common.schemas import CursorPage
@@ -44,13 +44,8 @@ router = APIRouter(prefix="/users")
     dependencies=[Depends(profile_rate_limit)],
 )
 async def get_me(
-    current_user: CurrentUser,
-    user_service: UserServiceDeps,
+    current_user: CurrentUserWithSettings,
 ):
-    user_settings = await user_service.get_user_settings_by_id(
-        user_id=current_user.id,
-        for_update=False,
-    )
     return PrivateUserResponse(
         uuid=current_user.uuid,
         username=current_user.username,
@@ -58,9 +53,9 @@ async def get_me(
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
         settings=UserSettingsResponse(
-            locale=user_settings.locale,
-            theme=user_settings.theme,
-            show_previews_for_long=user_settings.show_previews_for_long,
+            locale=current_user.settings.locale,
+            theme=current_user.settings.theme,
+            show_previews_for_long=current_user.settings.show_previews_for_long,
         )
     )
 
@@ -95,7 +90,6 @@ async def change_settings(
         payload=payload,
     )
     return new_user_settings
-    
 
 @router.put(
     "/me/password",
@@ -267,7 +261,18 @@ async def update_user(
         current_user_id=current_user.id,
         payload=payload,
     )
-    return updated_user
+    return PrivateUserResponse(
+        uuid=updated_user.uuid,
+        username=updated_user.username,
+        email=updated_user.email,
+        created_at=updated_user.created_at,
+        updated_at=updated_user.updated_at,
+        settings=UserSettingsResponse(
+            locale=updated_user.settings.locale,
+            theme=updated_user.settings.theme,
+            show_previews_for_long=updated_user.settings.show_previews_for_long,
+        )
+    )
 
 @router.delete(
     "/me",

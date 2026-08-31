@@ -4,6 +4,8 @@ from app.common.types import Password, Username
 from app.users.types import Locale, NormalizedEmail, Theme
 from pydantic import BaseModel, ConfigDict, PastDatetime
 
+from app.users.models import User
+
 
 class InternalUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -15,6 +17,36 @@ class InternalUser(BaseModel):
     hashed_password: str
     created_at: PastDatetime
     updated_at: PastDatetime
+
+class InternalUserSettings(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    locale: Locale
+    theme: Theme
+    show_previews_for_long: bool
+    created_at: PastDatetime
+    updated_at: PastDatetime
+
+class InternalUserWithSettings(InternalUser):
+    settings: InternalUserSettings
+
+    @classmethod
+    def from_parts(
+        cls,
+        user: InternalUser, 
+        settings: InternalUserSettings,
+    ) -> InternalUserWithSettings:
+        return cls(
+            id=user.id,
+            uuid=user.uuid,
+            username=user.username,
+            email=user.email,
+            hashed_password=user.hashed_password,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            settings=settings,
+        )
 
 class PublicUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

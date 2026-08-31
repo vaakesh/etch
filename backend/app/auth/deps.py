@@ -16,7 +16,7 @@ from app.users.models import User
 from app.users.service import UserService
 from fastapi import Depends, Request
 
-from app.users.schemas import InternalUser
+from app.users.schemas import InternalUser, InternalUserWithSettings
 
 
 @lru_cache
@@ -51,36 +51,43 @@ async def auth_user(
     
     return access_token
 
-async def get_current_user(
-    request: Request,
-    user_service: UserService = Depends(get_user_service),
+async def get_current_user_uuid(
     access_token: str | None = Depends(auth_user),
     auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
-) -> InternalUser: 
+) -> UUID | None:
     if access_token is None:
-        raise AccessTokenNotFoundError()
-    
-    payload = auth_tokens_service.decode_access_token(access_token)
-    user_uuid = UUID(payload.get("sub"))
+        return None
 
-    user = await user_service.get_by_uuid(user_uuid)
-    return user
+    payload = auth_tokens_service.decode_access_token(access_token)
+    user_uuid = UUID(payload["sub"])
+    return user_uuid
+
+async def get_current_user(
+    user_service: UserService = Depends(get_user_service),
+    user_uuid: UUID | None = Depends(get_current_user_uuid),
+) -> InternalUser:
+    if user_uuid is None:
+        raise AccessTokenNotFoundError()
+    return await user_service.get_by_uuid(user_uuid)
+    
+
+async def get_current_user_with_settings(
+    user_service: UserService = Depends(get_user_service),
+    user_uuid: UUID | None = Depends(get_current_user_uuid),
+) -> InternalUserWithSettings: 
+    if user_uuid is None:
+        raise AccessTokenNotFoundError()
+    return await user_service.get_by_uuid_with_settings(user_uuid)
+    
 
 async def get_optional_current_user(
     request: Request,
     user_service: UserServiceDeps,
-    access_token: str | None = Depends(auth_user),
-    auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
+    user_uuid: UUID | None = Depends(get_current_user_uuid),
 ) -> InternalUser | None:
-    if access_token is None:
+    if user_uuid is None:
         return None
-
-    return await get_current_user(
-        request=request,
-        user_service=user_service,
-        access_token=access_token,
-        auth_tokens_service=auth_tokens_service,
-    )
+    return await user_service.get_by_uuid(user_uuid)
 
 type AuthServiceDeps = Annotated[
     AuthService,
@@ -88,11 +95,16 @@ type AuthServiceDeps = Annotated[
 ]
 
 type CurrentUser = Annotated[
-    User,
+    InternalUser,
     Depends(get_current_user),
 ]
 
+type CurrentUserWithSettings = Annotated[
+    InternalUserWithSettings,
+    Depends(get_current_user_with_settings),
+]
+
 type OptionalCurrentUser = Annotated[
-    User | None,
+    InternalUser | None,
     Depends(get_optional_current_user),
 ]

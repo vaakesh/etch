@@ -21,12 +21,20 @@ from app.redis.keys import (
     make_library_cards_page_generation_cache_key,
     make_library_deck_page_cache_key,
     make_library_deck_page_generation_cache_key,
+    make_user_cache_key,
     make_user_deck_cache_key,
+    make_user_settings_cache_key,
+    make_user_uuid_cache_key,
 )
 from app.redis.schemas import CacheLookupResult, LibraryPageCacheLookup, UserDeckIdentity
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from app.users.schemas import InternalUser, InternalUserSettings
+
+USER_TTL = 60 * 60 * 3
+USER_ID_BY_UUID = 60 * 60 * 24 * 7
+USER_SETTINGS_TTL = 60 * 60
 LIBRARY_PAGE_TTL = 60 * 5
 GENERATION_TTL = LIBRARY_PAGE_TTL * 3
 DECK_CARDS_TTL = 60 * 60
@@ -333,6 +341,112 @@ class RedisCacheService:
 
 
     # cache operations
+
+    async def cache_user_ids_by_uuids(
+        self,
+        user_uuids: list[UUID],
+        user_ids: list[int],
+    ) -> None:
+        entries = {
+            make_user_uuid_cache_key(
+                user_uuid=user_uuid,
+            ): str(user_id)
+            for user_uuid, user_id in zip(user_uuids, user_ids, strict=True)
+        }
+        await self._safe_set_many(
+            entries=entries,
+            ex=USER_ID_BY_UUID,
+        )
+
+    async def get_cached_ids_by_uuids(
+        self,
+        user_uuids: list[UUID],
+    ) -> CacheLookupResult[UUID, int]:
+        return await self._get_many(
+            identities=user_uuids,
+            key_factory=make_user_uuid_cache_key,
+            deserializer=int,
+        )
+
+    async def invalidate_user_ids_by_uuids(
+        self,
+        user_uuids: list[UUID],
+    ) -> None:
+        await self._invalidate_many(
+            identities=user_uuids,
+            key_factory=make_user_uuid_cache_key,
+        )
+    
+
+    async def cache_users(
+        self,
+        users: list[InternalUser],
+    ) -> None:
+        entries = {
+            make_user_cache_key(
+                user.id
+            ): user.model_dump_json()
+            for user in users
+        }
+        await self._safe_set_many(
+            entries=entries,
+            ex=USER_TTL,
+        )
+
+    async def get_cached_users(
+        self,
+        user_ids: list[int],
+    ) -> CacheLookupResult[int, InternalUser]:
+        return await self._get_many(
+            identities=user_ids,
+            key_factory=make_user_cache_key,
+            deserializer=InternalUser.model_validate_json,
+        )
+
+    async def invalidate_users(
+        self,
+        user_ids: list[int],
+    ) -> None:
+        await self._invalidate_many(
+            identities=user_ids,
+            key_factory=make_user_cache_key,
+        )
+
+
+    async def cache_users_settings(
+        self,
+        users_settings: list[InternalUserSettings],
+    ) -> None:
+        entries = {
+            make_user_settings_cache_key(
+                user_id=user_settings.user_id,
+            ): user_settings.model_dump_json()
+            for user_settings in users_settings
+        }
+        await self._safe_set_many(
+            entries=entries,
+            ex=USER_SETTINGS_TTL,
+        )
+
+    async def get_cached_users_settings(
+        self,
+        user_ids: list[int],
+    ) -> CacheLookupResult[int, InternalUserSettings]:
+        return await self._get_many(
+            identities=user_ids,
+            key_factory=make_user_settings_cache_key,
+            deserializer=InternalUserSettings.model_validate_json,
+        )
+
+    async def invalidate_users_settings(
+        self,
+        user_ids: list[int],
+    ) -> None:
+        await self._invalidate_many(
+            identities=user_ids,
+            key_factory=make_user_settings_cache_key,
+        )
+
 
     async def cache_user_decks(
         self,

@@ -5,6 +5,18 @@ import orjson
 from app.common.types import NormalizedSearch
 from app.redis.schemas import UserDeckIdentity
 
+def make_user_cache_key(user_id: int) -> str:
+    return f"user:{user_id}"
+
+def make_user_uuid_cache_key(
+    user_uuid: UUID,
+) -> str:
+    return f"user:id-by-uuid:{user_uuid}"
+
+def make_user_settings_cache_key(
+    user_id: int,
+) -> str:
+    return f"user:{user_id}:settings"
 
 def make_deck_cache_key(deck_uuid: UUID) -> str:
     return f"deck:{deck_uuid}"

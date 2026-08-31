@@ -49,17 +49,13 @@ class UserRepository:
             self, 
             user_uuid: UUID,
             for_update: bool = False,
-            get_settings: bool = True,
+            get_settings: bool = False,
         ) -> User | None:
         stmt = select(User).where(User.uuid == user_uuid)
 
         if get_settings:
             stmt = stmt.options(
-                joinedload(User.settings).load_only(
-                    UserSettings.locale,
-                    UserSettings.theme,
-                    UserSettings.show_previews_for_long,
-                )
+                joinedload(User.settings)
             )
 
         if for_update:

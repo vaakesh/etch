@@ -10,25 +10,47 @@ from app.users.errors import (
     UserNotFoundError,
 )
 from app.users.models import User, UserSettings
-from app.users.schemas import CreateUserRequest, InternalUser, UserSettingsUpdate, UpdateUserRequest
+from app.users.schemas import CreateUserRequest, InternalUser, InternalUserSettings, InternalUserWithSettings, PrivateUserResponse, UserSettingsUpdate, UpdateUserRequest
 from sqlalchemy.exc import IntegrityError
+
+from app.redis.service import RedisCacheService
 
 
 class UserService:
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(
+        self, 
+        uow_factory: Callable[[], UnitOfWork],
+        cache_service: RedisCacheService,
+    ) -> None:
         self.uow_factory = uow_factory
+        self.cache_service = cache_service
 
     async def get_user_settings_by_id(
         self,
         user_id: int,
         for_update: bool = False,
-    ) -> UserSettings:
+    ) -> InternalUserSettings:
+        if not for_update:
+            settings_lookup = await self.cache_service.get_cached_users_settings(
+                user_ids=[user_id],
+            )
+            cached_user_settings = settings_lookup.cached.get(user_id)
+            if cached_user_settings is not None:
+                return cached_user_settings
+
         async with self.uow_factory() as uow:
             user_settings = await uow.user_settings_repo.get_by_user_id(
                 user_id=user_id,
                 for_update=for_update,
             )
-            return user_settings
+            internal_user_settings = InternalUserSettings.model_validate(
+                obj=user_settings,
+            )
+            if not for_update:
+                await self.cache_service.cache_users_settings(
+                    users_settings=[internal_user_settings],
+                )
+            return internal_user_settings
 
     async def _get_user_settings_by_id(
             self,
@@ -44,26 +66,117 @@ class UserService:
                 raise UserNotFoundError()
             return user_settings
 
-    async def get_by_uuid(
-            self, 
-            user_uuid: UUID,
-            for_update: bool = False,
-        ) -> InternalUser:
+    async def get_by_uuid_with_settings(
+        self,
+        user_uuid: UUID,
+    ) -> InternalUserWithSettings:
+        id_lookup = await self.cache_service.get_cached_ids_by_uuids(
+            user_uuids=[user_uuid],
+        )
+        cached_id = id_lookup.cached.get(user_uuid)
+        if cached_id is not None:
+            user_lookup = await self.cache_service.get_cached_users(
+                user_ids=[cached_id],
+            )
+            user_settings_lookup = (
+                await self.cache_service.get_cached_users_settings(
+                    user_ids=[cached_id],
+                )
+            )
+
+            cached_user = user_lookup.cached.get(cached_id)
+            cached_user_settings = (
+                user_settings_lookup.cached.get(cached_id)
+            )
+            if (
+                cached_user is not None 
+                and cached_user_settings is not None
+                and cached_user.uuid == user_uuid
+            ):
+                return InternalUserWithSettings.from_parts(
+                    user=cached_user,
+                    settings=cached_user_settings,
+                )
+
         async with self.uow_factory() as uow:
             user = await self._get_by_uuid(
-                uow=uow, 
+                uow=uow,
+                user_uuid=user_uuid,
+                for_update=False,
+                get_settings=True,
+            )
+            internal_user = InternalUser.model_validate(obj=user)
+            internal_user_settings = InternalUserSettings.model_validate(
+                obj=user.settings,
+            )
+
+            await self.cache_service.cache_users(
+                users=[internal_user],
+            )
+            await self.cache_service.cache_users_settings(
+                users_settings=[internal_user_settings],
+            )
+            await self.cache_service.cache_user_ids_by_uuids(
+                user_uuids=[internal_user.uuid],
+                user_ids=[internal_user.id],
+            )
+
+            return InternalUserWithSettings.from_parts(
+                user=internal_user,
+                settings=internal_user_settings,
+            )
+        
+
+    async def get_by_uuid(
+        self,
+        user_uuid: UUID,
+        for_update: bool = False,
+    ) -> InternalUser:
+        if not for_update:
+            id_lookup = await self.cache_service.get_cached_ids_by_uuids(
+                user_uuids=[user_uuid],
+            )
+
+            cached_id = id_lookup.cached.get(user_uuid)
+
+            if cached_id is not None:
+                user_lookup = await self.cache_service.get_cached_users(
+                    user_ids=[cached_id],
+                )
+
+                cached_user = user_lookup.cached.get(cached_id)
+
+                if cached_user is not None and cached_user.uuid == user_uuid:
+                    return cached_user
+
+        async with self.uow_factory() as uow:
+            user = await self._get_by_uuid(
+                uow=uow,
                 user_uuid=user_uuid,
                 for_update=for_update,
+                get_settings=False,
             )
-            return InternalUser.model_validate(obj=user)
+
+            internal_user = InternalUser.model_validate(obj=user)
+
+            if not for_update:
+                await self.cache_service.cache_user_ids_by_uuids(
+                    user_uuids=[internal_user.uuid],
+                    user_ids=[internal_user.id],
+                )
+                await self.cache_service.cache_users(
+                    users=[internal_user],
+                )
+
+            return internal_user
 
     async def _get_by_uuid(
-            self, 
-            uow: UnitOfWork, 
-            user_uuid: UUID,
-            for_update: bool = False,
-            get_settings: bool = True,
-        ) -> User:
+        self, 
+        uow: UnitOfWork, 
+        user_uuid: UUID,
+        for_update: bool = False,
+        get_settings: bool = False,
+    ) -> User:
         user = await uow.user_repo.get_by_uuid(
             user_uuid=user_uuid,
             for_update=for_update,
@@ -76,7 +189,7 @@ class UserService:
     async def create_user(
             self,
             payload: CreateUserRequest,
-    ) -> tuple[InternalUser, UserSettings]:
+    ) -> tuple[InternalUser, InternalUserSettings]:
         try:
             async with self.uow_factory() as uow:
                 user_data = payload.model_dump(exclude={"password"})
@@ -95,7 +208,10 @@ class UserService:
                 uow.user_settings_repo.add(user_settings)
                 await uow.commit()
                 await uow.user_settings_repo.refresh(user_settings)
-                return InternalUser.model_validate(obj=user), user_settings
+                return (
+                    InternalUser.model_validate(obj=user), 
+                    InternalUserSettings.model_validate(obj=user_settings)
+                )
         except IntegrityError as e:
             raise UserAlreadyExistsError() from e
 
@@ -117,6 +233,7 @@ class UserService:
                 user_id=current_user_id,
                 for_update=True,
             )
+            user_id = user_settings.user_id
 
             for field, value in update_data.items():
                 setattr(user_settings, field, value)
@@ -124,14 +241,22 @@ class UserService:
             await uow.flush()
             await uow.user_settings_repo.refresh(user_settings)
             await uow.commit()
-            return user_settings
+
+            await self.cache_service.invalidate_users_settings(
+                user_ids=[user_id],
+            )
+            
+            internal_user_settings = InternalUserSettings.model_validate(
+                obj=user_settings,
+            )
+            return internal_user_settings
 
     async def update_user(
             self,
             target_user_uuid: UUID,
             current_user_id: int,
             payload: UpdateUserRequest,
-    ) -> InternalUser:
+    ) -> InternalUserWithSettings:
         try:
             async with self.uow_factory() as uow:
                 update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
@@ -159,7 +284,23 @@ class UserService:
                 await uow.user_repo.refresh(target_user)
                 await uow.commit()
 
-                return InternalUser.model_validate(obj=target_user)
+                internal_user_with_settings = InternalUserWithSettings.from_parts(
+                    user=InternalUser.model_validate(obj=target_user),
+                    settings=InternalUserSettings.model_validate(
+                        obj=target_user.settings,
+                    )
+                )
+
+                # invalidation
+                await self.cache_service.invalidate_user_ids_by_uuids(
+                    user_uuids=[internal_user_with_settings.uuid],
+                )
+                await self.cache_service.invalidate_users(
+                    user_ids=[internal_user_with_settings.id],
+                )
+
+                return internal_user_with_settings
+
         except IntegrityError as e:
             raise UserAlreadyExistsError() from e
         
@@ -177,8 +318,23 @@ class UserService:
             if user.id != current_user_id:
                 raise PermissionDeniedError()
 
+            user_uuid = user.uuid
+            user_id = user.id
+
             await uow.user_repo.delete(user)
             await uow.commit()
+
+            # invalidation
+            await self.cache_service.invalidate_user_ids_by_uuids(
+                user_uuids=[user_uuid],
+            )
+            await self.cache_service.invalidate_users(
+                user_ids=[user_id],
+            )
+            await self.cache_service.invalidate_users_settings(
+                user_ids=[user_id],
+            )
+
 
             return None
         
