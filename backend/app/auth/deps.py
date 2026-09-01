@@ -68,7 +68,9 @@ async def get_current_user(
 ) -> InternalUser:
     if user_uuid is None:
         raise AccessTokenNotFoundError()
-    return await user_service.get_by_uuid(user_uuid)
+    return await user_service.get_by_uuid(
+        user_uuid=user_uuid,
+    )
     
 
 async def get_current_user_with_settings(
@@ -87,7 +89,9 @@ async def get_optional_current_user(
 ) -> InternalUser | None:
     if user_uuid is None:
         return None
-    return await user_service.get_by_uuid(user_uuid)
+    return await user_service.get_by_uuid(
+        user_uuid=user_uuid,
+    )
 
 type AuthServiceDeps = Annotated[
     AuthService,

@@ -134,20 +134,18 @@ class BffService:
             for deck in decks
         ]
 
-
     async def get_home_dashboard(
             self,
             user_id: int,
-            user_uuid: UUID,
         ) -> HomeDashboardResponse:
-        decks, cursor, has_more = await self.deck_service.get_all_by_user_uuid(
-            user_uuid=user_uuid,
+        page = await self.deck_service.get_owned_decks(
+            owner_id=user_id,
             search_query=None,
             cursor=None,
             limit=6,
-            public_only=False,
-            current_user_id=user_id,
         )
+
+        decks = page.items
 
         user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
             deck_ids=[deck.id for deck in decks],
@@ -189,7 +187,7 @@ class BffService:
             decks=[
                 HomeDeckItemResponse(
                     uuid=deck.uuid,
-                    owner_uuid=user_uuid,
+                    owner_uuid=deck.owner_uuid,
                     title=deck.title,
                     description=deck.description,
                     words_count=deck.words_count,
@@ -209,15 +207,15 @@ class BffService:
     async def _fetch_and_cache_library_deck_page_cards_previews(
         self,
         user_id: int,
-        deck_uuids: list[UUID],
-    ) -> dict[UUID, list[InternalCard]]:
-        if not deck_uuids:
+        deck_ids: list[int],
+    ) -> dict[int, list[InternalCard]]:
+        if not deck_ids:
             return {}
 
         fetched_by_deck = (
-            await self.deck_service.get_all_cards_by_deck_uuids(
+            await self.deck_service.get_all_cards_by_deck_ids(
                 user_id=user_id,
-                deck_uuids=deck_uuids,
+                deck_ids=deck_ids,
                 offset=0,
                 limit=2,
             )
@@ -232,8 +230,8 @@ class BffService:
         await asyncio.gather(
             self.cache_service.cache_deck_cards(
                 deck_cards={
-                    deck_uuid: [card.uuid for card in cards]
-                    for deck_uuid, cards in fetched_by_deck.items()
+                    deck_id: [card.id for card in cards]
+                    for deck_id, cards in fetched_by_deck.items()
                 }
             ),
             self.cache_service.cache_cards(
@@ -286,13 +284,16 @@ class BffService:
         source-of-truth чтение library page из БД + кэширование
         """
         if not is_favourite:
-            decks, next_cursor, has_more = await self.deck_service.get_all_by_user_uuid(
-                user_uuid=user_uuid,
+            page = await self.deck_service.get_library_decks(
+                user_id=user_id,
                 search_query=search_query,
                 cursor=cursor,
                 limit=limit,
-                public_only=False,
-                current_user_id=user_id,
+            )
+            decks, next_cursor, has_more = (
+                page.items, 
+                page.next_cursor, 
+                page.has_more
             )
         else:
             decks, next_cursor, has_more = (
@@ -306,8 +307,8 @@ class BffService:
 
         await asyncio.gather(
             self.cache_service.cache_library_decks_page(
-                user_uuid=user_uuid,
-                deck_uuids=[deck.uuid for deck in decks],
+                user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
                 next_cursor=next_cursor,
                 has_more=has_more,
                 expected_generation=expected_generation,
@@ -357,7 +358,7 @@ class BffService:
         cards_by_deck, user_decks = await asyncio.gather(
             self._get_cards_library_deck_page(
                 user_id=user_id,
-                deck_uuids=[deck.uuid for deck in decks],
+                deck_ids=[deck.id for deck in decks],
             ),
             self._get_user_decks_by_deck_ids(
                 user_id=user_id,
@@ -375,7 +376,7 @@ class BffService:
                 self._build_library_deck(
                     deck=deck,
                     user_deck=user_decks[(user_id, deck.id)],
-                    cards=cards_by_deck[deck.uuid]
+                    cards=cards_by_deck[deck.id]
                 ) for deck in decks
             ],
             next_cursor=library_result.next_cursor,
@@ -393,7 +394,7 @@ class BffService:
         limit: int,
     ) -> CursorPage[InternalDeck]:
         page_lookup = await self.cache_service.get_cached_library_decks_page(
-            user_uuid=user_uuid,
+            user_id=user_id,
             search_query=search_query,
             is_favourite=is_favourite,
             cursor=cursor,
@@ -421,22 +422,35 @@ class BffService:
             )
 
         deck_lookup = await self.cache_service.get_cached_decks(
-            deck_uuids=cached_page.items,
+            deck_ids=cached_page.items,
         )
 
-        decks_by_uuid: dict[UUID, InternalDeck] = dict(
+        decks_by_id: dict[int, InternalDeck] = dict(
             deck_lookup.cached
         )
 
         if deck_lookup.missing:
-            fetched_decks = await self.deck_service.get_by_uuids(
-                deck_uuids=deck_lookup.missing,
+            fetched_decks, missing_decks = await self.deck_service.get_visible_by_ids(
+                deck_ids=deck_lookup.missing,
+                viewer_id=user_id,
             )
+            if missing_decks:
+                # page cache не соответствует БД
+                # перечитываем страницу полностью
+                return await self._fetch_and_cache_library_deck_page_decks(
+                    user_id=user_id,
+                    user_uuid=user_uuid,
+                    expected_generation=page_lookup.generation,
+                    search_query=search_query,
+                    is_favourite=is_favourite,
+                    cursor=cursor,
+                    limit=limit,
+                )
 
-            decks_by_uuid.update(
+            decks_by_id.update(
                 {
-                    deck.uuid: deck
-                    for deck in fetched_decks
+                    deck_id: deck
+                    for deck_id, deck in fetched_decks.items()
                 }
             )
 
@@ -444,30 +458,10 @@ class BffService:
                 decks=fetched_decks,
             )
 
-        # устаревшие deck_uuids, которых уже нет
-        unresolved_deck_uuids = [
-            deck_uuid
-            for deck_uuid in cached_page.items
-            if deck_uuid not in decks_by_uuid
-        ]
-
-        if unresolved_deck_uuids:
-            # page cache не соответствует БД
-            # перечитываем страницу полностью
-            return await self._fetch_and_cache_library_deck_page_decks(
-                user_id=user_id,
-                user_uuid=user_uuid,
-                expected_generation=page_lookup.generation,
-                search_query=search_query,
-                is_favourite=is_favourite,
-                cursor=cursor,
-                limit=limit,
-            )
-
         return CursorPage[InternalDeck](
             items=[
-                decks_by_uuid[deck_uuid]
-                for deck_uuid in cached_page.items
+                decks_by_id[deck_id]
+                for deck_id in cached_page.items
             ],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
@@ -476,62 +470,62 @@ class BffService:
     async def _get_cards_library_deck_page(
         self,
         user_id: int,
-        deck_uuids: list[UUID],
-    ) -> dict[UUID, list[InternalCard]]:
-        if not deck_uuids:
+        deck_ids: list[int],
+    ) -> dict[int, list[InternalCard]]:
+        if not deck_ids:
             return {}
 
         deck_cards_lookup = await self.cache_service.get_cached_deck_cards(
-            deck_uuids=deck_uuids,
+            deck_ids=deck_ids,
         )
 
-        cards_by_deck: dict[UUID, list[InternalCard]] = {}
+        cards_by_deck: dict[int, list[InternalCard]] = {}
 
         if deck_cards_lookup.missing:
             fetched_cards_by_deck = await self._fetch_and_cache_library_deck_page_cards_previews(
                 user_id=user_id,
-                deck_uuids=deck_cards_lookup.missing,
+                deck_ids=deck_cards_lookup.missing,
             )
             cards_by_deck.update(fetched_cards_by_deck)
 
-        cached_card_uuids_by_deck = {
-            deck_uuid: card_uuids[:2] # первые 2 карточки
-            for deck_uuid, card_uuids
+        cached_card_ids_by_deck = {
+            deck_id: card_ids[:2] # первые 2 карточки
+            for deck_id, card_ids
             in deck_cards_lookup.cached.items()
         }
 
-        card_uuids = list(
+        card_ids = list(
             dict.fromkeys(
-                card_uuid
-                for tmp_card_uuids in cached_card_uuids_by_deck.values()
-                for card_uuid in tmp_card_uuids
+                card_id
+                for tmp_card_ids in cached_card_ids_by_deck.values()
+                for card_id in tmp_card_ids
             )
         )
 
-        if not card_uuids:
+        if not card_ids:
             return {
-                deck_uuid: cards_by_deck.get(deck_uuid, [])
-                for deck_uuid in deck_uuids
+                deck_id: cards_by_deck.get(deck_id, [])
+                for deck_id in deck_ids
             }
 
         card_lookup = await self.cache_service.get_cached_cards(
-            card_uuids=card_uuids,
+            card_ids=card_ids,
         )
 
-        cards_by_uuid: dict[UUID, InternalCard] = dict(
+        cards_by_id: dict[int, InternalCard] = dict(
             card_lookup.cached
         )
 
         fetched_cards: list[InternalCard] = []
 
         if card_lookup.missing:
-            fetched_cards = await self.card_service.get_by_uuids(
-                card_uuids=card_lookup.missing,
+            fetched_cards = await self.card_service.get_by_ids(
+                card_ids=card_lookup.missing,
             )
 
-            cards_by_uuid.update(
+            cards_by_id.update(
                 {
-                    card.uuid: card
+                    card.id: card
                     for card in fetched_cards
                 }
             )
@@ -540,54 +534,53 @@ class BffService:
                 cards=fetched_cards,
             )
 
-        # uuid карточек был в кэше, но самих карточек в бд не нашлось -> кэш deck_cards старый
-        unresolved_card_uuids = {
-            card_uuid
-            for card_uuid in card_lookup.missing
-            if card_uuid not in cards_by_uuid
+        # ID карточек был в кэше, но самих карточек в БД не нашлось -> кэш deck_cards старый
+        unresolved_card_ids = {
+            card_id
+            for card_id in card_lookup.missing
+            if card_id not in cards_by_id
         }
 
         # какие именно deck_cards ссылаются на несуществующие карточки
-        stale_deck_uuids = {
-            deck_uuid
-            for deck_uuid, card_uuids
-            in cached_card_uuids_by_deck.items()
-            if unresolved_card_uuids.intersection(card_uuids)
+        stale_deck_ids = {
+            deck_id
+            for deck_id, card_ids
+            in cached_card_ids_by_deck.items()
+            if unresolved_card_ids.intersection(card_ids)
         }
 
-        if stale_deck_uuids:
+        if stale_deck_ids:
             refreshed_cards = await self._fetch_and_cache_library_deck_page_cards_previews(
                 user_id=user_id,
-                deck_uuids=list(stale_deck_uuids),
+                deck_ids=list(stale_deck_ids),
             )
 
             cards_by_deck.update(refreshed_cards)
 
 
-        for deck_uuid, card_uuids in cached_card_uuids_by_deck.items():
-            if deck_uuid in stale_deck_uuids:
+        for deck_id, card_ids in cached_card_ids_by_deck.items():
+            if deck_id in stale_deck_ids:
                 continue
 
-            cards_by_deck[deck_uuid] = [
-                cards_by_uuid[card_uuid]
-                for card_uuid in card_uuids
+            cards_by_deck[deck_id] = [
+                cards_by_id[card_id]
+                for card_id in card_ids
             ]
 
         return {
-            deck_uuid: cards_by_deck.get(deck_uuid, [])
-            for deck_uuid in deck_uuids
+            deck_id: cards_by_deck.get(deck_id, [])
+            for deck_id in deck_ids
         }
 
     async def _get_cards_library_card_page(
         self,
         user_id: int,
-        user_uuid: UUID,
         search_query: SearchQuery = None,
         cursor: str | None = None,
         limit: int = 50,
     ) -> CursorPage[InternalCard]:
         cards_page_lookup = await self.cache_service.get_cached_library_cards_page(
-            user_uuid=user_uuid,
+            user_id=user_id,
             search_query=search_query,
             cursor=cursor,
             limit=limit,
@@ -597,7 +590,6 @@ class BffService:
         if cards_page_lookup.page is None:
             return await self._fetch_and_cache_cards_library_cards_page(
                 user_id=user_id,
-                user_uuid=user_uuid,
                 expected_generation=cards_page_lookup.generation,
                 search_query=search_query,
                 cursor=cursor,
@@ -615,32 +607,31 @@ class BffService:
             )
 
         cards_lookup = await self.cache_service.get_cached_cards(
-            card_uuids=cached_page.items,
+            card_ids=cached_page.items,
         )
-        cards_by_uuid = cards_lookup.cached
+        cards_by_id = cards_lookup.cached
 
         if cards_lookup.missing:
-            fetched_missing_cards = await self.card_service.get_by_uuids(
-                card_uuids=cards_lookup.missing,
+            fetched_missing_cards = await self.card_service.get_by_ids(
+                card_ids=cards_lookup.missing,
             )
 
             for fetched_card in fetched_missing_cards:
-                cards_by_uuid[fetched_card.uuid] = fetched_card
+                cards_by_id[fetched_card.id] = fetched_card
 
             # карточки, которые есть в кэше страницы, но нет в бд
             unresolved_cards = []
 
-            for missing_card_uuid in cards_lookup.missing:
+            for missing_card_id in cards_lookup.missing:
                 # проходим по всему списку, можно оптимизировать и пройти только по fetched списку
-                if missing_card_uuid not in cards_by_uuid:
-                    unresolved_cards.append(missing_card_uuid)
+                if missing_card_id not in cards_by_id:
+                    unresolved_cards.append(missing_card_id)
 
             # если в кэше старое значение, значит кэш где-то не инвалидировался
             # полностью достаем страницу из бд
             if unresolved_cards:
                 return await self._fetch_and_cache_cards_library_cards_page(
                     user_id=user_id,
-                    user_uuid=user_uuid,
                     expected_generation=cards_page_lookup.generation,
                     search_query=search_query,
                     cursor=cursor,
@@ -649,8 +640,8 @@ class BffService:
 
         return CursorPage[InternalCard](
             items=[
-                InternalCard.from_entity(cards_by_uuid[card_uuid])
-                for card_uuid in cached_page.items
+                cards_by_id[card_id]
+                for card_id in cached_page.items
             ],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
@@ -659,7 +650,6 @@ class BffService:
     async def _fetch_and_cache_cards_library_cards_page(
         self,
         user_id: int,
-        user_uuid: UUID,
         expected_generation: int | None,
         search_query: SearchQuery = None,
         cursor: str | None = None,
@@ -677,8 +667,8 @@ class BffService:
         # caching page and cards
         await asyncio.gather(
             self.cache_service.cache_library_cards_page(
-                user_uuid=user_uuid,
-                card_uuids=[card.uuid for card in cards],
+                user_id=user_id,
+                card_ids=[card.id for card in cards],
                 expected_generation=expected_generation,
                 search_query=search_query,
                 cursor=cursor,
@@ -692,7 +682,7 @@ class BffService:
         )
 
         return CursorPage[InternalCard](
-            items=[InternalCard.from_entity(card) for card in cards],
+            items=cards,
             next_cursor=next_cursor,
             has_more=has_more,
         )
@@ -700,14 +690,12 @@ class BffService:
     async def get_cards_library_page(
             self,
             user_id: int,
-            user_uuid: UUID,
             search_query: SearchQuery = None,
             cursor: str | None = None,
             limit: int = 50,
     ) -> CursorPage[LibraryCardItemResponse]:
         cards_page = await self._get_cards_library_card_page(
             user_id=user_id,
-            user_uuid=user_uuid,
             search_query=search_query,
             cursor=cursor,
             limit=limit,

@@ -4,8 +4,9 @@ from uuid import UUID
 
 from app.cards.models import Card
 from app.common.types import SearchQuery
+from app.common.utils import utcnow
 from app.users.models import User
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import Select, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +16,83 @@ from .models import Deck, DeckCard, UserDeck
 class DeckRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    def _deck_stmt(
+        self,
+        load_owner: bool = False,
+    ) -> Select[tuple[Deck]]:
+        stmt = select(Deck)
+
+        if load_owner:
+            stmt = stmt.options(
+                joinedload(Deck.user).load_only(User.uuid),
+            )
+        return stmt
+
+    def _visible_decks_stmt(
+        self,
+        viewer_id: int | None,
+    ) -> Select[tuple[Deck]]:
+        stmt = self._deck_stmt(load_owner=True)
+
+        if viewer_id is None:
+            return stmt.where(
+                Deck.is_public.is_(True),
+            )
+
+        return stmt.where(
+            or_(
+                Deck.is_public.is_(True),
+                Deck.user_id == viewer_id,
+            )
+        )
+
+    def _owned_decks_stmt(
+        self,
+        owner_id: int,
+    ) -> Select[tuple[Deck]]:
+        return self._deck_stmt(
+            load_owner=True,
+        ).where(
+            Deck.user_id == owner_id,
+        )
+
+    async def get_visible_by_uuid(
+        self,
+        deck_uuid: UUID,
+        viewer_id: int,
+    ) -> Deck | None:
+        stmt = (
+            self._visible_decks_stmt(
+                viewer_id=viewer_id,
+            )
+            .where(
+                Deck.uuid == deck_uuid
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_owned_by_uuid(
+        self,
+        deck_uuid: UUID,
+        owner_id: int,
+        for_update: bool = False,
+    ) -> Deck | None:
+        stmt = (
+            self._owned_decks_stmt(
+                owner_id=owner_id,
+            ).where(
+                Deck.uuid == deck_uuid,
+            )
+        )
+
+        if for_update:
+            stmt = stmt.with_for_update(of=Deck)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_public_decks(
         self,
@@ -51,21 +129,20 @@ class DeckRepository:
         rows = result.scalars().all()
         return rows
 
-
-    async def _get_by_uuids(
+    async def get_visible_by_ids(
         self,
-        deck_uuids: list[UUID],
-        for_update: bool = False,
+        deck_ids: list[int],
+        viewer_id: int,
     ) -> list[Deck]:
         stmt = (
-            select(Deck)
-            .options(joinedload(Deck.user).load_only(User.uuid))
+            self._visible_decks_stmt(
+                viewer_id=viewer_id,
+            )
             .where(
-                Deck.uuid.in_(deck_uuids)
+                Deck.id.in_(deck_ids),
             )
         )
-        if for_update:
-            stmt = stmt.with_for_update(of=Deck)
+
         result = await self.session.execute(stmt)
         rows = result.scalars().all()
         return rows
@@ -121,10 +198,242 @@ class DeckRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_all_by_limit(self, limit: int = 10) -> list[Deck]:
-        stmt = select(Deck).limit(limit)
+    async def get_visible_to_user_id(
+        self,
+        viewer_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+    ) -> tuple[list[Deck], bool]:
+        stmt = (
+            self._visible_decks_stmt(
+                viewer_id=viewer_id,
+            )
+        )
+
+        if search_query:
+            terms = search_query.split()
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_owned_by_owner_id(
+        self,
+        owner_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+    ) -> tuple[list[Deck], bool]:
+        stmt = (
+            self._owned_decks_stmt(
+                owner_id=owner_id,
+            )
+        )
+
+        if search_query:
+            terms = search_query.split()
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_saved_by_user_id(
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+    ) -> tuple[list[Deck], bool]:
+        stmt = (
+            self._deck_stmt(load_owner=True)
+            .join(
+                UserDeck,
+                UserDeck.deck_id == Deck.id,
+            )
+            .where(
+                UserDeck.user_id == user_id,
+                UserDeck.is_saved.is_(True),
+                Deck.user_id != user_id,
+                Deck.is_public.is_(True),
+            )
+        )
+
+        if search_query:
+            terms = search_query.split()
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    ),
+                )
+            )
+
+        stmt = stmt.order_by(
+            Deck.updated_at.desc(),
+            Deck.id.desc(),
+        ).limit(limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = list(result.scalars().all())
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_library_by_user_id(
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+    ) -> tuple[list[Deck], bool]:
+        stmt = (
+            self._deck_stmt(load_owner=True)
+            .outerjoin(
+                UserDeck,
+                and_(
+                    UserDeck.deck_id == Deck.id,
+                    UserDeck.user_id == user_id,
+                ),
+            )
+            .where(
+                or_(
+                    Deck.user_id == user_id,
+                    and_(
+                        UserDeck.is_saved.is_(True),
+                        Deck.user_id != user_id,
+                        Deck.is_public.is_(True),
+                    ),
+                )
+            )
+        )
+
+        if search_query:
+            terms = search_query.split()
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    ),
+                )
+            )
+
+        stmt = stmt.order_by(
+            Deck.updated_at.desc(),
+            Deck.id.desc(),
+        ).limit(limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = list(result.scalars().all())
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
+    async def get_public_by_owner_id(
+        self,
+        owner_id: int,
+        viewer_id: int | None = None,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 30,
+    ) -> tuple[list[Deck], bool]:
+        stmt = (
+            self._visible_decks_stmt(
+                viewer_id=viewer_id,
+            ).where(
+                Deck.user_id == owner_id,
+            )
+        )
+        if search_query:
+            terms = search_query.split()
+            stmt = stmt.where(
+                *(
+                    Deck.title.icontains(term, autoescape=True)
+                    for term in terms
+                )
+            )
+        if cursor_updated_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Deck.updated_at < cursor_updated_at,
+                    and_(
+                        Deck.updated_at == cursor_updated_at,
+                        Deck.id < cursor_id,
+                    )
+                )
+            )
+
+        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc())
+        stmt = stmt.limit(limit=limit + 1)
+
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
+
 
     async def get_all_by_user_id(
         self,
@@ -174,33 +483,6 @@ class DeckRepository:
         has_more = len(rows) > limit
         return rows[:limit], has_more
 
-    async def get_page_by_user_id(
-        self,
-        user_id: int,
-        limit: int = 16,
-        cursor: tuple[datetime, int] | None = None,
-    ) -> tuple[list[Deck], bool]:
-        stmt = select(Deck).where(Deck.user_id == user_id)
-
-        if cursor is not None:
-            cursor_updated_at, cursor_id = cursor
-            stmt = stmt.where(
-                or_(
-                    Deck.updated_at < cursor_updated_at,
-                    and_(
-                        Deck.updated_at == cursor_updated_at,
-                        Deck.id < cursor_id,
-                    ),
-                )
-            )
-
-        stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc()).limit(limit + 1)
-        result = await self.session.execute(stmt)
-        decks = list(result.scalars().all())
-        has_more = len(decks) > limit
-        return decks[:limit], has_more
-
-
     def add(self, deck: Deck) -> None:
         self.session.add(deck)
 
@@ -210,26 +492,22 @@ class DeckRepository:
     async def refresh(self, deck: Deck) -> None:
         await self.session.refresh(deck)
 
-    async def get(self, deck_id: int) -> Deck:
-        return await self.session.get(Deck, deck_id)
-
 
 class DeckCardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_all_decks_by_card_id(
+    async def get_all_deck_ids_by_card_id(
             self,
             card_id: int,
-    ) -> list[tuple[int, UUID]]:
+    ) -> list[int]:
         stmt = (
-            select(DeckCard.deck_id, Deck.uuid)
-            .join(Deck, DeckCard.deck_id == Deck.id)
+            select(DeckCard.deck_id)
             .where(DeckCard.card_id == card_id)
             .distinct()
         )
         result = await self.session.execute(stmt)
-        return result.tuples().all()
+        return list(result.scalars().all())
 
     async def update_cards_count(
             self,
@@ -245,7 +523,8 @@ class DeckCardRepository:
                             DeckCard.deck_id == Deck.id,
                         )
                         .scalar_subquery()
-                    )
+                    ),
+                    updated_at=utcnow(),
                 )
                 .where(Deck.id.in_(deck_ids))
             )
@@ -253,11 +532,6 @@ class DeckCardRepository:
 
     async def delete(self, deck_card: DeckCard) -> None:
         await self.session.delete(deck_card)
-
-    async def get_by_uuid(self, deck_card_uuid: UUID) -> DeckCard | None:
-        stmt = select(DeckCard).where(DeckCard.uuid == deck_card_uuid)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
 
     async def get_max_position(
             self,
@@ -322,18 +596,6 @@ class DeckCardRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-
-    async def get_all_deck_cards_by_deck_id(
-        self,
-        deck_id: int,
-    ) -> list[DeckCard]:
-        stmt = (
-            select(DeckCard)
-            .where(DeckCard.deck_id == deck_id)
-            .order_by(DeckCard.position.asc())
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
     
     async def get_all_cards_by_deck_ids(
         self,
@@ -375,81 +637,6 @@ class DeckCardRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.all())
-
-    async def get_all_cards_by_deck_uuids(
-        self,
-        deck_uuids: list[UUID],
-        limit: int = 100,
-    ) -> dict[UUID, list[Card]]:
-        """
-        returns only existing decks with its cards including empty decks
-        """
-        if not deck_uuids or limit <= 0:
-            return {}
-
-        existing_result = await self.session.execute(
-            select(Deck.uuid).where(Deck.uuid.in_(deck_uuids))
-        )
-        existing_deck_uuids = set(existing_result.scalars().all())
-
-        cards_by_deck: dict[UUID, list[Card]] = {
-            deck_uuid: []
-            for deck_uuid in existing_deck_uuids
-        }
-
-        ranked_deck_cards = (
-            select(
-                Deck.uuid.label("deck_uuid"),
-                Deck.id.label("deck_id"),
-                DeckCard.card_id.label("card_id"),
-                DeckCard.position.label("position"),
-                DeckCard.id.label("deck_card_id"),
-                func.row_number()
-                .over(
-                    partition_by=Deck.id,
-                    order_by=(
-                        DeckCard.position.asc(),
-                        DeckCard.id.asc(),
-                    ),
-                )
-                .label("row_number"),
-            )
-            .select_from(Deck)
-            .join(
-                DeckCard,
-                DeckCard.deck_id == Deck.id,
-            )
-            .where(
-                Deck.uuid.in_(deck_uuids),
-            )
-            .subquery()
-        )
-
-        stmt = (
-            select(
-                ranked_deck_cards.c.deck_uuid,
-                Card,
-            )
-            .join(
-                Card,
-                Card.id == ranked_deck_cards.c.card_id,
-            )
-            .where(
-                ranked_deck_cards.c.row_number <= limit,
-            )
-            .order_by(
-                ranked_deck_cards.c.deck_uuid.asc(),
-                ranked_deck_cards.c.position.asc(),
-                ranked_deck_cards.c.deck_card_id.asc(),
-            )
-        )
-
-        result = await self.session.execute(stmt)
-
-        for deck_uuid, card in result.all():
-            cards_by_deck[deck_uuid].append(card)
-
-        return cards_by_deck
 
     def add_all(self, deck_cards: list[DeckCard]) -> None:
         self.session.add_all(deck_cards)

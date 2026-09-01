@@ -15,14 +15,14 @@ class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_uuids(
+    async def get_by_ids(
         self,
-        card_uuids: list[UUID],
+        card_ids: list[int],
     ) -> list[Card]:
         stmt = (
             select(Card)
             .where(
-                Card.uuid.in_(card_uuids),
+                Card.id.in_(card_ids),
             )
         )
         result = await self.session.execute(stmt)

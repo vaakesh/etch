@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.auth.cookies import clear_tokens_cookie
-from app.auth.deps import AuthServiceDeps, CurrentUser, CurrentUserWithSettings
+from app.auth.deps import AuthServiceDeps, CurrentUser, CurrentUserWithSettings, OptionalCurrentUser
 from app.cards.deps import CardServiceDeps
 from app.cards.schemas import CardResponse
 from app.common.schemas import CursorPage
@@ -122,19 +122,17 @@ async def get_my_decks(
     search_query: SearchQuery = None,
     cursor: PaginationCursor = None,
 ):
-    decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
-        user_uuid=current_user.uuid,
+    page = await deck_service.get_owned_decks(
+        owner_id=current_user.id,
         search_query=search_query,
         cursor=cursor,
         limit=limit,
-        public_only=False,
-        current_user_id=current_user.id,
     )
 
     return CursorPage[DeckResponse](
-        items=decks,
-        next_cursor=next_cursor,
-        has_more=has_more,
+        items=page.items,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
     )
 
 @router.get(
@@ -218,7 +216,6 @@ async def get_public_user(
 ):
     user = await user_service.get_by_uuid(
         user_uuid=user_uuid,
-        for_update=False,
     )
     return user
 
@@ -232,7 +229,7 @@ async def create_user(
     payload: CreateUserRequest,
     user_service: UserServiceDeps,
 ):
-    new_user, user_settings = await user_service.create_user(payload)
+    new_user = await user_service.create_user(payload)
     return PrivateUserResponse(
         uuid=new_user.uuid,
         username=new_user.username,
@@ -240,9 +237,9 @@ async def create_user(
         created_at=new_user.created_at,
         updated_at=new_user.updated_at,
         settings=UserSettingsResponse(
-            locale=user_settings.locale,
-            theme=user_settings.theme,
-            show_previews_for_long=user_settings.show_previews_for_long,
+            locale=new_user.settings.locale,
+            theme=new_user.settings.theme,
+            show_previews_for_long=new_user.settings.show_previews_for_long,
         )
     )
 
@@ -257,7 +254,6 @@ async def update_user(
     user_service: UserServiceDeps,
 ):
     updated_user = await user_service.update_user(
-        target_user_uuid=current_user.uuid,
         current_user_id=current_user.id,
         payload=payload,
     )
@@ -285,7 +281,6 @@ async def delete_user(
 ):
     await user_service.delete_user(
         current_user_id=current_user.id,
-        target_user_uuid=current_user.uuid,
     )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_tokens_cookie(response=response)
@@ -323,22 +318,22 @@ async def get_public_training_sessions_by_user(
 )
 async def get_public_decks_by_user(
     user_uuid: UUID,
+    current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
     search_query: SearchQuery = None,
     cursor: PaginationCursor = None,
     limit: PageLimit = 30,
 ):
-    decks, next_cursor, has_more = await deck_service.get_all_by_user_uuid(
-        user_uuid=user_uuid,
+    page = await deck_service.get_public_by_owner_uuid(
+        owner_uuid=user_uuid,
+        viewer_id=current_user.id,
         search_query=search_query,
         cursor=cursor,
         limit=limit,
-        public_only=True,
-        current_user_id=None,
     )
 
     return CursorPage[DeckResponse](
-        items=decks,
-        next_cursor=next_cursor,
-        has_more=has_more,
+        items=page.decks,
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
     )

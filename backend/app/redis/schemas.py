@@ -12,5 +12,5 @@ class CacheLookupResult[K: Hashable, T]:
 
 @dataclass(frozen=True, slots=True)
 class LibraryPageCacheLookup:
-    page: CursorPage | None
+    page: CursorPage[int] | None
     generation: int | None

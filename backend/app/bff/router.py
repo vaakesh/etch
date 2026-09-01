@@ -32,7 +32,6 @@ async def get_home_dashboard(
 ):
     result = await bff_service.get_home_dashboard(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
     )
     return result
 
@@ -82,7 +81,6 @@ async def get_cards_library_page(
 ) -> CursorPage[LibraryCardItemResponse]:
     result = await bff_service.get_cards_library_page(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         search_query=search_query,
         cursor=cursor,
         limit=limit,

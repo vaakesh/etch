@@ -36,9 +36,9 @@ async def get_deck(
     current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
 ):
-    return await deck_service.get_by_uuid(
+    return await deck_service.get_visible_by_uuid(
         deck_uuid=deck_uuid,
-        current_user_id=current_user.id if current_user else None,
+        viewer_id=current_user.id if current_user else None,
     )
 
 @router.post(
@@ -88,7 +88,6 @@ async def delete_deck(
     await deck_service.delete_deck(
         deck_uuid=deck_uuid,
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
     )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
@@ -142,7 +141,6 @@ async def remove_card_from_deck(
 ):
     await deck_service.remove_card_from_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
@@ -183,7 +181,6 @@ async def load_cards_to_deck(
         deck_uuid=deck_uuid,
         cards=payload.cards,
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
     )
 
 @router.post(
@@ -199,7 +196,6 @@ async def add_card_to_deck(
 ):
     new_deck_card = await deck_service.add_card_to_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
@@ -218,7 +214,6 @@ async def set_favourite(
 ):
     user_deck = await user_deck_service.set_favourite_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         value=value,
     )
@@ -237,7 +232,6 @@ async def save_deck(
 ):
     await user_deck_service.save_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
     )
     response = Response(status_code=status.HTTP_200_OK)
@@ -255,7 +249,6 @@ async def unsave_deck(
 ):
     await user_deck_service.unsave_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
     )
     response = Response(status_code=status.HTTP_200_OK)

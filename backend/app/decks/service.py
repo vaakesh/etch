@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from uuid import UUID
 
@@ -10,11 +11,13 @@ from app.cards.schemas import (
     LoadedCardResponse,
 )
 from app.common.types import SearchQuery
-from app.common.utils import calculate_accuracy, decode_cursor, encode_cursor
+from app.common.utils import calculate_accuracy, decode_cursor, encode_cursor, utcnow
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from sqlalchemy.exc import IntegrityError
+
+from app.common.schemas import CursorPage
 
 from .errors import (
     CannotSaveOwnDeckError,
@@ -56,6 +59,10 @@ class DeckService:
         page: int = 1,
         limit: int = 50,
     ) -> list[InternalDeck]:
+        '''
+        получение колод на странице каталога, подумать над логикой,
+        добавить фильтры какие-то
+        '''
         async with self.uow_factory() as uow:
             offset = (page - 1) * limit
             decks = await uow.deck_repo.get_public_decks(
@@ -70,17 +77,17 @@ class DeckService:
         deck_uuid: UUID,
         cards: list[CreateCardRequest],
         user_id: int,
-        user_uuid: UUID,
     ) -> LoadCardsResponse:
+        '''
+        импорт карточек батчем
+        '''
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(
+            deck = await self._require_owned_deck(
                 uow=uow,
                 deck_uuid=deck_uuid,
+                owner_id=user_id,
                 for_update=True,
             )
-
-            if deck.user_id != user_id:
-                raise PermissionDeniedError()
 
             max_position = await uow.deck_card_repo.get_max_position(
                 deck_id=deck.id,
@@ -111,19 +118,23 @@ class DeckService:
 
             deck.words_count += len(card_entities)
             deck.version += 1
+            deck.updated_at = utcnow()
 
             await uow.commit()
 
-            await self.cache_service.invalidate_deck_cards(
-                deck_uuids=[deck_uuid],
-            )
-
-            await self.cache_service.invalidate_decks(
-                deck_uuids=[deck_uuid],
-            )
-
-            await self.cache_service.invalidate_library_card_page(
-                user_uuid=user_uuid,
+            await asyncio.gather(
+                self.cache_service.invalidate_deck_cards(
+                    deck_ids=[deck.id],
+                ),
+                self.cache_service.invalidate_decks(
+                    deck_ids=[deck.id],
+                ),
+                self.cache_service.invalidate_library_deck_page(
+                    user_id=user_id,
+                ),
+                self.cache_service.invalidate_library_card_page(
+                    user_id=user_id,
+                )
             )
 
             return LoadCardsResponse(
@@ -137,43 +148,70 @@ class DeckService:
                 ]
             )
 
-    async def get_by_uuids(
+    async def get_visible_by_ids(
         self,
-        deck_uuids: list[UUID],
-    ) -> list[InternalDeck]:
+        deck_ids: list[int],
+        viewer_id: int,
+    ) -> tuple[dict[int, InternalDeck], list[int]]:
         async with self.uow_factory() as uow:
-            decks = await uow.deck_repo._get_by_uuids(
-                deck_uuids=deck_uuids,
-                for_update=False,
+            decks = await uow.deck_repo.get_visible_by_ids(
+                deck_ids=deck_ids,
+                viewer_id=viewer_id,
             )
-            return [InternalDeck.model_validate(deck) for deck in decks]
+            fetched_decks: dict[int, InternalDeck] = {
+                deck.id: InternalDeck.model_validate(deck)
+                for deck in decks
+            }
+            # если есть missing, значит для пользователя неактуальный deck_id
+            # колода удалена или закрыта
+            missing_decks: list[int] = [
+                deck_id
+                for deck_id in deck_ids
+                if deck_id not in fetched_decks
+            ]
+            return (fetched_decks, missing_decks)
 
-    async def get_by_uuid(
+    async def get_visible_by_uuid(
             self, 
             deck_uuid: UUID,
-            current_user_id: int | None = None,
+            viewer_id: int | None = None,
         ) -> InternalDeck:
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(uow, deck_uuid)
-            if not deck.is_public:
-                if current_user_id is None or current_user_id != deck.user_id:
-                    raise DeckNotFoundError()
+            deck = await self._require_visible_deck(
+                uow=uow,
+                deck_uuid=deck_uuid,
+                viewer_id=viewer_id,
+            )
             return InternalDeck.model_validate(deck)
 
-    async def _get_by_uuid(
+    async def _require_visible_deck(
         self,
         uow: UnitOfWork,
         deck_uuid: UUID,
+        viewer_id: int | None,
+    ) -> Deck:
+        deck = await uow.deck_repo.get_visible_by_uuid(
+            deck_uuid=deck_uuid,
+            viewer_id=viewer_id,
+        )
+        if deck is None:
+            raise DeckNotFoundError()
+        return deck
+
+    async def _require_owned_deck(
+        self,
+        uow: UnitOfWork,
+        deck_uuid: UUID,
+        owner_id: int,
         for_update: bool = False,
     ) -> Deck:
-        deck = await uow.deck_repo.get_by_uuid(
-            deck_uuid,
+        deck = await uow.deck_repo.get_owned_by_uuid(
+            deck_uuid=deck_uuid,
+            owner_id=owner_id,
             for_update=for_update,
         )
-
         if deck is None:
-            raise DeckNotFoundError(f"Deck with uuid={deck_uuid} not found")
-
+            raise DeckNotFoundError()
         return deck
 
     async def _get_card_by_uuid(
@@ -192,48 +230,32 @@ class DeckService:
 
         return card
 
-    async def _get_deck_card_by_uuid(
+    async def get_public_by_owner_uuid(
         self,
-        uow: UnitOfWork,
-        deck_card_uuid: UUID,
-    ) -> DeckCard:
-        deck_card = await uow.deck_card_repo.get_by_uuid(deck_card_uuid)
-
-        if deck_card is None:
-            raise DeckCardNotFoundError(
-                f"Deck card link with uuid={deck_card_uuid} not found"
-            )
-
-        return deck_card
-
-    async def get_all_by_user_uuid(
-        self,
-        user_uuid: UUID,
+        owner_uuid: UUID,
+        viewer_id: int | None = None,
         search_query: str | None = None,
         cursor: str | None = None,
         limit: int = 10,
-        public_only: bool = True,
-        current_user_id: int | None = None,
-    ) -> tuple[list[InternalDeck], str | None, bool]:
+    ) -> CursorPage[InternalDeck]:
         async with self.uow_factory() as uow:
-            user = await uow.user_repo.get_by_uuid(user_uuid=user_uuid)
+            user = await uow.user_repo.get_by_uuid(
+                user_uuid=owner_uuid,
+            )
             if user is None:
                 raise UserNotFoundError()
-
-            if not public_only:
-                if current_user_id is None or current_user_id != user.id:
-                    raise PermissionDeniedError()
 
             cursor_updated_at, cursor_id = (
                 decode_cursor(cursor) if cursor is not None else (None, None)
             )
-            decks, has_more = await uow.deck_repo.get_all_by_user_id(
-                user_id=user.id,
+
+            decks, has_more = await uow.deck_repo.get_public_by_owner_id(
+                owner_id=user.id,
+                viewer_id=viewer_id,
                 search_query=search_query,
                 cursor_updated_at=cursor_updated_at,
                 cursor_id=cursor_id,
                 limit=limit,
-                public_only=public_only,
             )
 
             next_cursor = None
@@ -243,7 +265,143 @@ class DeckService:
                     entity_id=decks[-1].id,
                 )
 
-            return [InternalDeck.model_validate(deck) for deck in decks], next_cursor, has_more
+            return CursorPage(
+                items=[InternalDeck.model_validate(deck) for deck in decks], 
+                next_cursor=next_cursor, 
+                has_more=has_more,
+            )
+
+    async def get_owned_decks(
+        self,
+        owner_id: int,
+        search_query: str | None = None,
+        cursor: str | None = None,
+        limit: int = 10,
+    ) -> CursorPage[InternalDeck]:
+        async with self.uow_factory() as uow:
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+
+            decks, has_more = await uow.deck_repo.get_owned_by_owner_id(
+                owner_id=owner_id,
+                search_query=search_query,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
+                limit=limit,
+            )
+
+            next_cursor = None
+            if decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=decks[-1].updated_at,
+                    entity_id=decks[-1].id,
+                )
+
+            return CursorPage(
+                items=[InternalDeck.model_validate(deck) for deck in decks], 
+                next_cursor=next_cursor, 
+                has_more=has_more,
+            )
+
+    async def get_visible_to_user(
+        self,
+        viewer_id: int,
+        search_query: str | None = None,
+        cursor: str | None = None,
+        limit: int = 10,
+    ) -> CursorPage[InternalDeck]:
+        async with self.uow_factory() as uow:
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+
+            decks, has_more = await uow.deck_repo.get_visible_to_user_id(
+                viewer_id=viewer_id,
+                search_query=search_query,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
+                limit=limit,
+            )
+
+            next_cursor = None
+            if decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=decks[-1].updated_at,
+                    entity_id=decks[-1].id,
+                )
+
+            return CursorPage(
+                items=[InternalDeck.model_validate(deck) for deck in decks], 
+                next_cursor=next_cursor, 
+                has_more=has_more,
+            )
+
+    async def get_saved_decks(
+        self,
+        user_id: int,
+        search_query: str | None = None,
+        cursor: str | None = None,
+        limit: int = 10,
+    ) -> CursorPage[InternalDeck]:
+        async with self.uow_factory() as uow:
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+
+            decks, has_more = await uow.deck_repo.get_saved_by_user_id(
+                user_id=user_id,
+                search_query=search_query,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
+                limit=limit,
+            )
+
+            next_cursor = None
+            if decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=decks[-1].updated_at,
+                    entity_id=decks[-1].id,
+                )
+
+            return CursorPage(
+                items=[InternalDeck.model_validate(deck) for deck in decks], 
+                next_cursor=next_cursor, 
+                has_more=has_more,
+            )
+
+    async def get_library_decks(
+        self,
+        user_id: int,
+        search_query: str | None = None,
+        cursor: str | None = None,
+        limit: int = 10,
+    ) -> CursorPage[InternalDeck]:
+        async with self.uow_factory() as uow:
+            cursor_updated_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+
+            decks, has_more = await uow.deck_repo.get_library_by_user_id(
+                user_id=user_id,
+                search_query=search_query,
+                cursor_updated_at=cursor_updated_at,
+                cursor_id=cursor_id,
+                limit=limit,
+            )
+
+            next_cursor = None
+            if decks and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=decks[-1].updated_at,
+                    entity_id=decks[-1].id,
+                )
+
+            return CursorPage(
+                items=[InternalDeck.model_validate(deck) for deck in decks],
+                next_cursor=next_cursor,
+                has_more=has_more,
+            )
 
     async def create_deck(
         self,
@@ -270,7 +428,7 @@ class DeckService:
                 await uow.commit()
 
                 await self.cache_service.invalidate_library_deck_page(
-                    user_uuid=user_uuid,
+                    user_id=user_id,
                 )
 
                 return InternalDeck(
@@ -299,19 +457,18 @@ class DeckService:
     ) -> InternalDeck:
         try:
             async with self.uow_factory() as uow:
-                deck = await self._get_by_uuid(
-                    uow=uow, 
+                deck = await self._require_owned_deck(
+                    uow=uow,
                     deck_uuid=deck_uuid,
+                    owner_id=user_id,
                     for_update=True,
                 )
-
-                if deck.user_id != user_id:
-                    raise PermissionDeniedError()
 
                 update_data = payload.model_dump(exclude_unset=True)
                 update_data["version"] = deck.version + 1
                 for field, value in update_data.items():
                     setattr(deck, field, value)
+                deck.updated_at = utcnow()
 
                 await uow.commit()
                 await uow.deck_repo.refresh(deck)
@@ -321,11 +478,11 @@ class DeckService:
                 )
 
                 await self.cache_service.invalidate_decks(
-                    deck_uuids=[deck.uuid],
+                    deck_ids=[deck.id],
                 )
 
                 await self.cache_service.invalidate_library_deck_page(
-                    user_uuid=user_uuid,
+                    user_id=user_id,
                 )
 
                 return InternalDeck(
@@ -349,13 +506,14 @@ class DeckService:
             self, 
             deck_uuid: UUID,
             user_id: int,
-            user_uuid: UUID,
         ) -> None:
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(uow, deck_uuid)
-
-            if deck.user_id != user_id:
-                raise PermissionDeniedError()
+            deck = await self._require_owned_deck(
+                uow=uow,
+                deck_uuid=deck_uuid,
+                owner_id=user_id,
+                for_update=True,
+            )
 
             await uow.deck_repo.delete(deck)
             await uow.commit()
@@ -365,15 +523,19 @@ class DeckService:
             )
 
             await self.cache_service.invalidate_decks(
-                deck_uuids=[deck.uuid],
+                deck_ids=[deck.id],
             )
 
             await self.cache_service.invalidate_deck_cards(
+                deck_ids=[deck.id],
+            )
+
+            await self.cache_service.invalidate_deck_ids_by_uuids(
                 deck_uuids=[deck.uuid],
             )
 
             await self.cache_service.invalidate_library_deck_page(
-                user_uuid=user_uuid,
+                user_id=user_id,
             )
 
             return None
@@ -386,11 +548,11 @@ class DeckService:
         limit: int = 50,
     ) -> list[InternalCard]:
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(uow, deck_uuid)
-
-            if not deck.is_public:
-                if user_id is None or user_id != deck.user_id:
-                    raise DeckNotFoundError()
+            deck = await self._require_visible_deck(
+                uow=uow,
+                deck_uuid=deck_uuid,
+                viewer_id=user_id,
+            )
 
             cards = await uow.deck_card_repo.get_all_by_deck_id(
                 deck_id=deck.id,
@@ -406,46 +568,34 @@ class DeckService:
         deck_ids: list[int],
         offset: int = 0,
         limit: int = 2,
-    ) -> list[tuple[int, InternalCard]]:
+    ) -> dict[int, list[InternalCard]]:
         async with self.uow_factory() as uow:
-            cards = await uow.deck_card_repo.get_all_cards_by_deck_ids(
+            rows = await uow.deck_card_repo.get_all_cards_by_deck_ids(
                 deck_ids=deck_ids,
                 limit=limit,
             )
-            return [(deck_id, InternalCard.model_validate(card)) for deck_id, card in cards]
-
-    async def get_all_cards_by_deck_uuids(
-        self,
-        user_id: int,
-        deck_uuids: list[UUID],
-        offset: int = 0,
-        limit: int = 2,
-    ) -> dict[UUID, list[InternalCard]]:
-        """
-        returns only existing decks with its cards including empty decks
-        """
-        async with self.uow_factory() as uow:
-            cards_by_deck = await uow.deck_card_repo.get_all_cards_by_deck_uuids(
-                deck_uuids=deck_uuids,
-                limit=limit,
-            )
-            return {
-                deck_uuid: [InternalCard.model_validate(card) for card in cards]
-                for deck_uuid, cards in cards_by_deck.items()
+            cards_by_deck = {
+                deck_id: []
+                for deck_id in deck_ids
             }
+            for deck_id, card in rows:
+                cards_by_deck[deck_id].append(
+                    InternalCard.model_validate(card)
+                )
+            return cards_by_deck
 
     async def add_card_to_deck(
         self,
         user_id: int,
-        user_uuid: UUID,
         deck_uuid: UUID,
         card_uuid: UUID,
     ) -> InternalDeckCard:
         try:
             async with self.uow_factory() as uow:
-                deck = await self._get_by_uuid(
+                deck = await self._require_owned_deck(
                     uow=uow,
                     deck_uuid=deck_uuid,
+                    owner_id=user_id,
                     for_update=True,
                 )
 
@@ -468,6 +618,7 @@ class DeckService:
 
                 deck.words_count += 1
                 deck.version += 1
+                deck.updated_at = utcnow()
 
                 max_position = await uow.deck_card_repo.get_max_position(
                     deck_id=deck.id,
@@ -493,15 +644,15 @@ class DeckService:
                 )
 
                 await self.cache_service.invalidate_library_deck_page(
-                    user_uuid=user_uuid,
+                    user_id=user_id,
                 )
 
                 await self.cache_service.invalidate_decks(
-                    deck_uuids=[deck_uuid],
+                    deck_ids=[deck.id],
                 )
 
                 await self.cache_service.invalidate_deck_cards(
-                    deck_uuids=[deck_uuid],
+                    deck_ids=[deck.id],
                 )
 
                 return InternalDeckCard.model_validate(obj=deck_card)
@@ -511,14 +662,14 @@ class DeckService:
     async def remove_card_from_deck(
         self,
         user_id: int,
-        user_uuid: UUID,
         deck_uuid: UUID,
         card_uuid: UUID,
     ) -> None:
         async with self.uow_factory() as uow:
-            deck = await self._get_by_uuid(
-                uow=uow, 
+            deck = await self._require_owned_deck(
+                uow=uow,
                 deck_uuid=deck_uuid,
+                owner_id=user_id,
                 for_update=True,
             )
 
@@ -544,6 +695,7 @@ class DeckService:
 
             deck.words_count -= 1
             deck.version += 1
+            deck.updated_at = utcnow()
 
             await uow.deck_card_repo.delete(deck_card)
             await uow.flush()
@@ -558,15 +710,15 @@ class DeckService:
             )
 
             await self.cache_service.invalidate_library_deck_page(
-                user_uuid=user_uuid,
+                user_id=user_id,
             )
 
             await self.cache_service.invalidate_decks(
-                deck_uuids=[deck_uuid],
+                deck_ids=[deck.id],
             )
 
             await self.cache_service.invalidate_deck_cards(
-                deck_uuids=[deck_uuid],
+                deck_ids=[deck.id],
             )
 
             return None
@@ -583,12 +735,13 @@ class DeckService:
                 uow,
                 card_uuid=card_uuid,
             )
-            deck = await self._get_by_uuid(
-                uow,
+            deck = await self._require_owned_deck(
+                uow=uow,
                 deck_uuid=deck_uuid,
+                owner_id=user_id,
                 for_update=True,
             )
-            if card.user_id != user_id or deck.user_id != user_id:
+            if card.user_id != user_id:
                 raise PermissionDeniedError()
 
             if not 1 <= to_position <= deck.words_count:
@@ -615,10 +768,11 @@ class DeckService:
                 add_to_position=add_to_position,
             )
             deck_card.position = to_position
+            deck.updated_at = utcnow()
             await uow.commit()
 
             await self.cache_service.invalidate_deck_cards(
-                deck_uuids=[deck_uuid],
+                deck_ids=[deck.id],
             )
 
 
@@ -634,16 +788,19 @@ class UserDeckService:
     async def unsave_deck(
         self,
         user_id: int,
-        user_uuid: UUID,
         deck_uuid: UUID,
     ) -> InternalUserDeck:
         async with self.uow_factory() as uow:
-            deck = await uow.deck_repo.get_by_uuid_and_is_public(deck_uuid=deck_uuid)
+            deck = await uow.deck_repo.get_by_uuid(
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
+            # todo: change error
             if deck.user_id == user_id:
                 raise CannotSaveOwnDeckError()
-            
+
             user_deck = await uow.user_deck_repo.get_by_user_id_and_deck_id(
                 user_id=user_id,
                 deck_id=deck.id,
@@ -656,12 +813,13 @@ class UserDeckService:
 
             await uow.commit()
 
-            await self.cache_service.invalidate_user_decks(
-                identities=[(user_deck.user_id, user_deck.deck_id)],
-            )
-
-            await self.cache_service.invalidate_library_deck_page(
-                user_uuid=user_uuid,
+            await asyncio.gather(
+                self.cache_service.invalidate_user_decks(
+                    identities=[(user_deck.user_id, user_deck.deck_id)],
+                ),
+                self.cache_service.invalidate_library_deck_page(
+                    user_id=user_id,
+                )
             )
 
             return InternalUserDeck.model_validate(user_deck)
@@ -669,11 +827,13 @@ class UserDeckService:
     async def save_deck(
             self,
             user_id: int,
-            user_uuid: UUID,
             deck_uuid: UUID,
     ) -> InternalUserDeck:
         async with self.uow_factory() as uow:
-            deck = await uow.deck_repo.get_by_uuid(deck_uuid=deck_uuid)
+            deck = await uow.deck_repo.get_by_uuid(
+                deck_uuid=deck_uuid,
+                for_update=True,
+            )
             if deck is None or not deck.is_public:
                 raise DeckNotFoundError()
             if deck.user_id == user_id:
@@ -702,7 +862,7 @@ class UserDeckService:
             )
 
             await self.cache_service.invalidate_library_deck_page(
-                user_uuid=user_uuid,
+                user_id=user_id,
             )
 
             return InternalUserDeck.model_validate(user_deck)
@@ -744,7 +904,6 @@ class UserDeckService:
     async def set_favourite_deck(
             self,
             user_id: int,
-            user_uuid: UUID,
             deck_uuid: UUID,
             value: bool,
     ) -> InternalUserDeck:
@@ -780,7 +939,7 @@ class UserDeckService:
             )
 
             await self.cache_service.invalidate_library_deck_page(
-                user_uuid=user_uuid,
+                user_id=user_id,
             )
 
             return InternalUserDeck.model_validate(user_deck)

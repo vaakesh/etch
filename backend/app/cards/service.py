@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from uuid import UUID
 
@@ -43,13 +44,13 @@ class CardService:
 
             return InternalCard.model_validate(card)
 
-    async def get_by_uuids(
+    async def get_by_ids(
         self,
-        card_uuids: list[UUID],
+        card_ids: list[int],
     ) -> list[InternalCard]:
         async with self.uow_factory() as uow:
-            cards = await uow.card_repo.get_by_uuids(
-                card_uuids=card_uuids,
+            cards = await uow.card_repo.get_by_ids(
+                card_ids=card_ids,
             )
             return [
                 InternalCard.model_validate(card)
@@ -112,7 +113,6 @@ class CardService:
         self,
         payload: CreateCardRequest,
         user_id: int,
-        user_uuid: UUID,
     ) -> InternalCard:
         try:
             async with self.uow_factory() as uow:
@@ -127,7 +127,7 @@ class CardService:
                 await uow.card_repo.refresh(card)
 
                 await self.cache_service.invalidate_library_card_page(
-                    user_uuid=user_uuid,
+                    user_id=user_id,
                 )
 
                 return InternalCard.model_validate(card)
@@ -158,8 +158,13 @@ class CardService:
                 await uow.commit()
                 await uow.card_repo.refresh(card)
 
-                await self.cache_service.invalidate_cards(
-                    card_uuids=[card.uuid],
+                await asyncio.gather(
+                    self.cache_service.invalidate_cards(
+                        card_ids=[card.id],
+                    ),
+                    self.cache_service.invalidate_library_card_page(
+                        user_id=user_id,
+                    )
                 )
 
                 return InternalCard.model_validate(card)
@@ -170,7 +175,6 @@ class CardService:
     async def delete_card(
             self, 
             user_id: int,
-            user_uuid: UUID,
             card_uuid: UUID,
         ) -> None:
         async with self.uow_factory() as uow:
@@ -178,9 +182,9 @@ class CardService:
             if card.user_id != user_id:
                 raise CardNotFoundError(f"Card with uuid={card_uuid} not found")
 
-            deck_ids_and_uuids = await uow.deck_card_repo.get_all_decks_by_card_id(card.id)
-            deck_ids=[deck_id for deck_id, deck_uuid in deck_ids_and_uuids]
-            deck_uuids=[deck_uuid for deck_id, deck_uuid in deck_ids_and_uuids]
+            deck_ids = await uow.deck_card_repo.get_all_deck_ids_by_card_id(
+                card_id=card.id,
+            )
 
             await uow.card_repo.delete(card)
             await uow.flush()
@@ -190,19 +194,27 @@ class CardService:
             await uow.commit()
 
             await self.cache_service.invalidate_cards(
+                card_ids=[card.id],
+            )
+
+            await self.cache_service.invalidate_card_ids_by_uuids(
                 card_uuids=[card.uuid],
             )
 
             await self.cache_service.invalidate_library_card_page(
-                user_uuid=user_uuid,
+                user_id=user_id,
+            )
+
+            await self.cache_service.invalidate_library_deck_page(
+                user_id=user_id,
             )
 
             await self.cache_service.invalidate_deck_cards(
-                deck_uuids=deck_uuids,
+                deck_ids=deck_ids,
             )
 
             await self.cache_service.invalidate_decks(
-                deck_uuids=deck_uuids,
+                deck_ids=deck_ids,
             )
 
             return None

@@ -22,7 +22,6 @@ async def create_card(
     return await card_service.create_card(
         payload=payload,
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
     )
 
 
@@ -48,7 +47,6 @@ async def delete_card(
 ):
     await card_service.delete_card(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         card_uuid=card_uuid,
     )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
