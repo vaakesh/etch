@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
+import uuid
 
 from app.bff.schemas import UserProgressResponse
 from app.common.types import PositiveInt
@@ -13,6 +14,7 @@ from app.decks.models import UserDeck
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
+    PermissionDeniedError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFinishedYet,
@@ -25,6 +27,8 @@ from app.training_sessions.schemas import (
     PracticeCardResponse,
     PracticeSessionResponse,
     SubmitAnswerResponse,
+    TrainingSessionActivityRequest,
+    TrainingSessionActivityResponse,
     TrainingSessionStatus,
 )
 from app.training_sessions.types import UserAnswer
@@ -40,6 +44,79 @@ class TrainingSessionService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+
+    def _accrue_activity(
+        self,
+        training_session: TrainingSession,
+        now: datetime,
+    ) -> None:
+        if (
+            training_session.activity_last_seen_at is None
+            or
+            training_session.activity_tracker_uuid is None
+        ):
+            return
+
+        gap_ms = round((
+            now - training_session.activity_last_seen_at
+        ).total_seconds() * 1000)
+
+        if 0 < gap_ms <= 30_000:
+            training_session.active_study_time_ms += gap_ms
+
+        training_session.activity_last_seen_at = now
+
+    async def record_activity(
+        self,
+        user_id: int,
+        session_uuid: UUID,
+        payload: TrainingSessionActivityRequest,
+    ) -> TrainingSessionActivityResponse:
+        async with self.uow_factory() as uow:
+            training_session = await self._get_by_uuid(
+                uow=uow,
+                session_uuid=session_uuid,
+                for_update=True,
+            )
+
+            if training_session.user_id != user_id:
+                raise TrainingSessionNotFoundError()
+            if training_session.status != TrainingSessionStatus.IN_PROGRESS:
+                return TrainingSessionActivityResponse(
+                    tracker_uuid=None,
+                )
+
+            event = payload.event
+            now = utcnow()
+
+            if event == "resume":
+                training_session.activity_tracker_uuid = uuid.uuid7()
+                training_session.activity_last_seen_at = now
+            elif event == "heartbeat":
+                if payload.tracker_uuid != training_session.activity_tracker_uuid:
+                    return TrainingSessionActivityResponse(
+                        tracker_uuid=None,
+                    )
+                self._accrue_activity(
+                    training_session=training_session,
+                    now=now,
+                )
+            elif event == "pause":
+                if payload.tracker_uuid != training_session.activity_tracker_uuid:
+                    return TrainingSessionActivityResponse(
+                        tracker_uuid=None,
+                    )
+                self._accrue_activity(
+                    training_session=training_session,
+                    now=now,
+                )
+                training_session.activity_tracker_uuid = None
+                training_session.activity_last_seen_at = None
+            await uow.commit()
+
+            return TrainingSessionActivityResponse(
+                tracker_uuid=training_session.activity_tracker_uuid,
+            )
 
 
     async def user_daily_activity(
@@ -109,8 +186,9 @@ class TrainingSessionService:
     ) -> SubmitAnswerResponse:
         async with self.uow_factory() as uow:
             user_deck_changed = False
-            training_session = await uow.training_session_repo.get_by_uuid(
-                training_session_uuid,
+            training_session = await self._get_by_uuid(
+                uow=uow,
+                session_uuid=training_session_uuid,
                 for_update=True,
             )
 
@@ -138,9 +216,8 @@ class TrainingSessionService:
                     total_count=training_session.requested_count,
                     is_finished=True if training_session.finished_at else False,
                     time_to_complete=(
-                        int((training_session.finished_at - training_session.started_at)
-                            .total_seconds())
-                        if training_session.finished_at
+                        training_session.active_study_time_ms // 1000
+                        if training_session.finished_at is not None
                         else None
                     ),
                 )
@@ -149,9 +226,15 @@ class TrainingSessionService:
             if training_session.finished_at is not None:
                 raise TrainingSessionAlreadyFinishedError()
 
+            now = utcnow()
             item.is_answered = True
-            item.answered_at = utcnow()
+            item.answered_at = now
             training_session.actual_count += 1
+
+            self._accrue_activity(
+                training_session=training_session,
+                now=now,
+            )
         
             if (
                 user_answer.action == "answer" 
@@ -173,8 +256,10 @@ class TrainingSessionService:
                 and 
                 training_session.finished_at is None
             ):
-                training_session.finished_at = utcnow()
+                training_session.finished_at = now
                 training_session.status = TrainingSessionStatus.COMPLETED
+                training_session.activity_last_seen_at = None
+                training_session.activity_tracker_uuid = None
                 await self._update_user_deck_after_session(
                         uow=uow,
                         user_id=user_id,
@@ -190,9 +275,8 @@ class TrainingSessionService:
                     total_count=training_session.requested_count,
                     is_finished=True if training_session.finished_at else False,
                     time_to_complete=(
-                        int((training_session.finished_at - training_session.started_at)
-                            .total_seconds())
-                        if training_session.finished_at
+                        training_session.active_study_time_ms // 1000
+                        if training_session.finished_at is not None
                         else None
                     ),
                 )
@@ -245,8 +329,12 @@ class TrainingSessionService:
         self,
         uow: UnitOfWork,
         session_uuid: UUID,
+        for_update: bool = False,
     ) -> TrainingSession:
-        training_session = await uow.training_session_repo.get_by_uuid(session_uuid)
+        training_session = await uow.training_session_repo.get_by_uuid(
+            session_uuid=session_uuid,
+            for_update=for_update,
+        )
 
         if training_session is None:
             raise TrainingSessionNotFoundError(

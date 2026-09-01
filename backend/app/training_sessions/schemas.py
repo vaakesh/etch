@@ -1,10 +1,10 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from app.common.types import CardLang, CardText, Counter, PositiveInt, Seconds
 from app.errors import RequestValueError
 from app.training_sessions.models import CardSide, TrainingSessionStatus
-from pydantic import BaseModel, ConfigDict, PastDatetime, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PastDatetime, field_validator
 
 
 class InternalTrainingSession(BaseModel):
@@ -129,3 +129,21 @@ class TrainingSessionHistoryItemResponse(BaseModel):
 
     is_answered: bool
     is_correct: bool | None
+
+class ResumeTrainingSessionActivityRequest(BaseModel):
+    event: Literal["resume"]
+
+
+class ActiveTrainingSessionActivityRequest(BaseModel):
+    event: Literal["pause", "heartbeat"]
+    tracker_uuid: UUID
+
+
+type TrainingSessionActivityRequest = Annotated[
+    ResumeTrainingSessionActivityRequest
+    | ActiveTrainingSessionActivityRequest,
+    Field(discriminator="event"),
+]
+
+class TrainingSessionActivityResponse(BaseModel):
+    tracker_uuid: UUID | None

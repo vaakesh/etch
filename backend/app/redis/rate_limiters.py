@@ -120,6 +120,11 @@ SUBMIT_ANSWER_RATE_LIMIT_POLICY = RateLimitPolicy(
     requests=300,
     window_seconds=60,
 )
+TRAINING_SESSION_ACTIVITY_RATE_LIMIT_POLICY = RateLimitPolicy(
+    route="training-sessions:activity",
+    requests=20,
+    window_seconds=60,
+)
 BFF_RATE_LIMIT_POLICY = RateLimitPolicy(
     route="bff",
     requests=120,
@@ -165,6 +170,10 @@ training_sessions_rate_limit = limit(
 )
 submit_answer_rate_limit = limit(
     SUBMIT_ANSWER_RATE_LIMIT_POLICY,
+    by_identity="user",
+)
+training_session_activity_rate_limit = limit(
+    TRAINING_SESSION_ACTIVITY_RATE_LIMIT_POLICY,
     by_identity="user",
 )
 

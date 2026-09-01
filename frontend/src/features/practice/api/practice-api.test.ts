@@ -3,6 +3,7 @@ import { apiFetch } from "../../../api";
 import {
   getPracticeSessionItemsHistory,
   getPracticeSessionHistory,
+  recordPracticeActivity,
   resumePracticeSession,
   startPracticeSession,
   submitPracticeAnswer,
@@ -17,6 +18,7 @@ vi.mock("../../../api", async (importOriginal) => {
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const SESSION_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac10";
 const OTHER_UUID = "f9b7ced5-fbea-4741-82fd-33ea144dab7c";
+const TRACKER_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac11";
 const START_INPUT = { promptSide: "front", wordsPerSession: 50 } as const;
 
 const SESSION_RESPONSE = {
@@ -438,6 +440,59 @@ describe("submitPracticeAnswer", () => {
       method: "PUT",
       body: { action: "skip" },
       signal: undefined,
+    });
+  });
+});
+
+describe("recordPracticeActivity", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetch).mockResolvedValue({ tracker_uuid: TRACKER_UUID });
+  });
+
+  it("posts resume without a client-generated tracker", async () => {
+    await expect(recordPracticeActivity(SESSION_UUID, { event: "resume" })).resolves.toEqual({
+      trackerUuid: TRACKER_UUID,
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(`/training-sessions/${SESSION_UUID}/activity`, {
+      method: "POST",
+      body: { event: "resume" },
+      keepalive: undefined,
+    });
+  });
+
+  it.each(["heartbeat", "pause"] as const)(
+    "posts %s with the backend tracker and keepalive option",
+    async (event) => {
+      await recordPracticeActivity(
+        SESSION_UUID,
+        { event, trackerUuid: TRACKER_UUID },
+        { keepalive: true },
+      );
+
+      expect(apiFetch).toHaveBeenCalledWith(`/training-sessions/${SESSION_UUID}/activity`, {
+        method: "POST",
+        body: { event, tracker_uuid: TRACKER_UUID },
+        keepalive: true,
+      });
+    },
+  );
+
+  it("accepts null when the backend no longer tracks the session", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ tracker_uuid: null });
+
+    await expect(recordPracticeActivity(SESSION_UUID, { event: "resume" })).resolves.toEqual({
+      trackerUuid: null,
+    });
+  });
+
+  it("rejects an invalid activity response", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ tracker_uuid: "not-a-uuid" });
+
+    await expect(recordPracticeActivity(SESSION_UUID, { event: "resume" })).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
     });
   });
 });

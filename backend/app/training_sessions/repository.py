@@ -94,12 +94,8 @@ class TrainingSessionItemRepository:
             select(
                 func.coalesce(
                     cast(
-                        func.sum(
-                            func.extract(
-                                "epoch",
-                                TrainingSession.finished_at
-                                - TrainingSession.started_at,
-                            )
+                        func.floor(
+                            func.sum(TrainingSession.active_study_time_ms) / 1000
                         ),
                         Integer,
                     ),

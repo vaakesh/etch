@@ -11,7 +11,7 @@ import type {
 } from "../model/catalog-types";
 
 const CATALOG_PATH = "/bff/catalog";
-export const CATALOG_PAGE_SIZE = 24;
+export const CATALOG_PAGE_SIZE = 30;
 export const CATALOG_SEARCH_MAX_LENGTH = 50;
 export const CATALOG_PREVIEW_CARD_PAGE_SIZE = 20;
 

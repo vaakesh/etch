@@ -105,6 +105,8 @@ export const PRACTICE_MESSAGES = defineMessages(
     yourAnswer: "Ваш ответ",
     submitAnswer: "Отправить ответ",
     doNotKnow: "Не знаю",
+    activityPaused: "Тренировка на паузе",
+    activityPausedHint: "Нажмите в любом месте, чтобы продолжить",
     card: (sequenceNumber: number) => `Карточка ${sequenceNumber}`,
     languageFlow: (prompt: string, answer: string) =>
       `Язык вопроса ${prompt}, язык ответа ${answer}`,
@@ -217,6 +219,8 @@ export const PRACTICE_MESSAGES = defineMessages(
     yourAnswer: "Your answer",
     submitAnswer: "Submit answer",
     doNotKnow: "I don't know",
+    activityPaused: "Practice paused",
+    activityPausedHint: "Click anywhere to continue",
     card: (sequenceNumber: number) => `Card ${sequenceNumber}`,
     languageFlow: (prompt: string, answer: string) =>
       `Question language: ${prompt}; answer language: ${answer}`,

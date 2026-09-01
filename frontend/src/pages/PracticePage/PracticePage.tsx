@@ -3,6 +3,10 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { isApiError } from "../../api";
 import { getPracticePaginationTokens } from "../../features/practice/model/practice-pagination";
 import { usePracticeDeckAvailability } from "../../features/practice/model/usePracticeDeckAvailability";
+import {
+  usePracticeActivity,
+  type UsePracticeActivityResult,
+} from "../../features/practice/model/usePracticeActivity";
 import type {
   CardSide,
   PracticeCard,
@@ -1330,6 +1334,7 @@ function AnswerArea({
           </div>
           <button
             className={styles.continueButton}
+            data-practice-primary-focus
             onClick={isFinished || nextSequenceNumber === null ? onFinish : onContinue}
             ref={continueButtonRef}
             type="button"
@@ -1354,6 +1359,7 @@ function AnswerArea({
           <textarea
             autoComplete="off"
             autoFocus
+            data-practice-primary-focus
             disabled={isSubmitting}
             id={inputId}
             lang={card.answerLanguage}
@@ -1397,18 +1403,45 @@ function AnswerArea({
 }
 
 interface ActiveSessionViewProps {
+  activity?: Pick<UsePracticeActivityResult, "focusRevision" | "phase" | "resume">;
   state: ReadyPracticeState;
   onSubmit: UsePracticeSessionResult["submit"];
   onComplete: (summary: PracticeCompletionSummary) => void;
 }
 
-export function ActivePracticeSessionView({ onComplete, onSubmit, state }: ActiveSessionViewProps) {
+const DEFAULT_ACTIVITY_VIEW = {
+  focusRevision: 0,
+  phase: "active",
+  resume: () => undefined,
+} as const;
+
+export function ActivePracticeSessionView({
+  activity = DEFAULT_ACTIVITY_VIEW,
+  onComplete,
+  onSubmit,
+  state,
+}: ActiveSessionViewProps) {
   const { locale } = useLocale();
   const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [selectedSequenceNumber, setSelectedSequenceNumber] = useState(
     state.session.cards[0]?.sequenceNumber ?? 1,
   );
   const [draftsBySequence, setDraftsBySequence] = useState<Readonly<Record<number, string>>>({});
+
+  useEffect(() => {
+    if (activity.phase !== "active" || activity.focusRevision === 0) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      workspaceRef.current
+        ?.querySelector<HTMLElement>("[data-practice-primary-focus]:not(:disabled)")
+        ?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activity.focusRevision, activity.phase]);
 
   const selectedCard =
     state.session.cards.find((card) => card.sequenceNumber === selectedSequenceNumber) ??
@@ -1446,78 +1479,141 @@ export function ActivePracticeSessionView({ onComplete, onSubmit, state }: Activ
 
   return (
     <main className={styles.sessionMain}>
-      <SessionProgress session={state.session} />
+      <div
+        aria-hidden={activity.phase === "paused" ? true : undefined}
+        className={
+          activity.phase === "paused"
+            ? `${styles.sessionActivityContent} ${styles.sessionActivityContentPaused}`
+            : styles.sessionActivityContent
+        }
+        inert={activity.phase === "paused" ? true : undefined}
+        ref={workspaceRef}
+      >
+        <SessionProgress session={state.session} />
 
-      <section aria-labelledby="practice-prompt" className={styles.cardStage}>
-        <article className={cardClassName} key={selectedCard.sequenceNumber}>
-          <div className={styles.cardTopline}>
-            <span
-              aria-label={messages.card(selectedCard.sequenceNumber)}
-              className={styles.cardNumber}
-            >
-              {String(selectedCard.sequenceNumber).padStart(2, "0")}
-            </span>
-            <span
-              aria-label={messages.languageFlow(
-                selectedCard.promptLanguage,
-                selectedCard.answerLanguage,
-              )}
-              className={styles.languageFlow}
-            >
-              <span>{formatLanguage(selectedCard.promptLanguage, locale)}</span>
-              <DirectionMark />
-              <span>{formatLanguage(selectedCard.answerLanguage, locale)}</span>
-            </span>
-          </div>
+        <section aria-labelledby="practice-prompt" className={styles.cardStage}>
+          <article className={cardClassName} key={selectedCard.sequenceNumber}>
+            <div className={styles.cardTopline}>
+              <span
+                aria-label={messages.card(selectedCard.sequenceNumber)}
+                className={styles.cardNumber}
+              >
+                {String(selectedCard.sequenceNumber).padStart(2, "0")}
+              </span>
+              <span
+                aria-label={messages.languageFlow(
+                  selectedCard.promptLanguage,
+                  selectedCard.answerLanguage,
+                )}
+                className={styles.languageFlow}
+              >
+                <span>{formatLanguage(selectedCard.promptLanguage, locale)}</span>
+                <DirectionMark />
+                <span>{formatLanguage(selectedCard.answerLanguage, locale)}</span>
+              </span>
+            </div>
 
-          <div className={styles.promptArea}>
-            <h1
-              data-text-size={getPracticeTextSize(selectedCard.promptText)}
-              id="practice-prompt"
-              lang={selectedCard.promptLanguage}
-            >
-              {selectedCard.promptText}
-            </h1>
-          </div>
+            <div className={styles.promptArea}>
+              <h1
+                data-text-size={getPracticeTextSize(selectedCard.promptText)}
+                id="practice-prompt"
+                lang={selectedCard.promptLanguage}
+              >
+                {selectedCard.promptText}
+              </h1>
+            </div>
 
-          <AnswerArea
-            card={selectedCard}
-            feedback={feedback}
-            isFinished={state.isFinished}
-            isSubmitting={isSubmitting}
-            nextSequenceNumber={nextSequenceNumber}
-            onChange={setDraft}
-            onContinue={() =>
-              nextSequenceNumber !== null && setSelectedSequenceNumber(nextSequenceNumber)
-            }
-            onFinish={() =>
-              onComplete(createCompletionSummary(state.session, state.timeToCompleteSeconds))
-            }
-            onSkip={() => void onSubmit(selectedCard.sequenceNumber, { action: "skip" })}
-            onSubmit={() =>
-              void onSubmit(selectedCard.sequenceNumber, {
-                action: "answer",
-                answer: draft.trim(),
-              })
-            }
-            submitError={
-              state.submitError?.sequenceNumber === selectedCard.sequenceNumber
-                ? state.submitError.error
-                : null
-            }
-            value={draft}
+            <AnswerArea
+              card={selectedCard}
+              feedback={feedback}
+              isFinished={state.isFinished}
+              isSubmitting={isSubmitting}
+              nextSequenceNumber={nextSequenceNumber}
+              onChange={setDraft}
+              onContinue={() =>
+                nextSequenceNumber !== null && setSelectedSequenceNumber(nextSequenceNumber)
+              }
+              onFinish={() =>
+                onComplete(createCompletionSummary(state.session, state.timeToCompleteSeconds))
+              }
+              onSkip={() => void onSubmit(selectedCard.sequenceNumber, { action: "skip" })}
+              onSubmit={() =>
+                void onSubmit(selectedCard.sequenceNumber, {
+                  action: "answer",
+                  answer: draft.trim(),
+                })
+              }
+              submitError={
+                state.submitError?.sequenceNumber === selectedCard.sequenceNumber
+                  ? state.submitError.error
+                  : null
+              }
+              value={draft}
+            />
+          </article>
+
+          <CardPagination
+            cards={state.session.cards}
+            currentSequenceNumber={selectedCard.sequenceNumber}
+            feedbackBySequence={state.feedbackBySequence}
+            isDisabled={isSubmitting}
+            onSelect={setSelectedSequenceNumber}
           />
-        </article>
+        </section>
+      </div>
 
-        <CardPagination
-          cards={state.session.cards}
-          currentSequenceNumber={selectedCard.sequenceNumber}
-          feedbackBySequence={state.feedbackBySequence}
-          isDisabled={isSubmitting}
-          onSelect={setSelectedSequenceNumber}
-        />
-      </section>
+      {activity.phase === "paused" ? (
+        <button
+          aria-label={`${messages.activityPaused}. ${messages.activityPausedHint}`}
+          autoFocus
+          className={styles.pausedOverlay}
+          onClick={activity.resume}
+          type="button"
+        >
+          <span className={styles.pausedOverlayContent}>
+            <span aria-hidden="true" className={styles.pauseSymbol}>
+              <i />
+              <i />
+            </span>
+            <strong>{messages.activityPaused}</strong>
+            <span>{messages.activityPausedHint}</span>
+          </span>
+        </button>
+      ) : null}
     </main>
+  );
+}
+
+interface TrackedActivePracticeSessionViewProps extends Omit<ActiveSessionViewProps, "activity"> {
+  onSessionUnavailable: () => void;
+}
+
+function TrackedActivePracticeSessionView({
+  onComplete,
+  onSessionUnavailable,
+  onSubmit,
+  state,
+}: TrackedActivePracticeSessionViewProps) {
+  const activity = usePracticeActivity({
+    enabled: !state.isFinished,
+    onSessionUnavailable,
+    sessionUuid: state.session.uuid,
+  });
+  const handleSubmit: UsePracticeSessionResult["submit"] = async (sequenceNumber, input) => {
+    const result = await onSubmit(sequenceNumber, input);
+    if (result !== null) {
+      activity.noteAnswerAccepted(result.isFinished);
+    }
+    return result;
+  };
+
+  return (
+    <ActivePracticeSessionView
+      activity={activity}
+      onComplete={onComplete}
+      onSubmit={handleSubmit}
+      state={state}
+    />
   );
 }
 
@@ -1605,11 +1701,12 @@ export function PracticePage() {
       content = isMissingSessionAfterSubmit ? (
         <SessionErrorView error={terminalSubmitError} onRetry={practice.retryResume} />
       ) : (
-        <ActivePracticeSessionView
+        <TrackedActivePracticeSessionView
           key={practice.state.session.uuid}
           onComplete={(summary) => {
             navigate("/practice", { replace: true, state: { practiceCompletion: summary } });
           }}
+          onSessionUnavailable={practice.retryResume}
           onSubmit={practice.submit}
           state={practice.state}
         />

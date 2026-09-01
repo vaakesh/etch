@@ -118,6 +118,23 @@ class TrainingSession(Base):
         server_default="back",
     )
 
+    active_study_time_ms: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    activity_last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    activity_tracker_uuid: Mapped[UUID | None] = mapped_column(
+        postgresUUID(as_uuid=True),
+        nullable=True,
+    )
+
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -145,6 +162,17 @@ class TrainingSession(Base):
             AND prompt_side <> answer_side
             """,
             name="ck_training_session_card_sides_valid_and_different",
+        ),
+        CheckConstraint(
+            "active_study_time_ms >= 0",
+            name="ck_training_session_active_study_time_ms_non_negative",
+        ),
+        CheckConstraint(
+            """
+            (activity_tracker_uuid IS NULL)
+            = (activity_last_seen_at IS NULL)
+            """,
+            name="ck_training_session_activity_state_consistent",
         ),
     )
 

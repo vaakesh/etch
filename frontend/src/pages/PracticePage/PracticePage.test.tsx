@@ -444,6 +444,27 @@ describe("PracticePage", () => {
 });
 
 describe("active practice feedback", () => {
+  it("covers only the practice workspace with an accessible pause control", () => {
+    const resume = vi.fn();
+
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <ActivePracticeSessionView
+          activity={{ focusRevision: 0, phase: "paused", resume }}
+          onComplete={vi.fn()}
+          onSubmit={vi.fn(async () => null)}
+          state={createReadyState()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain("Тренировка на паузе");
+    expect(markup).toContain("Нажмите в любом месте, чтобы продолжить");
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).toContain("inert");
+    expect(markup).toContain("Ваш ответ");
+  });
+
   it("keeps a wrong answer visible with the canonical backend answer", () => {
     const state = createReadyState({
       session: createSession({ answeredCount: 1, wrongCount: 1 }),

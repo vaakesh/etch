@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { isApiError } from "../../api";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import { CATALOG_SEARCH_MAX_LENGTH } from "../../features/catalog/api/catalog-api";
 import type { CatalogDeck } from "../../features/catalog/model/catalog-types";
+import {
+  getCatalogPaginationTokens,
+  parseCatalogPage,
+} from "../../features/catalog/model/catalog-pagination";
 import {
   useCatalogDecks,
   type CatalogDeckSaveFailure,
@@ -62,11 +67,13 @@ const MESSAGES = defineMessages(
     loading: "Загружаем каталог…",
     empty: "Публичных колод пока нет",
     searchEmpty: "Ничего не найдено",
+    pageEmpty: "На этой странице нет колод",
     errorTitle: "Каталог не загрузился",
     retry: "Попробовать снова",
-    loadMore: "Показать ещё",
-    loadingMore: "Загружаем…",
-    loadMoreError: "Не удалось загрузить ещё колоды.",
+    pagination: "Страницы каталога",
+    goToPage: (page: number) => `Перейти на страницу ${page}`,
+    currentPage: (page: number) => `Страница ${page}, текущая`,
+    pageStatus: (page: number) => `Страница ${page}`,
     errors: {
       generic: "Попробуйте ещё раз.",
       forbidden: "У этой учётной записи нет доступа к каталогу.",
@@ -106,11 +113,13 @@ const MESSAGES = defineMessages(
     loading: "Loading catalog…",
     empty: "No public decks yet",
     searchEmpty: "Nothing found",
+    pageEmpty: "There are no decks on this page",
     errorTitle: "Catalog didn't load",
     retry: "Try again",
-    loadMore: "Show more",
-    loadingMore: "Loading…",
-    loadMoreError: "Couldn't load more decks.",
+    pagination: "Catalog pages",
+    goToPage: (page: number) => `Go to page ${page}`,
+    currentPage: (page: number) => `Page ${page}, current`,
+    pageStatus: (page: number) => `Page ${page}`,
     errors: {
       generic: "Try again.",
       forbidden: "This account does not have access to the catalog.",
@@ -325,17 +334,103 @@ function CatalogSkeletons() {
   );
 }
 
+function CatalogPagination({
+  currentPage,
+  pageCount,
+  onPageChange,
+}: {
+  currentPage: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
+}) {
+  const messages = useLocalizedMessages(MESSAGES);
+  const tokens = getCatalogPaginationTokens(pageCount, currentPage);
+
+  if (tokens.filter((token) => token.type === "page").length < 2) {
+    return null;
+  }
+
+  return (
+    <nav aria-label={messages.pagination} className={styles.pagination}>
+      <span aria-live="polite" className={styles.visuallyHidden} role="status">
+        {messages.pageStatus(currentPage)}
+      </span>
+      <ol className={styles.paginationList}>
+        {tokens.map((token) => (
+          <li key={token.key}>
+            {token.type === "ellipsis" ? (
+              <span aria-hidden="true" className={styles.paginationEllipsis}>
+                …
+              </span>
+            ) : (
+              <button
+                aria-current={token.pageNumber === currentPage ? "page" : undefined}
+                aria-label={
+                  token.pageNumber === currentPage
+                    ? messages.currentPage(token.pageNumber)
+                    : messages.goToPage(token.pageNumber)
+                }
+                className={
+                  token.pageNumber === currentPage
+                    ? `${styles.paginationButton} ${styles.paginationButtonActive}`
+                    : styles.paginationButton
+                }
+                onClick={() => onPageChange(token.pageNumber)}
+                type="button"
+              >
+                {token.pageNumber}
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
 export function CatalogPage() {
   const messages = useLocalizedMessages(MESSAGES);
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [previewDeckUuid, setPreviewDeckUuid] = useState<string | null>(null);
   const pageRef = useRef<HTMLElement | null>(null);
   const pageScrollTopRef = useRef<number | null>(null);
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const catalog = useCatalogDecks(searchQuery);
+  const currentPage = parseCatalogPage(searchParams.get("page"));
+  const catalog = useCatalogDecks(searchQuery, currentPage);
+  const pageCount = currentPage + (catalog.status === "success" && catalog.hasMore ? 1 : 0);
   const isSearchActive = searchQuery.trim().length > 0;
   const currentUserUuid = user?.uuid ?? "";
+
+  function changePage(page: number, replace = false): void {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (page === 1) {
+      nextSearchParams.delete("page");
+    } else {
+      nextSearchParams.set("page", String(page));
+    }
+    setSearchParams(nextSearchParams, { replace });
+  }
+
+  function handleSearchChange(value: string): void {
+    setSearchQuery(value);
+    if (currentPage !== 1) {
+      changePage(1, true);
+    }
+  }
+
+  function handlePageChange(page: number): void {
+    if (page === currentPage) {
+      return;
+    }
+
+    changePage(page);
+    const scrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+    pageRef.current?.scrollTo({ top: 0, behavior: scrollBehavior });
+  }
 
   useEffect(() => {
     if (previewDeckUuid === null) {
@@ -386,7 +481,7 @@ export function CatalogPage() {
                 autoComplete="off"
                 maxLength={CATALOG_SEARCH_MAX_LENGTH}
                 name="catalog_search"
-                onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                onChange={(event) => handleSearchChange(event.currentTarget.value)}
                 placeholder={messages.searchPlaceholder}
                 type="search"
                 value={searchQuery}
@@ -396,7 +491,7 @@ export function CatalogPage() {
               <button
                 aria-label={messages.clearSearch}
                 className={styles.clearSearch}
-                onClick={() => setSearchQuery("")}
+                onClick={() => handleSearchChange("")}
                 type="button"
               >
                 <CatalogIcon name="x" />
@@ -424,7 +519,13 @@ export function CatalogPage() {
 
           {catalog.status === "success" && catalog.decks.length === 0 ? (
             <div className={styles.stateMessage} role="status">
-              <h2>{isSearchActive ? messages.searchEmpty : messages.empty}</h2>
+              <h2>
+                {currentPage > 1
+                  ? messages.pageEmpty
+                  : isSearchActive
+                    ? messages.searchEmpty
+                    : messages.empty}
+              </h2>
             </div>
           ) : null}
 
@@ -443,24 +544,14 @@ export function CatalogPage() {
                   />
                 ))}
               </div>
-
-              {catalog.hasMore ? (
-                <div className={styles.loadMoreArea}>
-                  <button
-                    className={styles.loadMoreButton}
-                    disabled={catalog.isLoadingMore}
-                    onClick={catalog.loadMore}
-                    type="button"
-                  >
-                    {catalog.isLoadingMore ? messages.loadingMore : messages.loadMore}
-                  </button>
-                  {catalog.loadMoreError === null ? null : (
-                    <p role="alert">{messages.loadMoreError}</p>
-                  )}
-                </div>
-              ) : null}
             </>
           ) : null}
+
+          <CatalogPagination
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            pageCount={pageCount}
+          />
         </section>
       </div>
       {previewDeckUuid === null ? null : (

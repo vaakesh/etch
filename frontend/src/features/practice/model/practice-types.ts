@@ -64,6 +64,19 @@ export interface StartPracticeSessionInput {
   wordsPerSession: number;
 }
 
+export type PracticeActivityInput =
+  | {
+      event: "resume";
+    }
+  | {
+      event: "heartbeat" | "pause";
+      trackerUuid: string;
+    };
+
+export interface PracticeActivityResponse {
+  trackerUuid: string | null;
+}
+
 export type SubmitPracticeAnswerInput =
   | {
       action: "answer";

@@ -43,16 +43,14 @@
   --practice-skeleton-highlight: rgb(255 255 255 / 65%);
   --practice-control-shadow: 0 4px 12px rgb(73 56 115 / 10%);
   --practice-empty-shadow: 0 6px 18px rgb(73 56 115 / 10%);
-  --practice-primary-shadow:
-    0 8px 20px rgb(73 56 115 / 24%), inset 0 1px 0 rgb(255 255 255 / 18%);
-  --practice-card-shadow:
-    0 12px 28px rgb(73 56 115 / 10%), inset 0 1px 0 rgb(255 255 255 / 78%);
+  --practice-primary-shadow: 0 8px 20px rgb(73 56 115 / 24%), inset 0 1px 0 rgb(255 255 255 / 18%);
+  --practice-card-shadow: 0 12px 28px rgb(73 56 115 / 10%), inset 0 1px 0 rgb(255 255 255 / 78%);
   --practice-card-shadow-hover:
     0 16px 34px rgb(73 56 115 / 14%), inset 0 1px 0 rgb(255 255 255 / 84%);
-  --practice-shadow-soft:
-    0 10px 28px rgb(73 56 115 / 10%), inset 0 1px 0 rgb(255 255 255 / 72%);
-  --practice-shadow-panel:
-    0 22px 60px rgb(73 56 115 / 15%), inset 0 1px 0 rgb(255 255 255 / 76%);
+  --practice-pause-scrim: rgb(238 234 255 / 76%);
+  --practice-pause-panel: rgb(255 255 255 / 78%);
+  --practice-shadow-soft: 0 10px 28px rgb(73 56 115 / 10%), inset 0 1px 0 rgb(255 255 255 / 72%);
+  --practice-shadow-panel: 0 22px 60px rgb(73 56 115 / 15%), inset 0 1px 0 rgb(255 255 255 / 76%);
   --practice-glass-filter: blur(20px) saturate(1.08);
   --practice-radius-sm: 10px;
   --practice-radius-md: 14px;
@@ -108,6 +106,8 @@
   --practice-primary-fill: var(--practice-primary);
   --practice-primary-fill-hover: var(--practice-primary-hover);
   --practice-primary-fill-pressed: var(--practice-primary-pressed);
+  --practice-pause-scrim: rgb(18 17 25 / 78%);
+  --practice-pause-panel: var(--dark-surface-raised);
   --practice-primary-ink: var(--dark-on-cta);
   --practice-primary-soft: var(--dark-cta-soft);
   --practice-primary-soft-hover: var(--dark-cta-medium);
@@ -124,19 +124,14 @@
   --practice-warning-soft: var(--dark-warning-soft);
   --practice-cyan: var(--dark-info);
   --practice-cyan-soft: var(--dark-info-soft);
-  --practice-accuracy-orange: color-mix(
-    in srgb,
-    var(--dark-danger) 38%,
-    var(--dark-warning)
-  );
+  --practice-accuracy-orange: color-mix(in srgb, var(--dark-danger) 38%, var(--dark-warning));
   --practice-primary-line: var(--dark-cta-medium);
   --practice-primary-line-strong: var(--dark-border-accent);
   --practice-skeleton-highlight: var(--dark-highlight);
   --practice-control-shadow: 0 4px 12px var(--dark-shadow);
   --practice-empty-shadow: 0 6px 18px var(--dark-shadow);
   --practice-primary-shadow: 0 5px 14px var(--dark-shadow);
-  --practice-card-shadow:
-    0 6px 18px var(--dark-shadow), inset 0 1px 0 var(--dark-highlight);
+  --practice-card-shadow: 0 6px 18px var(--dark-shadow), inset 0 1px 0 var(--dark-highlight);
   --practice-card-shadow-hover:
     0 8px 22px var(--dark-shadow-strong), inset 0 1px 0 var(--dark-highlight);
   --practice-shadow-soft: 0 12px 30px var(--dark-shadow);
@@ -278,6 +273,88 @@
   display: flex;
   flex-direction: column;
   padding: clamp(20px, 3vw, 42px);
+}
+
+.sessionActivityContent {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  transition:
+    filter var(--practice-motion-base),
+    opacity var(--practice-motion-base);
+}
+
+.sessionActivityContentPaused {
+  pointer-events: none;
+  user-select: none;
+  filter: blur(4px);
+  opacity: 0.34;
+}
+
+.pausedOverlay {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(24px, 5vw, 64px);
+  place-items: center;
+  color: var(--practice-ink);
+  text-align: center;
+  background: var(--practice-pause-scrim);
+  border: 0;
+  backdrop-filter: blur(8px) saturate(0.9);
+}
+
+.pausedOverlay:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--practice-focus);
+}
+
+.pausedOverlayContent {
+  display: grid;
+  width: min(100%, 440px);
+  gap: 10px;
+  padding: clamp(24px, 5vw, 42px);
+  place-items: center;
+  background: var(--practice-pause-panel);
+  border: 1px solid var(--practice-panel-line);
+  border-radius: var(--practice-radius-lg);
+  box-shadow: var(--practice-shadow-panel);
+}
+
+.pausedOverlayContent strong {
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  line-height: 1.15;
+}
+
+.pausedOverlayContent > span:last-child {
+  color: var(--practice-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.pauseSymbol {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--practice-primary-ink);
+  background: var(--practice-primary-fill);
+  border: 1px solid var(--practice-primary);
+  border-radius: 14px;
+  box-shadow: var(--practice-primary-shadow);
+}
+
+.pauseSymbol i {
+  display: block;
+  width: 4px;
+  height: 17px;
+  background: currentColor;
+  border-radius: 999px;
 }
 
 .paperPanel,
@@ -755,7 +832,12 @@
 .historySkeletons > span {
   min-height: 312px;
   background:
-    linear-gradient(105deg, transparent 30%, var(--practice-skeleton-highlight) 47%, transparent 64%),
+    linear-gradient(
+      105deg,
+      transparent 30%,
+      var(--practice-skeleton-highlight) 47%,
+      transparent 64%
+    ),
     var(--practice-surface);
   background-size: 220% 100%;
   border: 1px solid var(--practice-panel-line);

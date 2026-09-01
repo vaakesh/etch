@@ -1,6 +1,7 @@
 import { ApiError, apiFetch } from "../../../api";
 import {
   parsePracticeDeckSummary,
+  parsePracticeActivityResponse,
   parsePracticeHistoryPage,
   parsePracticeSession,
   parsePracticeSessionHistory,
@@ -8,6 +9,8 @@ import {
 } from "../model/practice-contract";
 import type {
   PracticeHistoryFilter,
+  PracticeActivityInput,
+  PracticeActivityResponse,
   PracticeHistorySession,
   PracticeDeckSummary,
   PracticeSession,
@@ -19,6 +22,10 @@ import type {
 
 const PRACTICE_HISTORY_PAGE_SIZE = 100;
 const PRACTICE_SESSION_HISTORY_PAGE_SIZE = 100;
+
+interface RecordPracticeActivityOptions {
+  keepalive?: boolean;
+}
 
 function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: string): void {
   if (actualUuid.toLowerCase() !== expectedUuid.toLowerCase()) {
@@ -199,4 +206,22 @@ export async function submitPracticeAnswer(
   );
 
   return parseSubmitPracticeAnswerResult(payload);
+}
+
+export async function recordPracticeActivity(
+  sessionUuid: string,
+  input: PracticeActivityInput,
+  options: RecordPracticeActivityOptions = {},
+): Promise<PracticeActivityResponse> {
+  const body =
+    input.event === "resume"
+      ? { event: input.event }
+      : { event: input.event, tracker_uuid: input.trackerUuid };
+  const payload = await apiFetch<unknown>(`/training-sessions/${sessionUuid}/activity`, {
+    method: "POST",
+    body,
+    keepalive: options.keepalive,
+  });
+
+  return parsePracticeActivityResponse(payload);
 }

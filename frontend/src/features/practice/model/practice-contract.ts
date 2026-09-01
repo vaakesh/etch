@@ -1,6 +1,7 @@
 import { ApiError } from "../../../api";
 import type {
   CardSide,
+  PracticeActivityResponse,
   PracticeCard,
   PracticeDeckSummary,
   PracticeHistoryPage,
@@ -87,6 +88,14 @@ function readUuid(value: unknown, path: string): string {
   }
 
   return uuid;
+}
+
+function readNullableUuid(value: unknown, path: string): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  return readUuid(value, path);
 }
 
 function readCardSide(value: unknown, path: string): CardSide {
@@ -231,6 +240,14 @@ export function parsePracticeSession(value: unknown): PracticeSession {
     wrongCount,
     startedAt: readDateTime(session.started_at, "practice.started_at"),
     cards,
+  };
+}
+
+export function parsePracticeActivityResponse(value: unknown): PracticeActivityResponse {
+  const response = readRecord(value, "practiceActivity");
+
+  return {
+    trackerUuid: readNullableUuid(response.tracker_uuid, "practiceActivity.tracker_uuid"),
   };
 }
 

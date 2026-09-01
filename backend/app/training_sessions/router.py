@@ -4,6 +4,7 @@ from app.auth.deps import CurrentUser, OptionalCurrentUser
 from app.redis.rate_limiters import (
     public_training_sessions_rate_limit,
     submit_answer_rate_limit,
+    training_session_activity_rate_limit,
     training_sessions_rate_limit,
 )
 from app.training_sessions.deps import (
@@ -11,6 +12,8 @@ from app.training_sessions.deps import (
 )
 from app.training_sessions.schemas import (
     SubmitAnswerResponse,
+    TrainingSessionActivityRequest,
+    TrainingSessionActivityResponse,
     TrainingSessionHistoryItemResponse,
     TrainingSessionResponse,
 )
@@ -70,6 +73,24 @@ async def get_training_session_history(
         for item in items
     ]
     return result
+
+
+@router.post(
+    "/{session_uuid}/activity",
+    response_model=TrainingSessionActivityResponse,
+    dependencies=[Depends(training_session_activity_rate_limit)],
+)
+async def record_activity(
+    session_uuid: UUID,
+    current_user: CurrentUser,
+    payload: TrainingSessionActivityRequest,
+    training_session_service: TrainingSessionServiceDeps,
+):
+    return await training_session_service.record_activity(
+        user_id=current_user.id,
+        session_uuid=session_uuid,
+        payload=payload,
+    )
 
 @router.put(
         "/{training_session_uuid}/items/{sequence_number}/submit",
