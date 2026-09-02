@@ -17,7 +17,7 @@ export interface HomeProgress {
 
 export interface HomeWeeklyActivityDay {
   date: string;
-  percent: number;
+  value: number;
 }
 
 export interface HomeDashboard {

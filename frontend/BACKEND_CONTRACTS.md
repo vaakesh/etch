@@ -88,7 +88,7 @@ type UserProgress = {
 
 type WeeklyActivityDay = {
   date: DateOnly;
-  percent: number; // int, 0..100
+  value: number; // int, >= 0, количество ответов по карточкам за день
 };
 
 type CardLibraryPage = {

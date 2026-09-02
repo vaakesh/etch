@@ -34,7 +34,7 @@ class UserProgressResponse(BaseModel):
 
 class DailyActivityResponse(BaseModel):
     date: Date
-    percent: Percent
+    value: Counter
 
 class HomeDashboardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

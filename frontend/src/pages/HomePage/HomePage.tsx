@@ -4,6 +4,7 @@ import { isApiError } from "../../api";
 import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
 import {
   clampPercent,
+  formatActivityDate,
   formatCount,
   formatDeckUpdatedAt,
   formatPercent,
@@ -64,6 +65,8 @@ const MESSAGES = defineMessages(
     streak: "Текущая серия",
     studyTime: "Время занятий",
     weeklyActivity: "Активность за неделю",
+    activityUnit: "Ответы по карточкам",
+    cardsAnswered: (value: string) => `Ответов по карточкам: ${value}`,
     noActivity: "Пока нет данных об активности.",
     loadingAria: "Загрузка данных главной страницы",
     loading: "Загружаем данные…",
@@ -102,6 +105,8 @@ const MESSAGES = defineMessages(
     streak: "Current streak",
     studyTime: "Study time",
     weeklyActivity: "Weekly activity",
+    activityUnit: "Card answers",
+    cardsAnswered: (value: string) => `Cards answered: ${value}`,
     noActivity: "No activity yet.",
     loadingAria: "Loading home dashboard",
     loading: "Loading data…",
@@ -334,6 +339,124 @@ function ProgressMetric({ icon, label, value, detail, tone }: ProgressMetricProp
   );
 }
 
+interface ActivityChartScale {
+  max: number;
+  peak: number;
+  ticks: readonly number[];
+}
+
+const ACTIVITY_PLOT_HEIGHT = 86;
+const ACTIVITY_LABEL_AREA_HEIGHT = 25;
+const ACTIVITY_TOOLTIP_GAP = 10;
+
+function getNiceActivityStep(value: number): number {
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalizedValue = value / magnitude;
+  const multiplier =
+    normalizedValue <= 1
+      ? 1
+      : normalizedValue <= 2
+        ? 2
+        : normalizedValue <= 2.5
+          ? 2.5
+          : normalizedValue <= 5
+            ? 5
+            : 10;
+
+  return multiplier * magnitude;
+}
+
+function createActivityChartScale(activity: readonly HomeWeeklyActivityDay[]): ActivityChartScale {
+  const highestValue = Math.max(0, ...activity.map((activityDay) => activityDay.value));
+
+  if (highestValue === 0) {
+    return { max: 0, peak: 0, ticks: [0] };
+  }
+
+  const targetIntervalCount = Math.min(3, highestValue);
+  const step = getNiceActivityStep(highestValue / targetIntervalCount);
+  const max = Math.ceil(highestValue / step) * step;
+  const intervalCount = Math.round(max / step);
+  const ticks = Array.from({ length: intervalCount + 1 }, (_, index) => max - index * step);
+
+  return { max, peak: highestValue, ticks };
+}
+
+function getActivityTooltipBottom(scale: ActivityChartScale): number {
+  const peakHeight =
+    scale.max > 0 ? (scale.peak / scale.max) * ACTIVITY_PLOT_HEIGHT : ACTIVITY_PLOT_HEIGHT;
+
+  return Math.round(ACTIVITY_LABEL_AREA_HEIGHT + peakHeight + ACTIVITY_TOOLTIP_GAP);
+}
+
+interface WeeklyActivityBarProps {
+  activityDay: HomeWeeklyActivityDay;
+  scaleMax: number;
+  tooltipBottom: number;
+}
+
+function WeeklyActivityBar({ activityDay, scaleMax, tooltipBottom }: WeeklyActivityBarProps) {
+  const tooltipId = useId();
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const { locale } = useLocale();
+  const messages = useLocalizedMessages(MESSAGES);
+  const weekday = formatShortWeekday(activityDay.date, locale);
+  const dateLabel = formatActivityDate(activityDay.date, locale);
+  const valueLabel = messages.cardsAnswered(formatCount(activityDay.value, locale));
+  const height = scaleMax > 0 ? (activityDay.value / scaleMax) * 100 : 0;
+  const barClassName = isTooltipOpen
+    ? `${styles.weeklyBar} ${styles.weeklyBarOpen}`
+    : styles.weeklyBar;
+
+  return (
+    <div className={barClassName}>
+      <button
+        aria-describedby={tooltipId}
+        aria-label={dateLabel}
+        className={styles.barTrigger}
+        onBlur={() => setIsTooltipOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setIsTooltipOpen(false);
+            event.currentTarget.blur();
+          } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        onPointerDown={(event) => {
+          if (event.button === 0) {
+            setIsTooltipOpen((isOpen) => !isOpen);
+          }
+        }}
+        type="button"
+      >
+        <span aria-hidden="true" className={styles.barTrack}>
+          <span
+            className={styles.barFill}
+            data-positive={activityDay.value > 0}
+            style={{ height: `${height}%` }}
+          />
+        </span>
+        <span aria-hidden="true" className={styles.weekdayLabel}>
+          {weekday}
+        </span>
+      </button>
+      <span
+        className={styles.activityTooltip}
+        id={tooltipId}
+        role="tooltip"
+        style={{ bottom: `${tooltipBottom}px` }}
+      >
+        <time aria-hidden="true" dateTime={activityDay.date}>
+          {dateLabel}
+        </time>
+        <strong>{valueLabel}</strong>
+      </span>
+    </div>
+  );
+}
+
 interface ProgressPanelProps {
   progress: HomeProgress;
   weeklyActivity: readonly HomeWeeklyActivityDay[];
@@ -345,6 +468,8 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
   const chartValues = [...weeklyActivity]
     .sort((first, second) => first.date.localeCompare(second.date))
     .slice(-7);
+  const chartScale = createActivityChartScale(chartValues);
+  const tooltipBottom = getActivityTooltipBottom(chartScale);
   const studiedWordsCount = localizeCount(progress.wordsExplored, WORD_COUNT_FORMS, locale);
 
   return (
@@ -388,27 +513,44 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
       </div>
 
       <section aria-labelledby="weekly-heading" className={styles.weeklySection}>
-        <h3 id="weekly-heading">{messages.weeklyActivity}</h3>
+        <header className={styles.weeklyHeader}>
+          <h3 id="weekly-heading">{messages.weeklyActivity}</h3>
+          <span>{messages.activityUnit}</span>
+        </header>
         {chartValues.length > 0 ? (
           <div className={styles.weeklyChart}>
-            {chartValues.map((activityDay) => {
-              const percent = clampPercent(activityDay.percent);
-              const weekday = formatShortWeekday(activityDay.date, locale);
-
-              return (
-                <div className={styles.weeklyBar} key={activityDay.date}>
-                  <div className={styles.barTrack}>
-                    <span
-                      aria-label={`${weekday}, ${activityDay.date}: ${formatPercent(percent, locale)}`}
-                      className={styles.barFill}
-                      role="img"
-                      style={{ height: `${Math.max(4, percent)}%` }}
-                    />
-                  </div>
-                  <span>{weekday}</span>
-                </div>
-              );
-            })}
+            <div aria-hidden="true" className={styles.chartScale}>
+              {chartScale.ticks.map((tick) => (
+                <span
+                  className={styles.chartScaleTick}
+                  key={tick}
+                  style={{ bottom: `${chartScale.max > 0 ? (tick / chartScale.max) * 100 : 0}%` }}
+                >
+                  {formatCount(tick, locale)}
+                </span>
+              ))}
+            </div>
+            <div className={styles.weeklyPlot}>
+              <div aria-hidden="true" className={styles.chartGridlines}>
+                {chartScale.ticks.map((tick) => (
+                  <span
+                    className={`${styles.chartGridline} ${tick === 0 ? styles.chartBaseline : ""}`}
+                    key={tick}
+                    style={{ bottom: `${chartScale.max > 0 ? (tick / chartScale.max) * 100 : 0}%` }}
+                  />
+                ))}
+              </div>
+              <div className={styles.weeklyBars}>
+                {chartValues.map((activityDay) => (
+                  <WeeklyActivityBar
+                    activityDay={activityDay}
+                    key={activityDay.date}
+                    scaleMax={chartScale.max}
+                    tooltipBottom={tooltipBottom}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           <p className={styles.noActivity}>{messages.noActivity}</p>

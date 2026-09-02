@@ -11,6 +11,7 @@ import {
 
 const percentFormatters = new Map<AppLocale, Intl.NumberFormat>();
 const weekdayFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
+const activityDateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
 const deckUpdatedAtFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
 
 function getPercentFormatter(locale: AppLocale): Intl.NumberFormat {
@@ -32,6 +33,22 @@ function getWeekdayFormatter(locale: AppLocale): Intl.DateTimeFormat {
 
   const formatter = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
   weekdayFormatters.set(locale, formatter);
+  return formatter;
+}
+
+function getActivityDateFormatter(locale: AppLocale): Intl.DateTimeFormat {
+  const cachedFormatter = activityDateFormatters.get(locale);
+  if (cachedFormatter !== undefined) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  activityDateFormatters.set(locale, formatter);
   return formatter;
 }
 
@@ -68,6 +85,11 @@ export function formatShortWeekday(date: string, locale: AppLocale = DEFAULT_LOC
   const label = getWeekdayFormatter(locale).format(new Date(Date.UTC(year, month - 1, day)));
 
   return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+}
+
+export function formatActivityDate(date: string, locale: AppLocale = DEFAULT_LOCALE): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return getActivityDateFormatter(locale).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 export function formatDeckUpdatedAt(

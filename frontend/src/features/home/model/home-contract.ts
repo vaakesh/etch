@@ -99,15 +99,15 @@ function readDateOnly(value: unknown, path: string): string {
 function parseWeeklyActivityDay(value: unknown, index: number): HomeWeeklyActivityDay {
   const path = `user_weekly_activity[${index}]`;
   const activityDay = readRecord(value, path);
-  const percent = readInteger(activityDay.percent, `${path}.percent`);
+  const activityValue = readInteger(activityDay.value, `${path}.value`);
 
-  if (percent < 0 || percent > 100) {
-    return invalidHomeResponse(`${path}.percent`);
+  if (activityValue < 0) {
+    return invalidHomeResponse(`${path}.value`);
   }
 
   return {
     date: readDateOnly(activityDay.date, `${path}.date`),
-    percent,
+    value: activityValue,
   };
 }
 
