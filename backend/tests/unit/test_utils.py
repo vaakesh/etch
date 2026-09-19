@@ -4,11 +4,13 @@ import pytest
 
 from app.errors import RequestValueError
 from app.common.utils import (
-    calculate_accuracy,
     format_duration,
     decode_cursor,
     encode_cursor,
     utcnow,
+)
+from app.decks.utils import (
+    calculate_accuracy,
     make_user_deck_identity,
 )
 from app.auth.utils import (

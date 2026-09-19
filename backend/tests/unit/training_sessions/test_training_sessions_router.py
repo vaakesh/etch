@@ -39,6 +39,7 @@ class TestGetTrainingSession:
         expected = {
             "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
             "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "deck_title": "Test deck",
             "status": "in_progress",
             "requested_count": 10,
             "actual_count": 3,
@@ -75,6 +76,7 @@ class TestGetTrainingSession:
         expected = {
             "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
             "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "deck_title": "Test deck",
             "status": "completed",
             "requested_count": 10,
             "actual_count": 3,
@@ -108,7 +110,7 @@ class TestGetTrainingSession:
         response = await client.get(f"/training-sessions/{training_session.uuid}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Training session not found"}
+        assert response.json()["message"] == "Training session not found"
 
         training_session_service.get_by_uuid.assert_awaited_once_with(
             session_uuid=training_session.uuid,
@@ -123,6 +125,7 @@ class TestGetTrainingSession:
         response = await client.get("/training-sessions/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -336,6 +339,7 @@ class TestGetTrainingSessionHistory:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -376,7 +380,7 @@ class TestGetTrainingSessionHistory:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         training_session_service.get_session_history.assert_awaited_once_with(
             user_id=current_user.id,
@@ -394,6 +398,7 @@ class TestGetTrainingSessionHistory:
         response = await client.get("/training-sessions/not-a-uuid/history")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -716,6 +721,7 @@ class TestSubmitAnswer:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -736,6 +742,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -770,6 +777,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -808,6 +816,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -875,7 +884,7 @@ class TestSubmitAnswer:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         training_session_service.submit_answer.assert_awaited_once_with(
             user_id=current_user.id,
@@ -896,6 +905,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -924,6 +934,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

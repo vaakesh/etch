@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from app.auth.cookies import clear_tokens_cookie
 from app.auth.errors import (
     AccessTokenNotFoundError,
@@ -15,6 +17,7 @@ from app.cards.errors import (
     PermissionDeniedError as CardPermissionDeniedError,
 )
 from app.decks.errors import (
+    CannotFavouriteUnsavedDeckError,
     CannotSaveOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
@@ -23,6 +26,7 @@ from app.decks.errors import (
     DeckIsNotFavouriteError,
     DeckIsNotSavedError,
     DeckNotFoundError,
+    DeckSizeLimitExceededError,
     InvalidDeckCardPositionError,
     UserDeckNotFoundError,
 )
@@ -51,33 +55,90 @@ from app.users.errors import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+type ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
-async def invalid_login_credentials_handler(
-    request: Request,
-    exc: InvalidLoginCredentials,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
+VALIDATION_ERROR_CODE = "VALIDATION_ERROR"
+
+# Контракт с клиентом: code стабилен и по нему различают ошибки,
+# message остаётся свободным текстом. Один и тот же статус несут разные
+# ошибки, поэтому статуса для этого недостаточно.
+ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
+    (InvalidLoginCredentials, status.HTTP_404_NOT_FOUND, "INVALID_LOGIN_CREDENTIALS"),
+    (InvalidTokenError, status.HTTP_401_UNAUTHORIZED, "INVALID_TOKEN"),
+    (InvalidTokenTypeError, status.HTTP_401_UNAUTHORIZED, "INVALID_TOKEN_TYPE"),
+    (RefreshTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "REFRESH_TOKEN_NOT_FOUND"),
+    (AccessTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "ACCESS_TOKEN_NOT_FOUND"),
+
+    (UserNotFoundError, status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND"),
+    (UserAlreadyExistsError, status.HTTP_409_CONFLICT, "USER_ALREADY_EXISTS"),
+    (UserPermissionDeniedError, status.HTTP_403_FORBIDDEN, "USER_PERMISSION_DENIED"),
+
+    (CardNotFoundError, status.HTTP_404_NOT_FOUND, "CARD_NOT_FOUND"),
+    (CardAlreadyExistsError, status.HTTP_409_CONFLICT, "CARD_ALREADY_EXISTS"),
+    (CardPermissionDeniedError, status.HTTP_403_FORBIDDEN, "CARD_PERMISSION_DENIED"),
+
+    (DeckNotFoundError, status.HTTP_404_NOT_FOUND, "DECK_NOT_FOUND"),
+    (DeckAlreadyExistsError, status.HTTP_409_CONFLICT, "DECK_ALREADY_EXISTS"),
+    (DeckIsEmptyError, status.HTTP_409_CONFLICT, "DECK_IS_EMPTY"),
+    (DeckCardNotFoundError, status.HTTP_404_NOT_FOUND, "DECK_CARD_NOT_FOUND"),
+    (InvalidDeckCardPositionError, status.HTTP_409_CONFLICT, "INVALID_DECK_CARD_POSITION"),
+    (DeckCardAlreadyExistsError, status.HTTP_409_CONFLICT, "DECK_CARD_ALREADY_EXISTS"),
+    (DeckSizeLimitExceededError, status.HTTP_409_CONFLICT, "DECK_SIZE_LIMIT_EXCEEDED"),
+    (DeckPermissionDeniedError, status.HTTP_403_FORBIDDEN, "DECK_PERMISSION_DENIED"),
+    (UserDeckNotFoundError, status.HTTP_404_NOT_FOUND, "USER_DECK_NOT_FOUND"),
+    (DeckIsNotSavedError, status.HTTP_409_CONFLICT, "DECK_IS_NOT_SAVED"),
+    (
+        CannotFavouriteUnsavedDeckError,
+        status.HTTP_409_CONFLICT,
+        "CANNOT_FAVOURITE_UNSAVED_DECK",
+    ),
+    (DeckIsNotFavouriteError, status.HTTP_409_CONFLICT, "DECK_IS_NOT_FAVOURITE"),
+    (CannotSaveOwnDeckError, status.HTTP_409_CONFLICT, "CANNOT_SAVE_OWN_DECK"),
+
+    (TrainingSessionNotFoundError, status.HTTP_404_NOT_FOUND, "TRAINING_SESSION_NOT_FOUND"),
+    (
+        TrainingSessionItemNotFoundError,
+        status.HTTP_404_NOT_FOUND,
+        "TRAINING_SESSION_ITEM_NOT_FOUND",
+    ),
+    (CardAlreadyAnsweredError, status.HTTP_409_CONFLICT, "CARD_ALREADY_ANSWERED"),
+    (
+        TrainingSessionAlreadyExistsError,
+        status.HTTP_409_CONFLICT,
+        "TRAINING_SESSION_ALREADY_EXISTS",
+    ),
+    (
+        TrainingSessionAlreadyFinishedError,
+        status.HTTP_409_CONFLICT,
+        "TRAINING_SESSION_ALREADY_FINISHED",
+    ),
+    (TrainingSessionNotFinishedYet, status.HTTP_409_CONFLICT, "TRAINING_SESSION_NOT_FINISHED"),
+    (
+        TrainingSessionPermissionDeniedError,
+        status.HTTP_403_FORBIDDEN,
+        "TRAINING_SESSION_PERMISSION_DENIED",
+    ),
+
+    (RateLimitError, status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
+)
 
 
-async def invalid_token_handler(
-    request: Request,
-    exc: InvalidTokenError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={
-            "message": str(exc),
-        },
-    )
+def make_error_handler(status_code: int, code: str) -> ExceptionHandler:
+    async def error_handler(request: Request, exc: Exception) -> Response:
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "code": code,
+                "message": str(exc),
+            },
+        )
+
+    return error_handler
+
 
 async def invalid_refresh_token_handler(
     request: Request,
@@ -86,334 +147,12 @@ async def invalid_refresh_token_handler(
     json_response = JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
         content={
+            "code": "INVALID_REFRESH_TOKEN",
             "message": str(exc),
         },
     )
     clear_tokens_cookie(json_response)
     return json_response
-
-
-async def invalid_token_type_handler(
-    request: Request,
-    exc: InvalidTokenTypeError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def refresh_token_not_found_handler(
-    request: Request,
-    exc: RefreshTokenNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def access_token_not_found_handler(
-    request: Request,
-    exc: AccessTokenNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def user_not_found_handler(
-    request: Request,
-    exc: UserNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def user_already_exists_handler(
-    request: Request,
-    exc: UserAlreadyExistsError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def user_permission_denied_handler(
-    request: Request,
-    exc: UserPermissionDeniedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def card_not_found_handler(
-    request: Request,
-    exc: CardNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def card_already_exists_handler(
-    request: Request,
-    exc: CardAlreadyExistsError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def card_permission_denied_handler(
-    request: Request,
-    exc: CardPermissionDeniedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_not_found_handler(
-    request: Request,
-    exc: DeckNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_already_exists_handler(
-    request: Request,
-    exc: DeckAlreadyExistsError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_is_empty_handler(
-    request: Request,
-    exc: DeckIsEmptyError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-async def deck_card_not_found_handler(
-    request: Request,
-    exc: DeckCardNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def invalid_deck_card_position_handler(
-    request: Request,
-    exc: InvalidDeckCardPositionError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_card_already_exists_handler(
-    request: Request,
-    exc: DeckCardAlreadyExistsError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_permission_denied_handler(
-    request: Request,
-    exc: DeckPermissionDeniedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def user_deck_not_found_handler(
-    request: Request,
-    exc: UserDeckNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_is_not_saved_handler(
-    request: Request,
-    exc: DeckIsNotSavedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def deck_is_not_favourite_handler(
-    request: Request,
-    exc: DeckIsNotFavouriteError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def cannot_save_own_deck_handler(
-    request: Request,
-    exc: CannotSaveOwnDeckError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_not_found_handler(
-    request: Request,
-    exc: TrainingSessionNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_item_not_found_handler(
-    request: Request,
-    exc: TrainingSessionItemNotFoundError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def card_already_answered_handler(
-    request: Request,
-    exc: CardAlreadyAnsweredError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_already_exists_handler(
-    request: Request,
-    exc: TrainingSessionAlreadyExistsError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_already_finished_handler(
-    request: Request,
-    exc: TrainingSessionAlreadyFinishedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_not_finished_yet_handler(
-    request: Request,
-    exc: TrainingSessionNotFinishedYet,
-):
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
-async def training_session_permission_denied_handler(
-    request: Request,
-    exc: TrainingSessionPermissionDeniedError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "message": str(exc),
-        },
-    )
 
 
 async def unhandled_exception_handler(
@@ -423,6 +162,7 @@ async def unhandled_exception_handler(
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
+            "code": "INTERNAL_SERVER_ERROR",
             "message": "Internal server error",
         },
     )
@@ -435,6 +175,7 @@ async def request_validation_handler(
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
+            "code": VALIDATION_ERROR_CODE,
             "message": "Validation error",
             "details": exc.errors(),
         },
@@ -448,6 +189,7 @@ async def request_value_error_handler(
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
+            "code": VALIDATION_ERROR_CODE,
             "message": "Validation error",
             "details": [
                 {
@@ -461,85 +203,14 @@ async def request_value_error_handler(
     )
 
 
-async def rate_limit_error_handler(
-    request: Request,
-    exc: RateLimitError,
-):
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content={
-            "message": str(exc),
-        },
-    )
-
-
 def register_exception_handlers(app: FastAPI):
-    app.add_exception_handler(InvalidLoginCredentials, invalid_login_credentials_handler)
-    app.add_exception_handler(InvalidTokenError, invalid_token_handler)
+    for exception_class, status_code, code in ERROR_RESPONSES:
+        app.add_exception_handler(
+            exception_class,
+            make_error_handler(status_code=status_code, code=code),
+        )
+
     app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
-    app.add_exception_handler(InvalidTokenTypeError, invalid_token_type_handler)
-    app.add_exception_handler(
-        RefreshTokenNotFoundError,
-        refresh_token_not_found_handler,
-    )
-    app.add_exception_handler(
-        AccessTokenNotFoundError,
-        access_token_not_found_handler,
-    )
-
-    app.add_exception_handler(UserNotFoundError, user_not_found_handler)
-    app.add_exception_handler(UserAlreadyExistsError, user_already_exists_handler)
-    app.add_exception_handler(UserPermissionDeniedError, user_permission_denied_handler)
-
-    app.add_exception_handler(CardNotFoundError, card_not_found_handler)
-    app.add_exception_handler(CardAlreadyExistsError, card_already_exists_handler)
-    app.add_exception_handler(CardPermissionDeniedError, card_permission_denied_handler)
-
-    app.add_exception_handler(DeckNotFoundError, deck_not_found_handler)
-    app.add_exception_handler(DeckAlreadyExistsError, deck_already_exists_handler)
-    app.add_exception_handler(DeckIsEmptyError, deck_is_empty_handler)
-    app.add_exception_handler(DeckCardNotFoundError, deck_card_not_found_handler)
-    app.add_exception_handler(
-        InvalidDeckCardPositionError,
-        invalid_deck_card_position_handler,
-    )
-    app.add_exception_handler(DeckCardAlreadyExistsError, deck_card_already_exists_handler)
-    app.add_exception_handler(DeckPermissionDeniedError, deck_permission_denied_handler)
-    app.add_exception_handler(UserDeckNotFoundError, user_deck_not_found_handler)
-    app.add_exception_handler(DeckIsNotSavedError, deck_is_not_saved_handler)
-    app.add_exception_handler(DeckIsNotFavouriteError, deck_is_not_favourite_handler)
-    app.add_exception_handler(CannotSaveOwnDeckError, cannot_save_own_deck_handler)
-
-    app.add_exception_handler(
-        TrainingSessionNotFoundError,
-        training_session_not_found_handler,
-    )
-    app.add_exception_handler(
-        TrainingSessionAlreadyExistsError,
-        training_session_already_exists_handler,
-    )
-    app.add_exception_handler(
-            TrainingSessionAlreadyFinishedError,
-            training_session_already_finished_handler,
-        )
-    app.add_exception_handler(
-        TrainingSessionNotFinishedYet,
-        training_session_not_finished_yet_handler,
-    )
-    app.add_exception_handler(
-        TrainingSessionItemNotFoundError,
-        training_session_item_not_found_handler,
-    )
-    app.add_exception_handler(
-            CardAlreadyAnsweredError,
-            card_already_answered_handler,
-        )
-    app.add_exception_handler(
-            TrainingSessionPermissionDeniedError,
-            training_session_permission_denied_handler,
-        )
-
     app.add_exception_handler(RequestValueError, request_value_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
-    app.add_exception_handler(RateLimitError, rate_limit_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

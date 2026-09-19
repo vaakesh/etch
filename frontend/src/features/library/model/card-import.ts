@@ -1,3 +1,4 @@
+import { MAX_DECK_SIZE, fitsIntoDeck, getDeckFreeSlots } from "./deck-capacity";
 import type { ImportLibraryCardsInput } from "./library-types";
 
 const MAX_CARDS = 500;
@@ -10,9 +11,26 @@ export type CardImportIssue =
   | { code: "cards-array" }
   | { code: "cards-empty" }
   | { code: "cards-limit"; limit: number }
+  | { code: "deck-capacity"; limit: number; freeSlots: number }
   | { code: "card-object"; path: string }
   | { code: "text"; path: string; maxLength: number }
   | { code: "language"; path: string };
+
+/** Импорт не поместится в колоду — backend ответил бы 409, проверяем заранее. */
+export function checkDeckCapacity(
+  deckWordsCount: number,
+  importedCardsCount: number,
+): CardImportIssue | null {
+  if (fitsIntoDeck(deckWordsCount, importedCardsCount)) {
+    return null;
+  }
+
+  return {
+    code: "deck-capacity",
+    limit: MAX_DECK_SIZE,
+    freeSlots: getDeckFreeSlots(deckWordsCount),
+  };
+}
 
 export type CardImportParseResult =
   { ok: true; value: ImportLibraryCardsInput } | { ok: false; issue: CardImportIssue };

@@ -1,12 +1,19 @@
 
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.database import Base
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, func, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from app.auth.models import UserSession
+    from app.cards.models import Card
+    from app.decks.models import Deck
+    from app.training_sessions.models import TrainingSession
 
 
 class UserSettings(Base):
@@ -16,17 +23,18 @@ class UserSettings(Base):
         BigInteger,
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
-        nullable=False,
     )
     locale: Mapped[str] = mapped_column(
         String(10),
         default="ru-RU",
         server_default="ru-RU",
+        nullable=False,
     )
     theme: Mapped[str] = mapped_column(
         String(10),
         default="system",
         server_default="system",
+        nullable=False,
     )
     show_previews_for_long: Mapped[bool] = mapped_column(
         Boolean,
@@ -46,7 +54,11 @@ class UserSettings(Base):
         nullable=False,
     )
 
-    user = relationship("User", back_populates="settings")
+    user: Mapped[User] = relationship(
+        back_populates="settings",
+        lazy="raise",
+        single_parent=True,
+    )
 
 
 class User(Base):
@@ -55,18 +67,27 @@ class User(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, 
         primary_key=True,
-        nullable=False,
     )
+
     uuid: Mapped[UUID] = mapped_column(
         postgresUUID(as_uuid=True),
         server_default=text("uuidv7()"),
-        unique=True,
         nullable=False,
-        index=True
     )
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    username: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+    email: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    hashed_password: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -81,23 +102,59 @@ class User(Base):
         nullable=False,
     )
 
-    cards = relationship("Card", back_populates="user", passive_deletes=True)
-    decks = relationship("Deck", back_populates="user", passive_deletes=True)
-    training_sessions = relationship(
-        "TrainingSession", 
-        back_populates="user", 
-        passive_deletes=True,
-    )
-    user_sessions = relationship(
-        "UserSession", 
-        foreign_keys="UserSession.user_id", 
+    cards: Mapped[list["Card"]] = relationship(
         back_populates="user",
         passive_deletes=True,
+        lazy="raise",
     )
-    settings = relationship(
-        "UserSettings",
+    decks: Mapped[list["Deck"]] = relationship(
+        back_populates="user",
+        passive_deletes=True,
+        lazy="raise",
+    )
+    training_sessions: Mapped[list["TrainingSession"]] = relationship(
+        back_populates="user",
+        passive_deletes=True,
+        lazy="raise",
+    )
+    user_sessions: Mapped[list["UserSession"]] = relationship(
+        foreign_keys="UserSession.user_id",
+        back_populates="user",
+        passive_deletes=True,
+        lazy="raise",
+    )
+    settings: Mapped["UserSettings"] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
-        uselist=False,
+        lazy="raise",
+        single_parent=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "uuid",
+            name="uq_users_uuid",
+        ),
+        UniqueConstraint(
+            "username",
+            name="uq_users_username",
+        ),
+        UniqueConstraint(
+            "email",
+            name="uq_users_email",
+        ),
+
+        CheckConstraint(
+            "char_length(username) >= 3",
+            name="username_min_length",
+        ),
+        CheckConstraint(
+            "username = btrim(username)",
+            name="username_trimmed",
+        ),
+        CheckConstraint(
+            "email = btrim(email)",
+            name="email_trimmed",
+        ),
     )

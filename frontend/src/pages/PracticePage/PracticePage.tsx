@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasAnyApiErrorCode, hasApiErrorCode, isApiError } from "../../api";
+import { DashboardIcon } from "../../components/DashboardVisuals";
 import { getPracticePaginationTokens } from "../../features/practice/model/practice-pagination";
 import { usePracticeDeckAvailability } from "../../features/practice/model/usePracticeDeckAvailability";
 import {
@@ -16,12 +17,21 @@ import type {
 } from "../../features/practice/model/practice-types";
 import { usePracticeHistory } from "../../features/practice/model/usePracticeHistory";
 import {
+  MAX_SESSION_SIZE,
+  canPracticeEntireDeck,
+  clampCustomSessionSize,
+  getWordsPerSession,
+  readCustomSessionSize,
+  type PracticeSessionScope,
+} from "../../features/practice/model/practice-session-size";
+import {
   usePracticeSession,
   type PracticeCardFeedback,
   type ReadyPracticeState,
   type UsePracticeSessionResult,
 } from "../../features/practice/model/usePracticeSession";
 import {
+  CARD_COUNT_FORMS,
   CORRECT_ANSWER_COUNT_FORMS,
   MINUTE_SHORT_COUNT_FORMS,
   SECOND_SHORT_COUNT_FORMS,
@@ -34,30 +44,115 @@ import {
 } from "../../i18n";
 import styles from "./PracticePage.module.css";
 import { PRACTICE_MESSAGES, type PracticeMessages } from "./PracticePage.messages";
+import { CatalogDeckPreview } from "../CatalogPage/CatalogDeckPreview";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const practiceHistoryDateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
 
 type PracticeTextSize = "regular" | "medium" | "compact" | "dense";
 
-function getPracticeTextSize(text: string): PracticeTextSize {
+function getFeedbackTextSize(text: string): PracticeTextSize {
   const normalizedText = text.trim();
   const characterCount = Array.from(normalizedText).length;
   const longestWordLength = normalizedText
     .split(/\s+/u)
     .reduce((longestLength, word) => Math.max(longestLength, Array.from(word).length), 0);
 
+  if (characterCount <= 50) {
+    return "regular";
+  }
   if (characterCount > 110 || longestWordLength > 42) {
     return "dense";
   }
   if (characterCount > 64 || longestWordLength > 28) {
     return "compact";
   }
-  if (characterCount > 30 || longestWordLength > 14) {
-    return "medium";
-  }
 
-  return "regular";
+  return "medium";
+}
+
+function PracticePrompt({ language, text }: { language: string; text: string }) {
+  const promptAreaRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLHeadingElement>(null);
+
+  useLayoutEffect(() => {
+    const promptArea = promptAreaRef.current;
+    const prompt = promptRef.current;
+
+    if (promptArea === null || prompt === null) {
+      return;
+    }
+
+    const fitPrompt = () => {
+      prompt.style.removeProperty("font-size");
+      prompt.dataset.textSize = "regular";
+
+      const promptAreaStyles = window.getComputedStyle(promptArea);
+      const availableHeight =
+        promptArea.clientHeight -
+        Number.parseFloat(promptAreaStyles.paddingTop) -
+        Number.parseFloat(promptAreaStyles.paddingBottom);
+      const availableWidth =
+        promptArea.clientWidth -
+        Number.parseFloat(promptAreaStyles.paddingLeft) -
+        Number.parseFloat(promptAreaStyles.paddingRight);
+
+      const fitsAvailableArea = () => {
+        const promptRect = prompt.getBoundingClientRect();
+        return promptRect.height <= availableHeight + 1 && promptRect.width <= availableWidth + 1;
+      };
+
+      if (fitsAvailableArea()) {
+        return;
+      }
+
+      const minimumFontSize = 12;
+      let smallestFittingFontSize = minimumFontSize;
+      let largestOverflowingFontSize = Number.parseFloat(
+        window.getComputedStyle(prompt).fontSize,
+      );
+
+      prompt.style.fontSize = `${minimumFontSize}px`;
+
+      if (!fitsAvailableArea()) {
+        return;
+      }
+
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const candidateFontSize =
+          (smallestFittingFontSize + largestOverflowingFontSize) / 2;
+        prompt.style.fontSize = `${candidateFontSize}px`;
+
+        if (fitsAvailableArea()) {
+          smallestFittingFontSize = candidateFontSize;
+        } else {
+          largestOverflowingFontSize = candidateFontSize;
+        }
+      }
+
+      prompt.style.fontSize = `${Math.floor(smallestFittingFontSize * 100) / 100}px`;
+    };
+
+    fitPrompt();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", fitPrompt);
+      return () => window.removeEventListener("resize", fitPrompt);
+    }
+
+    const resizeObserver = new ResizeObserver(fitPrompt);
+    resizeObserver.observe(promptArea);
+
+    return () => resizeObserver.disconnect();
+  }, [text]);
+
+  return (
+    <div className={styles.promptArea} ref={promptAreaRef}>
+      <h1 data-text-size="regular" id="practice-prompt" lang={language} ref={promptRef}>
+        {text}
+      </h1>
+    </div>
+  );
 }
 
 const PRACTICE_HISTORY_FILTERS: readonly PracticeHistoryFilter[] = [
@@ -212,6 +307,37 @@ function getPracticeErrorMessage(
   if (error.code === "INVALID_PRACTICE_RESPONSE") {
     return messages.errors.invalidResponse;
   }
+
+  if (
+    hasAnyApiErrorCode(error, [API_ERROR_CODES.deckNotFound, API_ERROR_CODES.deckPermissionDenied])
+  ) {
+    return messages.errors.deckNotFound;
+  }
+  if (
+    hasAnyApiErrorCode(error, [
+      API_ERROR_CODES.trainingSessionNotFound,
+      API_ERROR_CODES.trainingSessionItemNotFound,
+      API_ERROR_CODES.trainingSessionPermissionDenied,
+    ])
+  ) {
+    return messages.errors.sessionNotFound;
+  }
+  if (hasApiErrorCode(error, API_ERROR_CODES.deckIsEmpty)) {
+    return messages.errors.emptyDeck;
+  }
+  if (hasApiErrorCode(error, API_ERROR_CODES.trainingSessionAlreadyFinished)) {
+    return operation === "resume"
+      ? messages.errors.resumedFinished
+      : messages.errors.submittedFinished;
+  }
+  if (hasApiErrorCode(error, API_ERROR_CODES.cardAlreadyAnswered)) {
+    return messages.errors.alreadyAnswered;
+  }
+  if (hasApiErrorCode(error, API_ERROR_CODES.validationError)) {
+    return operation === "submit" ? messages.errors.invalidAnswer : messages.errors.invalidLink;
+  }
+
+  // Ниже — ошибки без кода backend: сеть, отмена, шлюз и ещё не размеченные случаи.
   if (error.status === 403 || error.status === 404) {
     return operation === "start" ? messages.errors.deckNotFound : messages.errors.sessionNotFound;
   }
@@ -300,58 +426,12 @@ function getPracticeAccuracyToneClassName(accuracy: number): string {
   return styles.historyAccuracyRed;
 }
 
-function SessionAccuracyStat({ accuracy, locale }: { accuracy: number; locale: AppLocale }) {
-  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
-  const tooltipId = useId();
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  const formattedAccuracy = formatNumber(accuracy, locale);
-  const hintClassName = isTooltipOpen
-    ? `${styles.historyAccuracyHint} ${styles.historyAccuracyHintOpen}`
-    : styles.historyAccuracyHint;
-
-  return (
-    <span className={hintClassName}>
-      <span
-        aria-describedby={tooltipId}
-        aria-label={messages.sessionAccuracy}
-        aria-valuemax={100}
-        aria-valuemin={0}
-        aria-valuenow={accuracy}
-        aria-valuetext={`${formattedAccuracy}%`}
-        className={`${styles.historyAccuracy} ${getPracticeAccuracyToneClassName(accuracy)}`}
-        onBlur={() => setIsTooltipOpen(false)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            setIsTooltipOpen(false);
-            event.currentTarget.blur();
-          } else if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setIsTooltipOpen((isOpen) => !isOpen);
-          }
-        }}
-        onPointerDown={(event) => {
-          if (event.button === 0) {
-            setIsTooltipOpen((isOpen) => !isOpen);
-          }
-        }}
-        role="meter"
-        tabIndex={0}
-      >
-        {formattedAccuracy}
-      </span>
-      <span className={styles.historyAccuracyTooltip} id={tooltipId} role="tooltip">
-        <strong>{messages.sessionAccuracy}</strong>
-        <span>{messages.correctPercentage(formattedAccuracy)}</span>
-      </span>
-    </span>
-  );
-}
-
 function PracticeHistoryCard({
   isActionDisabled,
   isRepeating,
   locale,
   onContinue,
+  onPreview,
   onRepeat,
   session,
 }: {
@@ -359,6 +439,7 @@ function PracticeHistoryCard({
   isRepeating: boolean;
   locale: AppLocale;
   onContinue: (session: PracticeHistorySession) => void;
+  onPreview: (deckUuid: string, trigger: HTMLButtonElement) => void;
   onRepeat: (session: PracticeHistorySession) => void;
   session: PracticeHistorySession;
 }) {
@@ -369,6 +450,11 @@ function PracticeHistoryCard({
     session.actualCount === 0
       ? 0
       : Math.min(100, Math.round((session.correctCount / session.actualCount) * 100));
+  const remainingCards = localizeCount(
+    Math.max(session.requestedCount - session.actualCount, 0),
+    CARD_COUNT_FORMS,
+    locale,
+  ).text;
 
   return (
     <article className={styles.historyCard}>
@@ -381,75 +467,82 @@ function PracticeHistoryCard({
         </span>
       </header>
 
-      <div className={styles.historyDirection}>
-        <strong>
-          {session.promptSide === "front" ? (
-            <DirectionLabel from={messages.translation} to={messages.wordLower} />
-          ) : (
-            <DirectionLabel from={messages.word} to={messages.translationLower} />
-          )}
-        </strong>
-        <span>
-          {formatNumber(session.actualCount, locale)} /{" "}
-          {formatNumber(session.requestedCount, locale)}
-          &nbsp;{messages.cards}
-        </span>
-      </div>
-
-      <dl className={styles.historyStats}>
-        <div>
-          <dt>{messages.correct}</dt>
-          <dd>{formatNumber(session.correctCount, locale)}</dd>
-        </div>
-        <div>
-          <dt>{messages.errorsLabel}</dt>
-          <dd>{formatNumber(session.wrongCount, locale)}</dd>
-        </div>
-      </dl>
-
-      <SessionAccuracyStat accuracy={accuracy} locale={locale} />
-
-      <div
-        className={
-          canViewHistory
-            ? styles.historyCardActions
-            : `${styles.historyCardActions} ${styles.historyCardActionsSingle}`
-        }
+      <button
+        aria-haspopup="dialog"
+        aria-label={messages.previewDeck(session.deckTitle)}
+        className={styles.historyDeck}
+        onClick={(event) => onPreview(session.deckUuid, event.currentTarget)}
+        title={session.deckTitle}
+        type="button"
       >
-        {canViewHistory ? (
-          <Link
-            aria-label={messages.openSessionHistory}
-            className={styles.historyDetailsButton}
-            title={messages.sessionHistory}
-            to={`/practice/sessions/${session.uuid}/history`}
+        <strong>{session.deckTitle}</strong>
+      </button>
+
+      {canContinue ? (
+        <p className={styles.historyRemaining}>{messages.cardsRemaining(remainingCards)}</p>
+      ) : null}
+
+      <footer className={styles.historyCardFooter}>
+        <dl className={styles.historyStats}>
+          <div>
+            <dt>{messages.correct}</dt>
+            <dd>
+              <strong>{formatNumber(session.correctCount, locale)}</strong>
+              <span>/ {formatNumber(session.actualCount, locale)}</span>
+            </dd>
+          </div>
+          <div
+            className={`${styles.historyAccuracyStat} ${getPracticeAccuracyToneClassName(accuracy)}`}
           >
-            <HistoryIcon />
-          </Link>
-        ) : null}
-        <button
+            <dt>{messages.accuracy}</dt>
+            <dd>{formatNumber(accuracy, locale)}%</dd>
+          </div>
+        </dl>
+
+        <div
           className={
-            canContinue
-              ? styles.historyRepeatButton
-              : `${styles.historyRepeatButton} ${styles.historyRepeatButtonAccent}`
+            canViewHistory
+              ? styles.historyCardActions
+              : `${styles.historyCardActions} ${styles.historyCardActionsSingle}`
           }
-          disabled={isActionDisabled}
-          onClick={() => (canContinue ? onContinue(session) : onRepeat(session))}
-          type="button"
         >
-          {isRepeating ? <span className={styles.buttonSpinner} /> : null}
-          {isRepeating ? messages.launching : canContinue ? messages.continue : messages.repeat}
-        </button>
-      </div>
+          {canViewHistory ? (
+            <Link
+              aria-label={messages.openSessionHistory}
+              className={styles.historyDetailsButton}
+              title={messages.sessionHistory}
+              to={`/practice/sessions/${session.uuid}/history`}
+            >
+              <HistoryIcon />
+            </Link>
+          ) : null}
+          <button
+            className={
+              canContinue
+                ? `${styles.historyRepeatButton} ${styles.historyRepeatButtonAccent}`
+                : styles.historyRepeatButton
+            }
+            disabled={isActionDisabled}
+            onClick={() => (canContinue ? onContinue(session) : onRepeat(session))}
+            type="button"
+          >
+            {isRepeating ? <span className={styles.buttonSpinner} /> : null}
+            {isRepeating ? messages.launching : canContinue ? messages.continue : messages.repeat}
+          </button>
+        </div>
+      </footer>
     </article>
   );
 }
 
 function PracticeHistoryView({
   onContinue,
+  onPreview,
   onRepeat,
   startError,
 }: {
   onContinue: (session: PracticeHistorySession) => void;
+  onPreview: (deckUuid: string, trigger: HTMLButtonElement) => void;
   onRepeat: (session: PracticeHistorySession) => Promise<void>;
   startError: unknown | null;
 }) {
@@ -458,6 +551,51 @@ function PracticeHistoryView({
   const [activeFilter, setActiveFilter] = useState<PracticeHistoryFilter>("all");
   const history = usePracticeHistory(activeFilter);
   const [repeatingSessionUuid, setRepeatingSessionUuid] = useState<string | null>(null);
+  const historyFiltersRef = useRef<HTMLDivElement | null>(null);
+  const historyFilterButtonRefs = useRef(
+    new Map<PracticeHistoryFilter, HTMLButtonElement>(),
+  );
+
+  useLayoutEffect(() => {
+    const filters = historyFiltersRef.current;
+    const activeButton = historyFilterButtonRefs.current.get(activeFilter);
+    if (filters === null || activeButton === undefined) {
+      return;
+    }
+
+    const updateIndicator = (): void => {
+      const x = activeButton.offsetLeft;
+      const y = activeButton.offsetTop;
+      const width = activeButton.offsetWidth;
+      const height = activeButton.offsetHeight;
+
+      filters.style.setProperty("--history-filter-indicator-x", `${x}px`);
+      filters.style.setProperty("--history-filter-indicator-y", `${y}px`);
+      filters.style.setProperty(
+        "--history-filter-indicator-width",
+        `${width}px`,
+      );
+      filters.style.setProperty(
+        "--history-filter-indicator-height",
+        `${height}px`,
+      );
+      filters.dataset.indicatorReady = "true";
+    };
+
+    updateIndicator();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateIndicator);
+      return () => window.removeEventListener("resize", updateIndicator);
+    }
+
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(filters);
+    historyFilterButtonRefs.current.forEach((button) =>
+      resizeObserver.observe(button),
+    );
+    return () => resizeObserver.disconnect();
+  }, [activeFilter]);
 
   const sessions = history.state.status === "ready" ? history.state.sessions : [];
 
@@ -520,6 +658,7 @@ function PracticeHistoryView({
             key={session.uuid}
             locale={locale}
             onContinue={onContinue}
+            onPreview={onPreview}
             onRepeat={(selectedSession) => void handleRepeat(selectedSession)}
             session={session}
           />
@@ -532,31 +671,53 @@ function PracticeHistoryView({
     <main className={styles.historyMain}>
       <section className={styles.historyPanel}>
         <header className={styles.historyIntro}>
-          <div>
-            <h1>{messages.sessionsTitle}</h1>
-            <p>{messages.sessionsLead}</p>
-          </div>
+          <h1>{messages.practiceTitle}</h1>
           <Link className={styles.primaryAction} to="/library">
-            {messages.newSession}
+            <span>{messages.newSession}</span>
+            <DashboardIcon name="plus" />
           </Link>
         </header>
 
-        <div aria-label={messages.historyFilters} className={styles.historyFilters}>
-          {PRACTICE_HISTORY_FILTERS.map((filter) => (
-            <button
-              aria-pressed={activeFilter === filter}
-              className={
-                activeFilter === filter
-                  ? `${styles.historyFilter} ${styles.historyFilterActive}`
-                  : styles.historyFilter
-              }
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              type="button"
-            >
-              {messages.filters[filter]}
-            </button>
-          ))}
+        <div className={styles.historyToolbar}>
+          <div className={styles.historyHeading}>
+            <h2>{messages.sessionsTitle}</h2>
+            <p>{messages.sessionsLead}</p>
+          </div>
+
+          <div
+            aria-label={messages.historyFilters}
+            className={styles.historyFilters}
+            data-active-filter={activeFilter}
+            ref={historyFiltersRef}
+            role="group"
+          >
+            <span
+              aria-hidden="true"
+              className={styles.historyFilterIndicator}
+            />
+            {PRACTICE_HISTORY_FILTERS.map((filter) => (
+              <button
+                aria-pressed={activeFilter === filter}
+                className={
+                  activeFilter === filter
+                    ? `${styles.historyFilter} ${styles.historyFilterActive}`
+                    : styles.historyFilter
+                }
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                ref={(button) => {
+                  if (button === null) {
+                    historyFilterButtonRefs.current.delete(filter);
+                  } else {
+                    historyFilterButtonRefs.current.set(filter, button);
+                  }
+                }}
+                type="button"
+              >
+                {messages.filters[filter]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {startError === null ? null : (
@@ -580,27 +741,6 @@ interface SetupViewProps {
   onStarted: (session: PracticeSession) => void;
 }
 
-type PracticeSessionScope = "all" | "50" | "100" | "custom";
-
-function getWordsPerSession(
-  scope: PracticeSessionScope,
-  deckWordsCount: number,
-  customWordsCount: string,
-): number | null {
-  if (scope === "all") {
-    return Math.max(deckWordsCount, 1);
-  }
-  if (scope === "50") {
-    return 50;
-  }
-  if (scope === "100") {
-    return 100;
-  }
-
-  const parsedCount = Number(customWordsCount);
-  return Number.isSafeInteger(parsedCount) && parsedCount > 0 ? parsedCount : null;
-}
-
 export function PracticeSetupView({
   deckUuid,
   deckWordsCount,
@@ -608,11 +748,14 @@ export function PracticeSetupView({
   practice,
 }: SetupViewProps) {
   const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+  const customCountHintId = useId();
   const [promptSide, setPromptSide] = useState<CardSide>("front");
   const [sessionScope, setSessionScope] = useState<PracticeSessionScope>("all");
   const [customWordsCount, setCustomWordsCount] = useState("");
   const isStarting = practice.state.status === "loading" && practice.state.operation === "start";
   const wordsPerSession = getWordsPerSession(sessionScope, deckWordsCount, customWordsCount);
+  const customSessionSize = readCustomSessionSize(customWordsCount);
+  const isCustomCountInvalid = sessionScope === "custom" && customSessionSize.isInvalid;
   const startError =
     practice.state.status === "error" && practice.state.operation === "start"
       ? practice.state.error
@@ -698,7 +841,11 @@ export function PracticeSetupView({
                     type="radio"
                     value="all"
                   />
-                  <span>{messages.entireDeck}</span>
+                  <span>
+                    {canPracticeEntireDeck(deckWordsCount)
+                      ? messages.entireDeck
+                      : messages.maxCards(MAX_SESSION_SIZE)}
+                  </span>
                 </label>
                 <label
                   className={
@@ -750,16 +897,17 @@ export function PracticeSetupView({
                   />
                   <span>{messages.customCount}</span>
                   <input
+                    aria-describedby={customCountHintId}
                     aria-label={messages.cardCount}
-                    aria-invalid={
-                      sessionScope === "custom" &&
-                      customWordsCount !== "" &&
-                      wordsPerSession === null
-                        ? true
-                        : undefined
+                    aria-invalid={isCustomCountInvalid ? true : undefined}
+                    className={
+                      isCustomCountInvalid
+                        ? `${styles.scopeInput} ${styles.scopeInputInvalid}`
+                        : styles.scopeInput
                     }
-                    className={styles.scopeInput}
+                    max={MAX_SESSION_SIZE}
                     min="1"
+                    onBlur={() => setCustomWordsCount(clampCustomSessionSize(customWordsCount))}
                     onChange={(event) => setCustomWordsCount(event.target.value)}
                     onFocus={() => setSessionScope("custom")}
                     step="1"
@@ -768,6 +916,17 @@ export function PracticeSetupView({
                   />
                 </label>
               </div>
+
+              <p
+                className={
+                  isCustomCountInvalid
+                    ? `${styles.scopeHint} ${styles.scopeHintInvalid}`
+                    : styles.scopeHint
+                }
+                id={customCountHintId}
+              >
+                {messages.sessionSizeRange(MAX_SESSION_SIZE)}
+              </p>
             </fieldset>
           </div>
 
@@ -1281,7 +1440,7 @@ function AnswerArea({
     }
 
     const resizeInput = (): void => {
-      const maximumHeight = 156;
+      const maximumHeight = 54;
       input.style.height = "0px";
       const nextHeight = Math.min(Math.max(input.scrollHeight, 54), maximumHeight);
       input.style.height = `${nextHeight}px`;
@@ -1327,7 +1486,7 @@ function AnswerArea({
             </strong>
             <span
               className={styles.feedbackAnswer}
-              data-text-size={getPracticeTextSize(feedbackText ?? "")}
+              data-text-size={getFeedbackTextSize(feedbackText ?? "")}
             >
               {feedbackText}
             </span>
@@ -1513,15 +1672,7 @@ export function ActivePracticeSessionView({
               </span>
             </div>
 
-            <div className={styles.promptArea}>
-              <h1
-                data-text-size={getPracticeTextSize(selectedCard.promptText)}
-                id="practice-prompt"
-                lang={selectedCard.promptLanguage}
-              >
-                {selectedCard.promptText}
-              </h1>
-            </div>
+            <PracticePrompt language={selectedCard.promptLanguage} text={selectedCard.promptText} />
 
             <AnswerArea
               card={selectedCard}
@@ -1640,6 +1791,7 @@ export function PracticePage() {
   const navigate = useNavigate();
   const deckQuery = searchParams.get("deck");
   const sessionQuery = searchParams.get("session");
+  const previewQuery = searchParams.get("preview");
   const hasConflictingQuery = deckQuery !== null && sessionQuery !== null;
   const isDeckQueryValid = deckQuery === null || UUID_PATTERN.test(deckQuery);
   const isSessionQueryValid = sessionQuery === null || UUID_PATTERN.test(sessionQuery);
@@ -1649,10 +1801,60 @@ export function PracticePage() {
     !hasConflictingQuery && isSessionQueryValid && sessionQuery !== null
       ? sessionQuery.toLowerCase()
       : null;
+  const previewDeckUuid =
+    previewQuery !== null && UUID_PATTERN.test(previewQuery) ? previewQuery.toLowerCase() : null;
   const completionSummary = readCompletionSummary(location.state);
   const practice = usePracticeSession(sessionUuid, deckUuid);
   const practiceDeck = usePracticeDeckAvailability(deckUuid);
   const isActiveSession = sessionQuery !== null;
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const pageScrollTopRef = useRef<number | null>(null);
+  const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const shouldShowPreview = previewDeckUuid !== null && deckQuery === null && sessionQuery === null;
+
+  useEffect(() => {
+    if (!shouldShowPreview) {
+      return;
+    }
+
+    const page = pageRef.current;
+    if (page === null) {
+      return;
+    }
+
+    const scrollTop = pageScrollTopRef.current ?? page.scrollTop;
+    const previousOverflow = page.style.overflow;
+    page.style.overflow = "hidden";
+
+    return () => {
+      page.style.overflow = previousOverflow;
+      page.scrollTop = scrollTop;
+      pageScrollTopRef.current = null;
+    };
+  }, [shouldShowPreview]);
+
+  useEffect(() => {
+    if (shouldShowPreview || previewTriggerRef.current === null) {
+      return;
+    }
+
+    previewTriggerRef.current.focus({ preventScroll: true });
+    previewTriggerRef.current = null;
+  }, [shouldShowPreview]);
+
+  function openPreview(deckUuid: string, trigger: HTMLButtonElement): void {
+    pageScrollTopRef.current = pageRef.current?.scrollTop ?? null;
+    previewTriggerRef.current = trigger;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("preview", deckUuid);
+    setSearchParams(nextSearchParams);
+  }
+
+  function closePreview(): void {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("preview");
+    setSearchParams(nextSearchParams, { replace: true });
+  }
 
   useEffect(() => {
     if (
@@ -1783,6 +1985,7 @@ export function PracticePage() {
         onContinue={(historySession) => {
           setSearchParams({ session: historySession.uuid }, { replace: true });
         }}
+        onPreview={openPreview}
         onRepeat={async (historySession) => {
           const session = await practice.start(
             historySession.deckUuid,
@@ -1799,9 +2002,27 @@ export function PracticePage() {
   }
 
   return (
-    <div className={styles.page} data-practice-mode={isActiveSession ? "session" : "setup"}>
+    <div
+      className={styles.page}
+      data-practice-mode={isActiveSession ? "session" : "setup"}
+      data-practice-view={
+        deckQuery === null && sessionQuery === null
+          ? "history"
+          : isActiveSession
+            ? "session"
+            : "setup"
+      }
+      ref={pageRef}
+    >
       <AmbientBackground />
       {content}
+      {shouldShowPreview && previewDeckUuid !== null ? (
+        <CatalogDeckPreview
+          deckUuid={previewDeckUuid}
+          onClose={closePreview}
+          returnTarget="practice"
+        />
+      ) : null}
     </div>
   );
 }

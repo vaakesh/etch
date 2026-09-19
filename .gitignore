@@ -13,3 +13,8 @@ bob.py
 .mypy_cache
 .ty_cache
 .vscode
+developing.html
+next_developing.html
+schema.sql
+seed_massive.sql
+query.sql

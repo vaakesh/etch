@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../api";
 import { LIBRARY_CREATE_DECK_NAVIGATION_STATE } from "../../features/library/model/library-navigation";
 import type { UseCardDeckAssignmentResult } from "../../features/library/model/useCardDeckAssignment";
 import type { UseLibraryCardsResult } from "../../features/library/model/useLibraryCards";
@@ -10,6 +11,11 @@ const useLibraryDecksMock = vi.hoisted(() => vi.fn());
 const useLibraryCardsMock = vi.hoisted(() => vi.fn());
 const useCardDeckAssignmentMock = vi.hoisted(() => vi.fn());
 const useAuthMock = vi.hoisted(() => vi.fn());
+const useLibraryDeckLayoutMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../features/library/model/useLibraryDeckLayout", () => ({
+  useLibraryDeckLayout: useLibraryDeckLayoutMock,
+}));
 
 vi.mock("../../auth/hooks/useAuth", () => ({
   useAuth: useAuthMock,
@@ -31,9 +37,11 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
       {
         uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
         ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+        ownerUsername: "etch-user",
         title: "Daily Words",
         description: "Core vocabulary",
         totalWordsCount: 48,
+        savesCount: 12,
         accuracy: 88,
         isFavourite: true,
         updatedAt: "2026-07-17T10:30:00Z",
@@ -59,9 +67,11 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
       {
         uuid: "f9b7ced5-fbea-4741-82fd-33ea144dab7c",
         ownerUuid: "aaa61c35-11d0-489e-837d-3845418ba39e",
+        ownerUsername: "deck-owner",
         title: "Travel Essentials",
         description: null,
         totalWordsCount: 36,
+        savesCount: 12,
         accuracy: 64,
         isFavourite: false,
         updatedAt: null,
@@ -166,6 +176,7 @@ function renderLibraryPage(state?: unknown, locale: AppLocale = "ru-RU"): string
 describe("LibraryPage", () => {
   beforeEach(() => {
     useAuthMock.mockReset();
+    useLibraryDeckLayoutMock.mockReturnValue({ deckLayout: "full", changeDeckLayout: vi.fn() });
     useLibraryDecksMock.mockReset();
     useLibraryCardsMock.mockReset();
     useCardDeckAssignmentMock.mockReset();
@@ -188,6 +199,74 @@ describe("LibraryPage", () => {
       refresh: vi.fn(),
       applyUserSettings: vi.fn(),
     });
+  });
+
+  it.each<[AppLocale, string]>([
+    ["ru-RU", "Сначала сохраните колоду, чтобы добавить её в избранное."],
+    ["en-US", "Save the deck before adding it to favorites."],
+  ])("explains the unsaved deck favourite error in %s", (locale, message) => {
+    useLibraryDecksMock.mockReturnValue(
+      createLibraryResult({
+        favouriteErrors: {
+          "f9b7ced5-fbea-4741-82fd-33ea144dab7c": new ApiError({
+            status: 409,
+            code: "CANNOT_FAVOURITE_UNSAVED_DECK",
+            message: "Backend error text",
+          }),
+        },
+      }),
+    );
+
+    const markup = renderLibraryPage(undefined, locale);
+
+    expect(markup).toContain(message);
+    expect(markup).not.toContain("Backend error text");
+  });
+
+  it.each(["full", "compact"])(
+    "keeps deck data and actions mounted in the %s layout",
+    (deckLayout) => {
+      useLibraryDeckLayoutMock.mockReturnValue({ deckLayout, changeDeckLayout: vi.fn() });
+      const library = createLibraryResult({ nextCursor: "next-page", hasMore: true });
+      useLibraryDecksMock.mockReturnValue(library);
+
+      const markup = renderLibraryPage();
+
+      expect(markup).toContain(`data-deck-layout="${deckLayout}"`);
+      expect(markup).toMatch(
+        new RegExp(
+          `aria-label="${deckLayout === "full" ? "Полный вид" : "Компактный вид"}" aria-pressed="true"`,
+        ),
+      );
+      expect(markup.match(/data-deck-uuid=/g)).toHaveLength(2);
+      expect(markup.match(/data-card-uuid=/g)).toHaveLength(2);
+      expect(markup).toContain("Core vocabulary");
+      expect(markup).toContain("journey");
+      expect(markup).toContain("Показать ещё");
+      expect(markup).toContain('aria-label="Редактировать колоду «Daily Words»"');
+      expect(markup).toContain('aria-label="Удалить колоду «Daily Words»"');
+      expect(markup.match(/data-deck-action="open"/g)).toHaveLength(2);
+      expect(markup).toContain('href="/decks/714d882d-726e-4dcb-9303-a8bf4638429c"');
+      expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
+      expect(library.retry).not.toHaveBeenCalled();
+      expect(library.loadMore).not.toHaveBeenCalled();
+      expect(useLibraryDecksMock).toHaveBeenCalledWith("d2f61c35-11d0-489e-837d-3845418ba39e", "");
+    },
+  );
+
+  it.each<[AppLocale, number, string]>([
+    ["ru-RU", 0, "0 сохранений"],
+    ["ru-RU", 1, "1 сохранение"],
+    ["ru-RU", 22, "22 сохранения"],
+    ["en-US", 12, "12 saves"],
+  ])("renders the save count in %s for %s saves", (locale, savesCount, label) => {
+    const library = createLibraryResult();
+    useLibraryDecksMock.mockReturnValue({
+      ...library,
+      decks: library.decks.map((deck) => ({ ...deck, savesCount })),
+    });
+
+    expect(renderLibraryPage(undefined, locale)).toContain(`title="${label}"`);
   });
 
   it("renders deck card previews, empty previews, actions, and accessible tabs", () => {
@@ -213,6 +292,7 @@ describe("LibraryPage", () => {
     );
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).toContain('data-deck-title-style="gradient-underline"');
     expect(markup.match(/Описание колоды:/g)).toHaveLength(2);
     expect(markup.match(/<article/g)).toHaveLength(2);
     expect(markup.match(/role="meter"/g)).toHaveLength(2);
@@ -238,11 +318,15 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Редактировать");
     expect(markup).toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
     expect(markup).toContain("Начать");
+    expect(markup.match(/data-deck-action="open"/g)).toHaveLength(2);
+    expect(markup).toContain('aria-label="Открыть страницу колоды «Daily Words»"');
+    expect(markup).toContain('href="/decks/714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/decks/f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
     expect(markup).toContain('href="/practice?deck=f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup).toContain("48 слов");
     expect(markup).toContain("Обновлено");
-    expect(markup).not.toContain("Открыть");
+    expect(markup).not.toContain("<span>Открыть</span>");
     expect(markup).not.toContain('viewBox="0 0 160 140"');
     expect(markup).toContain("2</strong> колоды загружены");
     expect(markup).toMatch(/<section[^>]*hidden=""[^>]*id="library-cards-panel"[^>]*><\/section>/);
@@ -559,9 +643,11 @@ describe("LibraryPage", () => {
           {
             uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
             ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+            ownerUsername: "etch-user",
             title: "Backend favourites",
             description: null,
             totalWordsCount: 12,
+            savesCount: 12,
             accuracy: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,
@@ -602,9 +688,11 @@ describe("LibraryPage", () => {
           {
             uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
             ownerUuid: "aaa61c35-11d0-489e-837d-3845418ba39e",
+            ownerUsername: "deck-owner",
             title: "Чужая публичная колода",
             description: null,
             totalWordsCount: 12,
+            savesCount: 12,
             accuracy: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,

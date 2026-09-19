@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { subscribeToLibraryDeckSaveChanges } from "../../library/model/library-decks-cache";
 import { getCatalogDeckPage, setCatalogDeckSaved } from "../api/catalog-api";
 import type { CatalogDeck } from "./catalog-types";
 
@@ -90,6 +91,16 @@ export function useCatalogDecks(searchQuery: string, page: number): UseCatalogDe
   const retry = useCallback((): void => {
     setRetryRevision((revision) => revision + 1);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeToLibraryDeckSaveChanges((source) => {
+        if (source === "remote") {
+          retry();
+        }
+      }),
+    [retry],
+  );
 
   const setSaved = useCallback(
     (deckUuid: string, value: boolean): void => {

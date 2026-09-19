@@ -1,7 +1,15 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from app.common.types import CardLang, CardText, Counter, PositiveInt, Seconds
+from app.common.types import (
+    CardLang,
+    CardText,
+    Counter,
+    DeckTitle,
+    PositiveInt,
+    Seconds,
+    SessionSize,
+)
 from app.errors import RequestValueError
 from app.training_sessions.models import CardSide, TrainingSessionStatus
 from pydantic import BaseModel, ConfigDict, Field, PastDatetime, field_validator
@@ -14,8 +22,9 @@ class InternalTrainingSession(BaseModel):
     uuid: UUID
     user_id: int
     deck_uuid: UUID
+    deck_title: DeckTitle
     status: TrainingSessionStatus
-    requested_count: Counter
+    requested_count: SessionSize
     actual_count: Counter
     correct_count: Counter
     wrong_count: Counter
@@ -56,7 +65,7 @@ class PracticeSessionResponse(BaseModel):
     prompt_side: CardSide
     answer_side: CardSide
 
-    total_count: Counter
+    total_count: SessionSize
     answered_count: Counter
     correct_count: Counter
     wrong_count: Counter
@@ -69,10 +78,11 @@ class TrainingSessionResponse(BaseModel):
 
     uuid: UUID
     deck_uuid: UUID
+    deck_title: DeckTitle
 
     status: TrainingSessionStatus
 
-    requested_count: Counter
+    requested_count: SessionSize
     actual_count: Counter
 
     correct_count: Counter
@@ -114,7 +124,7 @@ class SubmitAnswerResponse(BaseModel):
 
 class StartPracticeSessionRequest(BaseModel):
     prompt_side: CardSide
-    words_per_session: PositiveInt
+    words_per_session: SessionSize
 
 class TrainingSessionHistoryItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

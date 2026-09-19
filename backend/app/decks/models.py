@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime
 
@@ -18,6 +19,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.common.limits import MAX_DECK_SIZE
+from app.common.utils import utcnow
+if TYPE_CHECKING:
+    from app.cards.models import Card
+    from app.users.models import User
+
 
 class Deck(Base):
     __tablename__ = "decks"
@@ -28,7 +35,6 @@ class Deck(Base):
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
-        index=True
     )
 
     user_id: Mapped[int] = mapped_column(
@@ -87,8 +93,8 @@ class Deck(Base):
         nullable=False,
     )
 
-    user = relationship("User", back_populates="decks", lazy="raise")
-    card_links = relationship(
+    user: Mapped["User"] = relationship("User", back_populates="decks", lazy="raise")
+    card_links: Mapped[list["DeckCard"]] = relationship(
         "DeckCard", 
         back_populates="deck", 
         cascade="all, delete-orphan",
@@ -102,6 +108,41 @@ class Deck(Base):
     @property
     def owner_uuid(self) -> UUID:
         return self.user.uuid
+
+    @property
+    def owner_username(self) -> str:
+        return self.user.username
+
+    def mark_content_changed(self) -> None:
+        self.version += 1
+        self.updated_at = utcnow()
+
+    __table_args__ = (
+        CheckConstraint(
+            "saves_count >= 0",
+            name="ck_deck_saves_count_ge_0",
+        ),
+        CheckConstraint(
+            "words_count >= 0",
+            name="ck_deck_words_count_ge_0",
+        ),
+        CheckConstraint(
+            f"words_count <= {MAX_DECK_SIZE}",
+            name="ck_deck_words_count_le_max",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_deck_version_ge_1",
+        ),
+        CheckConstraint(
+            "char_length(trim(title)) > 0",
+            name="ck_deck_title_not_blank",
+        ),
+        CheckConstraint(
+            "source_deck_id IS NULL OR source_deck_id <> id",
+            name="ck_deck_source_not_self",
+        ),
+    )
 
 
 class DeckCard(Base):
@@ -147,14 +188,18 @@ class DeckCard(Base):
         nullable=False,
     )
 
-    deck = relationship("Deck", back_populates="card_links")
-    card = relationship("Card", back_populates="deck_links")
+    deck: Mapped["Deck"] = relationship("Deck", back_populates="card_links")
+    card: Mapped["Card"] = relationship("Card", back_populates="deck_links")
 
     __table_args__ = (
         UniqueConstraint("deck_id", "card_id", name="uq_deck_card"),
         CheckConstraint(
             "position >= 1",
             name="ck_deck_cards_position_ge_1",
+        ),
+        CheckConstraint(
+            f"position <= {MAX_DECK_SIZE}",
+            name="ck_deck_cards_position_le_max",
         ),
         UniqueConstraint(
             "deck_id",

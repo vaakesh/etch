@@ -66,9 +66,11 @@ export interface UpdateLibraryDeckInput {
 export interface LibraryDeck {
   uuid: string;
   ownerUuid: string;
+  ownerUsername: string;
   title: string;
   description: string | null;
   totalWordsCount: number;
+  savesCount: number;
   accuracy: number;
   isFavourite: boolean;
   updatedAt: string | null;
@@ -97,9 +99,11 @@ export interface CreateLibraryDeckInput {
 
 export interface CreatedLibraryDeck {
   uuid: string;
+  ownerUsername: string;
   title: string;
   description: string | null;
   totalWordsCount: number;
+  savesCount: number;
   isPublic: boolean;
   updatedAt: string | null;
 }

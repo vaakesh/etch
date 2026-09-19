@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiFetch } from "../../../api";
+import { API_ERROR_CODES, ApiError, apiFetch } from "../../../api";
 import {
   addLibraryCardToDeck,
   createLibraryCard,
@@ -350,9 +350,13 @@ describe("addLibraryCardToDeck", () => {
     );
   });
 
-  it("treats a 409 response as an already-present card", async () => {
+  it("treats the already-present conflict code as an already-present card", async () => {
     vi.mocked(apiFetch).mockRejectedValue(
-      new ApiError({ status: 409, message: "Card already exists in this deck" }),
+      new ApiError({
+        status: 409,
+        code: API_ERROR_CODES.deckCardAlreadyExists,
+        message: "Card already exists in this deck",
+      }),
     );
 
     await expect(
@@ -361,6 +365,35 @@ describe("addLibraryCardToDeck", () => {
         "413b1910-5d07-4c67-93a0-6b8946c59b15",
       ),
     ).resolves.toBe("already-present");
+  });
+
+  it("rethrows the deck size limit conflict instead of reporting it as already-present", async () => {
+    const error = new ApiError({
+      status: 409,
+      code: API_ERROR_CODES.deckSizeLimitExceeded,
+      message:
+        "Deck size limit exceeded: deck has 5000/5000 cards, cannot add 1 more (only 0 slots left)",
+    });
+    vi.mocked(apiFetch).mockRejectedValue(error);
+
+    await expect(
+      addLibraryCardToDeck(
+        "714d882d-726e-4dcb-9303-a8bf4638429c",
+        "413b1910-5d07-4c67-93a0-6b8946c59b15",
+      ),
+    ).rejects.toBe(error);
+  });
+
+  it("rethrows an uncoded 409 rather than guessing that the card is already present", async () => {
+    const error = new ApiError({ status: 409, message: "Conflict" });
+    vi.mocked(apiFetch).mockRejectedValue(error);
+
+    await expect(
+      addLibraryCardToDeck(
+        "714d882d-726e-4dcb-9303-a8bf4638429c",
+        "413b1910-5d07-4c67-93a0-6b8946c59b15",
+      ),
+    ).rejects.toBe(error);
   });
 
   it("rethrows non-409 errors", async () => {
@@ -382,9 +415,11 @@ describe("createLibraryDeck", () => {
     vi.mocked(apiFetch).mockResolvedValue({
       uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
       owner_uuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+      owner_username: "deck-owner",
       title: "Испанский в путешествии",
       description: null,
       words_count: 0,
+      saves_count: 0,
       is_public: false,
       updated_at: "2026-07-21T18:30:00Z",
     });
@@ -404,9 +439,11 @@ describe("createLibraryDeck", () => {
       ),
     ).resolves.toEqual({
       uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
+      ownerUsername: "deck-owner",
       title: "Испанский в путешествии",
       description: null,
       totalWordsCount: 0,
+      savesCount: 0,
       isPublic: false,
       updatedAt: "2026-07-21T18:30:00Z",
     });

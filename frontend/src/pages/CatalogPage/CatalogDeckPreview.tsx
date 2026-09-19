@@ -1,7 +1,15 @@
-import { useEffect, useId, useRef, type SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
+import { Link } from "react-router-dom";
 import { isApiError } from "../../api";
 import { formatCatalogUpdatedAt } from "../../features/catalog/model/catalog-formatters";
+import { getCatalogPaginationTokens } from "../../features/catalog/model/catalog-pagination";
+import { CATALOG_PREVIEW_CARD_PAGE_SIZE } from "../../features/catalog/model/catalog-preview-pagination";
 import { useCatalogDeckPreview } from "../../features/catalog/model/useCatalogDeckPreview";
+import {
+  createDeckDetailsNavigationState,
+  getDeckDetailsPath,
+  type DeckDetailsReturnTarget,
+} from "../../features/decks/model/deck-details-navigation";
 import {
   WORD_COUNT_FORMS,
   defineMessages,
@@ -26,22 +34,24 @@ const MESSAGES = defineMessages(
   {
     dialogLabel: "Предпросмотр колоды",
     close: "Закрыть",
-    yourDeck: "Ваша колода",
-    otherOwner: "Другой пользователь",
-    owner: "Владелец",
-    words: "Слов",
-    saves: "Сохранений",
-    edited: "Изменено",
+    openDeck: "Открыть колоду",
+    openDeckPage: "Открыть страницу колоды",
+    owner: (username: string) => `Автор: @${username}`,
+    updated: "Обновлено",
     noDescription: "Без описания",
     cards: "Карточки",
-    cardsLoaded: (loaded: number, total: number) => `${loaded} из ${total}`,
     noCards: "В этой колоде пока нет карточек",
     loading: "Загружаем предпросмотр…",
     errorTitle: "Предпросмотр не загрузился",
     retry: "Попробовать снова",
-    loadMore: "Показать ещё",
-    loadingMore: "Загружаем…",
-    loadMoreError: "Не удалось загрузить следующие карточки.",
+    loadingPage: "Загружаем карточки…",
+    pageError: "Не удалось загрузить эту страницу карточек.",
+    pagination: "Страницы карточек",
+    previousPage: "Предыдущая страница",
+    nextPage: "Следующая страница",
+    goToPage: (page: number) => `Перейти на страницу ${page}`,
+    currentPage: (page: number) => `Страница ${page}, текущая`,
+    pageStatus: (page: number) => `Страница ${page}`,
     errors: {
       generic: "Попробуйте ещё раз.",
       forbidden: "У этой учётной записи нет доступа к колоде.",
@@ -54,22 +64,24 @@ const MESSAGES = defineMessages(
   {
     dialogLabel: "Deck preview",
     close: "Close",
-    yourDeck: "Your deck",
-    otherOwner: "Another user",
-    owner: "Owner",
-    words: "Words",
-    saves: "Saves",
-    edited: "Edited",
+    openDeck: "Open deck",
+    openDeckPage: "Open deck page",
+    owner: (username: string) => `Author: @${username}`,
+    updated: "Updated",
     noDescription: "No description",
     cards: "Cards",
-    cardsLoaded: (loaded: number, total: number) => `${loaded} of ${total}`,
     noCards: "This deck has no cards yet",
     loading: "Loading preview…",
     errorTitle: "Preview didn't load",
     retry: "Try again",
-    loadMore: "Show more",
-    loadingMore: "Loading…",
-    loadMoreError: "Couldn't load the next cards.",
+    loadingPage: "Loading cards…",
+    pageError: "Couldn't load this page of cards.",
+    pagination: "Card pages",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    goToPage: (page: number) => `Go to page ${page}`,
+    currentPage: (page: number) => `Page ${page}, current`,
+    pageStatus: (page: number) => `Page ${page}`,
     errors: {
       generic: "Try again.",
       forbidden: "This account does not have access to the deck.",
@@ -105,21 +117,70 @@ function getPreviewErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-
 }
 
 interface CatalogDeckPreviewProps {
-  currentUserUuid: string;
   deckUuid: string;
   onClose: () => void;
+  onOpenDeck?: () => void;
+  returnTarget: DeckDetailsReturnTarget;
+  returnUsername?: string;
+}
+
+function PreviewChevronIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d={direction === "left" ? "m14.5 6-6 6 6 6" : "m9.5 6 6 6-6 6"} />
+    </svg>
+  );
+}
+
+function usePreviewPaginationWidth(): number {
+  const getButtonCount = () => {
+    if (typeof window === "undefined") {
+      return 7;
+    }
+    if (window.matchMedia("(max-width: 420px)").matches) {
+      return 3;
+    }
+    return window.matchMedia("(max-width: 760px)").matches ? 5 : 7;
+  };
+  const [buttonCount, setButtonCount] = useState(getButtonCount);
+
+  useEffect(() => {
+    const narrowQuery = window.matchMedia("(max-width: 420px)");
+    const compactQuery = window.matchMedia("(max-width: 760px)");
+    const updateButtonCount = () => setButtonCount(getButtonCount());
+    narrowQuery.addEventListener("change", updateButtonCount);
+    compactQuery.addEventListener("change", updateButtonCount);
+    return () => {
+      narrowQuery.removeEventListener("change", updateButtonCount);
+      compactQuery.removeEventListener("change", updateButtonCount);
+    };
+  }, []);
+
+  return buttonCount;
 }
 
 export function CatalogDeckPreview({
-  currentUserUuid,
   deckUuid,
   onClose,
+  onOpenDeck,
+  returnTarget,
+  returnUsername,
 }: CatalogDeckPreviewProps) {
   const messages = useLocalizedMessages(MESSAGES);
   const { locale } = useLocale();
   const preview = useCatalogDeckPreview(deckUuid);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const cardsSectionRef = useRef<HTMLElement | null>(null);
   const dialogLabelId = useId();
+  const paginationButtonCount = usePreviewPaginationWidth();
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -135,11 +196,22 @@ export function CatalogDeckPreview({
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
     event.preventDefault();
+    closeDialog();
+  }
+
+  function selectPage(page: number): void {
+    if (page === preview.currentPage || page < 1 || page > preview.pageCount) {
+      return;
+    }
+
+    preview.selectPage(page);
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+    cardsSectionRef.current?.scrollIntoView({ behavior, block: "start" });
   }
 
   const deck = preview.deck;
-  const ownerUsername =
-    deck?.ownerUuid === currentUserUuid ? messages.yourDeck : messages.otherOwner;
   const updatedAt = deck === null ? null : formatCatalogUpdatedAt(deck.updatedAt, locale);
   const words =
     deck === null ? null : localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
@@ -160,6 +232,26 @@ export function CatalogDeckPreview({
           {messages.dialogLabel}
         </span>
         <div className={styles.previewTopbar}>
+          <Link
+            aria-label={messages.openDeckPage}
+            className={styles.previewOpenButton}
+            onClick={onOpenDeck}
+            state={createDeckDetailsNavigationState(returnTarget, returnUsername)}
+            to={getDeckDetailsPath(deckUuid)}
+          >
+            <span>{messages.openDeck}</span>
+            <svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.9"
+              viewBox="0 0 24 24"
+            >
+              <path d="M5 12h14m-5-5 5 5-5 5" />
+            </svg>
+          </Link>
           <button aria-label={messages.close} autoFocus onClick={closeDialog} type="button">
             <svg
               aria-hidden="true"
@@ -175,7 +267,7 @@ export function CatalogDeckPreview({
         </div>
 
         <div
-          aria-busy={preview.status === "loading" || preview.isLoadingMore}
+          aria-busy={preview.status === "loading" || preview.isPageLoading}
           className={styles.previewScrollArea}
         >
           {preview.status === "loading" ? (
@@ -199,48 +291,68 @@ export function CatalogDeckPreview({
           {preview.status === "success" && deck !== null && words !== null && saves !== null ? (
             <>
               <header className={styles.previewHero}>
-                <h2>{deck.title}</h2>
-                <p>{deck.description ?? messages.noDescription}</p>
-
-                <dl className={styles.previewMeta}>
-                  <div>
-                    <dt>{messages.owner}</dt>
-                    <dd>{ownerUsername}</dd>
-                  </div>
-                  <div>
-                    <dt>{messages.words}</dt>
-                    <dd>{words.formattedValue}</dd>
-                  </div>
-                  <div>
-                    <dt>{messages.saves}</dt>
-                    <dd>{saves.formattedValue}</dd>
-                  </div>
-                  {deck.updatedAt !== null && updatedAt !== null ? (
-                    <div>
-                      <dt>{messages.edited}</dt>
-                      <dd>
-                        <time dateTime={deck.updatedAt}>{updatedAt}</time>
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-              </header>
-
-              <section aria-labelledby={`${dialogLabelId}-cards`} className={styles.previewCards}>
-                <div className={styles.previewCardsHeader}>
-                  <h3 id={`${dialogLabelId}-cards`}>{messages.cards}</h3>
-                  <span aria-live="polite">
-                    {messages.cardsLoaded(preview.cards.length, deck.totalWordsCount)}
+                <div className={styles.previewHeroTopline}>
+                  <span
+                    aria-label={messages.owner(deck.ownerUsername)}
+                    className={styles.previewOwnerBadge}
+                    title={`@${deck.ownerUsername}`}
+                  >
+                    @{deck.ownerUsername}
                   </span>
                 </div>
 
-                {preview.cards.length === 0 ? (
+                <h2>{deck.title}</h2>
+                <p>{deck.description ?? messages.noDescription}</p>
+
+                <div className={styles.previewFacts}>
+                  <dl className={styles.previewKeyStats}>
+                    <div>
+                      <dt>{words.unit}</dt>
+                      <dd>{words.formattedValue}</dd>
+                    </div>
+                    <div>
+                      <dt>{saves.unit}</dt>
+                      <dd>{saves.formattedValue}</dd>
+                    </div>
+                  </dl>
+                  {deck.updatedAt !== null && updatedAt !== null ? (
+                    <p className={styles.previewUpdatedMeta}>
+                      <span>{messages.updated}</span>
+                      <time dateTime={deck.updatedAt}>{updatedAt}</time>
+                    </p>
+                  ) : null}
+                </div>
+              </header>
+
+              <section
+                aria-labelledby={`${dialogLabelId}-cards`}
+                className={styles.previewCards}
+                ref={cardsSectionRef}
+              >
+                <div className={styles.previewCardsHeader}>
+                  <h3 id={`${dialogLabelId}-cards`}>{messages.cards}</h3>
+                </div>
+
+                {deck.totalWordsCount === 0 ? (
                   <p className={styles.previewEmpty}>{messages.noCards}</p>
+                ) : preview.isPageLoading ? (
+                  <div className={styles.previewPageState} role="status">
+                    {messages.loadingPage}
+                  </div>
+                ) : preview.pageError !== null ? (
+                  <div className={styles.previewPageState} role="alert">
+                    <p>{messages.pageError}</p>
+                    <button onClick={preview.retryPage} type="button">
+                      {messages.retry}
+                    </button>
+                  </div>
                 ) : (
                   <ol className={styles.previewCardList}>
                     {preview.cards.map((card, index) => (
                       <li key={card.uuid}>
-                        <span className={styles.previewCardNumber}>{index + 1}</span>
+                        <span className={styles.previewCardNumber}>
+                          {(preview.currentPage - 1) * CATALOG_PREVIEW_CARD_PAGE_SIZE + index + 1}
+                        </span>
                         <div className={styles.previewCardSide}>
                           <span>{card.frontLang.toLocaleUpperCase(locale)}</span>
                           <p>{card.frontText}</p>
@@ -254,19 +366,65 @@ export function CatalogDeckPreview({
                   </ol>
                 )}
 
-                {preview.hasMore ? (
-                  <div className={styles.previewLoadMore}>
+                {preview.pageCount > 1 ? (
+                  <nav aria-label={messages.pagination} className={styles.previewPagination}>
+                    <span aria-live="polite" className={styles.visuallyHidden} role="status">
+                      {messages.pageStatus(preview.currentPage)}
+                    </span>
                     <button
-                      disabled={preview.isLoadingMore}
-                      onClick={preview.loadMore}
+                      aria-label={messages.previousPage}
+                      className={styles.previewPaginationArrow}
+                      disabled={preview.currentPage === 1}
+                      onClick={() => selectPage(preview.currentPage - 1)}
                       type="button"
                     >
-                      {preview.isLoadingMore ? messages.loadingMore : messages.loadMore}
+                      <PreviewChevronIcon direction="left" />
                     </button>
-                    {preview.loadMoreError === null ? null : (
-                      <p role="alert">{messages.loadMoreError}</p>
-                    )}
-                  </div>
+                    <ol className={styles.previewPaginationList}>
+                      {getCatalogPaginationTokens(
+                        preview.pageCount,
+                        preview.currentPage,
+                        paginationButtonCount,
+                      ).map((token) => (
+                        <li key={token.key}>
+                          {token.type === "ellipsis" ? (
+                            <span aria-hidden="true" className={styles.previewPaginationEllipsis}>
+                              …
+                            </span>
+                          ) : (
+                            <button
+                              aria-current={
+                                token.pageNumber === preview.currentPage ? "page" : undefined
+                              }
+                              aria-label={
+                                token.pageNumber === preview.currentPage
+                                  ? messages.currentPage(token.pageNumber)
+                                  : messages.goToPage(token.pageNumber)
+                              }
+                              className={
+                                token.pageNumber === preview.currentPage
+                                  ? `${styles.previewPaginationButton} ${styles.previewPaginationButtonActive}`
+                                  : styles.previewPaginationButton
+                              }
+                              onClick={() => selectPage(token.pageNumber)}
+                              type="button"
+                            >
+                              {token.pageNumber}
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                    <button
+                      aria-label={messages.nextPage}
+                      className={styles.previewPaginationArrow}
+                      disabled={preview.currentPage === preview.pageCount}
+                      onClick={() => selectPage(preview.currentPage + 1)}
+                      type="button"
+                    >
+                      <PreviewChevronIcon direction="right" />
+                    </button>
+                  </nav>
                 ) : null}
               </section>
             </>

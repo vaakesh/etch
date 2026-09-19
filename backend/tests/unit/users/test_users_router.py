@@ -6,6 +6,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
+from app.common.schemas import CursorPage
 from app.decks.schemas import (
     DeckListItemResponse,
     DeckResponse,
@@ -21,7 +22,7 @@ from app.users.errors import (
 from app.users.schemas import (
     CreateUserRequest,
     UpdateUserRequest,
-    UserSettingsUpdate,
+    UpdateUserSettingsRequest,
 )
 from tests.unit.factories import (
     make_card,
@@ -37,12 +38,8 @@ class TestGetMe:
     async def test_returns_current_user(
         self,
         client: AsyncClient,
-        current_user,
-        user_settings,
-        user_service: AsyncMock,
+        current_user_with_settings,
     ):
-        user_service.get_user_settings_by_id.return_value = user_settings
-
         response = await client.get("/users/me")
 
         expected = {
@@ -60,11 +57,6 @@ class TestGetMe:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
-
-        user_service.get_user_settings_by_id.assert_awaited_once_with(
-            user_id=current_user.id,
-            for_update=False,
-        )
 
     @pytest.mark.parametrize(
         "current_user",
@@ -91,12 +83,8 @@ class TestGetMe:
     async def test_returns_user_with_custom_settings(
         self,
         client: AsyncClient,
-        current_user,
-        user_settings,
-        user_service: AsyncMock,
+        current_user_with_settings,
     ):
-        user_service.get_user_settings_by_id.return_value = user_settings
-
         response = await client.get("/users/me")
 
         expected = {
@@ -115,27 +103,22 @@ class TestGetMe:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        user_service.get_user_settings_by_id.assert_awaited_once_with(
-            user_id=current_user.id,
-            for_update=False,
-        )
-
 
 class TestGetUserDailyActivity:
-    async def test_returns_daily_activity_from_date(
+    async def test_returns_daily_activity_from_datetime(
         self,
         client: AsyncClient,
         current_user,
         training_session_service: AsyncMock,
     ):
-        training_session_service.user_daily_activity.return_value = {
+        training_session_service.get_user_activity.return_value = {
             date(2026, 8, 1): 2,
             date(2026, 8, 3): 5,
         }
 
         response = await client.get(
             "/users/me/daily-activity",
-            params={"from_date": "2026-08-01T00:00:00Z"},
+            params={"from_datetime": "2026-08-01T00:00:00Z"},
         )
 
         expected = {
@@ -146,34 +129,34 @@ class TestGetUserDailyActivity:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        training_session_service.user_daily_activity.assert_awaited_once_with(
+        training_session_service.get_user_activity.assert_awaited_once_with(
             user_id=current_user.id,
-            from_date=datetime(2026, 8, 1, tzinfo=UTC),
-            to_date=None,
+            from_datetime=datetime(2026, 8, 1, tzinfo=UTC),
+            to_datetime=None,
         )
 
-    async def test_passes_date_range_and_returns_empty_activity(
+    async def test_passes_datetime_range_and_returns_empty_activity(
         self,
         client: AsyncClient,
         current_user,
         training_session_service: AsyncMock,
     ):
-        training_session_service.user_daily_activity.return_value = {}
+        training_session_service.get_user_activity.return_value = {}
 
         response = await client.get(
             "/users/me/daily-activity",
             params={
-                "from_date": "2026-08-01T10:30:00+03:00",
-                "to_date": "2026-08-31T23:59:59+03:00",
+                "from_datetime": "2026-08-01T10:30:00+03:00",
+                "to_datetime": "2026-08-31T23:59:59+03:00",
             },
         )
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {}
 
-        training_session_service.user_daily_activity.assert_awaited_once_with(
+        training_session_service.get_user_activity.assert_awaited_once_with(
             user_id=current_user.id,
-            from_date=datetime(
+            from_datetime=datetime(
                 2026,
                 8,
                 1,
@@ -181,7 +164,7 @@ class TestGetUserDailyActivity:
                 30,
                 tzinfo=timezone(timedelta(hours=3)),
             ),
-            to_date=datetime(
+            to_datetime=datetime(
                 2026,
                 8,
                 31,
@@ -192,7 +175,7 @@ class TestGetUserDailyActivity:
             ),
         )
 
-    async def test_rejects_missing_from_date(
+    async def test_rejects_missing_from_datetime(
         self,
         client: AsyncClient,
         training_session_service: AsyncMock,
@@ -200,11 +183,12 @@ class TestGetUserDailyActivity:
         response = await client.get("/users/me/daily-activity")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
                     "type": "missing",
-                    "loc": ["query", "from_date"],
+                    "loc": ["query", "from_datetime"],
                     "msg": "Field required",
                     "input": None,
                 }
@@ -214,27 +198,27 @@ class TestGetUserDailyActivity:
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == expected
 
-        training_session_service.user_daily_activity.assert_not_awaited()
+        training_session_service.get_user_activity.assert_not_awaited()
 
     @pytest.mark.parametrize(
         ("params", "field"),
         [
             pytest.param(
-                {"from_date": "not-a-date"},
-                "from_date",
-                id="from_date_invalid",
+                {"from_datetime": "not-a-date"},
+                "from_datetime",
+                id="from_datetime_invalid",
             ),
             pytest.param(
                 {
-                    "from_date": "2026-08-01T00:00:00Z",
-                    "to_date": "not-a-date",
+                    "from_datetime": "2026-08-01T00:00:00Z",
+                    "to_datetime": "not-a-date",
                 },
-                "to_date",
-                id="to_date_invalid",
+                "to_datetime",
+                id="to_datetime_invalid",
             ),
         ],
     )
-    async def test_rejects_invalid_date(
+    async def test_rejects_invalid_datetime(
         self,
         client: AsyncClient,
         params,
@@ -247,6 +231,7 @@ class TestGetUserDailyActivity:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -265,7 +250,7 @@ class TestGetUserDailyActivity:
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == expected
 
-        training_session_service.user_daily_activity.assert_not_awaited()
+        training_session_service.get_user_activity.assert_not_awaited()
 
 
 class TestChangeSettings:
@@ -300,7 +285,7 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UserSettingsUpdate(**payload),
+            payload=UpdateUserSettingsRequest(**payload),
         )
 
     @pytest.mark.parametrize(
@@ -393,7 +378,7 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UserSettingsUpdate(**payload),
+            payload=UpdateUserSettingsRequest(**payload),
         )
 
     async def test_returns_422_for_empty_payload(
@@ -414,6 +399,7 @@ class TestChangeSettings:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -430,249 +416,8 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UserSettingsUpdate(**payload),
+            payload=UpdateUserSettingsRequest(**payload),
         )
-
-
-class TestChangePassword:
-    async def test_changes_password(
-        self,
-        client: AsyncClient,
-        current_user,
-        auth_service: AsyncMock,
-    ):
-        payload = {
-            "current_password": "old-password",
-            "new_password": "new-password",
-        }
-
-        response = await client.put(
-            "/users/me/password",
-            json=payload,
-        )
-
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert response.content == b""
-
-        set_cookie_headers = response.headers.get_list("set-cookie")
-        cookies = SimpleCookie()
-        cookies.load(set_cookie_headers[0])
-        cookies.load(set_cookie_headers[1])
-
-        assert len(set_cookie_headers) == 2
-        assert set(cookies) == {"access_token", "refresh_token"}
-
-        access_token = cookies["access_token"]
-        assert access_token.value == ""
-        assert access_token["max-age"] == "0"
-        assert access_token["path"] == "/"
-        assert access_token["secure"] is True
-        assert access_token["httponly"] is True
-        assert access_token["samesite"] == "lax"
-        assert access_token["expires"]
-
-        refresh_token = cookies["refresh_token"]
-        assert refresh_token.value == ""
-        assert refresh_token["max-age"] == "0"
-        assert refresh_token["path"] == "/"
-        assert refresh_token["secure"] is True
-        assert refresh_token["httponly"] is True
-        assert refresh_token["samesite"] == "lax"
-        assert refresh_token["expires"]
-
-        auth_service.change_password.assert_awaited_once_with(
-            user_id=current_user.id,
-            current_password=payload["current_password"],
-            new_password=payload["new_password"],
-        )
-
-    @pytest.mark.parametrize(
-        ("payload", "expected_details"),
-        [
-            pytest.param(
-                {
-                    "current_password": "short",
-                    "new_password": "new-password",
-                },
-                [
-                    {
-                        "type": "string_too_short",
-                        "loc": ["body", "current_password"],
-                        "msg": "String should have at least 8 characters",
-                        "input": "short",
-                        "ctx": {"min_length": 8},
-                    }
-                ],
-                id="current_password_too_short",
-            ),
-            pytest.param(
-                {
-                    "current_password": "old-password",
-                    "new_password": "short",
-                },
-                [
-                    {
-                        "type": "string_too_short",
-                        "loc": ["body", "new_password"],
-                        "msg": "String should have at least 8 characters",
-                        "input": "short",
-                        "ctx": {"min_length": 8},
-                    }
-                ],
-                id="new_password_too_short",
-            ),
-            pytest.param(
-                {
-                    "current_password": "old password",
-                    "new_password": "new-password",
-                },
-                [
-                    {
-                        "type": "string_pattern_mismatch",
-                        "loc": ["body", "current_password"],
-                        "msg": "String should match pattern '^\\S+$'",
-                        "input": "old password",
-                        "ctx": {"pattern": r"^\S+$"},
-                    }
-                ],
-                id="current_password_contains_spaces",
-            ),
-            pytest.param(
-                {
-                    "current_password": "old-password",
-                    "new_password": "new password",
-                },
-                [
-                    {
-                        "type": "string_pattern_mismatch",
-                        "loc": ["body", "new_password"],
-                        "msg": "String should match pattern '^\\S+$'",
-                        "input": "new password",
-                        "ctx": {"pattern": r"^\S+$"},
-                    }
-                ],
-                id="new_password_contains_spaces",
-            ),
-            pytest.param(
-                {
-                    "current_password": "",
-                    "new_password": "new-password",
-                },
-                [
-                    {
-                        "type": "string_too_short",
-                        "loc": ["body", "current_password"],
-                        "msg": "String should have at least 8 characters",
-                        "input": "",
-                        "ctx": {"min_length": 8},
-                    }
-                ],
-                id="current_password_empty",
-            ),
-            pytest.param(
-                {
-                    "current_password": "old-password",
-                    "new_password": "",
-                },
-                [
-                    {
-                        "type": "string_too_short",
-                        "loc": ["body", "new_password"],
-                        "msg": "String should have at least 8 characters",
-                        "input": "",
-                        "ctx": {"min_length": 8},
-                    }
-                ],
-                id="new_password_empty",
-            ),
-        ],
-    )
-    async def test_rejects_invalid_password(
-        self,
-        client: AsyncClient,
-        payload,
-        expected_details,
-        auth_service: AsyncMock,
-    ):
-        response = await client.put(
-            "/users/me/password",
-            json=payload,
-        )
-
-        assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
-        assert response.json() == {
-            "message": "Validation error",
-            "details": expected_details,
-        }
-
-        auth_service.change_password.assert_not_awaited()
-
-    @pytest.mark.parametrize(
-        ("payload", "expected_details"),
-        [
-            pytest.param(
-                {"new_password": "new-password"},
-                [
-                    {
-                        "type": "missing",
-                        "loc": ["body", "current_password"],
-                        "msg": "Field required",
-                        "input": {"new_password": "new-password"},
-                    }
-                ],
-                id="current_password_missing",
-            ),
-            pytest.param(
-                {"current_password": "old-password"},
-                [
-                    {
-                        "type": "missing",
-                        "loc": ["body", "new_password"],
-                        "msg": "Field required",
-                        "input": {"current_password": "old-password"},
-                    }
-                ],
-                id="new_password_missing",
-            ),
-            pytest.param(
-                {},
-                [
-                    {
-                        "type": "missing",
-                        "loc": ["body", "current_password"],
-                        "msg": "Field required",
-                        "input": {},
-                    },
-                    {
-                        "type": "missing",
-                        "loc": ["body", "new_password"],
-                        "msg": "Field required",
-                        "input": {},
-                    },
-                ],
-                id="all_passwords_missing",
-            ),
-        ],
-    )
-    async def test_rejects_missing_password(
-        self,
-        client: AsyncClient,
-        payload,
-        expected_details,
-        auth_service: AsyncMock,
-    ):
-        response = await client.put(
-            "/users/me/password",
-            json=payload,
-        )
-
-        assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
-        assert response.json() == {
-            "message": "Validation error",
-            "details": expected_details,
-        }
-
-        auth_service.change_password.assert_not_awaited()
 
 
 class TestGetMyDecks:
@@ -683,10 +428,10 @@ class TestGetMyDecks:
         deck,
         deck_service: AsyncMock,
     ):
-        deck_service.get_all_by_user_uuid.return_value = (
-            [deck],
-            None,
-            False,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=[deck],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get("/users/me/decks")
@@ -712,13 +457,11 @@ class TestGetMyDecks:
 
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     async def test_returns_multiple_decks(
@@ -736,10 +479,10 @@ class TestGetMyDecks:
             ),
         ]
 
-        deck_service.get_all_by_user_uuid.return_value = (
-            decks,
-            None,
-            False,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=decks,
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get("/users/me/decks")
@@ -775,13 +518,11 @@ class TestGetMyDecks:
 
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     async def test_returns_empty_page(
@@ -790,10 +531,10 @@ class TestGetMyDecks:
         current_user,
         deck_service: AsyncMock,
     ):
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get("/users/me/decks")
@@ -806,13 +547,11 @@ class TestGetMyDecks:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     async def test_returns_next_cursor(
@@ -824,10 +563,10 @@ class TestGetMyDecks:
     ):
         next_cursor = "next-page-cursor"
 
-        deck_service.get_all_by_user_uuid.return_value = (
-            [deck],
-            next_cursor,
-            True,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=[deck],
+            next_cursor=next_cursor,
+            has_more=True,
         )
 
         response = await client.get("/users/me/decks")
@@ -853,13 +592,11 @@ class TestGetMyDecks:
 
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     @pytest.mark.parametrize(
@@ -879,10 +616,10 @@ class TestGetMyDecks:
         cursor,
         deck_service: AsyncMock,
     ):
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get(
@@ -901,13 +638,11 @@ class TestGetMyDecks:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=None,
             cursor=cursor,
             limit=limit,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     @pytest.mark.parametrize(
@@ -943,10 +678,10 @@ class TestGetMyDecks:
         normalized_query,
         deck_service: AsyncMock,
     ):
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_owned_decks.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get(
@@ -961,13 +696,11 @@ class TestGetMyDecks:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=current_user.uuid,
+        deck_service.get_owned_decks.assert_awaited_once_with(
+            owner_id=current_user.id,
             search_query=normalized_query,
             cursor=None,
             limit=30,
-            public_only=False,
-            current_user_id=current_user.id,
         )
 
     @pytest.mark.parametrize(
@@ -1013,11 +746,12 @@ class TestGetMyDecks:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_owned_decks.assert_not_awaited()
 
     @pytest.mark.parametrize(
         ("search_query", "expected_detail"),
@@ -1062,11 +796,12 @@ class TestGetMyDecks:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_owned_decks.assert_not_awaited()
 
     async def test_rejects_too_long_cursor(
         self,
@@ -1082,6 +817,7 @@ class TestGetMyDecks:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1094,7 +830,7 @@ class TestGetMyDecks:
             ],
         }
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_owned_decks.assert_not_awaited()
 
 
 class TestGetMyCards:
@@ -1417,6 +1153,7 @@ class TestGetMyCards:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1466,6 +1203,7 @@ class TestGetMyCards:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1486,6 +1224,7 @@ class TestGetMyCards:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1524,6 +1263,7 @@ class TestGetMyTrainingSessions:
                 {
                     "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
                     "deck_uuid": ("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    "deck_title": "Test deck",
                     "status": "in_progress",
                     "requested_count": 10,
                     "actual_count": 3,
@@ -1580,6 +1320,7 @@ class TestGetMyTrainingSessions:
                 {
                     "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
                     "deck_uuid": ("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    "deck_title": "Test deck",
                     "status": "in_progress",
                     "requested_count": 10,
                     "actual_count": 3,
@@ -1593,6 +1334,7 @@ class TestGetMyTrainingSessions:
                 {
                     "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
                     "deck_uuid": ("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    "deck_title": "Test deck",
                     "status": "completed",
                     "requested_count": 10,
                     "actual_count": 3,
@@ -1674,6 +1416,7 @@ class TestGetMyTrainingSessions:
                 {
                     "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
                     "deck_uuid": ("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    "deck_title": "Test deck",
                     "status": "in_progress",
                     "requested_count": 10,
                     "actual_count": 3,
@@ -1882,6 +1625,7 @@ class TestGetMyTrainingSessions:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1902,6 +1646,7 @@ class TestGetMyTrainingSessions:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1932,6 +1677,7 @@ class TestGetMyTrainingSessions:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2224,6 +1970,7 @@ class TestGetMySavedDecks:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -2254,7 +2001,6 @@ class TestGetPublicUser:
 
         user_service.get_by_uuid.assert_awaited_once_with(
             user_uuid=user.uuid,
-            for_update=False,
         )
 
     async def test_rejects_invalid_uuid(
@@ -2266,6 +2012,7 @@ class TestGetPublicUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2302,10 +2049,8 @@ class TestCreateUser:
         )
         user_settings = make_user_settings()
 
-        user_service.create_user.return_value = (
-            new_user,
-            user_settings,
-        )
+        new_user.settings = user_settings
+        user_service.create_user.return_value = new_user
 
         response = await client.post(
             "/users/create",
@@ -2347,10 +2092,8 @@ class TestCreateUser:
         )
         user_settings = make_user_settings()
 
-        user_service.create_user.return_value = (
-            new_user,
-            user_settings,
-        )
+        new_user.settings = user_settings
+        user_service.create_user.return_value = new_user
 
         response = await client.post(
             "/users/create",
@@ -2439,10 +2182,8 @@ class TestCreateUser:
             email="user@example.com",
         )
         user_settings = make_user_settings()
-        user_service.create_user.return_value = (
-            new_user,
-            user_settings,
-        )
+        new_user.settings = user_settings
+        user_service.create_user.return_value = new_user
 
         response = await client.post(
             "/users/create",
@@ -2600,6 +2341,7 @@ class TestCreateUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -2703,6 +2445,7 @@ class TestCreateUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -2754,7 +2497,6 @@ class TestUpdateUser:
         assert response.json() == expected
 
         user_service.update_user.assert_awaited_once_with(
-            target_user_uuid=current_user.uuid,
             current_user_id=current_user.id,
             payload=UpdateUserRequest(**payload),
         )
@@ -2814,7 +2556,6 @@ class TestUpdateUser:
         assert response.json() == expected
 
         user_service.update_user.assert_awaited_once_with(
-            target_user_uuid=current_user.uuid,
             current_user_id=current_user.id,
             payload=UpdateUserRequest(**payload),
         )
@@ -2895,7 +2636,6 @@ class TestUpdateUser:
         assert response.json() == expected
 
         user_service.update_user.assert_awaited_once_with(
-            target_user_uuid=current_user.uuid,
             current_user_id=current_user.id,
             payload=UpdateUserRequest(**expected_service_payload),
         )
@@ -2966,6 +2706,7 @@ class TestUpdateUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -3002,6 +2743,7 @@ class TestUpdateUser:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -3017,7 +2759,6 @@ class TestUpdateUser:
         assert response.json() == expected
 
         user_service.update_user.assert_awaited_once_with(
-            target_user_uuid=current_user.uuid,
             current_user_id=current_user.id,
             payload=UpdateUserRequest(**payload),
         )
@@ -3063,10 +2804,9 @@ class TestUpdateUser:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         user_service.update_user.assert_awaited_once_with(
-            target_user_uuid=current_user.uuid,
             current_user_id=current_user.id,
             payload=UpdateUserRequest(**payload),
         )
@@ -3112,7 +2852,6 @@ class TestDeleteUser:
 
         user_service.delete_user.assert_awaited_once_with(
             current_user_id=current_user.id,
-            target_user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -3146,12 +2885,11 @@ class TestDeleteUser:
         response = await client.delete("/users/me")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
         assert response.headers.get_list("set-cookie") == []
 
         user_service.delete_user.assert_awaited_once_with(
             current_user_id=current_user.id,
-            target_user_uuid=current_user.uuid,
         )
 
 
@@ -3179,6 +2917,7 @@ class TestGetPublicTrainingSessionsByUser:
                 {
                     "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
                     "deck_uuid": ("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                    "deck_title": "Test deck",
                     "status": "completed",
                     "requested_count": 10,
                     "actual_count": 3,
@@ -3294,7 +3033,7 @@ class TestGetPublicTrainingSessionsByUser:
         response = await client.get(f"/users/{user.uuid}/training-sessions")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "User not found"}
+        assert response.json()["message"] == "User not found"
 
         (
             training_session_service.get_all_by_user_uuid.assert_awaited_once_with(
@@ -3313,6 +3052,7 @@ class TestGetPublicTrainingSessionsByUser:
         response = await client.get("/users/not-a-uuid/training-sessions")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -3376,6 +3116,7 @@ class TestGetPublicTrainingSessionsByUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -3396,6 +3137,7 @@ class TestGetPublicTrainingSessionsByUser:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -3415,17 +3157,18 @@ class TestGetPublicTrainingSessionsByUser:
 
 
 class TestGetPublicDecksByUser:
-    async def test_returns_public_decks(
+    async def test_returns_public_decks_for_authenticated_viewer(
         self,
         client: AsyncClient,
+        current_user,
         deck,
         deck_service: AsyncMock,
     ):
         user = make_user()
-        deck_service.get_all_by_user_uuid.return_value = (
-            [deck],
-            "next-page-cursor",
-            True,
+        deck_service.get_public_by_owner_uuid.return_value = CursorPage(
+            items=[deck],
+            next_cursor="next-page-cursor",
+            has_more=True,
         )
 
         response = await client.get(f"/users/{user.uuid}/decks")
@@ -3450,25 +3193,51 @@ class TestGetPublicDecksByUser:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=user.uuid,
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=True,
-            current_user_id=None,
+        )
+
+    @pytest.mark.parametrize("optional_current_user", [None], indirect=True)
+    async def test_returns_public_decks_for_anonymous_viewer(
+        self,
+        client: AsyncClient,
+        deck,
+        deck_service: AsyncMock,
+    ):
+        user = make_user()
+        deck_service.get_public_by_owner_uuid.return_value = CursorPage(
+            items=[deck],
+            next_cursor=None,
+            has_more=False,
+        )
+
+        response = await client.get(f"/users/{user.uuid}/decks")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=None,
+            search_query=None,
+            cursor=None,
+            limit=30,
         )
 
     async def test_returns_empty_page(
         self,
         client: AsyncClient,
+        current_user,
         deck_service: AsyncMock,
     ):
         user = make_user()
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_public_by_owner_uuid.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get(f"/users/{user.uuid}/decks")
@@ -3480,13 +3249,12 @@ class TestGetPublicDecksByUser:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=user.uuid,
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=True,
-            current_user_id=None,
         )
 
     @pytest.mark.parametrize(
@@ -3509,15 +3277,16 @@ class TestGetPublicDecksByUser:
     async def test_passes_normalized_search_query(
         self,
         client: AsyncClient,
+        current_user,
         raw_query,
         normalized_query,
         deck_service: AsyncMock,
     ):
         user = make_user()
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_public_by_owner_uuid.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get(
@@ -3532,13 +3301,12 @@ class TestGetPublicDecksByUser:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=user.uuid,
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=current_user.id,
             search_query=normalized_query,
             cursor=None,
             limit=30,
-            public_only=True,
-            current_user_id=None,
         )
 
     @pytest.mark.parametrize(
@@ -3553,15 +3321,16 @@ class TestGetPublicDecksByUser:
     async def test_passes_pagination_params(
         self,
         client: AsyncClient,
+        current_user,
         limit,
         cursor,
         deck_service: AsyncMock,
     ):
         user = make_user()
-        deck_service.get_all_by_user_uuid.return_value = (
-            [],
-            None,
-            False,
+        deck_service.get_public_by_owner_uuid.return_value = CursorPage(
+            items=[],
+            next_cursor=None,
+            has_more=False,
         )
 
         response = await client.get(
@@ -3579,35 +3348,34 @@ class TestGetPublicDecksByUser:
             "has_more": False,
         }
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=user.uuid,
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=current_user.id,
             search_query=None,
             cursor=cursor,
             limit=limit,
-            public_only=True,
-            current_user_id=None,
         )
 
     async def test_returns_404_when_user_not_found(
         self,
         client: AsyncClient,
+        current_user,
         deck_service: AsyncMock,
     ):
         user = make_user()
-        deck_service.get_all_by_user_uuid.side_effect = UserNotFoundError()
+        deck_service.get_public_by_owner_uuid.side_effect = UserNotFoundError()
 
         response = await client.get(f"/users/{user.uuid}/decks")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "User not found"}
+        assert response.json()["message"] == "User not found"
 
-        deck_service.get_all_by_user_uuid.assert_awaited_once_with(
-            user_uuid=user.uuid,
+        deck_service.get_public_by_owner_uuid.assert_awaited_once_with(
+            owner_uuid=user.uuid,
+            viewer_id=current_user.id,
             search_query=None,
             cursor=None,
             limit=30,
-            public_only=True,
-            current_user_id=None,
         )
 
     async def test_rejects_invalid_user_uuid(
@@ -3618,6 +3386,7 @@ class TestGetPublicDecksByUser:
         response = await client.get("/users/not-a-uuid/decks")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -3636,7 +3405,7 @@ class TestGetPublicDecksByUser:
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_public_by_owner_uuid.assert_not_awaited()
 
     @pytest.mark.parametrize(
         ("limit", "expected_detail"),
@@ -3681,11 +3450,12 @@ class TestGetPublicDecksByUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_public_by_owner_uuid.assert_not_awaited()
 
     @pytest.mark.parametrize(
         ("search_query", "expected_detail"),
@@ -3730,11 +3500,12 @@ class TestGetPublicDecksByUser:
 
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_public_by_owner_uuid.assert_not_awaited()
 
     async def test_rejects_too_long_cursor(
         self,
@@ -3750,6 +3521,7 @@ class TestGetPublicDecksByUser:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -3765,4 +3537,4 @@ class TestGetPublicDecksByUser:
         assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
         assert response.json() == expected
 
-        deck_service.get_all_by_user_uuid.assert_not_awaited()
+        deck_service.get_public_by_owner_uuid.assert_not_awaited()

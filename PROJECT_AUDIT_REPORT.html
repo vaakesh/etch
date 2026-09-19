@@ -1,0 +1,1690 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Технический и продуктовый аудит проекта Etch: ошибки, риски, сильные стороны и дорожная карта."
+    />
+    <title>Etch — аудит проекта, 15 сентября 2026</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071018;
+        --panel: #0d1822;
+        --panel-2: #12212d;
+        --text: #edf6f4;
+        --muted: #91a9b3;
+        --line: #223744;
+        --accent: #56e0b3;
+        --accent-2: #8feacb;
+        --critical: #ff6b71;
+        --high: #ffb45b;
+        --medium: #69b9ff;
+        --low: #9baeb8;
+        --good: #57d39b;
+        --bad: #ff7b7f;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
+        --max: 1180px;
+      }
+
+      html[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f3f7f5;
+        --panel: #ffffff;
+        --panel-2: #eaf2ef;
+        --text: #10211e;
+        --muted: #526b66;
+        --line: #cbdcd7;
+        --accent: #087c5f;
+        --accent-2: #05644d;
+        --critical: #bd2430;
+        --high: #a35400;
+        --medium: #1268a9;
+        --low: #51636b;
+        --good: #0c7b55;
+        --bad: #bd2430;
+        --shadow: 0 24px 70px rgba(18, 50, 42, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 85% 8%, rgba(86, 224, 179, 0.1), transparent 25rem),
+          radial-gradient(circle at 4% 30%, rgba(105, 185, 255, 0.07), transparent 24rem),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      a {
+        color: var(--accent-2);
+        text-underline-offset: 0.18em;
+      }
+
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      .skip-link {
+        position: fixed;
+        left: 1rem;
+        top: -5rem;
+        z-index: 30;
+        border-radius: 0.55rem;
+        background: var(--accent);
+        color: #071018;
+        padding: 0.7rem 1rem;
+        font-weight: 800;
+      }
+
+      .skip-link:focus {
+        top: 1rem;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+        background: color-mix(in srgb, var(--bg) 89%, transparent);
+        backdrop-filter: blur(16px);
+      }
+
+      .topbar-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: min(calc(100% - 2rem), var(--max));
+        min-height: 64px;
+        margin: 0 auto;
+        gap: 1rem;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--line));
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.84rem;
+      }
+
+      .top-actions {
+        display: flex;
+        gap: 0.55rem;
+      }
+
+      .icon-button {
+        display: inline-grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 0.7rem;
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+      }
+
+      .icon-button:hover {
+        border-color: var(--accent);
+        background: var(--panel-2);
+        transform: translateY(-1px);
+      }
+
+      .icon-button svg {
+        width: 19px;
+        height: 19px;
+      }
+
+      .page {
+        width: min(calc(100% - 2rem), var(--max));
+        margin: 0 auto;
+        padding: 3.4rem 0 6rem;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+        align-items: end;
+        gap: 2.5rem;
+        padding: 3.2rem;
+        border: 1px solid var(--line);
+        border-radius: 1.5rem;
+        background:
+          linear-gradient(135deg, rgba(86, 224, 179, 0.08), transparent 42%), var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .eyebrow {
+        margin: 0 0 0.75rem;
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin-top: 0;
+        line-height: 1.14;
+        letter-spacing: -0.035em;
+      }
+
+      h1 {
+        max-width: 760px;
+        margin-bottom: 1.1rem;
+        font-size: clamp(2.4rem, 6vw, 5.4rem);
+      }
+
+      h2 {
+        margin-bottom: 0.75rem;
+        font-size: clamp(1.65rem, 3vw, 2.55rem);
+      }
+
+      h3 {
+        margin-bottom: 0.5rem;
+        font-size: 1.15rem;
+      }
+
+      .lead {
+        max-width: 740px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(1.03rem, 2vw, 1.25rem);
+      }
+
+      .verdict {
+        padding: 1.3rem;
+        border: 1px solid color-mix(in srgb, var(--high) 50%, var(--line));
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--high) 7%, var(--panel-2));
+      }
+
+      .verdict strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--high);
+        font-size: 1.2rem;
+      }
+
+      .verdict p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1.5rem;
+      }
+
+      .meta-pill,
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.25rem 0.7rem;
+        background: color-mix(in srgb, var(--panel-2) 76%, transparent);
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.74rem;
+        font-weight: 700;
+      }
+
+      .section {
+        scroll-margin-top: 90px;
+        margin-top: 4.8rem;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 2rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .section-intro {
+        max-width: 760px;
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.8rem;
+        margin-top: 1rem;
+      }
+
+      .metric {
+        min-height: 138px;
+        padding: 1.3rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--panel);
+      }
+
+      .metric .value {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: clamp(1.8rem, 4vw, 2.8rem);
+        font-weight: 850;
+        letter-spacing: -0.05em;
+      }
+
+      .metric .label {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .metric.critical .value {
+        color: var(--critical);
+      }
+
+      .metric.high .value {
+        color: var(--high);
+      }
+
+      .metric.good .value {
+        color: var(--good);
+      }
+
+      .checks,
+      .strength-grid,
+      .roadmap {
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .checks {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .check,
+      .strength,
+      .phase,
+      .note {
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--panel);
+      }
+
+      .check {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 1rem 1.1rem;
+      }
+
+      .check-mark {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--good);
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--good) 12%, transparent);
+      }
+
+      .check.fail .check-mark {
+        background: var(--bad);
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--bad) 12%, transparent);
+      }
+
+      .check.warn .check-mark {
+        background: var(--high);
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--high) 12%, transparent);
+      }
+
+      .check strong {
+        display: block;
+      }
+
+      .check small {
+        color: var(--muted);
+      }
+
+      .check code,
+      .finding code,
+      .note code {
+        color: var(--accent-2);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.82em;
+      }
+
+      .filters {
+        position: sticky;
+        top: 76px;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) auto;
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--bg) 91%, transparent);
+        backdrop-filter: blur(14px);
+      }
+
+      .search {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 0.65rem;
+        background: var(--panel);
+        color: var(--text);
+        padding: 0.65rem 0.85rem;
+      }
+
+      .filter-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.45rem;
+      }
+
+      .filter-button {
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 0.65rem;
+        background: var(--panel);
+        color: var(--muted);
+        padding: 0.55rem 0.8rem;
+        cursor: pointer;
+        font-size: 0.82rem;
+        font-weight: 750;
+        transition: 160ms ease;
+      }
+
+      .filter-button:hover,
+      .filter-button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 13%, var(--panel));
+        color: var(--text);
+      }
+
+      .result-count {
+        margin: 0.8rem 0 1.1rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .findings {
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .finding {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--panel);
+      }
+
+      .finding::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: var(--low);
+        content: "";
+      }
+
+      .finding[data-severity="critical"]::before {
+        background: var(--critical);
+      }
+
+      .finding[data-severity="high"]::before {
+        background: var(--high);
+      }
+
+      .finding[data-severity="medium"]::before {
+        background: var(--medium);
+      }
+
+      .finding[hidden] {
+        display: none;
+      }
+
+      .finding summary {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.1rem 1.25rem 1.1rem 1.4rem;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .finding summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .finding summary::after {
+        width: 9px;
+        height: 9px;
+        border-right: 2px solid var(--muted);
+        border-bottom: 2px solid var(--muted);
+        content: "";
+        transform: rotate(45deg);
+        transition: transform 160ms ease;
+      }
+
+      .finding[open] summary::after {
+        transform: rotate(225deg);
+      }
+
+      .finding-title {
+        min-width: 0;
+      }
+
+      .finding-title strong {
+        display: block;
+        color: var(--text);
+        font-size: 1rem;
+      }
+
+      .finding-title span {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .severity {
+        min-width: 82px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        padding: 0.24rem 0.55rem;
+        text-align: center;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.69rem;
+        font-weight: 850;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      [data-severity="critical"] .severity {
+        color: var(--critical);
+      }
+
+      [data-severity="high"] .severity {
+        color: var(--high);
+      }
+
+      [data-severity="medium"] .severity {
+        color: var(--medium);
+      }
+
+      [data-severity="low"] .severity {
+        color: var(--low);
+      }
+
+      .finding-body {
+        padding: 0 1.4rem 1.4rem;
+      }
+
+      .finding-body p {
+        margin: 0.7rem 0;
+      }
+
+      .finding-body strong {
+        color: var(--text);
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.65rem;
+        margin-top: 1rem;
+      }
+
+      .evidence div {
+        padding: 0.8rem;
+        border: 1px solid var(--line);
+        border-radius: 0.7rem;
+        background: var(--panel-2);
+      }
+
+      .evidence dt {
+        margin-bottom: 0.25rem;
+        color: var(--muted);
+        font-size: 0.73rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .evidence dd {
+        margin: 0;
+        font-size: 0.88rem;
+      }
+
+      .strength-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .strength {
+        padding: 1.25rem;
+      }
+
+      .strength p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .direction {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 0.85rem;
+      }
+
+      .north-star,
+      .product-loop {
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--panel);
+        padding: 1.5rem;
+      }
+
+      .north-star {
+        background:
+          linear-gradient(145deg, rgba(86, 224, 179, 0.1), transparent 60%), var(--panel);
+      }
+
+      .north-star blockquote {
+        margin: 1.2rem 0 0;
+        color: var(--accent-2);
+        font-size: clamp(1.25rem, 3vw, 2rem);
+        font-weight: 780;
+        line-height: 1.3;
+        letter-spacing: -0.03em;
+      }
+
+      .loop {
+        display: grid;
+        gap: 0.55rem;
+        margin-top: 1rem;
+      }
+
+      .loop-step {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 0.65rem;
+        align-items: start;
+      }
+
+      .loop-step span {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--accent) 16%, var(--panel-2));
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.76rem;
+        font-weight: 850;
+      }
+
+      .roadmap {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .phase {
+        position: relative;
+        padding: 1.35rem;
+      }
+
+      .phase-number {
+        color: var(--accent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.75rem;
+        font-weight: 850;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .phase p {
+        color: var(--muted);
+      }
+
+      .phase ul,
+      .note ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      .phase li + li,
+      .note li + li {
+        margin-top: 0.35rem;
+      }
+
+      .note {
+        margin-top: 1rem;
+        padding: 1.3rem;
+      }
+
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+
+      .method-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.8rem;
+        padding: 0;
+        list-style: none;
+      }
+
+      .method-list li {
+        padding: 1rem;
+        border-left: 3px solid var(--accent);
+        background: var(--panel);
+      }
+
+      .method-list strong {
+        display: block;
+      }
+
+      .method-list span {
+        color: var(--muted);
+      }
+
+      footer {
+        margin-top: 5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .empty-result {
+        padding: 2rem;
+        border: 1px dashed var(--line);
+        border-radius: 1rem;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .direction {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics,
+        .strength-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .evidence {
+          grid-template-columns: 1fr;
+        }
+
+        .filters {
+          position: static;
+          grid-template-columns: 1fr;
+        }
+
+        .filter-buttons {
+          justify-content: flex-start;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .page {
+          width: min(calc(100% - 1rem), var(--max));
+          padding-top: 1rem;
+        }
+
+        .hero {
+          padding: 1.4rem;
+          border-radius: 1rem;
+        }
+
+        .metrics,
+        .checks,
+        .strength-grid,
+        .roadmap,
+        .method-list {
+          grid-template-columns: 1fr;
+        }
+
+        .section {
+          margin-top: 3.5rem;
+        }
+
+        .section-head {
+          align-items: start;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .finding summary {
+          grid-template-columns: 1fr auto;
+        }
+
+        .severity {
+          grid-row: 1;
+          grid-column: 1 / -1;
+          justify-self: start;
+        }
+
+        .finding-title {
+          grid-row: 2;
+        }
+
+        .finding summary::after {
+          grid-row: 2;
+        }
+
+        .brand span:last-child {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #ffffff;
+          --panel: #ffffff;
+          --panel-2: #f4f6f5;
+          --text: #111111;
+          --muted: #4c5653;
+          --line: #cbd2cf;
+        }
+
+        body {
+          background: #fff;
+          font-size: 10pt;
+        }
+
+        .topbar,
+        .filters,
+        .result-count {
+          display: none;
+        }
+
+        .page {
+          width: 100%;
+          padding: 0;
+        }
+
+        .hero,
+        .finding,
+        .phase,
+        .strength,
+        .check {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+
+        .finding-body {
+          display: block;
+        }
+
+        details:not([open]) > *:not(summary) {
+          display: block;
+        }
+
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">К содержанию</a>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#top" aria-label="В начало отчёта">
+          <span class="brand-mark">ET</span>
+          <span>Etch / Project audit</span>
+        </a>
+        <div class="top-actions">
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Сменить тему">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+          </button>
+          <button class="icon-button" type="button" aria-label="Распечатать отчёт" onclick="window.print()">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <path d="M7 13h10v8H7z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page" id="main">
+      <section class="hero" id="top">
+        <div>
+          <p class="eyebrow">Комплексный аудит · 15.09.2026</p>
+          <h1>Etch готов расти, но выпускать текущую сборку рано</h1>
+          <p class="lead">
+            Проект уже выглядит как цельный продукт для словарных карточек: есть библиотека,
+            каталог, практика, история и профиль. Главный риск сейчас находится в целостности
+            данных и границах пользовательских сессий. До развития новых функций стоит закрыть
+            три критических дефекта и стабилизировать контракт между backend, frontend и БД.
+          </p>
+          <div class="meta-row" aria-label="Параметры аудита">
+            <span class="meta-pill">commit 6f6c7ea + working tree</span>
+            <span class="meta-pill">44 API operations</span>
+            <span class="meta-pill">294 source/test/style files</span>
+            <span class="meta-pill">76 137 lines</span>
+          </div>
+        </div>
+        <aside class="verdict" aria-label="Итог аудита">
+          <strong>Условная готовность: 46 / 100</strong>
+          <p>
+            Архитектурная база хорошая. Production readiness снижают утечки через кэш,
+            ошибочная публикация удалённых данных, красные тесты и дрейф миграций.
+          </p>
+        </aside>
+      </section>
+
+      <section class="section" aria-labelledby="snapshot-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Снимок состояния</p>
+            <h2 id="snapshot-title">Что показала проверка</h2>
+          </div>
+          <p class="section-intro">
+            Проверялось текущее рабочее дерево с уже существующими незакоммиченными изменениями.
+            Отчёт не меняет код приложения и относится именно к этому состоянию проекта.
+          </p>
+        </div>
+        <div class="metrics">
+          <article class="metric critical">
+            <span class="value">3</span>
+            <span class="label">критических дефекта безопасности и данных</span>
+          </article>
+          <article class="metric high">
+            <span class="value">7</span>
+            <span class="label">проблем высокого приоритета</span>
+          </article>
+          <article class="metric">
+            <span class="value">74</span>
+            <span class="label">падающих теста: 71 backend + 3 frontend</span>
+          </article>
+          <article class="metric good">
+            <span class="value">50%</span>
+            <span class="label">покрытие backend по строкам</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="checks-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Автоматические проверки</p>
+            <h2 id="checks-title">Release gate сейчас не проходит</h2>
+          </div>
+        </div>
+        <div class="checks">
+          <article class="check fail">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>Backend tests</strong><small>409 passed, 71 failed, 480 collected</small></div>
+            <code>pytest</code>
+          </article>
+          <article class="check fail">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>Frontend tests</strong><small>396 passed, 3 failed, 399 total</small></div>
+            <code>vitest</code>
+          </article>
+          <article class="check">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>TypeScript + production build</strong><small>Сборка Vite завершена успешно</small></div>
+            <code>npm build</code>
+          </article>
+          <article class="check">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>ESLint</strong><small>Ошибок и предупреждений нет</small></div>
+            <code>npm lint</code>
+          </article>
+          <article class="check warn">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>Prettier</strong><small>3 файла не соответствуют форматированию</small></div>
+            <code>format:check</code>
+          </article>
+          <article class="check fail">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>Alembic schema check</strong><small>Обнаружены неприменённые изменения схемы</small></div>
+            <code>alembic check</code>
+          </article>
+          <article class="check fail">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>SQL удаления карточки</strong><small>PostgreSQL: FOR UPDATE запрещён с DISTINCT</small></div>
+            <code>EXPLAIN</code>
+          </article>
+          <article class="check">
+            <span class="check-mark" aria-hidden="true"></span>
+            <div><strong>Login UI smoke check</strong><small>Страница загрузилась, форма доступна, overflow не найден</small></div>
+            <code>Firefox</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="findings" aria-labelledby="findings-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Реестр проблем</p>
+            <h2 id="findings-title">20 находок с приоритетом</h2>
+          </div>
+          <p class="section-intro">
+            Critical и High подтверждены кодом, тестовым воспроизведением или запросом к локальной
+            PostgreSQL. Нажмите на строку, чтобы увидеть эффект и критерий исправления.
+          </p>
+        </div>
+
+        <div class="filters" aria-label="Фильтры проблем">
+          <input class="search" id="finding-search" type="search" placeholder="Поиск: кэш, Redis, профиль…" aria-label="Поиск по проблемам" />
+          <div class="filter-buttons" role="group" aria-label="Фильтр по важности">
+            <button class="filter-button" type="button" data-filter="all" aria-pressed="true">Все</button>
+            <button class="filter-button" type="button" data-filter="critical" aria-pressed="false">Critical</button>
+            <button class="filter-button" type="button" data-filter="high" aria-pressed="false">High</button>
+            <button class="filter-button" type="button" data-filter="medium" aria-pressed="false">Medium</button>
+            <button class="filter-button" type="button" data-filter="low" aria-pressed="false">Low</button>
+          </div>
+        </div>
+        <p class="result-count" id="result-count" aria-live="polite">Показано 20 из 20</p>
+
+        <div class="findings" id="finding-list">
+          <details class="finding" data-severity="critical" data-category="security cache frontend">
+            <summary>
+              <span class="severity">Critical</span>
+              <span class="finding-title"><strong>F01. Кэш frontend может показать данные предыдущего аккаунта</strong><span>Конфиденциальность · session boundary</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Главная, карточки библиотеки, практика и история хранят данные в module-level
+                переменных. Они не имеют ключа пользователя и не очищаются при logout/login.
+                <code>AuthProvider</code> остаётся смонтированным, поэтому после смены аккаунта в той
+                же вкладке новый пользователь может сначала увидеть данные прежнего.
+              </p>
+              <p><strong>Исправление:</strong> сделать единый session-scoped cache с ключом <code>user.uuid + sessionRevision</code>; очищать все персональные кэши при signed-out, signed-in и финальном 401.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>useHomeDashboard.ts:23</code>, <code>useLibraryCards.ts:50</code>, <code>usePracticeHistory.ts:43</code>, <code>usePracticeSessionHistory.ts:38</code></dd></div>
+                <div><dt>Риск</dt><dd>Межаккаунтный показ колод, карточек и истории обучения.</dd></div>
+                <div><dt>Критерий</dt><dd>E2E: A → logout → B; ни один экран не содержит данные A.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="critical" data-category="privacy backend decks deletion">
+            <summary>
+              <span class="severity">Critical</span>
+              <span class="finding-title"><strong>F02. Удаление приватной колоды создаёт публичную копию</strong><span>Конфиденциальность · жизненный цикл данных</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>delete_deck()</code> всегда вызывает архивирование, а <code>_copy_deck()</code>
+                всегда задаёт <code>is_public=True</code>. Воспроизведение показало: приватная колода
+                превращается в публичную копию владельца с жёстко заданным ID 1. Это противоречит
+                обещанию интерфейса «действие нельзя отменить» и настройке приватности.
+              </p>
+              <p><strong>Исправление:</strong> не архивировать приватные колоды; публичную копию создавать только при наличии реальных сторонних сохранений, сохранять исходную видимость и использовать системного владельца по UUID/конфигурации.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/service.py:52, 131, 550, 662</code></dd></div>
+                <div><dt>Воспроизведение</dt><dd><code>private → delete → archive is_public=true</code></dd></div>
+                <div><dt>Критерий</dt><dd>Удалённая приватная колода недоступна ни по UUID, ни в каталоге.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="critical" data-category="database cards deletion sql">
+            <summary>
+              <span class="severity">Critical</span>
+              <span class="finding-title"><strong>F03. Нельзя удалить карточку, связанную с колодой</strong><span>PostgreSQL · основной сценарий</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Перед удалением строится <code>SELECT DISTINCT ... FOR UPDATE OF decks</code>.
+                PostgreSQL отклоняет такой запрос: <code>FOR UPDATE is not allowed with DISTINCT clause</code>.
+                Ошибка подтверждена через <code>EXPLAIN</code> на локальной БД. Операция удаления
+                ломается именно для карточек в колодах.
+              </p>
+              <p><strong>Исправление:</strong> сначала получить уникальные ID без блокировки, затем отдельным запросом заблокировать строки <code>Deck</code>; покрыть реальным integration-тестом.</p>
+              <dl class="evidence">
+                <div><dt>Место</dt><dd><code>decks/repository.py:696–711</code></dd></div>
+                <div><dt>Подтверждение</dt><dd><a href="https://www.postgresql.org/docs/18/sql-select.html">PostgreSQL SELECT locking</a></dd></div>
+                <div><dt>Критерий</dt><dd>Удаление связанной карточки даёт 204, позиции и счётчики нормализованы.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="privacy cache backend decks">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F04. После перевода колоды в private старый публичный кэш остаётся доступным</strong><span>Авторизация · cache invalidation</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>_make_deck_private()</code> меняет видимость, но <code>update_deck()</code> не
+                устанавливает <code>invalidate_deck</code>. Изолированная проверка показала ноль вызовов
+                <code>invalidate_decks()</code>. Кэш живёт до 30 минут и продолжает считать колоду публичной.
+              </p>
+              <p><strong>Исправление:</strong> инвалидировать сущность колоды при любом изменении видимости, UUID lookup, страницы каталога и зависимые preview/card caches.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/service.py:561–631</code>; <code>redis/service.py</code> TTL 30 min</dd></div>
+                <div><dt>Риск</dt><dd>Доступ к закрытой колоде через ранее прогретый кэш.</dd></div>
+                <div><dt>Критерий</dt><dd>Сразу после private чужой GET возвращает 404 при горячем кэше.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="redis reliability backend">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F05. Сбой Redis превращается в AttributeError и может остановить API</strong><span>Надёжность · rate limiting</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>RedisRateLimiter.check()</code> перехватывает <code>RedisError</code>, затем вызывает
+                <code>self._log_redis_error()</code>. Этот метод существует только у другого класса —
+                <code>RedisCacheService</code>. Воспроизведение со simulated outage дало
+                <code>AttributeError</code>. Поскольку limiter подключён к большинству routes, Redis становится
+                единой точкой отказа.
+              </p>
+              <p><strong>Исправление:</strong> использовать module logger, явно выбрать fail-open/fail-closed policy по типу route и добавить тест отключённого Redis.</p>
+              <dl class="evidence">
+                <div><dt>Место</dt><dd><code>redis/service.py:106–128</code>; метод определён лишь на строке 388</dd></div>
+                <div><dt>Риск</dt><dd>Массовые 500 при кратком сбое Redis.</dd></div>
+                <div><dt>Критерий</dt><dd>Read routes работают по выбранной policy; auth routes дают контролируемый ответ.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="pagination backend library">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F06. Пагинация библиотеки падает на неизученных колодах</strong><span>Backend · cursor contract</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>UserDeck.last_studied_at</code> корректно допускает <code>null</code>, но
+                <code>LibraryCursor.last_studied_at</code> требует datetime, а serializer вызывает
+                <code>.isoformat()</code>. Если граница страницы приходится на ещё не изученную колоду,
+                создание next cursor завершается validation error и API отдаёт 500.
+              </p>
+              <p><strong>Исправление:</strong> разрешить null в cursor schema и serializer/deserializer, закрепить порядок <code>NULLS LAST</code> тестами на переход через обе группы.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/schemas.py:151–152</code>, <code>decks/cursor.py:54–83</code></dd></div>
+                <div><dt>Воспроизведение</dt><dd><code>last_studied_at=None → ValidationError</code></dd></div>
+                <div><dt>Критерий</dt><dd>Все страницы обходятся без дублей и пропусков при mixed/null dates.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="frontend profile product api">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F07. Кнопка «Сохранить» в профиле ничего не сохраняет</strong><span>Ложное успешное действие · UX</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Контракт профиля принудительно задаёт <code>isSaved: false</code>, а обработчик кнопки
+                вызывает <code>setMockSaved()</code>, который меняет только React state. Запрос
+                <code>/decks/{uuid}/save</code> или <code>/unsave</code> не выполняется. После перезагрузки
+                результат исчезает, а уже сохранённая колода показывается несохранённой.
+              </p>
+              <p><strong>Исправление:</strong> вернуть viewer_state в endpoint публичных колод либо объединить профиль с BFF; использовать тот же mutation flow, что каталог.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>user-profile-contract.ts:89</code>, <code>useUserProfile.ts:160</code>, <code>UserProfilePage.tsx:395</code></dd></div>
+                <div><dt>Риск</dt><dd>Пользователь получает недостоверное подтверждение действия.</dd></div>
+                <div><dt>Критерий</dt><dd>Состояние совпадает с сервером после reload и синхронизируется между вкладками.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="database migrations deployment">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F08. Модели и последняя миграция расходятся</strong><span>Схема данных · deployment</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                База находится на ревизии <code>871567056706</code>, однако <code>alembic check</code>
+                обнаруживает новые операции: проверки целостности decks/users, изменения unique/index
+                и расхождение constraint статуса сессии. Значит чистая установка и текущая dev-БД могут
+                вести себя иначе, чем предполагают ORM-модели.
+              </p>
+              <p><strong>Исправление:</strong> создать осознанную миграцию после ревизии, проверить upgrade с пустой БД и копией данных, затем сделать <code>alembic check</code> обязательным в CI.</p>
+              <dl class="evidence">
+                <div><dt>Подтверждение</dt><dd><code>docker exec etch-api uv run --frozen alembic check</code> — failed</dd></div>
+                <div><dt>Риск</dt><dd>Разный контракт данных по окружениям и падения при deploy.</dd></div>
+                <div><dt>Критерий</dt><dd><code>alembic upgrade head && alembic check</code> проходит на чистой БД.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="data counters favourite decks">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F09. Избранное искажает счётчик сохранений</strong><span>Целостность статистики · каталог</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>save_deck()</code> увеличивает <code>saves_count</code>, а
+                <code>set_favourite_deck(true)</code> увеличивает его повторно. После favourite → unsave
+                счётчик остаётся завышенным на единицу. Это влияет на профиль автора и сортировку каталога.
+              </p>
+              <p><strong>Исправление:</strong> считать saves только по переходу <code>is_saved</code>; favourite должен быть независимым атрибутом. Добавить reconciliation query и constraint/trigger либо вычисляемый счётчик.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/service.py:1097–1099, 1143–1145, 1186</code></dd></div>
+                <div><dt>Воспроизведение</dt><dd><code>1 save → favourite = 2 → unsave = 1</code>, хотя сохранений 0</dd></div>
+                <div><dt>Критерий</dt><dd><code>saves_count == COUNT(user_decks WHERE is_saved)</code> всегда.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="high" data-category="tests quality release">
+            <summary>
+              <span class="severity">High</span>
+              <span class="finding-title"><strong>F10. Тестовый контракт не синхронизирован с изменениями</strong><span>Release engineering · 74 failures</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Backend падает в 71 сценарии, frontend — в 3. Большой кластер backend failures вызван
+                добавлением <code>owner_username</code>, изменением pagination constraints и удалёнными/
+                изменёнными public routes. Во frontend фикстуры всё ещё используют <code>percent</code>,
+                тогда parser ждёт <code>value</code>; тест HomePage ожидает 2 tooltip, получая 9.
+              </p>
+              <p><strong>Исправление:</strong> сначала письменно зафиксировать новый wire contract, затем обновить код или тесты по источнику истины. Не принимать «обновить snapshots» без проверки продуктового смысла.</p>
+              <dl class="evidence">
+                <div><dt>Команды</dt><dd><code>pytest --cov=app</code>, <code>npm run test</code></dd></div>
+                <div><dt>Риск</dt><dd>Регрессии неотличимы от устаревших тестов.</dd></div>
+                <div><dt>Критерий</dt><dd>Все тесты зелёные; проверки обязательны перед merge.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="backend profile sql">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F11. Профиль без публичных колод может вернуть 500</strong><span>SQL aggregate · edge case</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Отфильтрованный <code>SUM(Deck.saves_count)</code> возвращает null, если строк нет, а
+                <code>UserProfileResponse.total_saves_count</code> требует integer. Изолированный сервисный
+                сценарий подтвердил Pydantic validation error.
+              </p>
+              <p><strong>Исправление:</strong> использовать <code>COALESCE(SUM(...) FILTER (...), 0)</code>.</p>
+              <dl class="evidence">
+                <div><dt>Место</dt><dd><code>users/repository.py:54–82</code></dd></div>
+                <div><dt>Справка</dt><dd><a href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL aggregate functions</a></dd></div>
+                <div><dt>Критерий</dt><dd>Новый пользователь получает <code>total_saves_count: 0</code>.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="backend endpoint contract">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F12. Endpoint сохранённых колод возвращает невалидную схему</strong><span>API contract · /users/me/decks/saved</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>DeckResponse</code> теперь требует <code>owner_username</code>, но legacy builder
+                <code>get_page_of_saved_decks_by_user_id()</code> это поле не передаёт. Воспроизведение
+                завершилось validation error до ответа route.
+              </p>
+              <p><strong>Исправление:</strong> добавить username в query/result или удалить дублирующий endpoint после миграции клиентов на BFF.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/service.py:1000–1033</code>, <code>decks/schemas.py:112</code></dd></div>
+                <div><dt>Риск</dt><dd>Стабильный 500 на формально зарегистрированном endpoint.</dd></div>
+                <div><dt>Критерий</dt><dd>Полный response schema проходит Pydantic и contract test.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="auth profile backend">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F13. «Публичный» профиль фактически требует авторизацию</strong><span>Несогласованные зависимости</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Route использует <code>OptionalCurrentUser</code>, однако <code>profile_rate_limit</code>
+                идентифицирует запрос через обязательный <code>CurrentUser</code>. Анонимный GET подтверждённо
+                возвращает 401. Если limiter исправить, сам handler обращается к <code>current_user.id</code>
+                без проверки на null.
+              </p>
+              <p><strong>Исправление:</strong> решить продуктовый контракт. Для публичного профиля — IP limiter и безопасный <code>viewer_id=None</code>; для приватного — убрать Optional и назвать route соответственно.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>users/router.py:69–79</code>, <code>redis/rate_limiters.py:140</code></dd></div>
+                <div><dt>Подтверждение</dt><dd><code>GET /users/profile/test-user → 401</code> без cookies</dd></div>
+                <div><dt>Критерий</dt><dd>OpenAPI, router, frontend access и тесты описывают один режим доступа.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="content data cards">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F14. Текст карточек безвозвратно приводится к нижнему регистру</strong><span>Качество контента · нормализация</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Общий тип <code>CardText</code> содержит <code>to_lower=True</code>. Поэтому «Berlin»
+                сохраняется как «berlin», а имена, аббревиатуры и регистр в языках теряются. Сравнение
+                ответа уже выполняет lowercase отдельно, поэтому изменение исходного материала не нужно.
+              </p>
+              <p><strong>Исправление:</strong> хранить исходный регистр; делать case-fold только в сравнении и поисковом индексе. Перед миграцией оценить уже потерянные данные.</p>
+              <dl class="evidence">
+                <div><dt>Место</dt><dd><code>common/types.py:7–15</code></dd></div>
+                <div><dt>Воспроизведение</dt><dd><code>CreateCardRequest("Berlin") → "berlin"</code></dd></div>
+                <div><dt>Критерий</dt><dd>API round-trip сохраняет точный пользовательский текст.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="analytics timezone training">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F15. Дни активности и streak считаются только по UTC</strong><span>Аналитика · локальное время</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Activity aggregation жёстко задаёт <code>timezone_name = "UTC"</code>, а пользовательские
+                настройки не содержат timezone. Для Москвы и других зон ответы около полуночи попадают
+                в соседний день. Дополнительно <code>get_user_activity_for_last_days(days)</code> вычисляет
+                начало как фиксированные 6 дней назад независимо от аргумента.
+              </p>
+              <p><strong>Исправление:</strong> хранить IANA timezone пользователя, вычислять границы периода из <code>days</code>, передавать их в SQL и тестировать DST/полуночные сценарии.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>training_sessions/repository.py:240, 261</code>; <code>service.py:301, 324</code></dd></div>
+                <div><dt>Риск</dt><dd>Неверная серия дней и недельная активность.</dd></div>
+                <div><dt>Критерий</dt><dd>Один timestamp попадает в ожидаемый локальный день разных timezone.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="docs onboarding migrations">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F16. Инструкция «make up → готово» не поднимает схему с нуля</strong><span>Developer experience · reproducibility</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                README обещает готовое приложение после <code>make up</code>, но compose и Dockerfile не
+                запускают <code>alembic upgrade head</code>. Нет documented seed/bootstrap системного
+                archive-user. На чистом volume API стартует раньше готовой схемы и основных данных.
+              </p>
+              <p><strong>Исправление:</strong> добавить одноразовый migration service/entrypoint, healthchecks и отдельный bootstrap системных сущностей; проверить путь клонирование → одна команда → работающий login.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>README.md</code>, <code>docker-compose.yml</code>, <code>backend/Dockerfile</code></dd></div>
+                <div><dt>Риск</dt><dd>Невоспроизводимый старт нового окружения.</dd></div>
+                <div><dt>Критерий</dt><dd>Smoke test проходит на новых Docker volumes без ручного SQL.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="deployment docker operations">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F17. Docker-конфигурация пригодна только для разработки</strong><span>Production readiness</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                Backend запускается с <code>uvicorn --reload</code>, frontend — через Vite dev server и
+                <code>npm install</code> вместо lockfile install. Compose публикует PostgreSQL, CloudBeaver
+                и RedisInsight. Healthchecks, restart dependencies, reverse proxy, TLS и отдельные prod
+                образы отсутствуют.
+              </p>
+              <p><strong>Исправление:</strong> оставить текущий compose как dev; создать multi-stage prod images, непривилегированных users, static frontend + reverse proxy, healthchecks и закрытые admin services.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>backend/Dockerfile:17</code>, <code>frontend/Dockerfile:6, 12</code>, <code>docker-compose.yml</code></dd></div>
+                <div><dt>Риск</dt><dd>Ненадёжный и лишне открытый production deploy.</dd></div>
+                <div><dt>Критерий</dt><dd>Immutable image, readiness/liveness, миграция до traffic, закрытые admin ports.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="medium" data-category="architecture tests maintainability">
+            <summary>
+              <span class="severity">Medium</span>
+              <span class="finding-title"><strong>F18. Критическая логика сосредоточена в очень больших файлах и почти не покрыта интеграционно</strong><span>Сопровождаемость · качество</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>LibraryPage.tsx</code> — 1826 строк, <code>PracticePage.tsx</code> — 2020,
+                <code>decks/service.py</code> — 1202. CSS-модуль библиотеки вырос до 8424 строк.
+                При этом service coverage: decks 16%, training sessions 18%, users 18%, BFF 25%; в
+                <code>tests/integration</code> нет test-файлов. Именно в этих слоях найдены дефекты данных.
+              </p>
+              <p><strong>Исправление:</strong> выделять законченные state machines/use-cases и компоненты по ответственности; сначала добавить integration tests для delete/archive, privacy, pagination, counters и concurrent mutations.</p>
+              <dl class="evidence">
+                <div><dt>Метрика</dt><dd>Backend total coverage 50.13%; core services 16–25%</dd></div>
+                <div><dt>Риск</dt><dd>Изменения трудно проверить, конфликты и скрытые регрессии растут.</dd></div>
+                <div><dt>Критерий</dt><dd>Core use-cases покрыты DB integration tests; route-pages имеют ясные границы.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="low" data-category="documentation contracts">
+            <summary>
+              <span class="severity">Low</span>
+              <span class="finding-title"><strong>F19. Документация API уже противоречит коду</strong><span>Точность документации</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>frontend/BACKEND_CONTRACTS.md</code> утверждает, что backend не возвращает
+                <code>code</code>, хотя exception handlers теперь возвращают стабильные коды. Там же
+                остались известные ограничения, часть которых текущий код уже изменил. Frontend README
+                описывает приложение как минимальный dashboard и не перечисляет новые feature-модули.
+              </p>
+              <p><strong>Исправление:</strong> генерировать/проверять OpenAPI snapshot, обновить contract map и README в том же PR, где меняется wire contract.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>frontend/BACKEND_CONTRACTS.md:425–466</code>, <code>frontend/README.md</code></dd></div>
+                <div><dt>Риск</dt><dd>Разработчики принимают решения по устаревшему источнику.</dd></div>
+                <div><dt>Критерий</dt><dd>Документация и OpenAPI contract test обновляются вместе.</dd></div>
+              </dl>
+            </div>
+          </details>
+
+          <details class="finding" data-severity="low" data-category="code hygiene backend">
+            <summary>
+              <span class="severity">Low</span>
+              <span class="finding-title"><strong>F20. В production-коде остались незавершённые и дублирующие ветви</strong><span>Технический долг</span></span>
+            </summary>
+            <div class="finding-body">
+              <p>
+                <code>UserDeckRepository.transfer_user_progress()</code> содержит пустой statement и ничего
+                не возвращает; <code>get_is_favourite()</code> и <code>CacheInvalidator</code> не используются;
+                рядом с актуальными queries хранятся большие блоки закомментированного SQL. Это не ломает
+                текущий путь, но затрудняет понимание того, какой механизм является каноническим.
+              </p>
+              <p><strong>Исправление:</strong> удалить мёртвый код либо завершить и покрыть тестами; включить проверку неиспользуемого Python-кода в CI.</p>
+              <dl class="evidence">
+                <div><dt>Места</dt><dd><code>decks/repository.py:986</code>, <code>bff/service.py:42</code>, <code>redis/service.py:137</code></dd></div>
+                <div><dt>Риск</dt><dd>Ошибочное повторное использование незавершённого метода.</dd></div>
+                <div><dt>Критерий</dt><dd>Нет пустых use-cases и неиспользуемых альтернативных путей.</dd></div>
+              </dl>
+            </div>
+          </details>
+        </div>
+        <p class="empty-result" id="empty-result" hidden>По этому фильтру проблем не найдено.</p>
+      </section>
+
+      <section class="section" aria-labelledby="strengths-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Что уже хорошо</p>
+            <h2 id="strengths-title">Основа проекта сильнее, чем текущий статус тестов</h2>
+          </div>
+        </div>
+        <div class="strength-grid">
+          <article class="strength"><h3>Безопасная auth-модель</h3><p>HttpOnly cookies, централизованный refresh, объединение конкурентных refresh-запросов и синхронизация сессий между вкладками.</p></article>
+          <article class="strength"><h3>Явные frontend-контракты</h3><p>Ответы API проходят runtime parsing, UUID и pagination проверяются, stale responses отменяются через AbortController.</p></article>
+          <article class="strength"><h3>Хорошая предметная модель</h3><p>Колоды, сохранения, снимки тренировок, версии и история уже дают базу для полноценного learning engine.</p></article>
+          <article class="strength"><h3>Целостность в БД</h3><p>В моделях есть FK, уникальность позиций и проверки диапазонов. Их нужно довести миграциями до реальной схемы.</p></article>
+          <article class="strength"><h3>Продуманный async UI</h3><p>Есть loading/error/retry, защита от устаревших запросов, optimistic updates и доступные native dialogs.</p></article>
+          <article class="strength"><h3>Локализация и темы</h3><p>Русский и английский интерфейс, light/dark/system, semantic markup, aria-label и reduced-motion уже встроены системно.</p></article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="direction-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Продуктовое направление</p>
+            <h2 id="direction-title">Куда двигаться после стабилизации</h2>
+          </div>
+        </div>
+        <div class="direction">
+          <article class="north-star">
+            <h3>Главная ставка: ежедневное удержание знаний</h3>
+            <p class="section-intro">
+              Сейчас практика выбирает случайные карточки и проверяет точное совпадение ответа. Это
+              хорошая демонстрация, но слабая причина возвращаться каждый день. Наиболее сильный путь —
+              превратить Etch в персональный план повторений, где пользователь всегда знает, что учить
+              сегодня и почему.
+            </p>
+            <blockquote>«Открыть Etch и за 10 минут закрыть все карточки, которые пора повторить сегодня».</blockquote>
+          </article>
+          <article class="product-loop">
+            <h3>Основной цикл</h3>
+            <div class="loop">
+              <div class="loop-step"><span>1</span><div><strong>Добавить</strong><br />Импорт, каталог, собственная карточка.</div></div>
+              <div class="loop-step"><span>2</span><div><strong>Выучить</strong><br />Короткая первая сессия с подсказками.</div></div>
+              <div class="loop-step"><span>3</span><div><strong>Оценить</strong><br />Again / Hard / Good / Easy.</div></div>
+              <div class="loop-step"><span>4</span><div><strong>Повторить</strong><br />Персональная очередь на сегодня.</div></div>
+              <div class="loop-step"><span>5</span><div><strong>Увидеть эффект</strong><br />Retention, streak, прогноз нагрузки.</div></div>
+            </div>
+          </article>
+        </div>
+        <div class="note">
+          <strong>Рекомендуемый алгоритм.</strong>
+          После исправления данных стоит оценить FSRS: он моделирует запоминаемость и планирует
+          интервалы по истории оценок. Начать можно с совместимого сервера и простого UI из четырёх
+          оценок, не показывая пользователю математику. Референс: 
+          <a href="https://github.com/open-spaced-repetition/free-spaced-repetition-scheduler">Open Spaced Repetition / FSRS</a>.
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="roadmap-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Дорожная карта</p>
+            <h2 id="roadmap-title">Последовательность работ</h2>
+          </div>
+          <p class="section-intro">Сроки ориентировочные для одного разработчика, который уже знает кодовую базу.</p>
+        </div>
+        <div class="roadmap">
+          <article class="phase">
+            <span class="phase-number">Этап 0 · 1–3 дня</span>
+            <h3>Остановить утечки и повреждение данных</h3>
+            <ul>
+              <li>Изолировать/очищать frontend caches по пользователю.</li>
+              <li>Исправить delete private deck и stale visibility cache.</li>
+              <li>Исправить SQL удаления связанной карточки.</li>
+              <li>Отключить ложную кнопку save в профиле до реального API.</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="phase-number">Этап 1 · 1 неделя</span>
+            <h3>Вернуть доверие к релизу</h3>
+            <ul>
+              <li>Исправить Redis outage, cursor null, counters и profile aggregates.</li>
+              <li>Синхронизировать API-контракты и сделать все тесты зелёными.</li>
+              <li>Закрыть Alembic drift и автоматизировать миграции.</li>
+              <li>Добавить CI: format, lint, typecheck, tests, build, alembic check.</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="phase-number">Этап 2 · 2–4 недели</span>
+            <h3>Сделать настоящий learning engine</h3>
+            <ul>
+              <li>Модель review: rating, due_at, stability, difficulty, elapsed days.</li>
+              <li>Очередь «Сегодня» и idempotent submit/undo последнего ответа.</li>
+              <li>FSRS shadow mode, сравнение расписаний, затем включение пользователям.</li>
+              <li>Timezone пользователя и корректные streak/activity buckets.</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="phase-number">Этап 3 · 4–8 недель</span>
+            <h3>Улучшить рост и качество опыта</h3>
+            <ul>
+              <li>Onboarding: первая колода и первая сессия за 2 минуты.</li>
+              <li>CSV/TSV импорт, предпросмотр, дедупликация и bulk edit.</li>
+              <li>Каталог: язык, тема, качество, автор, обновления сохранённых колод.</li>
+              <li>Browser E2E, accessibility audit и performance budgets.</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="phase-number">Этап 4 · после product fit</span>
+            <h3>Подготовить эксплуатацию и масштабирование</h3>
+            <ul>
+              <li>Prod images, reverse proxy, TLS, healthchecks и zero-downtime migrations.</li>
+              <li>Структурные метрики: latency, error rate, cache hit rate, queue lag.</li>
+              <li>Backup/restore drills, retention, rate-limit dashboards.</li>
+              <li>Модерация публичного каталога и abuse reporting.</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="phase-number">Метрики продукта</span>
+            <h3>Что измерять</h3>
+            <ul>
+              <li>Activation: первая завершённая сессия в день регистрации.</li>
+              <li>D1/D7/D30 retention и доля закрытой due queue.</li>
+              <li>Recall rate по интервалу и среднее время одной карточки.</li>
+              <li>Import → first review conversion и save → review conversion.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="method-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Методика и границы</p>
+            <h2 id="method-title">Как читать выводы</h2>
+          </div>
+        </div>
+        <ul class="method-list">
+          <li><strong>Статический обзор</strong><span>Дерево, конфигурация, маршруты, схемы, services, repositories, hooks, pages, tests и migrations.</span></li>
+          <li><strong>Автоматические проверки</strong><span>Backend/frontend tests, coverage, lint, format, typecheck/build и Alembic schema comparison.</span></li>
+          <li><strong>Изолированные reproductions</strong><span>Cursor null, empty aggregate, Redis outage, favourite counter, archive visibility и API response validation.</span></li>
+          <li><strong>Локальная инфраструктура</strong><span>Read-only запросы к PostgreSQL 18 и browser smoke check страницы входа.</span></li>
+        </ul>
+        <div class="note">
+          <p>
+            <strong>Границы:</strong> аудит не включал destructive сценарии на пользовательских данных,
+            полный ручной проход авторизованных страниц и нагрузочное тестирование. Локальная БД содержит
+            8 пользователей, 47 колод и 86 сессий; использовались только read-only запросы. Оценка UI
+            глубже статического анализа выполнена только для страницы входа, поскольку авторизованные
+            данные не изменялись.
+          </p>
+          <p>
+            Большинство из 71 backend failure — каскад рассинхронизированного контракта, поэтому они не
+            посчитаны как 71 отдельный дефект. Каждая Critical/High находка выше имеет самостоятельный
+            пользовательский эффект.
+          </p>
+        </div>
+      </section>
+
+      <footer>
+        <p>Etch project audit · текущее рабочее дерево на 15 сентября 2026 · отчёт создан без изменения кода приложения.</p>
+      </footer>
+    </main>
+
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const themeButton = document.getElementById("theme-toggle");
+        const search = document.getElementById("finding-search");
+        const filterButtons = [...document.querySelectorAll("[data-filter]")];
+        const findings = [...document.querySelectorAll(".finding")];
+        const count = document.getElementById("result-count");
+        const empty = document.getElementById("empty-result");
+        let activeFilter = "all";
+
+        const savedTheme = localStorage.getItem("etch-audit-theme");
+        if (savedTheme === "light" || savedTheme === "dark") {
+          root.dataset.theme = savedTheme;
+        }
+
+        themeButton.addEventListener("click", () => {
+          const next = root.dataset.theme === "dark" ? "light" : "dark";
+          root.dataset.theme = next;
+          localStorage.setItem("etch-audit-theme", next);
+        });
+
+        function applyFilters() {
+          const query = search.value.trim().toLocaleLowerCase("ru-RU");
+          let visible = 0;
+
+          findings.forEach((finding) => {
+            const matchesSeverity = activeFilter === "all" || finding.dataset.severity === activeFilter;
+            const haystack = `${finding.textContent} ${finding.dataset.category}`.toLocaleLowerCase("ru-RU");
+            const matchesQuery = query.length === 0 || haystack.includes(query);
+            finding.hidden = !(matchesSeverity && matchesQuery);
+            if (!finding.hidden) visible += 1;
+          });
+
+          count.textContent = `Показано ${visible} из ${findings.length}`;
+          empty.hidden = visible !== 0;
+        }
+
+        filterButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            activeFilter = button.dataset.filter;
+            filterButtons.forEach((candidate) => {
+              candidate.setAttribute("aria-pressed", String(candidate === button));
+            });
+            applyFilters();
+          });
+        });
+
+        search.addEventListener("input", applyFilters);
+      })();
+    </script>
+  </body>
+</html>

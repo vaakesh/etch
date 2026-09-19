@@ -1,4 +1,5 @@
 import { ApiError } from "../../../api";
+import { MAX_SESSION_SIZE } from "./practice-session-size";
 import type {
   CardSide,
   PracticeActivityResponse,
@@ -196,7 +197,7 @@ export function parsePracticeSession(value: unknown): PracticeSession {
   if (promptSide === answerSide) {
     return invalidPracticeResponse("practice.answer_side");
   }
-  if (totalCount < 1) {
+  if (totalCount < 1 || totalCount > MAX_SESSION_SIZE) {
     return invalidPracticeResponse("practice.total_count");
   }
   if (answeredCount < 0 || answeredCount > totalCount) {
@@ -281,6 +282,7 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
 
   if (
     requestedCount < 0 ||
+    requestedCount > MAX_SESSION_SIZE ||
     actualCount < 0 ||
     actualCount > requestedCount ||
     correctCount < 0 ||
@@ -296,6 +298,7 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
   return {
     uuid: readUuid(session.uuid, `${path}.uuid`),
     deckUuid: readUuid(session.deck_uuid, `${path}.deck_uuid`),
+    deckTitle: readString(session.deck_title, `${path}.deck_title`),
     status,
     requestedCount,
     actualCount,
@@ -402,7 +405,7 @@ export function parseSubmitPracticeAnswerResult(value: unknown): SubmitPracticeA
     "practiceAnswer.time_to_complete",
   );
 
-  if (totalCount < 1) {
+  if (totalCount < 1 || totalCount > MAX_SESSION_SIZE) {
     return invalidPracticeResponse("practiceAnswer.total_count");
   }
   if (answeredCount < 1 || answeredCount > totalCount) {

@@ -46,7 +46,6 @@ class TestCreateCard:
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_applies_default_languages(
@@ -84,7 +83,6 @@ class TestCreateCard:
                 back_lang="en",
             ),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_normalizes_all_fields(
@@ -129,7 +127,6 @@ class TestCreateCard:
                 back_lang="en",
             ),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -193,7 +190,6 @@ class TestCreateCard:
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -291,6 +287,7 @@ class TestCreateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -355,6 +352,7 @@ class TestCreateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -376,12 +374,11 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"message": "Card already exists"}
+        assert response.json()["message"] == "Card already exists"
 
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -730,6 +727,7 @@ class TestUpdateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -775,7 +773,7 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         card_service.update_card.assert_awaited_once_with(
             card.uuid,
@@ -794,6 +792,7 @@ class TestUpdateCard:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -830,7 +829,6 @@ class TestDeleteCard:
 
         card_service.delete_card.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             card_uuid=card.uuid,
         )
 
@@ -846,11 +844,10 @@ class TestDeleteCard:
         response = await client.delete(f"/cards/{card.uuid}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Card not found"}
+        assert response.json()["message"] == "Card not found"
 
         card_service.delete_card.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             card_uuid=card.uuid,
         )
 
@@ -862,6 +859,7 @@ class TestDeleteCard:
         response = await client.delete("/cards/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

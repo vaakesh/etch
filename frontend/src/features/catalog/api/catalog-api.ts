@@ -1,4 +1,5 @@
 import { ApiError, apiFetch } from "../../../api";
+import { updateLibraryDeckSavedState } from "../../library/model/library-decks-cache";
 import {
   parseCatalogDeckPreview,
   parseCatalogDecks,
@@ -9,11 +10,11 @@ import type {
   CatalogDeckPreview,
   CatalogPreviewCardPage,
 } from "../model/catalog-types";
+import { CATALOG_PREVIEW_CARD_BATCH_SIZE } from "../model/catalog-preview-pagination";
 
 const CATALOG_PATH = "/bff/catalog";
 export const CATALOG_PAGE_SIZE = 30;
 export const CATALOG_SEARCH_MAX_LENGTH = 50;
-export const CATALOG_PREVIEW_CARD_PAGE_SIZE = 20;
 
 function assertExpectedUuid(expectedUuid: string, actualUuid: string): void {
   if (actualUuid !== expectedUuid) {
@@ -56,6 +57,8 @@ export async function setCatalogDeckSaved(
     method: "POST",
     signal,
   });
+
+  updateLibraryDeckSavedState(deckUuid, isSaved);
 }
 
 export async function getCatalogDeckPreview(
@@ -75,9 +78,21 @@ export async function getCatalogPreviewCardPage(
   signal?: AbortSignal,
 ): Promise<CatalogPreviewCardPage> {
   const payload = await apiFetch<unknown>(`/decks/${deckUuid}/cards`, {
-    query: { offset, limit: CATALOG_PREVIEW_CARD_PAGE_SIZE },
+    query: { offset, limit: CATALOG_PREVIEW_CARD_BATCH_SIZE },
     signal,
   });
 
-  return parseCatalogPreviewCardPage(payload, offset, CATALOG_PREVIEW_CARD_PAGE_SIZE);
+  return parseCatalogPreviewCardPage(payload, offset, CATALOG_PREVIEW_CARD_BATCH_SIZE);
+}
+
+export async function getCatalogDeckPreviewInitialData(
+  deckUuid: string,
+  signal?: AbortSignal,
+): Promise<{ deck: CatalogDeckPreview; cardPage: CatalogPreviewCardPage }> {
+  const [deck, cardPage] = await Promise.all([
+    getCatalogDeckPreview(deckUuid, signal),
+    getCatalogPreviewCardPage(deckUuid, 0, signal),
+  ]);
+
+  return { deck, cardPage };
 }

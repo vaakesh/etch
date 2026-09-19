@@ -7,7 +7,7 @@ import {
   type FormEvent,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import {
   hasSessionExpiredNotice,
   withoutSessionExpiredNotice,
@@ -110,7 +110,10 @@ const MESSAGES = defineMessages(
 
 function getLoginError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): FormError {
   if (isApiError(error)) {
-    if (INVALID_CREDENTIALS_STATUSES.has(error.status)) {
+    if (
+      hasApiErrorCode(error, API_ERROR_CODES.invalidLoginCredentials) ||
+      INVALID_CREDENTIALS_STATUSES.has(error.status)
+    ) {
       return { invalidFields: true, message: messages.invalidCredentials };
     }
 
@@ -128,7 +131,7 @@ function getLoginError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): Fo
 
 function getRegistrationError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): FormError {
   if (isApiError(error)) {
-    if (error.status === 409) {
+    if (hasApiErrorCode(error, API_ERROR_CODES.userAlreadyExists) || error.status === 409) {
       return { invalidFields: true, message: messages.registrationConflict };
     }
 

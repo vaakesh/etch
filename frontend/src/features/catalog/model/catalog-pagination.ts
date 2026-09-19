@@ -1,5 +1,4 @@
-const MAX_VISIBLE_PAGE_BUTTONS = 5;
-const INTERIOR_WINDOW_SIZE = MAX_VISIBLE_PAGE_BUTTONS - 2;
+const DEFAULT_MAX_VISIBLE_PAGE_BUTTONS = 5;
 
 export interface CatalogPaginationPageToken {
   type: "page";
@@ -14,18 +13,23 @@ export interface CatalogPaginationEllipsisToken {
 
 export type CatalogPaginationToken = CatalogPaginationPageToken | CatalogPaginationEllipsisToken;
 
-function getVisiblePageIndices(pageCount: number, currentPage: number): readonly number[] {
-  if (pageCount <= MAX_VISIBLE_PAGE_BUTTONS) {
+function getVisiblePageIndices(
+  pageCount: number,
+  currentPage: number,
+  maxVisiblePageButtons: number,
+): readonly number[] {
+  if (pageCount <= maxVisiblePageButtons) {
     return Array.from({ length: pageCount }, (_, index) => index);
   }
 
+  const interiorWindowSize = maxVisiblePageButtons - 2;
   const currentIndex = Math.min(Math.max(currentPage - 1, 0), pageCount - 1);
-  const centeredWindowStart = currentIndex - Math.floor(INTERIOR_WINDOW_SIZE / 2);
-  const lastWindowStart = pageCount - INTERIOR_WINDOW_SIZE - 1;
+  const centeredWindowStart = currentIndex - Math.floor(interiorWindowSize / 2);
+  const lastWindowStart = pageCount - interiorWindowSize - 1;
   const windowStart = Math.min(Math.max(centeredWindowStart, 1), lastWindowStart);
   const visibleIndices = [0];
 
-  for (let index = windowStart; index < windowStart + INTERIOR_WINDOW_SIZE; index += 1) {
+  for (let index = windowStart; index < windowStart + interiorWindowSize; index += 1) {
     visibleIndices.push(index);
   }
 
@@ -45,9 +49,15 @@ export function parseCatalogPage(value: string | null): number {
 export function getCatalogPaginationTokens(
   pageCount: number,
   currentPage: number,
+  maxVisiblePageButtons = DEFAULT_MAX_VISIBLE_PAGE_BUTTONS,
 ): readonly CatalogPaginationToken[] {
   const safePageCount = Math.max(1, Math.floor(pageCount));
-  const visibleIndices = getVisiblePageIndices(safePageCount, currentPage);
+  const safeMaxVisiblePageButtons = Math.max(3, Math.floor(maxVisiblePageButtons));
+  const visibleIndices = getVisiblePageIndices(
+    safePageCount,
+    currentPage,
+    safeMaxVisiblePageButtons,
+  );
   const tokens: CatalogPaginationToken[] = [];
   let previousVisibleIndex: number | null = null;
 

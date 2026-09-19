@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import type {
   EditableLibraryCard,
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
-import styles from "./LibraryPage.module.css";
+import styles from "./CardEditorDialog.module.css";
 
 const MESSAGES = defineMessages(
   {
@@ -102,7 +102,7 @@ function getCardSaveErrorMessage(
   if (error.status === 404) {
     return messages.errors.notFound;
   }
-  if (error.status === 409) {
+  if (hasApiErrorCode(error, API_ERROR_CODES.cardAlreadyExists) || error.status === 409) {
     return messages.errors.conflict;
   }
   if (error.status === 422) {

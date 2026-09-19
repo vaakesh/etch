@@ -9,20 +9,24 @@ class AuthRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def add(self, user_session: UserSession) -> None:
-        self.session.add(user_session)
+    # base
 
     async def get_by_id(self, user_session_id: int) -> UserSession | None:
         return await self.session.get(UserSession, user_session_id)
-    
-    async def delete(self, user_session: UserSession) -> None:
-        await self.session.delete(user_session)
-    
+
+    def add(self, user_session: UserSession) -> None:
+        self.session.add(user_session)
+
     async def flush(self) -> None:
         await self.session.flush()
 
     async def refresh(self, user_session: UserSession) -> None:
         await self.session.refresh(user_session)
+
+    async def delete(self, user_session: UserSession) -> None:
+        await self.session.delete(user_session)
+
+    # read
 
     async def get_user_session_by_refresh(
         self, refresh_token_hash: str, *, for_update: bool = False
@@ -35,7 +39,7 @@ class AuthRepository:
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-    
+
     async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
         sessions = (
             (
@@ -49,7 +53,9 @@ class AuthRepository:
             .all()
         )
         return sessions
-    
+
+    # write
+
     async def revoke_active_session_by_refresh_token_hash(
         self,
         refresh_token_hash: str,

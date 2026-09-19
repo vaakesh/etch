@@ -1,0 +1,724 @@
+.cardEditorDialog {
+  --editor-ink: #291e49;
+  --editor-muted: #685e7e;
+  --editor-accent: #5f4897;
+  --editor-accent-deep: #493873;
+  --editor-accent-soft: #eeeaff;
+  --editor-primary-ink: #073d44;
+  --editor-primary-light: #d8f9fc;
+  --editor-primary: #9beef5;
+  --editor-primary-deep: #5ed5df;
+  --editor-line: rgb(64 43 103 / 16%);
+  --editor-line-strong: rgb(64 43 103 / 28%);
+  --editor-surface: rgb(255 255 255 / 94%);
+  --editor-surface-raised: rgb(255 255 255 / 82%);
+  --editor-field: rgb(255 255 255 / 78%);
+  --editor-field-hover: #f2fbfa;
+  --editor-error: #a83961;
+  --editor-error-surface: #fff4f7;
+  --editor-error-line: rgb(168 57 97 / 22%);
+  --editor-shadow: 0 32px 84px rgb(45 30 78 / 24%);
+  --editor-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(860px, calc(100dvh - 32px));
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  color: var(--editor-ink);
+  color-scheme: light;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: var(--editor-surface);
+  border: 1px solid rgb(255 255 255 / 74%);
+  border-radius: 26px;
+  box-shadow: var(--editor-shadow);
+  scrollbar-color: rgb(73 56 115 / 38%) transparent;
+}
+
+.cardEditorDialog *,
+.cardEditorDialog *::before,
+.cardEditorDialog *::after {
+  box-sizing: border-box;
+}
+
+.cardEditorDialog[open] {
+  animation: cardEditorReveal 280ms var(--editor-spring) both;
+}
+
+.cardEditorDialog::backdrop {
+  background: rgb(41 30 73 / 38%);
+  backdrop-filter: blur(9px) saturate(0.86);
+  animation: cardEditorBackdropReveal 220ms ease-out both;
+}
+
+:global(html):has(.cardEditorDialog[open]) {
+  overflow: hidden;
+}
+
+.cardEditorShell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 8% 0%, rgb(195 184 245 / 44%), transparent 36%),
+    radial-gradient(circle at 92% 5%, rgb(155 232 224 / 46%), transparent 34%),
+    linear-gradient(145deg, #faf8ff 0%, #f6fffe 58%, #fff8fc 100%);
+  border-radius: inherit;
+}
+
+.cardEditorGlow {
+  position: absolute;
+  z-index: -1;
+  right: -88px;
+  bottom: -120px;
+  width: 310px;
+  height: 310px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(245 198 232 / 42%), transparent 68%);
+  filter: blur(10px);
+}
+
+.cardEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 30px 24px;
+  background: var(--editor-surface-raised);
+  border-bottom: 1px solid var(--editor-line);
+}
+
+.cardEditorHeading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.cardEditorHeading > div {
+  min-width: 0;
+}
+
+.cardEditorMark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--editor-accent-deep);
+  background: linear-gradient(135deg, #ded7ff, #bdf1ec);
+  border: 1px solid rgb(95 72 151 / 20%);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgb(73 56 115 / 10%);
+}
+
+.cardEditorMark svg {
+  width: 22px;
+  height: 22px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.cardEditorEyebrow {
+  display: block;
+  margin: 1px 0 6px;
+  color: var(--editor-accent);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: lowercase;
+}
+
+.cardEditorHeader h2 {
+  margin: 0;
+  color: var(--editor-ink);
+  font-size: clamp(1.45rem, 3vw, 1.9rem);
+  font-weight: 680;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.cardEditorHeader p {
+  max-width: 500px;
+  margin: 8px 0 0;
+  color: var(--editor-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.cardEditorClose {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  color: var(--editor-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  background: rgb(255 255 255 / 66%);
+  border: 1px solid var(--editor-line);
+  border-radius: 13px;
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    transform 170ms ease;
+}
+
+.cardEditorClose:hover:not(:disabled) {
+  color: var(--editor-accent-deep);
+  background: var(--editor-accent-soft);
+  border-color: var(--editor-line-strong);
+}
+
+.cardEditorClose:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.cardEditorClose:focus-visible,
+.cardEditorCancel:focus-visible,
+.cardEditorSave:focus-visible {
+  outline: 3px solid rgb(95 72 151 / 25%);
+  outline-offset: 3px;
+}
+
+.cardEditorClose:disabled {
+  cursor: wait;
+  opacity: 0.46;
+}
+
+.cardEditorClose svg {
+  width: 19px;
+  height: 19px;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.cardEditorForm {
+  display: grid;
+  gap: 22px;
+  padding: 26px 30px 30px;
+  background: rgb(255 255 255 / 64%);
+}
+
+.cardEditorTextGrid,
+.cardEditorLanguageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cardEditorLanguageGrid {
+  grid-template-columns: repeat(2, minmax(0, 190px));
+}
+
+.cardEditorField {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.cardEditorLabel {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cardEditorLabel strong {
+  color: var(--editor-ink);
+  font-size: 0.78rem;
+  font-weight: 670;
+  line-height: 1.35;
+}
+
+.cardEditorLabel code {
+  display: none;
+}
+
+.cardEditorField textarea,
+.cardEditorField input {
+  width: 100%;
+  min-width: 0;
+  color: var(--editor-ink);
+  caret-color: var(--editor-accent-deep);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  background: var(--editor-field);
+  border: 1px solid var(--editor-line);
+  outline: none;
+  box-shadow: 0 4px 18px rgb(73 56 115 / 5%);
+  transition:
+    background-color 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.cardEditorField textarea {
+  min-height: 124px;
+  padding: 14px 15px 30px;
+  resize: vertical;
+  border-radius: 15px;
+}
+
+.cardEditorField input {
+  height: 48px;
+  padding: 0 15px;
+  border-radius: 13px;
+  font-weight: 620;
+  letter-spacing: 0.035em;
+}
+
+.cardEditorField textarea:hover,
+.cardEditorField input:hover {
+  background: var(--editor-field-hover);
+  border-color: var(--editor-line-strong);
+}
+
+.cardEditorField textarea:focus,
+.cardEditorField input:focus {
+  background: #fff;
+  border-color: var(--editor-accent);
+  box-shadow:
+    0 0 0 3px rgb(95 72 151 / 15%),
+    0 7px 22px rgb(73 56 115 / 7%);
+}
+
+.cardEditorField > small {
+  position: absolute;
+  right: 11px;
+  bottom: 9px;
+  padding: 3px 7px;
+  color: var(--editor-accent-deep);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+  background: rgb(238 234 255 / 94%);
+  border: 1px solid rgb(95 72 151 / 18%);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.cardEditorError {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--editor-error);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+  background: var(--editor-error-surface);
+  border: 1px solid var(--editor-error-line);
+  border-radius: 13px;
+}
+
+.cardEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 2px;
+}
+
+.cardEditorFooter > p {
+  max-width: 340px;
+  margin: 0;
+  color: var(--editor-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.cardEditorButtons {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cardEditorCancel,
+.cardEditorSave {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 680;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: 13px;
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease,
+    transform 170ms ease;
+}
+
+.cardEditorCancel {
+  color: var(--editor-ink);
+  background: rgb(255 255 255 / 62%);
+  border: 1px solid var(--editor-line-strong);
+}
+
+.cardEditorCancel:hover:not(:disabled) {
+  color: var(--editor-accent-deep);
+  background: var(--editor-accent-soft);
+  border-color: rgb(95 72 151 / 36%);
+  transform: translateY(-1px);
+}
+
+.cardEditorSave {
+  min-width: 136px;
+  min-height: 48px;
+  color: var(--editor-primary-ink);
+  font-size: 0.86rem;
+  background: linear-gradient(
+    100deg,
+    var(--editor-primary-light) 0%,
+    var(--editor-primary) 48%,
+    var(--editor-primary-deep) 100%
+  );
+  background-position: 0 50%;
+  background-size: 180% 100%;
+  border: 1px solid color-mix(in srgb, var(--editor-primary-deep) 84%, var(--editor-primary-ink));
+  border-radius: 999px;
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--editor-primary-deep) 18%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 48%);
+  transition:
+    color 180ms ease,
+    background-position 320ms ease,
+    border-color 200ms ease,
+    box-shadow 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.cardEditorSave:hover:not(:disabled) {
+  color: var(--editor-primary-ink);
+  background-position: 100% 50%;
+  border-color: var(--editor-primary-deep);
+  box-shadow:
+    0 11px 22px color-mix(in srgb, var(--editor-primary-deep) 24%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 58%);
+  transform: translateY(-1px) scale(1.015);
+}
+
+.cardEditorSave:focus-visible {
+  color: var(--editor-primary-ink);
+  outline-color: color-mix(in srgb, var(--editor-primary-deep) 52%, transparent);
+}
+
+.cardEditorCancel:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.cardEditorSave:active:not(:disabled) {
+  background-position: 72% 50%;
+  box-shadow:
+    0 5px 12px color-mix(in srgb, var(--editor-primary-deep) 16%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 42%);
+  transform: scale(0.99);
+}
+
+.cardEditorCancel:disabled,
+.cardEditorSave:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.cardEditorCancel:disabled {
+  opacity: 0.46;
+}
+
+.cardEditorSave:disabled {
+  opacity: 0.56;
+}
+
+.cardEditorSave svg,
+.cardEditorSpinner {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.cardEditorSave svg {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.cardEditorSpinner {
+  border: 2px solid rgb(255 255 255 / 36%);
+  border-top-color: currentcolor;
+  border-radius: 50%;
+  animation: cardEditorSpin 700ms linear infinite;
+}
+
+@media (max-width: 720px) {
+  .cardEditorDialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 22px;
+  }
+
+  .cardEditorHeader {
+    padding: 24px 22px 22px;
+  }
+
+  .cardEditorForm {
+    padding: 24px 22px;
+  }
+
+  .cardEditorTextGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cardEditorLanguageGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .cardEditorDialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 20px;
+  }
+
+  .cardEditorHeader {
+    gap: 12px;
+    padding: 20px 17px 18px;
+  }
+
+  .cardEditorHeading {
+    gap: 12px;
+  }
+
+  .cardEditorMark {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+  }
+
+  .cardEditorHeader h2 {
+    font-size: 1.4rem;
+  }
+
+  .cardEditorHeader p {
+    font-size: 0.78rem;
+  }
+
+  .cardEditorForm {
+    gap: 20px;
+    padding: 20px 17px;
+  }
+
+  .cardEditorLanguageGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cardEditorFooter {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .cardEditorFooter > p {
+    max-width: none;
+  }
+
+  .cardEditorButtons {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+
+@media (max-width: 375px) {
+  .cardEditorMark {
+    display: none;
+  }
+
+  .cardEditorButtons {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cardEditorCancel,
+  .cardEditorSave {
+    width: 100%;
+  }
+}
+
+@media (max-height: 620px) and (min-width: 721px) {
+  .cardEditorDialog {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .cardEditorHeader {
+    padding-block: 20px;
+  }
+
+  .cardEditorHeader p {
+    display: none;
+  }
+
+  .cardEditorForm {
+    gap: 16px;
+    padding-block: 20px;
+  }
+
+  .cardEditorField textarea {
+    min-height: 96px;
+  }
+}
+
+:global(html[data-theme="dark"]) .cardEditorDialog {
+  --editor-ink: var(--dark-text);
+  --editor-muted: var(--dark-text-muted);
+  --editor-accent: var(--dark-cta);
+  --editor-accent-deep: var(--dark-cyan);
+  --editor-accent-soft: var(--dark-cta-soft);
+  --editor-primary-ink: var(--dark-on-cta);
+  --editor-primary-light: var(--dark-cta-hover);
+  --editor-primary: var(--dark-cta);
+  --editor-primary-deep: var(--dark-cta-pressed);
+  --editor-line: var(--dark-border);
+  --editor-line-strong: var(--dark-border-strong);
+  --editor-surface: var(--dark-surface);
+  --editor-surface-raised: var(--dark-surface-raised);
+  --editor-field: var(--dark-surface-raised);
+  --editor-field-hover: var(--dark-surface-hover);
+  --editor-error: var(--dark-danger);
+  --editor-error-surface: var(--dark-danger-soft);
+  --editor-error-line: var(--dark-danger-medium);
+  --editor-shadow: 0 32px 84px var(--dark-shadow-strong);
+  color-scheme: dark;
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .cardEditorDialog::backdrop {
+  background: var(--dark-scrim);
+  backdrop-filter: blur(7px);
+}
+
+:global(html[data-theme="dark"]) .cardEditorShell {
+  background:
+    radial-gradient(circle at 8% 0%, var(--dark-cta-soft), transparent 36%), var(--dark-surface);
+}
+
+:global(html[data-theme="dark"]) .cardEditorGlow {
+  display: none;
+}
+
+:global(html[data-theme="dark"]) .cardEditorHeader,
+:global(html[data-theme="dark"]) .cardEditorForm {
+  background: color-mix(in srgb, var(--dark-surface-raised) 82%, transparent);
+}
+
+:global(html[data-theme="dark"]) .cardEditorMark {
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorClose,
+:global(html[data-theme="dark"]) .cardEditorCancel {
+  background: var(--dark-surface-raised);
+}
+
+:global(html[data-theme="dark"]) .cardEditorClose:hover:not(:disabled),
+:global(html[data-theme="dark"]) .cardEditorCancel:hover:not(:disabled) {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .cardEditorField textarea:focus,
+:global(html[data-theme="dark"]) .cardEditorField input:focus {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cyan);
+  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+}
+
+:global(html[data-theme="dark"]) .cardEditorField > small {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .cardEditorSave {
+  color: var(--dark-on-cta);
+  background: linear-gradient(
+    100deg,
+    var(--editor-primary-light) 0%,
+    var(--editor-primary) 48%,
+    var(--editor-primary-deep) 100%
+  );
+  background-position: 0 50%;
+  background-size: 180% 100%;
+  border-color: var(--dark-cta);
+  box-shadow: 0 9px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .cardEditorSave:hover:not(:disabled) {
+  color: var(--dark-on-cta);
+  background-position: 100% 50%;
+  border-color: var(--dark-cta-hover);
+  box-shadow: 0 11px 24px var(--dark-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardEditorDialog,
+  .cardEditorDialog::backdrop,
+  .cardEditorDialog *,
+  .cardEditorDialog *::before,
+  .cardEditorDialog *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+@keyframes cardEditorReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cardEditorBackdropReveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cardEditorSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}

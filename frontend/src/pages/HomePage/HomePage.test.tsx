@@ -73,6 +73,8 @@ describe("HomePage", () => {
     expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).toContain('href="/decks/714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/decks/f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
     expect(markup).toContain('href="/practice?deck=f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup.match(/href="\/library"/g)).toHaveLength(2);

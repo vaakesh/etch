@@ -4,10 +4,15 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from fastapi import status
+from fastapi import FastAPI, status
 from httpx import AsyncClient
 
-from app.auth.errors import InvalidLoginCredentials, InvalidRefreshTokenError
+from app.auth.deps import get_current_user
+from app.auth.errors import (
+    AccessTokenNotFoundError,
+    InvalidLoginCredentials,
+    InvalidRefreshTokenError,
+)
 from app.auth.schemas import AccessTokenResponse
 from app.users.errors import UserNotFoundError
 from tests.unit.factories import make_token_pair, make_user_session
@@ -57,7 +62,7 @@ class TestLoginForBearerToken:
         )
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Invalid username or password"}
+        assert response.json()["message"] == "Invalid username or password"
         (
             auth_service.login_by_bearer_token_without_refresh.assert_awaited_once_with(
                 username="test-user",
@@ -90,6 +95,7 @@ class TestLoginForBearerToken:
         response = await client.post("/auth/token", data=form_data)
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -296,6 +302,7 @@ class TestLogin:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -360,6 +367,7 @@ class TestLogin:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -377,7 +385,7 @@ class TestLogin:
         response = await client.post("/auth/login", json=payload)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Invalid username or password"}
+        assert response.json()["message"] == "Invalid username or password"
         assert response.headers.get_list("set-cookie") == []
         auth_service.login.assert_awaited_once_with(
             username="test-user",
@@ -501,7 +509,7 @@ class TestRefresh:
         response = await client.post("/auth/refresh")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json() == {"message": "Refresh token not found"}
+        assert response.json()["message"] == "Refresh token not found"
         assert response.headers.get_list("set-cookie") == []
         auth_service.refresh.assert_not_awaited()
 
@@ -517,7 +525,7 @@ class TestRefresh:
         response = await client.post("/auth/refresh")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json() == {"message": "Invalid refresh token"}
+        assert response.json()["message"] == "Invalid refresh token"
 
         set_cookie_headers = response.headers.get_list("set-cookie")
         cookies = SimpleCookie()
@@ -544,9 +552,336 @@ class TestRefresh:
         response = await client.post("/auth/refresh")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "User not found"}
+        assert response.json()["message"] == "User not found"
         assert response.headers.get_list("set-cookie") == []
         auth_service.refresh.assert_awaited_once_with("active-refresh-token")
+
+
+class TestChangePassword:
+    async def test_returns_401_when_user_is_not_authenticated(
+        self,
+        app: FastAPI,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+        auth_service: AsyncMock,
+    ):
+        async def reject_unauthenticated_user():
+            raise AccessTokenNotFoundError()
+
+        monkeypatch.setitem(
+            app.dependency_overrides,
+            get_current_user,
+            reject_unauthenticated_user,
+        )
+        payload = {
+            "current_password": "old-password",
+            "new_password": "new-password",
+        }
+
+        response = await client.put("/auth/password", json=payload)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {
+            "code": "ACCESS_TOKEN_NOT_FOUND",
+            "message": "Not authorized",
+        }
+        assert response.headers.get_list("set-cookie") == []
+        auth_service.change_password.assert_not_awaited()
+
+    async def test_returns_429_when_password_change_limit_is_exceeded(
+        self,
+        client: AsyncClient,
+        current_user,
+        redis_rate_limiter: AsyncMock,
+        auth_service: AsyncMock,
+    ):
+        redis_rate_limiter.check.return_value = False
+        payload = {
+            "current_password": "old-password",
+            "new_password": "new-password",
+        }
+
+        response = await client.put("/auth/password", json=payload)
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.json() == {
+            "code": "RATE_LIMIT_EXCEEDED",
+            "message": "Too many requests. Please try again later.",
+        }
+        assert response.headers.get_list("set-cookie") == []
+        redis_rate_limiter.check.assert_awaited_once_with(
+            redis_key=f"rate_limit:user:{current_user.id}:users:password-change",
+            requests=10,
+            window_seconds=3600,
+        )
+        auth_service.change_password.assert_not_awaited()
+
+    async def test_returns_404_without_clearing_cookies_when_current_password_is_wrong(
+        self,
+        client: AsyncClient,
+        current_user,
+        auth_service: AsyncMock,
+    ):
+        auth_service.change_password.side_effect = InvalidLoginCredentials()
+        payload = {
+            "current_password": "wrong-password",
+            "new_password": "new-password",
+        }
+
+        response = await client.put("/auth/password", json=payload)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {
+            "code": "INVALID_LOGIN_CREDENTIALS",
+            "message": "Invalid username or password",
+        }
+        assert response.headers.get_list("set-cookie") == []
+        auth_service.change_password.assert_awaited_once_with(
+            user_id=current_user.id,
+            current_password="wrong-password",
+            new_password="new-password",
+        )
+
+    async def test_changes_password(
+        self,
+        client: AsyncClient,
+        current_user,
+        auth_service: AsyncMock,
+    ):
+        payload = {
+            "current_password": "old-password",
+            "new_password": "new-password",
+        }
+
+        response = await client.put(
+            "/auth/password",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert response.content == b""
+
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        cookies = SimpleCookie()
+        cookies.load(set_cookie_headers[0])
+        cookies.load(set_cookie_headers[1])
+
+        assert len(set_cookie_headers) == 2
+        assert set(cookies) == {"access_token", "refresh_token"}
+
+        access_token = cookies["access_token"]
+        assert access_token.value == ""
+        assert access_token["max-age"] == "0"
+        assert access_token["path"] == "/"
+        assert access_token["secure"] is True
+        assert access_token["httponly"] is True
+        assert access_token["samesite"] == "lax"
+        assert access_token["expires"]
+
+        refresh_token = cookies["refresh_token"]
+        assert refresh_token.value == ""
+        assert refresh_token["max-age"] == "0"
+        assert refresh_token["path"] == "/"
+        assert refresh_token["secure"] is True
+        assert refresh_token["httponly"] is True
+        assert refresh_token["samesite"] == "lax"
+        assert refresh_token["expires"]
+
+        auth_service.change_password.assert_awaited_once_with(
+            user_id=current_user.id,
+            current_password=payload["current_password"],
+            new_password=payload["new_password"],
+        )
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_details"),
+        [
+            pytest.param(
+                {
+                    "current_password": "short",
+                    "new_password": "new-password",
+                },
+                [
+                    {
+                        "type": "string_too_short",
+                        "loc": ["body", "current_password"],
+                        "msg": "String should have at least 8 characters",
+                        "input": "short",
+                        "ctx": {"min_length": 8},
+                    }
+                ],
+                id="current_password_too_short",
+            ),
+            pytest.param(
+                {
+                    "current_password": "old-password",
+                    "new_password": "short",
+                },
+                [
+                    {
+                        "type": "string_too_short",
+                        "loc": ["body", "new_password"],
+                        "msg": "String should have at least 8 characters",
+                        "input": "short",
+                        "ctx": {"min_length": 8},
+                    }
+                ],
+                id="new_password_too_short",
+            ),
+            pytest.param(
+                {
+                    "current_password": "old password",
+                    "new_password": "new-password",
+                },
+                [
+                    {
+                        "type": "string_pattern_mismatch",
+                        "loc": ["body", "current_password"],
+                        "msg": "String should match pattern '^\\S+$'",
+                        "input": "old password",
+                        "ctx": {"pattern": r"^\S+$"},
+                    }
+                ],
+                id="current_password_contains_spaces",
+            ),
+            pytest.param(
+                {
+                    "current_password": "old-password",
+                    "new_password": "new password",
+                },
+                [
+                    {
+                        "type": "string_pattern_mismatch",
+                        "loc": ["body", "new_password"],
+                        "msg": "String should match pattern '^\\S+$'",
+                        "input": "new password",
+                        "ctx": {"pattern": r"^\S+$"},
+                    }
+                ],
+                id="new_password_contains_spaces",
+            ),
+            pytest.param(
+                {
+                    "current_password": "",
+                    "new_password": "new-password",
+                },
+                [
+                    {
+                        "type": "string_too_short",
+                        "loc": ["body", "current_password"],
+                        "msg": "String should have at least 8 characters",
+                        "input": "",
+                        "ctx": {"min_length": 8},
+                    }
+                ],
+                id="current_password_empty",
+            ),
+            pytest.param(
+                {
+                    "current_password": "old-password",
+                    "new_password": "",
+                },
+                [
+                    {
+                        "type": "string_too_short",
+                        "loc": ["body", "new_password"],
+                        "msg": "String should have at least 8 characters",
+                        "input": "",
+                        "ctx": {"min_length": 8},
+                    }
+                ],
+                id="new_password_empty",
+            ),
+        ],
+    )
+    async def test_rejects_invalid_password(
+        self,
+        client: AsyncClient,
+        payload,
+        expected_details,
+        auth_service: AsyncMock,
+    ):
+        response = await client.put(
+            "/auth/password",
+            json=payload,
+        )
+
+        assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+        assert response.json() == {
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": expected_details,
+        }
+
+        auth_service.change_password.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_details"),
+        [
+            pytest.param(
+                {"new_password": "new-password"},
+                [
+                    {
+                        "type": "missing",
+                        "loc": ["body", "current_password"],
+                        "msg": "Field required",
+                        "input": {"new_password": "new-password"},
+                    }
+                ],
+                id="current_password_missing",
+            ),
+            pytest.param(
+                {"current_password": "old-password"},
+                [
+                    {
+                        "type": "missing",
+                        "loc": ["body", "new_password"],
+                        "msg": "Field required",
+                        "input": {"current_password": "old-password"},
+                    }
+                ],
+                id="new_password_missing",
+            ),
+            pytest.param(
+                {},
+                [
+                    {
+                        "type": "missing",
+                        "loc": ["body", "current_password"],
+                        "msg": "Field required",
+                        "input": {},
+                    },
+                    {
+                        "type": "missing",
+                        "loc": ["body", "new_password"],
+                        "msg": "Field required",
+                        "input": {},
+                    },
+                ],
+                id="all_passwords_missing",
+            ),
+        ],
+    )
+    async def test_rejects_missing_password(
+        self,
+        client: AsyncClient,
+        payload,
+        expected_details,
+        auth_service: AsyncMock,
+    ):
+        response = await client.put(
+            "/auth/password",
+            json=payload,
+        )
+
+        assert response.status_code == (status.HTTP_422_UNPROCESSABLE_CONTENT)
+        assert response.json() == {
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": expected_details,
+        }
+
+        auth_service.change_password.assert_not_awaited()
 
 
 class TestGetSessions:
@@ -573,20 +908,14 @@ class TestGetSessions:
 
         expected = [
             {
-                "uuid": "ffffffff-ffff-ffff-ffff-ffffffffffff",
-                "user_id": 42,
                 "user_agent": "pytest",
                 "ip": "127.0.0.1",
                 "revoked_at": None,
-                "replaced_by_session_id": None,
             },
             {
-                "uuid": "11111111-1111-1111-1111-111111111111",
-                "user_id": 42,
                 "user_agent": None,
                 "ip": None,
                 "revoked_at": "2026-08-16T12:00:00Z",
-                "replaced_by_session_id": 601,
             },
         ]
 

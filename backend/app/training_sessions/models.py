@@ -21,6 +21,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.common.limits import MAX_SESSION_SIZE
+from app.common.types import DeckTitle
+
 type CardSide = Literal["front", "back"]
 
 card_side_enum = SQLAlchemyEnum(
@@ -82,7 +85,7 @@ class TrainingSession(Base):
     )
 
     requested_count: Mapped[int] = mapped_column(
-        Integer, 
+        Integer,
         nullable=False,
     )
     actual_count: Mapped[int] = mapped_column(
@@ -164,6 +167,14 @@ class TrainingSession(Base):
             name="ck_training_session_card_sides_valid_and_different",
         ),
         CheckConstraint(
+            "requested_count >= 1",
+            name="ck_training_session_requested_count_ge_1",
+        ),
+        CheckConstraint(
+            f"requested_count <= {MAX_SESSION_SIZE}",
+            name="ck_training_session_requested_count_le_max",
+        ),
+        CheckConstraint(
             "active_study_time_ms >= 0",
             name="ck_training_session_active_study_time_ms_non_negative",
         ),
@@ -179,6 +190,10 @@ class TrainingSession(Base):
     @property
     def deck_uuid(self) -> UUID:
         return self.deck.uuid
+
+    @property
+    def deck_title(self) -> DeckTitle:
+        return self.deck.title
 
 
 class TrainingSessionItem(Base):
@@ -207,7 +222,10 @@ class TrainingSessionItem(Base):
         index=True,
     )
 
-    user_typed_text: Mapped[str] = mapped_column(Text, nullable=True)
+    user_typed_text: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
     answer_text: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_lang: Mapped[str] = mapped_column(String(3), nullable=False)

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { isApiError } from "../../api";
+import { MAX_DECK_SIZE, isDeckSizeLimitError } from "../../features/library/model/deck-capacity";
 import type {
   LibraryCardDeckAddStatus,
   LibraryCard,
@@ -31,6 +32,8 @@ const MESSAGES = defineMessages(
       saveValidation: "Сервер не принял выбранную карточку или колоду.",
       saveAborted: "Добавление карточки было отменено.",
       saveServer: "Сервер временно не может добавить карточку в колоду.",
+      saveDeckFull: (limit: number) =>
+        `В колоде уже ${limit} карточек — это максимум, карточку добавить нельзя.`,
       partial: "Остальные изменения уже сохранены.",
     },
     eyebrow: "Быстрое добавление",
@@ -64,6 +67,8 @@ const MESSAGES = defineMessages(
       saveValidation: "The server rejected the selected card or deck.",
       saveAborted: "Adding the card was canceled.",
       saveServer: "The server cannot add the card to a deck right now.",
+      saveDeckFull: (limit: number) =>
+        `The deck already holds ${limit} cards — that's the maximum, so the card can't be added.`,
       partial: "Your other changes have already been saved.",
     },
     eyebrow: "Quick add",
@@ -119,7 +124,9 @@ function getDeckSaveErrorMessage(
 ): string {
   let message = messages.errors.saveGeneric;
 
-  if (isApiError(error)) {
+  if (isDeckSizeLimitError(error)) {
+    message = messages.errors.saveDeckFull(MAX_DECK_SIZE);
+  } else if (isApiError(error)) {
     if (error.status === 403) {
       message = messages.errors.saveForbidden;
     } else if (error.status === 404) {

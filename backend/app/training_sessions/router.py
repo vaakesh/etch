@@ -74,7 +74,6 @@ async def get_training_session_history(
     ]
     return result
 
-
 @router.post(
     "/{session_uuid}/activity",
     response_model=TrainingSessionActivityResponse,

@@ -7,6 +7,7 @@ import {
   parsePracticeSessionHistory,
   parseSubmitPracticeAnswerResult,
 } from "./practice-contract";
+import { MAX_SESSION_SIZE } from "./practice-session-size";
 
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const SESSION_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac10";
@@ -50,6 +51,7 @@ const VALID_ANSWER_RESULT = {
 const VALID_HISTORY_SESSION = {
   uuid: SESSION_UUID,
   deck_uuid: DECK_UUID,
+  deck_title: "French basics",
   status: "completed",
   requested_count: 3,
   actual_count: 3,
@@ -134,6 +136,10 @@ describe("parsePracticeSession", () => {
     ["counter sum mismatch", { correct_count: 0, wrong_count: 0 }],
     ["non-opposite sides", { answer_side: "front" }],
     ["inconsistent remaining cards", { cards: [VALID_SESSION.cards[0]] }],
+    [
+      "total above the session limit",
+      { total_count: MAX_SESSION_SIZE + 1, answered_count: 0, correct_count: 0, wrong_count: 0 },
+    ],
   ])("rejects the %s invariant", (_caseName, override) => {
     expectInvalidPracticeResponse(() => parsePracticeSession({ ...VALID_SESSION, ...override }));
   });
@@ -204,6 +210,7 @@ describe("parsePracticeHistoryPage", () => {
         {
           uuid: SESSION_UUID,
           deckUuid: DECK_UUID,
+          deckTitle: "French basics",
           status: "completed",
           requestedCount: 3,
           actualCount: 3,
@@ -232,7 +239,12 @@ describe("parsePracticeHistoryPage", () => {
 
   it.each([
     ["unknown status", { items: [{ ...VALID_HISTORY_SESSION, status: "finished" }] }],
+    ["invalid deck title", { items: [{ ...VALID_HISTORY_SESSION, deck_title: null }] }],
     ["invalid counters", { items: [{ ...VALID_HISTORY_SESSION, correct_count: 3 }] }],
+    [
+      "requested count above the session limit",
+      { items: [{ ...VALID_HISTORY_SESSION, requested_count: MAX_SESSION_SIZE + 1 }] },
+    ],
     ["same card side", { items: [{ ...VALID_HISTORY_SESSION, answer_side: "front" }] }],
     ["missing cursor", { has_more: true }],
   ])("rejects %s", (_caseName, override) => {

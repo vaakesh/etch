@@ -35,7 +35,7 @@ class TestGetDeck:
         deck,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.return_value = deck
+        deck_service.get_visible_by_uuid.return_value = deck
 
         response = await client.get(f"/decks/{deck.uuid}")
 
@@ -53,9 +53,9 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_awaited_once_with(
+        deck_service.get_visible_by_uuid.assert_awaited_once_with(
             deck_uuid=deck.uuid,
-            current_user_id=current_user.id,
+            viewer_id=current_user.id,
         )
 
     @pytest.mark.parametrize("optional_current_user", [None], indirect=True)
@@ -65,7 +65,7 @@ class TestGetDeck:
         deck,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.return_value = deck
+        deck_service.get_visible_by_uuid.return_value = deck
 
         response = await client.get(f"/decks/{deck.uuid}")
 
@@ -83,9 +83,9 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_awaited_once_with(
+        deck_service.get_visible_by_uuid.assert_awaited_once_with(
             deck_uuid=deck.uuid,
-            current_user_id=None,
+            viewer_id=None,
         )
 
     async def test_returns_404_when_deck_not_found(
@@ -93,14 +93,14 @@ class TestGetDeck:
         client: AsyncClient,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.side_effect = DeckNotFoundError()
+        deck_service.get_visible_by_uuid.side_effect = DeckNotFoundError()
 
         response = await client.get("/decks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Deck not found"}
+        assert response.json()["message"] == "Deck not found"
 
-        deck_service.get_by_uuid.assert_awaited_once()
+        deck_service.get_visible_by_uuid.assert_awaited_once()
 
     async def test_rejects_invalid_deck_uuid(
         self,
@@ -110,6 +110,7 @@ class TestGetDeck:
         response = await client.get("/decks/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -128,7 +129,7 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_not_awaited()
+        deck_service.get_visible_by_uuid.assert_not_awaited()
 
 
 class TestCreateDeck:
@@ -166,6 +167,7 @@ class TestCreateDeck:
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     async def test_applies_optional_field_defaults(
@@ -206,6 +208,7 @@ class TestCreateDeck:
             ),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     async def test_normalizes_title_and_description(
@@ -250,6 +253,7 @@ class TestCreateDeck:
             ),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     @pytest.mark.parametrize(
@@ -303,6 +307,7 @@ class TestCreateDeck:
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     @pytest.mark.parametrize(
@@ -354,6 +359,7 @@ class TestCreateDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -368,6 +374,7 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json={})
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -396,12 +403,13 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"message": "Deck already exists"}
+        assert response.json()["message"] == "Deck already exists"
 
         deck_service.create_deck.assert_awaited_once_with(
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
 
@@ -636,6 +644,7 @@ class TestUpdateDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -656,6 +665,7 @@ class TestUpdateDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -711,7 +721,7 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json=payload)
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
@@ -731,6 +741,7 @@ class TestUpdateDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -768,7 +779,6 @@ class TestDeleteDeck:
         deck_service.delete_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -803,12 +813,11 @@ class TestDeleteDeck:
         response = await client.delete(f"/decks/{deck.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.delete_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_rejects_invalid_deck_uuid(
@@ -820,6 +829,7 @@ class TestDeleteDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -932,6 +942,30 @@ class TestGetDeckCards:
             limit=25,
         )
 
+    async def test_accepts_maximum_card_limit(
+        self,
+        client: AsyncClient,
+        current_user,
+        deck,
+        deck_service: AsyncMock,
+    ):
+        deck_service.get_deck_cards.return_value = []
+
+        response = await client.get(
+            f"/decks/{deck.uuid}/cards",
+            params={"limit": 300},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == []
+
+        deck_service.get_deck_cards.assert_awaited_once_with(
+            user_id=current_user.id,
+            deck_uuid=deck.uuid,
+            offset=0,
+            limit=300,
+        )
+
     @pytest.mark.parametrize(
         ("params", "expected_detail"),
         [
@@ -958,13 +992,13 @@ class TestGetDeckCards:
                 id="limit_below_minimum",
             ),
             pytest.param(
-                {"limit": 51},
+                {"limit": 301},
                 {
                     "type": "less_than_equal",
                     "loc": ["query", "limit"],
-                    "msg": "Input should be less than or equal to 50",
-                    "input": "51",
-                    "ctx": {"le": 50},
+                    "msg": "Input should be less than or equal to 300",
+                    "input": "301",
+                    "ctx": {"le": 300},
                 },
                 id="limit_above_maximum",
             ),
@@ -985,6 +1019,7 @@ class TestGetDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1003,7 +1038,7 @@ class TestGetDeckCards:
         response = await client.get(f"/decks/{deck.uuid}/cards")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Deck not found"}
+        assert response.json()["message"] == "Deck not found"
 
         deck_service.get_deck_cards.assert_awaited_once_with(
             user_id=current_user.id,
@@ -1021,6 +1056,7 @@ class TestGetDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1113,7 +1149,7 @@ class TestGetCardInDeck:
         response = await client.get(f"/decks/{deck.uuid}/cards/{card.uuid}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Card not found"}
+        assert response.json()["message"] == "Card not found"
 
         card_service.get_card_in_deck.assert_awaited_once_with(
             card_uuid=card.uuid,
@@ -1150,6 +1186,7 @@ class TestGetCardInDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1184,7 +1221,6 @@ class TestRemoveCardFromDeck:
 
         deck_service.remove_card_from_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -1234,11 +1270,10 @@ class TestRemoveCardFromDeck:
         response = await client.post(f"/decks/{deck.uuid}/cards/remove/{card.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.remove_card_from_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -1272,6 +1307,7 @@ class TestRemoveCardFromDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1377,7 +1413,7 @@ class TestReorderDeckCards:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.reorder_cards.assert_awaited_once_with(
             user_id=current_user.id,
@@ -1437,6 +1473,7 @@ class TestReorderDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1469,6 +1506,7 @@ class TestReorderDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1560,7 +1598,6 @@ class TestLoadCardsToDeck:
                 ),
             ],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_normalizes_all_card_fields(
@@ -1619,7 +1656,6 @@ class TestLoadCardsToDeck:
                 )
             ],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_accepts_maximum_number_of_cards(
@@ -1658,7 +1694,6 @@ class TestLoadCardsToDeck:
             deck_uuid=deck.uuid,
             cards=[CreateCardRequest(**card_payload)] * 500,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -1745,6 +1780,7 @@ class TestLoadCardsToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1831,6 +1867,7 @@ class TestLoadCardsToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -1849,6 +1886,7 @@ class TestLoadCardsToDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1886,6 +1924,7 @@ class TestLoadCardsToDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1954,13 +1993,12 @@ class TestLoadCardsToDeck:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.load_cards_to_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             cards=[CreateCardRequest(**payload["cards"][0])],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -1988,7 +2026,6 @@ class TestAddCardToDeck:
 
         deck_service.add_card_to_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -2038,11 +2075,10 @@ class TestAddCardToDeck:
         response = await client.post(f"/decks/{deck.uuid}/cards/{card.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         deck_service.add_card_to_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -2076,6 +2112,7 @@ class TestAddCardToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2113,7 +2150,6 @@ class TestSetFavourite:
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=True,
         )
@@ -2139,7 +2175,6 @@ class TestSetFavourite:
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=False,
         )
@@ -2176,11 +2211,10 @@ class TestSetFavourite:
         response = await client.patch(f"/decks/{deck.uuid}/set-favourite")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=True,
         )
@@ -2197,6 +2231,7 @@ class TestSetFavourite:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2224,6 +2259,7 @@ class TestSetFavourite:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2257,7 +2293,6 @@ class TestSaveDeck:
 
         user_deck_service.save_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2293,11 +2328,10 @@ class TestSaveDeck:
         response = await client.post(f"/decks/{deck.uuid}/save")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         user_deck_service.save_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2310,6 +2344,7 @@ class TestSaveDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2343,7 +2378,6 @@ class TestUnsaveDeck:
 
         user_deck_service.unsave_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2385,11 +2419,10 @@ class TestUnsaveDeck:
         response = await client.post(f"/decks/{deck.uuid}/unsave")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         user_deck_service.unsave_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2402,6 +2435,7 @@ class TestUnsaveDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

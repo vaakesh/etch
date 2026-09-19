@@ -1,4 +1,5 @@
 import { ApiError } from "../../../api";
+import { MAX_DECK_SIZE } from "./deck-capacity";
 import type {
   CreatedLibraryCard,
   CreatedLibraryDeck,
@@ -154,7 +155,7 @@ export function parseEditableLibraryDeck(value: unknown): EditableLibraryDeck {
   const deck = readRecord(value, "deck");
   const totalWordsCount = readInteger(deck.words_count, "deck.words_count");
 
-  if (totalWordsCount < 0) {
+  if (totalWordsCount < 0 || totalWordsCount > MAX_DECK_SIZE) {
     return invalidLibraryResponse("deck.words_count");
   }
 
@@ -197,16 +198,23 @@ export function parseCreatedLibraryCard(value: unknown): CreatedLibraryCard {
 export function parseCreatedLibraryDeck(value: unknown): CreatedLibraryDeck {
   const deck = readRecord(value, "deck");
   const totalWordsCount = readInteger(deck.words_count, "deck.words_count");
+  const savesCount = readInteger(deck.saves_count, "deck.saves_count");
 
-  if (totalWordsCount < 0) {
+  if (savesCount < 0) {
+    return invalidLibraryResponse("deck.saves_count");
+  }
+
+  if (totalWordsCount < 0 || totalWordsCount > MAX_DECK_SIZE) {
     return invalidLibraryResponse("deck.words_count");
   }
 
   return {
     uuid: readUuid(deck.uuid, "deck.uuid"),
+    ownerUsername: readString(deck.owner_username, "deck.owner_username"),
     title: readString(deck.title, "deck.title"),
     description: readNullableString(deck.description, "deck.description"),
     totalWordsCount,
+    savesCount,
     isPublic: readBoolean(deck.is_public, "deck.is_public"),
     updatedAt: readNullableDateTime(deck.updated_at, "deck.updated_at"),
   };
@@ -252,13 +260,18 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   const viewerState = readRecord(item.viewer_state, viewerStatePath);
   const previewCards = item.preview_cards;
   const totalWordsCount = readInteger(deck.words_count, `${deckPath}.words_count`);
+  const savesCount = readInteger(deck.saves_count, `${deckPath}.saves_count`);
   const accuracy = readInteger(viewerState.accuracy, `${viewerStatePath}.accuracy`);
+
+  if (savesCount < 0) {
+    return invalidLibraryResponse(`${deckPath}.saves_count`);
+  }
 
   if (!Array.isArray(previewCards)) {
     return invalidLibraryResponse(`${path}.preview_cards`);
   }
 
-  if (totalWordsCount < 0) {
+  if (totalWordsCount < 0 || totalWordsCount > MAX_DECK_SIZE) {
     return invalidLibraryResponse(`${deckPath}.words_count`);
   }
   if (accuracy < 0 || accuracy > 100) {
@@ -268,9 +281,11 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   return {
     uuid: readUuid(deck.uuid, `${deckPath}.uuid`),
     ownerUuid: readUuid(deck.owner_uuid, `${deckPath}.owner_uuid`),
+    ownerUsername: readString(deck.owner_username, `${deckPath}.owner_username`),
     title: readString(deck.title, `${deckPath}.title`),
     description: readNullableString(deck.description, `${deckPath}.description`),
     totalWordsCount,
+    savesCount,
     accuracy,
     isFavourite: readBoolean(viewerState.is_favourite, `${viewerStatePath}.is_favourite`),
     updatedAt: readNullableDateTime(deck.updated_at, `${deckPath}.updated_at`),
@@ -312,7 +327,7 @@ export function parseLibraryDeckOptionPage(value: unknown): LibraryDeckOptionPag
     const deck = readRecord(item, path);
     const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
 
-    if (totalWordsCount < 0) {
+    if (totalWordsCount < 0 || totalWordsCount > MAX_DECK_SIZE) {
       return invalidLibraryResponse(`${path}.words_count`);
     }
 

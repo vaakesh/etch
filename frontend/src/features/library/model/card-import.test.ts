@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseCardImportJson } from "./card-import";
+import { checkDeckCapacity, parseCardImportJson } from "./card-import";
+import { MAX_DECK_SIZE } from "./deck-capacity";
 
 describe("parseCardImportJson", () => {
   it("maps the backend JSON shape and applies backend language defaults", () => {
@@ -52,6 +53,27 @@ describe("parseCardImportJson", () => {
     expect(parseCardImportJson('{"cards":[{"back_text":"hello"}]}')).toEqual({
       ok: false,
       issue: { code: "text", path: "cards[0].front_text", maxLength: 255 },
+    });
+  });
+});
+
+describe("checkDeckCapacity", () => {
+  it("accepts an import that still fits into the deck limit", () => {
+    expect(checkDeckCapacity(0, 500)).toBeNull();
+    expect(checkDeckCapacity(4500, 500)).toBeNull();
+    expect(checkDeckCapacity(MAX_DECK_SIZE, 0)).toBeNull();
+  });
+
+  it("reports the remaining slots when the import does not fit", () => {
+    expect(checkDeckCapacity(4800, 300)).toEqual({
+      code: "deck-capacity",
+      limit: MAX_DECK_SIZE,
+      freeSlots: 200,
+    });
+    expect(checkDeckCapacity(MAX_DECK_SIZE, 1)).toEqual({
+      code: "deck-capacity",
+      limit: MAX_DECK_SIZE,
+      freeSlots: 0,
     });
   });
 });

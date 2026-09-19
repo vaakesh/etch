@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.auth.deps import CurrentUser, get_current_user
+from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
     CatalogDeckItemResponse,

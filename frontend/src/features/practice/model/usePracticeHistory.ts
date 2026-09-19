@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionCacheScope } from "../../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  getSessionCacheEntry,
+  isSessionCacheScopeActive,
+  setSessionCacheEntry,
+} from "../../../auth/model/session-cache";
 import { getPracticeSessionHistory } from "../api/practice-api";
 import {
   getPracticeHistoryInvalidationVersion,
@@ -40,16 +47,24 @@ interface CachedPracticeHistoryEntry {
   invalidationVersion: number;
 }
 
-const cachedPracticeHistory = new Map<PracticeHistoryFilter, CachedPracticeHistoryEntry>();
+type PracticeHistoryCache = ReadonlyMap<PracticeHistoryFilter, CachedPracticeHistoryEntry>;
+
+const PRACTICE_HISTORY_CACHE_KEY = createSessionCacheKey<PracticeHistoryCache>("practice.history");
 
 export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHistoryResult {
-  const cachedStateAtMount = cachedPracticeHistory.get(filter)?.state;
+  const cacheScope = useSessionCacheScope();
+  const cachedStateAtMount = getSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY)?.get(
+    filter,
+  )?.state;
   const [filteredState, setFilteredState] = useState<FilteredPracticeHistoryState>({
     filter,
     state: cachedStateAtMount ?? LOADING_STATE,
   });
   const [attempt, setAttempt] = useState(0);
   const [cacheRevision, setCacheRevision] = useState(0);
+  const [stateScopeKey, setStateScopeKey] = useState<string | null>(
+    cachedStateAtMount === undefined ? null : (cacheScope?.key ?? null),
+  );
   const controllerRef = useRef<AbortController | null>(null);
   const activeFilterRef = useRef<PracticeHistoryFilter | null>(null);
   const activeInvalidationVersionRef = useRef<number | null>(null);
@@ -81,8 +96,22 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
       }, 0);
     };
 
+    if (cacheScope === null) {
+      requestRevisionRef.current += 1;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      activeFilterRef.current = null;
+      activeInvalidationVersionRef.current = null;
+      queueMicrotask(() => {
+        setStateScopeKey(null);
+        setFilteredState({ filter, state: LOADING_STATE });
+      });
+      return scheduleCleanup;
+    }
+
     const invalidationVersion = getPracticeHistoryInvalidationVersion(filter);
-    const cachedEntry = cachedPracticeHistory.get(filter);
+    const cachedPracticeHistory = getSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY);
+    const cachedEntry = cachedPracticeHistory?.get(filter);
     if (cachedEntry !== undefined && cachedEntry.invalidationVersion === invalidationVersion) {
       if (activeFilterRef.current !== null && activeFilterRef.current !== filter) {
         requestRevisionRef.current += 1;
@@ -91,7 +120,10 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
         activeFilterRef.current = null;
         activeInvalidationVersionRef.current = null;
       }
-      queueMicrotask(() => setFilteredState({ filter, state: cachedEntry.state }));
+      queueMicrotask(() => {
+        setStateScopeKey(cacheScope.key);
+        setFilteredState({ filter, state: cachedEntry.state });
+      });
 
       return scheduleCleanup;
     }
@@ -113,11 +145,11 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
     activeFilterRef.current = filter;
     activeInvalidationVersionRef.current = invalidationVersion;
 
-    const preservedState =
-      cachedEntry?.state.status === "ready" ? cachedEntry.state : undefined;
+    const preservedState = cachedEntry?.state.status === "ready" ? cachedEntry.state : undefined;
 
     queueMicrotask(() => {
       if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+        setStateScopeKey(cacheScope.key);
         setFilteredState({ filter, state: preservedState ?? LOADING_STATE });
       }
     });
@@ -127,18 +159,23 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
         if (
           !controller.signal.aborted &&
           requestRevisionRef.current === requestRevision &&
-          getPracticeHistoryInvalidationVersion(filter) === invalidationVersion
+          getPracticeHistoryInvalidationVersion(filter) === invalidationVersion &&
+          isSessionCacheScopeActive(cacheScope)
         ) {
           const nextState: PracticeHistoryState = { status: "ready", sessions };
-          cachedPracticeHistory.set(filter, { state: nextState, invalidationVersion });
-          setFilteredState({ filter, state: nextState });
+          const nextCache = new Map(getSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY));
+          nextCache.set(filter, { state: nextState, invalidationVersion });
+          if (setSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY, nextCache)) {
+            setFilteredState({ filter, state: nextState });
+          }
         }
       })
       .catch((error: unknown) => {
         if (
           controller.signal.aborted ||
           requestRevisionRef.current !== requestRevision ||
-          getPracticeHistoryInvalidationVersion(filter) !== invalidationVersion
+          getPracticeHistoryInvalidationVersion(filter) !== invalidationVersion ||
+          !isSessionCacheScopeActive(cacheScope)
         ) {
           return;
         }
@@ -147,8 +184,11 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
           setFilteredState({ filter, state: preservedState });
         } else {
           const nextState: PracticeHistoryState = { status: "error", error };
-          cachedPracticeHistory.set(filter, { state: nextState, invalidationVersion });
-          setFilteredState({ filter, state: nextState });
+          const nextCache = new Map(getSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY));
+          nextCache.set(filter, { state: nextState, invalidationVersion });
+          if (setSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY, nextCache)) {
+            setFilteredState({ filter, state: nextState });
+          }
         }
       })
       .finally(() => {
@@ -160,15 +200,23 @@ export function usePracticeHistory(filter: PracticeHistoryFilter): UsePracticeHi
       });
 
     return scheduleCleanup;
-  }, [attempt, cacheRevision, filter]);
+  }, [attempt, cacheRevision, cacheScope, filter]);
 
   const retry = useCallback(() => {
-    cachedPracticeHistory.delete(filter);
+    const cachedPracticeHistory = getSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY);
+    if (cachedPracticeHistory !== undefined) {
+      const nextCache = new Map(cachedPracticeHistory);
+      nextCache.delete(filter);
+      setSessionCacheEntry(cacheScope, PRACTICE_HISTORY_CACHE_KEY, nextCache);
+    }
     setAttempt((currentAttempt) => currentAttempt + 1);
-  }, [filter]);
+  }, [cacheScope, filter]);
 
   return {
-    state: filteredState.filter === filter ? filteredState.state : LOADING_STATE,
+    state:
+      cacheScope !== null && stateScopeKey === cacheScope.key && filteredState.filter === filter
+        ? filteredState.state
+        : LOADING_STATE,
     retry,
   };
 }

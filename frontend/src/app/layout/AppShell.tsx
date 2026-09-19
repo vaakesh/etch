@@ -9,13 +9,9 @@ import {
   type PointerEvent,
   type SyntheticEvent,
 } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
-import {
-  DashboardIcon,
-  DeckIllustration,
-  type DashboardIconName,
-} from "../../components/DashboardVisuals";
+import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
 import { PageLoader } from "../PageLoader";
 import styles from "./AppShell.module.css";
@@ -42,6 +38,8 @@ const MESSAGES = defineMessages(
     unavailable: "Раздел пока не подключён",
     expand: "Развернуть боковое меню",
     collapse: "Свернуть боковое меню",
+    profile: "Мой профиль",
+    openProfile: (username: string) => `Открыть мой профиль @${username}`,
     logout: "Выйти",
     logoutEyebrow: "Аккаунт",
     logoutTitle: "Выйти из Etch?",
@@ -65,6 +63,8 @@ const MESSAGES = defineMessages(
     unavailable: "This section is not available yet",
     expand: "Expand sidebar",
     collapse: "Collapse sidebar",
+    profile: "My profile",
+    openProfile: (username: string) => `Open my profile @${username}`,
     logout: "Sign out",
     logoutEyebrow: "Account",
     logoutTitle: "Sign out of Etch?",
@@ -94,17 +94,27 @@ function isNavigationItemActive(pathname: string, item: NavigationItem): boolean
     return false;
   }
 
+  if (item.to === "/library" && pathname.startsWith("/decks/")) {
+    return true;
+  }
+
   return item.end
     ? pathname === item.to
     : pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
+interface SidebarProfile {
+  path: string;
+  username: string;
+}
+
 interface SidebarProps {
   collapsed: boolean;
   onRequestLogout: () => void;
+  profile: SidebarProfile | null;
 }
 
-function Sidebar({ collapsed, onRequestLogout }: SidebarProps) {
+function Sidebar({ collapsed, onRequestLogout, profile }: SidebarProps) {
   const messages = useLocalizedMessages(MESSAGES);
   const { pathname } = useLocation();
   const activeIndex = NAVIGATION_ITEMS.findIndex((item) => isNavigationItemActive(pathname, item));
@@ -118,6 +128,29 @@ function Sidebar({ collapsed, onRequestLogout }: SidebarProps) {
         <span className={styles.brandName}>Etch</span>
       </Link>
 
+      {profile === null ? null : (
+        <Link
+          aria-current={pathname === profile.path ? "page" : undefined}
+          aria-label={messages.openProfile(profile.username)}
+          className={
+            pathname === profile.path
+              ? `${styles.profileCard} ${styles.profileCardActive}`
+              : styles.profileCard
+          }
+          title={messages.openProfile(profile.username)}
+          to={profile.path}
+        >
+          <span aria-hidden="true" className={styles.profileAvatar}>
+            {Array.from(profile.username)[0]?.toLocaleUpperCase() ?? "U"}
+          </span>
+          <span className={styles.profileDetails}>
+            <span>{messages.profile}</span>
+            <strong>@{profile.username}</strong>
+          </span>
+          <DashboardIcon className={styles.profileChevron} name="chevron" />
+        </Link>
+      )}
+
       <nav
         aria-label={messages.navigationAria}
         className={styles.navigation}
@@ -129,24 +162,25 @@ function Sidebar({ collapsed, onRequestLogout }: SidebarProps) {
         <ul className={styles.navigationList}>
           {NAVIGATION_ITEMS.map((item) => {
             const label = messages.navigation[item.key];
+            const isItemActive = isNavigationItemActive(pathname, item);
 
             return (
               <li className={item.to ? undefined : styles.navigationUnavailable} key={item.key}>
                 {item.to ? (
-                  <NavLink
+                  <Link
+                    aria-current={isItemActive ? "page" : undefined}
                     aria-label={label}
-                    className={({ isActive }) =>
-                      isActive
+                    className={
+                      isItemActive
                         ? `${styles.navigationItem} ${styles.navigationItemActive}`
                         : styles.navigationItem
                     }
-                    end={item.end}
                     title={collapsed ? label : undefined}
                     to={item.to}
                   >
                     <DashboardIcon className={styles.navigationIcon} name={item.icon} />
                     <span className={styles.navigationLabel}>{label}</span>
-                  </NavLink>
+                  </Link>
                 ) : (
                   <span
                     aria-label={label}
@@ -170,18 +204,12 @@ function Sidebar({ collapsed, onRequestLogout }: SidebarProps) {
           aria-label={messages.logout}
           className={styles.logoutButton}
           onClick={onRequestLogout}
-          title={collapsed ? messages.logout : undefined}
+          title={messages.logout}
           type="button"
         >
           <DashboardIcon className={styles.logoutIcon} name="logout" />
           <span className={styles.logoutLabel}>{messages.logout}</span>
         </button>
-
-        <div aria-hidden="true" className={styles.sidebarArtwork}>
-          <DeckIllustration className={styles.sidebarIllustration} variant={5} />
-          <span className={styles.artBook} />
-          <span className={styles.artBookSecondary} />
-        </div>
       </div>
     </aside>
   );
@@ -272,13 +300,23 @@ function LogoutDialog({ isPending, onClose, onConfirm }: LogoutDialogProps) {
 
 export function AppShell() {
   const messages = useLocalizedMessages(MESSAGES);
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { pathname } = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLogoutPending, setIsLogoutPending] = useState(false);
+  const profile =
+    user === null
+      ? null
+      : {
+          path: `/users/${encodeURIComponent(user.username)}`,
+          username: user.username,
+        };
   const isLibraryRoute =
-    pathname === "/catalog" || pathname === "/library" || pathname.startsWith("/library/");
+    pathname === "/catalog" ||
+    pathname === "/library" ||
+    pathname.startsWith("/library/") ||
+    pathname.startsWith("/decks/");
   const shellClassName = [
     styles.shell,
     isSidebarCollapsed ? styles.shellCollapsed : null,
@@ -308,7 +346,11 @@ export function AppShell() {
         <DashboardIcon className={styles.sidebarToggleIcon} name="chevron" />
       </button>
 
-      <Sidebar collapsed={isSidebarCollapsed} onRequestLogout={() => setIsLogoutDialogOpen(true)} />
+      <Sidebar
+        collapsed={isSidebarCollapsed}
+        onRequestLogout={() => setIsLogoutDialogOpen(true)}
+        profile={profile}
+      />
 
       <div className={styles.content}>
         <Suspense fallback={<PageLoader contained tone="light" />}>

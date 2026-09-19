@@ -60,6 +60,7 @@ const ANSWER_RESPONSE = {
 const HISTORY_SESSION_RESPONSE = {
   uuid: SESSION_UUID,
   deck_uuid: DECK_UUID,
+  deck_title: "French basics",
   status: "completed",
   requested_count: 2,
   actual_count: 2,

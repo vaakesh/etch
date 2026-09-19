@@ -9,9 +9,11 @@ import {
 } from "react";
 import { isApiError } from "../../api";
 import {
+  checkDeckCapacity,
   parseCardImportJson,
   type CardImportIssue,
 } from "../../features/library/model/card-import";
+import { MAX_DECK_SIZE, isDeckSizeLimitError } from "../../features/library/model/deck-capacity";
 import type {
   ImportLibraryCardsInput,
   ImportLibraryCardsResult,
@@ -75,12 +77,18 @@ const MESSAGES = defineMessages(
       cardsArray: "Неверный формат: поле cards должно быть массивом.",
       cardsEmpty: "Добавьте в массив cards хотя бы одну карточку.",
       cardsLimit: (limit: number) => `За один раз можно импортировать не больше ${limit} карточек.`,
+      deckCapacity: (limit: number, freeSlots: number) =>
+        freeSlots === 0
+          ? `В колоде уже ${limit} карточек — это максимум, импортировать больше нельзя.`
+          : `Столько карточек не поместится: лимит колоды — ${limit}, свободно ${freeSlots}.`,
       cardObject: (path: string) => `Неверный формат: ${path} должен быть объектом.`,
       text: (path: string, maxLength: number) =>
         `Проверьте ${path}: требуется непустой текст длиной до ${maxLength} символов.`,
       language: (path: string) => `Проверьте ${path}: код языка должен содержать 2–3 символа.`,
       file: "Не удалось прочитать файл. Попробуйте выбрать его ещё раз или вставьте JSON вручную.",
       generic: "Не удалось импортировать карточки. Попробуйте ещё раз.",
+      deckFull: (limit: number) =>
+        `Карточки не поместились: в колоде не может быть больше ${limit} карточек.`,
       forbidden: "У вас нет доступа к импорту в эту колоду.",
       notFound: "Выбранная колода больше не существует.",
       validation: "Сервер отклонил формат карточек. Проверьте поля JSON.",
@@ -126,12 +134,17 @@ const MESSAGES = defineMessages(
       cardsArray: "Invalid format: cards must be an array.",
       cardsEmpty: "Add at least one card to the cards array.",
       cardsLimit: (limit: number) => `You can import no more than ${limit} cards at once.`,
+      deckCapacity: (limit: number, freeSlots: number) =>
+        freeSlots === 0
+          ? `The deck already holds ${limit} cards — that's the maximum, so nothing more can be imported.`
+          : `That many cards won't fit: the deck limit is ${limit} and only ${freeSlots} slots are left.`,
       cardObject: (path: string) => `Invalid format: ${path} must be an object.`,
       text: (path: string, maxLength: number) =>
         `Check ${path}: enter non-empty text no longer than ${maxLength} characters.`,
       language: (path: string) => `Check ${path}: language codes must be 2–3 characters long.`,
       file: "We couldn't read that file. Choose it again or paste the JSON manually.",
       generic: "We couldn't import the cards. Try again.",
+      deckFull: (limit: number) => `The cards didn't fit: a deck can hold at most ${limit} cards.`,
       forbidden: "You do not have permission to import into this deck.",
       notFound: "The selected deck no longer exists.",
       validation: "The server rejected the card format. Check the JSON fields.",
@@ -207,6 +220,8 @@ function getIssueMessage(issue: CardImportIssue, messages: (typeof MESSAGES)["ru
       return messages.errors.cardsEmpty;
     case "cards-limit":
       return messages.errors.cardsLimit(issue.limit);
+    case "deck-capacity":
+      return messages.errors.deckCapacity(issue.limit, issue.freeSlots);
     case "card-object":
       return messages.errors.cardObject(issue.path);
     case "text":
@@ -217,6 +232,9 @@ function getIssueMessage(issue: CardImportIssue, messages: (typeof MESSAGES)["ru
 }
 
 function getImportErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
+  if (isDeckSizeLimitError(error)) {
+    return messages.errors.deckFull(MAX_DECK_SIZE);
+  }
   if (!isApiError(error)) {
     return messages.errors.generic;
   }
@@ -354,6 +372,16 @@ export function CardImportDialog({ decks, onClose, onImport }: CardImportDialogP
     const parseResult = parseCardImportJson(jsonText);
     if (!parseResult.ok) {
       setIssue(parseResult.issue);
+      textareaRef.current?.focus();
+      return;
+    }
+
+    const capacityIssue = checkDeckCapacity(
+      selectedDeck.totalWordsCount,
+      parseResult.value.cards.length,
+    );
+    if (capacityIssue !== null) {
+      setIssue(capacityIssue);
       textareaRef.current?.focus();
       return;
     }

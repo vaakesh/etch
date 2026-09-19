@@ -1,5 +1,6 @@
 from typing import Annotated
 
+from app.common.limits import MAX_DECK_SIZE, MAX_SESSION_SIZE
 from fastapi import Query
 from pydantic import Field, StringConstraints
 
@@ -7,7 +8,7 @@ type CardText = Annotated[
     str,
     StringConstraints(
         strip_whitespace=True,
-        to_lower=True,
+        to_lower=False,
         min_length=1,
         max_length=255,
     ),
@@ -27,6 +28,9 @@ type Counter = Annotated[int, Field(ge=0)]
 type Percent = Annotated[int, Field(ge=0, le=100)]
 type PositiveInt = Annotated[int, Field(ge=1)]
 type Seconds = Annotated[int, Field(ge=0)]
+
+type DeckSize = Annotated[int, Field(ge=0, le=MAX_DECK_SIZE)]
+type SessionSize = Annotated[int, Field(ge=1, le=MAX_SESSION_SIZE)]
 
 type DeckTitle = Annotated[
     str,
@@ -52,7 +56,7 @@ type Username = Annotated[
     str,
     StringConstraints(
         strip_whitespace=True,
-        to_lower=True,
+        to_lower=False,
         min_length=3,
         max_length=18,
         pattern=r"^\S+$",

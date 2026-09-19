@@ -106,6 +106,7 @@ def make_deck(**overrides):
     deck = SimpleNamespace(**data)
 
     deck.owner_uuid = user.uuid
+    deck.owner_username = user.username
 
     return deck
 
@@ -182,8 +183,9 @@ def make_training_session(**overrides):
 
     session = SimpleNamespace(**data)
 
-    # Аналог TrainingSession.deck_uuid property
+    # Аналог TrainingSession.deck_uuid / deck_title properties
     session.deck_uuid = deck.uuid
+    session.deck_title = deck.title
 
     return session
 
@@ -249,5 +251,4 @@ def make_token_pair(**overrides):
 
     data.update(overrides)
     return SimpleNamespace(**data)
-
 

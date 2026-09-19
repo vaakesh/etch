@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionCacheScope } from "../../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  getSessionCacheEntry,
+  isSessionCacheScopeActive,
+  setSessionCacheEntry,
+  type SessionCacheScope,
+} from "../../../auth/model/session-cache";
 import {
   resumePracticeSession,
   startPracticeSession,
@@ -63,7 +71,33 @@ export interface UsePracticeSessionResult {
 }
 
 const IDLE_STATE: IdlePracticeState = { status: "idle" };
-const cachedPracticeSessions = new Map<string, PracticeSessionState>();
+type PracticeSessionsCache = ReadonlyMap<string, PracticeSessionState>;
+const PRACTICE_SESSIONS_CACHE_KEY =
+  createSessionCacheKey<PracticeSessionsCache>("practice.sessions");
+
+function setCachedPracticeSession(
+  cacheScope: SessionCacheScope,
+  sessionUuid: string,
+  state: PracticeSessionState,
+): boolean {
+  const nextCache = new Map(getSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY));
+  nextCache.set(sessionUuid, state);
+  return setSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY, nextCache);
+}
+
+function deleteCachedPracticeSession(
+  cacheScope: SessionCacheScope | null,
+  sessionUuid: string,
+): void {
+  const cachedPracticeSessions = getSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY);
+  if (cachedPracticeSessions === undefined) {
+    return;
+  }
+
+  const nextCache = new Map(cachedPracticeSessions);
+  nextCache.delete(sessionUuid);
+  setSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY, nextCache);
+}
 
 function createReadyState(session: PracticeSession): ReadyPracticeState {
   return {
@@ -81,9 +115,14 @@ export function usePracticeSession(
   sessionUuid: string | null,
   setupDeckUuid: string | null,
 ): UsePracticeSessionResult {
+  const cacheScope = useSessionCacheScope();
+  const cachedPracticeSessions = getSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY);
   const cachedStateAtMount =
-    sessionUuid === null ? undefined : cachedPracticeSessions.get(sessionUuid);
+    sessionUuid === null ? undefined : cachedPracticeSessions?.get(sessionUuid);
   const [state, setState] = useState<PracticeSessionState>(cachedStateAtMount ?? IDLE_STATE);
+  const [stateScopeKey, setStateScopeKey] = useState<string | null>(
+    cachedStateAtMount === undefined ? null : (cacheScope?.key ?? null),
+  );
   const [resumeAttempt, setResumeAttempt] = useState(0);
   const loadControllerRef = useRef<AbortController | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
@@ -114,6 +153,21 @@ export function usePracticeSession(
       }, 0);
     };
 
+    if (cacheScope === null) {
+      loadRevisionRef.current += 1;
+      loadControllerRef.current?.abort();
+      submitControllerRef.current?.abort();
+      loadControllerRef.current = null;
+      submitControllerRef.current = null;
+      activeResumeSessionUuidRef.current = null;
+      sessionRef.current = null;
+      queueMicrotask(() => {
+        setStateScopeKey(null);
+        setState(IDLE_STATE);
+      });
+      return scheduleCleanup;
+    }
+
     if (sessionUuid === null) {
       loadRevisionRef.current += 1;
       loadControllerRef.current?.abort();
@@ -122,11 +176,12 @@ export function usePracticeSession(
       submitControllerRef.current = null;
       activeResumeSessionUuidRef.current = null;
       sessionRef.current = null;
-      setState(IDLE_STATE);
+      queueMicrotask(() => setState(IDLE_STATE));
       return scheduleCleanup;
     }
 
-    const cachedState = cachedPracticeSessions.get(sessionUuid);
+    const cachedPracticeSessions = getSessionCacheEntry(cacheScope, PRACTICE_SESSIONS_CACHE_KEY);
+    const cachedState = cachedPracticeSessions?.get(sessionUuid);
     if (cachedState !== undefined) {
       loadRevisionRef.current += 1;
       loadControllerRef.current?.abort();
@@ -137,7 +192,10 @@ export function usePracticeSession(
         submitControllerRef.current = null;
       }
       sessionRef.current = cachedState.status === "ready" ? cachedState.session : null;
-      setState(cachedState);
+      queueMicrotask(() => {
+        setStateScopeKey(cacheScope.key);
+        setState(cachedState);
+      });
       return scheduleCleanup;
     }
 
@@ -153,28 +211,43 @@ export function usePracticeSession(
     loadRevisionRef.current = revision;
     loadControllerRef.current = controller;
     activeResumeSessionUuidRef.current = sessionUuid;
-    setState({ status: "loading", operation: "resume" });
+    queueMicrotask(() => {
+      if (!controller.signal.aborted && loadRevisionRef.current === revision) {
+        setStateScopeKey(cacheScope.key);
+        setState({ status: "loading", operation: "resume" });
+      }
+    });
 
     void resumePracticeSession(sessionUuid, controller.signal)
       .then((session) => {
-        if (controller.signal.aborted || loadRevisionRef.current !== revision) {
+        if (
+          controller.signal.aborted ||
+          loadRevisionRef.current !== revision ||
+          !isSessionCacheScopeActive(cacheScope)
+        ) {
           return;
         }
 
         sessionRef.current = session;
         const nextState = createReadyState(session);
-        cachedPracticeSessions.set(sessionUuid, nextState);
-        setState(nextState);
+        if (setCachedPracticeSession(cacheScope, sessionUuid, nextState)) {
+          setState(nextState);
+        }
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted || loadRevisionRef.current !== revision) {
+        if (
+          controller.signal.aborted ||
+          loadRevisionRef.current !== revision ||
+          !isSessionCacheScopeActive(cacheScope)
+        ) {
           return;
         }
 
         sessionRef.current = null;
         const nextState: PracticeSessionState = { status: "error", operation: "resume", error };
-        cachedPracticeSessions.set(sessionUuid, nextState);
-        setState(nextState);
+        if (setCachedPracticeSession(cacheScope, sessionUuid, nextState)) {
+          setState(nextState);
+        }
       })
       .finally(() => {
         if (loadControllerRef.current === controller) {
@@ -184,7 +257,7 @@ export function usePracticeSession(
       });
 
     return scheduleCleanup;
-  }, [resumeAttempt, sessionUuid, setupDeckUuid]);
+  }, [cacheScope, resumeAttempt, sessionUuid, setupDeckUuid]);
 
   const start = useCallback(
     async (
@@ -192,6 +265,9 @@ export function usePracticeSession(
       promptSide: CardSide,
       wordsPerSession: number,
     ): Promise<PracticeSession | null> => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return null;
+      }
       const normalizedDeckUuid = deckUuid.toLowerCase();
       if (
         setupDeckUuidRef.current !== null &&
@@ -209,6 +285,7 @@ export function usePracticeSession(
       loadRevisionRef.current = revision;
       loadControllerRef.current = controller;
       sessionRef.current = null;
+      setStateScopeKey(cacheScope.key);
       setState({ status: "loading", operation: "start" });
 
       try {
@@ -220,6 +297,7 @@ export function usePracticeSession(
         if (
           controller.signal.aborted ||
           loadRevisionRef.current !== revision ||
+          !isSessionCacheScopeActive(cacheScope) ||
           (setupDeckUuidRef.current !== null &&
             setupDeckUuidRef.current.toLowerCase() !== normalizedDeckUuid)
         ) {
@@ -228,7 +306,7 @@ export function usePracticeSession(
 
         sessionRef.current = session;
         const nextState = createReadyState(session);
-        cachedPracticeSessions.set(session.uuid, nextState);
+        setCachedPracticeSession(cacheScope, session.uuid, nextState);
         invalidatePracticeHistory(["all", "in_progress"]);
         setState(nextState);
         return session;
@@ -236,6 +314,7 @@ export function usePracticeSession(
         if (
           controller.signal.aborted ||
           loadRevisionRef.current !== revision ||
+          !isSessionCacheScopeActive(cacheScope) ||
           (setupDeckUuidRef.current !== null &&
             setupDeckUuidRef.current.toLowerCase() !== normalizedDeckUuid)
         ) {
@@ -250,7 +329,7 @@ export function usePracticeSession(
         }
       }
     },
-    [],
+    [cacheScope],
   );
 
   const submit = useCallback(
@@ -259,7 +338,7 @@ export function usePracticeSession(
       input: SubmitPracticeAnswerInput,
     ): Promise<SubmitPracticeAnswerResult | null> => {
       const activeSession = sessionRef.current;
-      if (activeSession === null) {
+      if (activeSession === null || !isSessionCacheScopeActive(cacheScope)) {
         return null;
       }
 
@@ -284,7 +363,11 @@ export function usePracticeSession(
           input,
           controller.signal,
         );
-        if (controller.signal.aborted || sessionRef.current?.uuid !== activeSession.uuid) {
+        if (
+          controller.signal.aborted ||
+          sessionRef.current?.uuid !== activeSession.uuid ||
+          !isSessionCacheScopeActive(cacheScope)
+        ) {
           return null;
         }
 
@@ -317,12 +400,16 @@ export function usePracticeSession(
             submittingSequenceNumber: null,
             submitError: null,
           };
-          cachedPracticeSessions.set(activeSession.uuid, nextState);
+          setCachedPracticeSession(cacheScope, activeSession.uuid, nextState);
           return nextState;
         });
         return result;
       } catch (error: unknown) {
-        if (controller.signal.aborted || sessionRef.current?.uuid !== activeSession.uuid) {
+        if (
+          controller.signal.aborted ||
+          sessionRef.current?.uuid !== activeSession.uuid ||
+          !isSessionCacheScopeActive(cacheScope)
+        ) {
           return null;
         }
 
@@ -336,7 +423,7 @@ export function usePracticeSession(
             submittingSequenceNumber: null,
             submitError: { sequenceNumber, error },
           };
-          cachedPracticeSessions.set(activeSession.uuid, nextState);
+          setCachedPracticeSession(cacheScope, activeSession.uuid, nextState);
           return nextState;
         });
         return null;
@@ -346,16 +433,23 @@ export function usePracticeSession(
         }
       }
     },
-    [],
+    [cacheScope],
   );
 
   const retryResume = useCallback(() => {
     if (sessionUuid !== null) {
-      cachedPracticeSessions.delete(sessionUuid);
+      deleteCachedPracticeSession(cacheScope, sessionUuid);
     }
     sessionRef.current = null;
     setResumeAttempt((attempt) => attempt + 1);
-  }, [sessionUuid]);
+  }, [cacheScope, sessionUuid]);
 
-  return { state, retryResume, start, submit };
+  const visibleState: PracticeSessionState =
+    cacheScope !== null && stateScopeKey === cacheScope.key
+      ? state
+      : sessionUuid === null
+        ? IDLE_STATE
+        : { status: "loading", operation: "resume" };
+
+  return { state: visibleState, retryResume, start, submit };
 }

@@ -42,8 +42,8 @@ class TestGetHomeDashboard:
                 "user_total_study_time": 3600,
             },
             "user_weekly_activity": [
-                {"date": "2026-08-14", "percent": 50},
-                {"date": "2026-08-15", "percent": 100},
+                {"date": "2026-08-14", "value": 50},
+                {"date": "2026-08-15", "value": 100},
             ],
         }
 
@@ -68,8 +68,8 @@ class TestGetHomeDashboard:
                 "user_total_study_time": 3600,
             },
             "user_weekly_activity": [
-                {"date": "2026-08-14", "percent": 50},
-                {"date": "2026-08-15", "percent": 100},
+                {"date": "2026-08-14", "value": 50},
+                {"date": "2026-08-15", "value": 100},
             ],
         }
 
@@ -77,7 +77,6 @@ class TestGetHomeDashboard:
         assert response.json() == expected
         bff_service.get_home_dashboard.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_returns_empty_home_collections(
@@ -114,7 +113,6 @@ class TestGetHomeDashboard:
         assert response.json() == expected
         bff_service.get_home_dashboard.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -346,6 +344,7 @@ class TestGetCatalogPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -590,6 +589,7 @@ class TestGetDecksLibraryPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -606,7 +606,7 @@ class TestGetDecksLibraryPage:
         response = await client.get("/bff/library/decks")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "User deck progress not found"}
+        assert response.json()["message"] == "User deck progress not found"
         bff_service.get_decks_library_page.assert_awaited_once_with(
             user_id=current_user.id,
             user_uuid=current_user.uuid,
@@ -664,7 +664,6 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             search_query=None,
             cursor=None,
             limit=50,
@@ -690,7 +689,6 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             search_query=None,
             cursor=None,
             limit=50,
@@ -723,7 +721,6 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             search_query="hello",
             cursor="card-cursor",
             limit=25,
@@ -779,6 +776,7 @@ class TestGetCardsLibraryPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -935,6 +933,7 @@ class TestStartPracticeSession:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -969,6 +968,7 @@ class TestStartPracticeSession:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1015,7 +1015,7 @@ class TestStartPracticeSession:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
         bff_service.start_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
             deck_uuid=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
@@ -1034,6 +1034,7 @@ class TestStartPracticeSession:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1151,7 +1152,7 @@ class TestResumePracticeSession:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
         bff_service.resume_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
             training_session_uuid=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
@@ -1165,6 +1166,7 @@ class TestResumePracticeSession:
         response = await client.get("/bff/practice/not-a-uuid/resume")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

@@ -25,6 +25,7 @@ export interface PracticeSession {
 export interface PracticeHistorySession {
   uuid: string;
   deckUuid: string;
+  deckTitle: string;
   status: TrainingSessionStatus;
   requestedCount: number;
   actualCount: number;

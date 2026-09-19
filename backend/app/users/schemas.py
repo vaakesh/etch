@@ -1,12 +1,10 @@
 from uuid import UUID
 
-from app.common.types import Password, Username
+from app.common.types import Counter, Password, Username
 from app.users.types import Locale, NormalizedEmail, Theme
 from pydantic import BaseModel, ConfigDict, PastDatetime
 
-from app.users.models import User
-
-
+# internal models
 class InternalUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,12 +46,15 @@ class InternalUserWithSettings(InternalUser):
             settings=settings,
         )
 
-class PublicUserResponse(BaseModel):
+# external models
+class UserProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID
     username: Username
     created_at: PastDatetime
+    deck_count: Counter
+    total_saves_count: Counter
 
 class UserSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -72,6 +73,24 @@ class PrivateUserResponse(BaseModel):
     updated_at: PastDatetime
     settings: UserSettingsResponse
 
+    @classmethod
+    def from_user_with_settings(
+        cls,
+        user: InternalUserWithSettings,
+    ) -> PrivateUserResponse:
+        return PrivateUserResponse(
+            uuid=user.uuid,
+            username=user.username,
+            email=user.email,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            settings=UserSettingsResponse(
+                locale=user.settings.locale,
+                theme=user.settings.theme,
+                show_previews_for_long=user.settings.show_previews_for_long,
+            )
+        )
+
 class CreateUserRequest(BaseModel):
     username: Username
     email: NormalizedEmail
@@ -81,11 +100,7 @@ class UpdateUserRequest(BaseModel):
     username: Username | None = None
     email: NormalizedEmail | None = None
 
-class ChangePasswordRequest(BaseModel):
-    current_password: Password
-    new_password: Password
-
-class UserSettingsUpdate(BaseModel):
+class UpdateUserSettingsRequest(BaseModel):
     locale: Locale | None = None
     theme: Theme | None = None
     show_previews_for_long: bool | None = None

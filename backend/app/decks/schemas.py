@@ -1,22 +1,39 @@
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from app.common.types import Counter, DeckDescription, DeckTitle, Percent, PositiveInt
-from app.common.utils import calculate_accuracy
+from app.common.types import (
+    Counter,
+    DeckDescription,
+    DeckSize,
+    DeckTitle,
+    Percent,
+    PositiveInt,
+    Username,
+)
 from app.decks.models import Deck
 from app.errors import RequestValueError
 from pydantic import BaseModel, ConfigDict, PastDatetime, model_validator
 
+from app.decks.utils import calculate_accuracy
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DeckLoad:
+    user: bool = False
+    card_links: bool = False
+    cards: bool = False # cards include card_links
 
 class InternalDeck(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     uuid: UUID
+    user_id: int
     owner_uuid: UUID
+    owner_username: Username
     title: DeckTitle
     description: DeckDescription
-    words_count: Counter
+    words_count: DeckSize
     is_public: bool
     saves_count: Counter
     version: PositiveInt
@@ -28,7 +45,9 @@ class InternalDeck(BaseModel):
         return cls(
             id=deck.id,
             uuid=deck.uuid,
+            user_id=deck.user_id,
             owner_uuid=deck.owner_uuid,
+            owner_username=deck.owner_username,
             title=deck.title,
             description=deck.description,
             words_count=deck.words_count,
@@ -96,9 +115,10 @@ class DeckResponse(BaseModel):
 
     uuid: UUID
     owner_uuid: UUID
+    owner_username: Username
     title: DeckTitle
     description: DeckDescription = None
-    words_count: Counter
+    words_count: DeckSize
     is_public: bool
     saves_count: Counter
     updated_at: PastDatetime | None = None
@@ -133,3 +153,8 @@ class DeckViewerStateResponse(BaseModel):
 class ReorderCards(BaseModel):
     card_uuid: UUID
     to_position: PositiveInt
+
+class LibraryCursor(BaseModel):
+    last_studied_at: PastDatetime | None
+    added_at: PastDatetime
+    id: PositiveInt

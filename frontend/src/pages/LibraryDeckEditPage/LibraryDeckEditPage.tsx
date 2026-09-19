@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import type {
   EditableLibraryDeck,
@@ -178,7 +178,7 @@ function getDeckSaveErrorMessage(error: unknown, messages: DeckSaveErrorMessages
   if (error.status === 403 || error.status === 404) {
     return messages.notFound;
   }
-  if (error.status === 409) {
+  if (hasApiErrorCode(error, API_ERROR_CODES.deckAlreadyExists) || error.status === 409) {
     return messages.conflict;
   }
   if (error.status === 422) {

@@ -1,10 +1,8 @@
 import base64
 import json
 from datetime import UTC, datetime
-from app.decks.models import UserDeck
 
 from app.errors import RequestValueError
-from app.decks.models import UserDeck
 
 
 def utcnow() -> datetime:
@@ -57,20 +55,3 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
             message="Invalid cursor format",
             failed_field="cursor",
         ) from exc
-
-def calculate_accuracy(user_deck: UserDeck) -> int:
-    if (user_deck is None) or (user_deck.correct_count + user_deck.wrong_count == 0):
-        return 0
-
-    accuracy = (
-        int
-        (
-            user_deck.correct_count / 
-            (user_deck.correct_count + user_deck.wrong_count)
-            * 100
-        )
-    )
-    return accuracy
-
-def make_user_deck_identity(user_id: int, deck_id: int) -> tuple[int, int]:
-    return (user_id, deck_id)

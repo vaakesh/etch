@@ -30,6 +30,30 @@ class AuthTokensService:
     def __init__(self, config: AuthTokensConfig) -> None:
         self.config = config
 
+    # read
+
+    def decode_access_token(self, token: str) -> dict[str, Any]:
+        try:
+            payload = jwt.decode(
+                jwt=token,
+                key=self.config.public_key,
+                algorithms=[self.config.algorithm],
+            )
+        except jwt.InvalidTokenError as e:
+            raise InvalidTokenError() from e
+        
+        if payload.get("type") != "access":
+            raise InvalidTokenTypeError()
+        
+        return payload
+
+    def hash_refresh_token(self, refresh_token: str) -> str:
+        return hmac.new(
+            self.config.refresh_pepper_bytes, refresh_token.encode(), hashlib.sha256
+        ).hexdigest()
+
+    # write
+
     def create_access_token(self, user_uuid: UUID) -> str:
         now = utcnow()
         payload: dict[str, Any] = {
@@ -49,30 +73,10 @@ class AuthTokensService:
             key=self.config.private_key,
             algorithm=self.config.algorithm,
         )
-    
-    def decode_access_token(self, token: str) -> dict[str, Any]:
-        try:
-            payload = jwt.decode(
-                jwt=token,
-                key=self.config.public_key,
-                algorithms=[self.config.algorithm],
-            )
-        except jwt.InvalidTokenError as e:
-            raise InvalidTokenError() from e
-        
-        if payload.get("type") != "access":
-            raise InvalidTokenTypeError()
-        
-        return payload
-    
+
     def generate_refresh_token(self) -> str:
         return secrets.token_urlsafe(64)
-    
-    def hash_refresh_token(self, refresh_token: str) -> str:
-        return hmac.new(
-            self.config.refresh_pepper_bytes, refresh_token.encode(), hashlib.sha256
-        ).hexdigest()
-    
+
     def issue_tokens(self, user_uuid: UUID) -> IssuedTokens:
         access_token = self.create_access_token(user_uuid=user_uuid)
         refresh_token = self.generate_refresh_token()
@@ -93,6 +97,113 @@ class AuthService:
         ):
         self.uow_factory = uow_factory
         self.auth_tokens_service = auth_tokens_service
+
+    # helpers
+
+    async def _authenticate_user(
+            self,
+            username: str,
+            password: str,
+            uow: UnitOfWork,
+    ) -> User:
+        user = await uow.user_repo.get_by_username(username=username)
+        if user is None or not verify_password(password, user.hashed_password):
+            raise InvalidLoginCredentials("Invalid username or password")
+        
+        return user
+
+    async def _validate_refresh_token(
+        self, refresh_token: str, uow: UnitOfWork
+    ) -> UserSession:
+        refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
+        user_session = await uow.auth_repo.get_user_session_by_refresh(
+            refresh_token_hash, 
+            for_update=True,
+        )
+
+        if (
+            user_session is None
+            or user_session.revoked_at is not None
+            or user_session.replaced_by_session_id is not None
+            or user_session.expires_at <= utcnow()
+        ):
+            raise InvalidRefreshTokenError("Session expired")
+
+        return user_session
+
+    # read
+
+    async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
+        async with self.uow_factory() as uow:
+            return await uow.auth_repo.get_all_user_sessions(user_id)
+
+    # write
+
+    async def build_user_session(
+            self,
+            user: User,
+            refresh_token_hash,
+    ) -> UserSession:
+        user_session = UserSession(
+            user_id=user.id,
+            refresh_token_hash=refresh_token_hash,
+            expires_at=utcnow() + timedelta(
+                days=self.auth_tokens_service.config.refresh_token_expire_days
+            ),
+        )
+        return user_session
+
+    async def login(
+        self,
+        username: str,
+        password: str,
+    ) -> TokenPair:
+        async with self.uow_factory() as uow:
+            user = await self._authenticate_user(
+                username=username,
+                password=password,
+                uow=uow,
+            )
+            tokens = self.auth_tokens_service.issue_tokens(user_uuid=user.uuid)
+            user_session = await self.build_user_session(
+                user, tokens.refresh_token_hash,
+            )
+            uow.auth_repo.add(user_session=user_session)
+            await uow.commit()
+
+            return TokenPair(tokens.access_token, tokens.refresh_token)
+
+    async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
+        async with self.uow_factory() as uow:
+            user = await self._authenticate_user(
+                username,
+                password,
+                uow,
+            )
+            bearer_access_token = self.auth_tokens_service.create_access_token(user.uuid)
+            return AccessTokenResponse(bearer_access_token)
+
+    async def refresh(
+        self,
+        refresh_token: str,
+    ) -> TokenPair:
+        async with self.uow_factory() as uow:
+            user_session = await self._validate_refresh_token(refresh_token, uow)
+            user = await uow.user_repo.get_by_id(user_session.user_id)
+            if user is None:
+                raise UserNotFoundError()
+            tokens = self.auth_tokens_service.issue_tokens(user.uuid)
+            new_user_session = await self.build_user_session(
+                user, tokens.refresh_token_hash,
+            )
+            uow.auth_repo.add(new_user_session)
+            await uow.auth_repo.flush()
+            user_session.replaced_by_session_id = new_user_session.id
+            user_session.revoked_at = utcnow()
+
+            await uow.commit()
+
+            return TokenPair(tokens.access_token, tokens.refresh_token)
 
     async def change_password(
         self,
@@ -126,36 +237,6 @@ class AuthService:
 
             await uow.commit()
 
-    async def login(
-        self,
-        username: str,
-        password: str,
-    ) -> TokenPair:
-        async with self.uow_factory() as uow:
-            user = await self._authenticate_user(
-                username=username,
-                password=password,
-                uow=uow,
-            )
-            tokens = self.auth_tokens_service.issue_tokens(user_uuid=user.uuid)
-            user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash,
-            )
-            uow.auth_repo.add(user_session=user_session)
-            await uow.commit()
-
-            return TokenPair(tokens.access_token, tokens.refresh_token)
-
-    async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
-        async with self.uow_factory() as uow:
-            user = await self._authenticate_user(
-                username,
-                password,
-                uow,
-            )
-            bearer_access_token = self.auth_tokens_service.create_access_token(user.uuid)
-            return AccessTokenResponse(bearer_access_token)
-        
     async def logout(
         self,
         refresh_token: str | None = None,
@@ -171,75 +252,3 @@ class AuthService:
             )
             if is_updated:
                 await uow.commit()
-    
-    async def refresh(
-        self,
-        refresh_token: str,
-    ) -> TokenPair:
-        async with self.uow_factory() as uow:
-            user_session = await self._validate_refresh_token(refresh_token, uow)
-            user = await uow.user_repo.get_by_id(user_session.user_id)
-            if user is None:
-                raise UserNotFoundError()
-            tokens = self.auth_tokens_service.issue_tokens(user.uuid)
-            new_user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash,
-            )
-            uow.auth_repo.add(new_user_session)
-            await uow.auth_repo.flush()
-            user_session.replaced_by_session_id = new_user_session.id
-            user_session.revoked_at = utcnow()
-
-            await uow.commit()
-
-            return TokenPair(tokens.access_token, tokens.refresh_token)
-
-    async def _validate_refresh_token(
-        self, refresh_token: str, uow: UnitOfWork
-    ) -> UserSession:
-        refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
-        user_session = await uow.auth_repo.get_user_session_by_refresh(
-            refresh_token_hash, 
-            for_update=True,
-        )
-
-        if (
-            user_session is None
-            or user_session.revoked_at is not None
-            or user_session.replaced_by_session_id is not None
-            or user_session.expires_at <= utcnow()
-        ):
-            raise InvalidRefreshTokenError("Session expired")
-
-        return user_session
-
-
-    async def _authenticate_user(
-            self,
-            username: str,
-            password: str,
-            uow: UnitOfWork,
-    ) -> User:
-        user = await uow.user_repo.get_by_username(username=username)
-        if user is None or not verify_password(password, user.hashed_password):
-            raise InvalidLoginCredentials("Invalid username or password")
-        
-        return user
-    
-    async def build_user_session(
-            self,
-            user: User,
-            refresh_token_hash,
-    ) -> UserSession:
-        user_session = UserSession(
-            user_id=user.id,
-            refresh_token_hash=refresh_token_hash,
-            expires_at=utcnow() + timedelta(
-                days=self.auth_tokens_service.config.refresh_token_expire_days
-            ),
-        )
-        return user_session
-    
-    async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
-        async with self.uow_factory() as uow:
-            return await uow.auth_repo.get_all_user_sessions(user_id)

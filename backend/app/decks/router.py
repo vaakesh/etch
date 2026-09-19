@@ -55,6 +55,7 @@ async def create_deck(
         payload, 
         user_id=current_user.id,
         user_uuid=current_user.uuid,
+        user_username=current_user.username,
     )
 
 @router.patch(
@@ -70,7 +71,6 @@ async def update_deck(
 ):
     return await deck_service.update_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         payload=payload,
     )
@@ -102,30 +102,13 @@ async def get_deck_cards(
     current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
     offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=50),
+    limit: int = Query(default=50, ge=1, le=500),
 ):
     return await deck_service.get_deck_cards(
         user_id=current_user.id if current_user else None,
         deck_uuid=deck_uuid,
         offset=offset,
         limit=limit,
-    )
-
-@router.get(
-    "/{deck_uuid}/cards/{card_uuid}",
-    response_model=CardResponse,
-    dependencies=[Depends(public_decks_rate_limit)],
-)
-async def get_card_in_deck(
-    deck_uuid: UUID,
-    card_uuid: UUID,
-    current_user: OptionalCurrentUser,
-    card_service: CardServiceDeps,
-):
-    return await card_service.get_card_in_deck(
-        card_uuid=card_uuid,
-        deck_uuid=deck_uuid,
-        viewer_id=current_user.id if current_user else None,
     )
 
 @router.post(
@@ -147,7 +130,6 @@ async def remove_card_from_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
-# todo: complete the logic of cards reordering
 @router.post(
     "/{deck_uuid}/cards/reorder",
     dependencies=[Depends(decks_rate_limit)],
@@ -201,7 +183,6 @@ async def add_card_to_deck(
     )
     return new_deck_card
 
-
 @router.patch(
     "/{deck_uuid}/set-favourite",
     dependencies=[Depends(decks_rate_limit)],
@@ -218,7 +199,6 @@ async def set_favourite(
         value=value,
     )
     return user_deck.is_favourite
-
 
 @router.post(
     "/{deck_uuid}/save",

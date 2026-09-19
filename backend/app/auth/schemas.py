@@ -26,15 +26,16 @@ class AccessTokenResponse:
 
 class AuthSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    uuid: UUID
-    user_id: int
     user_agent: str | None
     ip: str | None
     revoked_at: PastDatetime | None
-    replaced_by_session_id: int | None
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     username: Username
     password: Password
+
+class ChangePasswordRequest(BaseModel):
+    current_password: Password
+    new_password: Password

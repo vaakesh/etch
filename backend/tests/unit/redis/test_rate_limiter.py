@@ -6,14 +6,19 @@ from fastapi import Request, status
 from httpx import AsyncClient
 
 from app.redis.errors import RateLimitError
-from app.redis.service import RateLimit, RateLimitPolicy, RedisRateLimiter
+from app.redis.service import (
+    RATE_LIMIT_SCRIPT,
+    RateLimit,
+    RateLimitPolicy,
+    RedisRateLimiter,
+)
 from app.redis.rate_limiters import limit
 
 
 class TestRedisRateLimiterCheck:
-    async def test_initializes_counter_and_allows_first_request(self):
+    async def test_allows_first_request(self):
         redis = AsyncMock()
-        redis.get.return_value = None
+        redis.eval.return_value = 1
         rate_limiter = RedisRateLimiter(redis=redis)
 
         allowed = await rate_limiter.check(
@@ -23,20 +28,16 @@ class TestRedisRateLimiterCheck:
         )
 
         assert allowed is True
-        redis.get.assert_awaited_once_with(
-            name="rate_limit:user:42:cards",
+        redis.eval.assert_awaited_once_with(
+            RATE_LIMIT_SCRIPT,
+            1,
+            "rate_limit:user:42:cards",
+            60,
         )
-        redis.set.assert_awaited_once_with(
-            name="rate_limit:user:42:cards",
-            value="1",
-            ex=60,
-        )
-        redis.incrby.assert_not_awaited()
 
     async def test_allows_request_at_limit_boundary(self):
         redis = AsyncMock()
-        redis.get.return_value = "4"
-        redis.incrby.return_value = 5
+        redis.eval.return_value = 5
         rate_limiter = RedisRateLimiter(redis=redis)
 
         allowed = await rate_limiter.check(
@@ -46,16 +47,10 @@ class TestRedisRateLimiterCheck:
         )
 
         assert allowed is True
-        redis.incrby.assert_awaited_once_with(
-            name="rate_limit:user:42:cards",
-            amount=1,
-        )
-        redis.set.assert_not_awaited()
 
     async def test_rejects_request_over_limit(self):
         redis = AsyncMock()
-        redis.get.return_value = "5"
-        redis.incrby.return_value = 6
+        redis.eval.return_value = 6
         rate_limiter = RedisRateLimiter(redis=redis)
 
         allowed = await rate_limiter.check(
@@ -184,6 +179,7 @@ class TestRateLimitResponse:
 
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
         assert response.json() == {
+            "code": "RATE_LIMIT_EXCEEDED",
             "message": "Too many requests. Please try again later.",
         }
         redis_rate_limiter.check.assert_awaited_once_with(
@@ -191,4 +187,4 @@ class TestRateLimitResponse:
             requests=60,
             window_seconds=60,
         )
-        user_service.get_user_settings_by_id.assert_not_awaited()
+        user_service.get_by_uuid_with_settings.assert_not_awaited()

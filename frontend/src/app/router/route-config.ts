@@ -1,4 +1,5 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { DECK_DETAILS_ROUTE_PATH } from "../../features/decks/model/deck-details-navigation";
 import type { AppLocale } from "../../i18n";
 
 export type RouteAccess = "public" | "protected" | "guest";
@@ -13,7 +14,9 @@ export interface AppRouteDefinition {
 const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const HomePage = lazy(() => import("../../pages/HomePage"));
 const LibraryPage = lazy(() => import("../../pages/LibraryPage"));
+const DeckDetailsPage = lazy(() => import("../../pages/DeckDetailsPage"));
 const CatalogPage = lazy(() => import("../../pages/CatalogPage"));
+const UserProfilePage = lazy(() => import("../../pages/UserProfilePage"));
 const LibraryDeckEditPage = lazy(() => import("../../pages/LibraryDeckEditPage"));
 const PracticePage = lazy(() => import("../../pages/PracticePage"));
 const SessionHistoryPage = lazy(() => import("../../pages/SessionHistoryPage"));
@@ -40,10 +43,22 @@ export const appRoutes: readonly AppRouteDefinition[] = [
     Component: LibraryPage,
   },
   {
+    path: DECK_DETAILS_ROUTE_PATH,
+    access: "protected",
+    title: { "ru-RU": "Колода — Etch", "en-US": "Deck — Etch" },
+    Component: DeckDetailsPage,
+  },
+  {
     path: "/catalog",
     access: "protected",
     title: { "ru-RU": "Каталог — Etch", "en-US": "Catalog — Etch" },
     Component: CatalogPage,
+  },
+  {
+    path: "/users/:username",
+    access: "protected",
+    title: { "ru-RU": "Профиль — Etch", "en-US": "Profile — Etch" },
+    Component: UserProfilePage,
   },
   {
     path: "/library/:deck_uuid/edit",

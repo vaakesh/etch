@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Etch — аудит бэкенда</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f4;
+      --paper: #ffffff;
+      --ink: #18181b;
+      --muted: #57534e;
+      --line: #e7e5e4;
+      --critical: #991b1b;
+      --critical-bg: #fef2f2;
+      --high: #9a3412;
+      --high-bg: #fff7ed;
+      --medium: #854d0e;
+      --medium-bg: #fefce8;
+      --good: #166534;
+      --good-bg: #f0fdf4;
+      --accent: #1d4ed8;
+      --code: #f4f4f5;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.58 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1160px; margin: 0 auto; padding: 48px 28px 80px; }
+    header { padding: 36px; background: #18181b; color: #fff; border-radius: 22px; }
+    h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 52px); line-height: 1.05; letter-spacing: -.04em; }
+    header p { max-width: 850px; margin: 12px 0 0; color: #d6d3d1; font-size: 17px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 24px; color: #a8a29e; font-size: 13px; }
+    nav { position: sticky; top: 0; z-index: 10; margin: 18px 0 30px; padding: 12px 16px; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(12px); }
+    nav a { display: inline-block; margin: 4px 18px 4px 0; color: var(--muted); text-decoration: none; font-weight: 650; }
+    nav a:hover { color: var(--accent); }
+    section { margin: 42px 0; scroll-margin-top: 82px; }
+    h2 { margin: 0 0 18px; font-size: 27px; letter-spacing: -.025em; }
+    h3 { margin: 0; font-size: 18px; line-height: 1.35; }
+    p { margin: 10px 0; }
+    a { color: var(--accent); }
+    code { padding: .12em .35em; background: var(--code); border-radius: 5px; font: .92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .lede { font-size: 18px; max-width: 920px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .metric { padding: 20px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+    .metric strong { display: block; font-size: 29px; line-height: 1.1; }
+    .metric span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+    .callout { margin: 18px 0; padding: 18px 20px; border-left: 5px solid var(--accent); background: #eff6ff; border-radius: 8px 14px 14px 8px; }
+    .finding { margin: 16px 0; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.025); }
+    .finding-head { display: flex; align-items: flex-start; gap: 12px; }
+    .badge { flex: 0 0 auto; padding: 4px 9px; border-radius: 999px; font-size: 11px; line-height: 1.3; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .p1 { color: var(--critical); background: var(--critical-bg); border-color: #fecaca; }
+    .p2 { color: var(--high); background: var(--high-bg); border-color: #fed7aa; }
+    .p3 { color: var(--medium); background: var(--medium-bg); border-color: #fde68a; }
+    .ok { color: var(--good); background: var(--good-bg); border-color: #bbf7d0; }
+    .finding ul, .finding ol { margin: 10px 0 0; padding-left: 21px; }
+    .finding li { margin: 5px 0; }
+    .evidence { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .label { font-weight: 750; color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #fafaf9; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    .roadmap { counter-reset: phase; display: grid; gap: 14px; }
+    .phase { position: relative; padding: 20px 20px 20px 68px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; }
+    .phase::before { counter-increment: phase; content: counter(phase); position: absolute; left: 20px; top: 20px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: #18181b; color: white; font-weight: 800; }
+    .phase h3 { margin-bottom: 6px; }
+    .small { color: var(--muted); font-size: 13px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .no-break { break-inside: avoid; }
+    footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr 1fr; } .cols { grid-template-columns: 1fr; } main { padding: 22px 14px 52px; } header { padding: 26px 22px; } nav { position: static; } }
+    @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .finding-head { display: block; } .badge { display: inline-block; margin-bottom: 8px; } }
+    @media print { body { background: #fff; font-size: 11px; } main { max-width: none; padding: 0; } header { border-radius: 0; } nav { display: none; } section { margin: 24px 0; } .finding, .metric, .phase { box-shadow: none; break-inside: avoid; } a { color: inherit; text-decoration: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Etch: аудит бэкенда</h1>
+    <p>Проверка корректности API, бизнес-логики, данных, авторизации, кэша, миграций и тестов. Аудит выполнен по текущему рабочему дереву, включая незакоммиченные изменения.</p>
+    <div class="meta">
+      <span>Дата: 17 сентября 2026</span>
+      <span>Область: только <code>backend/</code></span>
+      <span>Формат: статический анализ + безопасные изолированные воспроизведения</span>
+      <span>Код проекта не изменён</span>
+    </div>
+  </header>
+
+  <nav aria-label="Разделы отчёта">
+    <a href="#summary">Итог</a>
+    <a href="#p1">P1</a>
+    <a href="#p2">P2</a>
+    <a href="#p3">P3</a>
+    <a href="#tests">Тесты</a>
+    <a href="#strengths">Сильные стороны</a>
+    <a href="#roadmap">Развитие</a>
+    <a href="#method">Методика</a>
+  </nav>
+
+  <section id="summary">
+    <h2>Итоговая оценка</h2>
+    <p class="lede">Архитектура проекта понятна и уже имеет хорошие базовые решения: слои API/service/repository, транзакционный Unit of Work, refresh-ротация, ограничения данных и развитый кэш. Главный риск сейчас находится на стыке жизненного цикла колоды, архива и истории обучения. Там есть сценарии потери истории, раскрытия отозванного контента и невозможности завершить тренировку. Второй крупный блок — неполная согласованность Redis-кэша с PostgreSQL.</p>
+    <div class="grid">
+      <div class="metric"><strong>4</strong><span>блока P1: исправить до развития продукта</span></div>
+      <div class="metric"><strong>12</strong><span>подтверждённых проблем P2</span></div>
+      <div class="metric"><strong>402 / 480</strong><span>unit-тестов прошли; 78 упали</span></div>
+      <div class="metric"><strong>50.01%</strong><span>покрытие строк по запуску unit-тестов</span></div>
+    </div>
+    <div class="callout"><strong>Рекомендация по выпуску.</strong> Не наращивать функциональность публикации, социального каталога и обучения до исправления P1 и добавления PostgreSQL-интеграционных сценариев. Текущие route-тесты в основном подменяют сервисы и не проверяют реальные транзакции, внешние ключи, блокировки и кэш.</div>
+  </section>
+
+  <section id="p1">
+    <h2>P1 — критичные ошибки</h2>
+
+    <article class="finding p1">
+      <div class="finding-head"><span class="badge p1">P1 · высокая уверенность</span><h3>Пагинация библиотеки падает на неизученных колодах</h3></div>
+      <p><code>UserDeck.last_studied_at</code> допускает <code>NULL</code>, и SQL-запрос умеет сортировать такие записи. Но модель курсора требует обязательную дату, а кодек вызывает <code>isoformat()</code>. Если следующая страница заканчивается неизученной колодой, API формирует курсор из <code>None</code> и отвечает ошибкой вместо страницы.</p>
+      <p><span class="label">Сценарий:</span> две новые колоды → <code>GET /bff/library/decks?limit=1</code> → ошибка валидации при создании <code>next_cursor</code>.</p>
+      <p><span class="label">Исправление:</span> сделать поле курсора nullable, явно кодировать <code>null</code>, проверить страницы «только NULL» и переход от изученных к неизученным.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/decks/models.py">decks/models.py:233</a>, <a href="file:///home/linux/etch/backend/app/decks/schemas.py">decks/schemas.py:152</a>, <a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:424–433</a>, <a href="file:///home/linux/etch/backend/app/decks/cursor.py">decks/cursor.py:58–66</a>. Воспроизведено вызовом реального метода сервиса с изолированным репозиторием.</div>
+    </article>
+
+    <article class="finding p1">
+      <div class="finding-head"><span class="badge p1">P1 · приватность</span><h3>Отзыв публикации оставляет публичную копию колоды</h3></div>
+      <p>Перевод публичной колоды в приватную и её удаление всегда создают копию с <code>is_public=True</code>, даже если колоду никто не сохранял. Каталог выбирает все публичные колоды и не отличает архив. Владелец ожидает скрытия или удаления, но содержимое остаётся доступным всем, а повторные переключения создают новые копии.</p>
+      <p><span class="label">Исправление:</span> ввести отдельную архивную сущность или признак архива; выдавать снимок только пользователям, которые ранее сохранили колоду; не создавать архив при отсутствии потребителей.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:112–181, 543–578</a>, <a href="file:///home/linux/etch/backend/app/decks/repository.py">decks/repository.py:206–240</a>. Подтверждено: <code>update_deck(is_public=False)</code> при нуле сохранений создал публичную копию.</div>
+    </article>
+
+    <article class="finding p1">
+      <div class="finding-head"><span class="badge p1">P1 · доступ</span><h3>Архивы принадлежат обычному аккаунту с жёстким ID 1</h3></div>
+      <p><code>ARCHIVE_USER_ID = 1</code> применяется к копиям колод и карточек. В миграциях нет защищённого системного пользователя. На новой установке ID 1 может получить первый обычный пользователь и стать владельцем архивов чужого контента: штатные проверки владельца разрешат ему редактирование и удаление. Если пользователя 1 нет, внешний ключ сорвёт архивирование, а часть путей маскирует <code>IntegrityError</code> как конфликт имени колоды.</p>
+      <p><span class="label">Исправление:</span> убрать владение архивом из обычной модели пользователя или создать миграцией отдельного неаутентифицируемого системного субъекта с явным типом и запретом CRUD.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:52, 126–147, 543–552</a>. Условие эксплуатации зависит от содержимого реальной БД; механизм подтверждён по коду.</div>
+    </article>
+
+    <article class="finding p1">
+      <div class="finding-head"><span class="badge p1">P1 · целостность данных</span><h3>Архивирование ломает активную тренировку и удаляет историю</h3></div>
+      <p>При отзыве публикации сохранённый <code>UserDeck</code> переносится на архив, но <code>TrainingSession.deck_id</code> остаётся на оригинале. Последний ответ ищет <code>UserDeck</code> по старому ID и откатывается с <code>USER_DECK_NOT_FOUND</code>. При удалении оригинала внешний ключ <code>ON DELETE CASCADE</code> уничтожает сессии и ответы чужого пользователя, хотя агрегированные счётчики у архивного <code>UserDeck</code> сохраняются.</p>
+      <p><span class="label">Следствие:</span> пользователь может потерять историю, streak и время обучения из-за действия автора колоды; статистика разных экранов расходится.</p>
+      <p><span class="label">Исправление:</span> отделить историю от жизненного цикла исходной колоды: хранить snapshot метаданных и nullable/soft-delete ссылку либо атомарно переносить все активные и исторические связи на архив.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/decks/repository.py">decks/repository.py:559–578</a>, <a href="file:///home/linux/etch/backend/app/training_sessions/models.py">training_sessions/models.py:72–76, 211–215</a>, <a href="file:///home/linux/etch/backend/app/training_sessions/service.py">training_sessions/service.py:89–107, 570–584</a>. Финальный submit воспроизведён: ошибка, commit не выполнен.</div>
+    </article>
+  </section>
+
+  <section id="p2">
+    <h2>P2 — существенные проблемы</h2>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2</span><h3>Инвалидация Redis неполна и допускает возврат старых данных</h3></div>
+      <table>
+        <thead><tr><th>Операция</th><th>Что остаётся старым</th><th>Окно</th></tr></thead>
+        <tbody>
+          <tr><td>Только <code>is_public=False</code></td><td>Закэшированная колода может остаться публичной; при нуле подписчиков вызова invalidation нет</td><td>до 30–35 мин</td></tr>
+          <tr><td>Переименование колоды</td><td>Состав поисковых страниц по старому и новому названию</td><td>до 5 мин</td></tr>
+          <tr><td>Импорт карточек</td><td>Личная страница карточек, включая ранее пустой результат</td><td>до 5 мин</td></tr>
+          <tr><td>Save / unsave</td><td><code>saves_count</code> объекта колоды</td><td>до 30–35 мин</td></tr>
+          <tr><td>Завершение тренировки</td><td>Порядок и курсоры библиотеки по <code>last_studied_at</code></td><td>до 5 мин</td></tr>
+          <tr><td>Переименование пользователя</td><td><code>owner_username</code>, встроенный в кэш колод</td><td>до 30–35 мин</td></tr>
+        </tbody>
+      </table>
+      <p>Кроме пропущенных зависимостей есть гонка cache-aside: медленный GET читает старую БД → PATCH фиксирует новое значение и удаляет ключ → старый GET позже записывает прежнее значение обратно. Реальные методы <code>UserService</code> в изолированном воспроизведении вернули старое имя после успешного PATCH.</p>
+      <p><span class="label">Исправление:</span> единая матрица «событие → entity keys → page generations → затронутые пользователи»; version/CAS для заполнения сущностей; надёжная повторная инвалидация после commit.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/redis/service.py">redis/service.py:39–50, 224–240</a>, <a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:599–640, 846–854, 1102–1114</a>, <a href="file:///home/linux/etch/backend/app/users/service.py">users/service.py:113–124, 236–248</a>, <a href="file:///home/linux/etch/backend/app/training_sessions/service.py">training_sessions/service.py:603–606</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2</span><h3>Неверный JOIN ломает выбор пользователей для очистки кэша</h3></div>
+      <p>Запрос соединяет <code>UserDeck</code> по условию <code>UserDeck.user_id == UserDeck.deck_id</code>, не связывая таблицу <code>users</code>. Обычно он вернёт пустой список; при случайном совпадении ID может вернуть всех пользователей. Это означает пропущенную или массовую лишнюю инвалидацию при удалении аккаунта.</p>
+      <p><span class="label">Исправление:</span> выбрать <code>distinct UserDeck.user_id</code> с фильтром <code>deck_id IN (...)</code> или соединять <code>User.id == UserDeck.user_id</code>.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/decks/repository.py">decks/repository.py:851–865</a>, вызов: <a href="file:///home/linux/etch/backend/app/users/service.py">users/service.py:388–418</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · данные</span><h3>Удаление пользователя завышает число сохранений чужих колод</h3></div>
+      <p>Записи <code>UserDeck</code> удаляются каскадом, но <code>Deck.saves_count</code> у чужих колод не уменьшается. Каталог и суммарная популярность профиля остаются неверными.</p>
+      <p><span class="label">Исправление:</span> до удаления получить сохранённые чужие колоды, заблокировать их в стабильном порядке, пересчитать/уменьшить агрегаты и инвалидировать кэш. Полезен периодический invariant-check: counter равен числу <code>is_saved</code>.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/users/service.py">users/service.py:368–418</a>, <a href="file:///home/linux/etch/backend/app/decks/models.py">decks/models.py:217–227</a>, изменение счётчика только в <a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:1100, 1183</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · auth</span><h3>Смена пароля и logout не отзывают access JWT</h3></div>
+      <p>Операция отзывает refresh-сессии, но access token проверяется только по подписи и сроку. Уже выданный JWT продолжает работать до <code>exp</code>, по умолчанию до 50 минут. Это ограничение текущей модели отзыва, особенно важное при компрометации токена.</p>
+      <p><span class="label">Исправление:</span> выбрать требуемую семантику: более короткий access TTL либо <code>auth_version/session_id</code> с надёжной проверкой при критичных запросах.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/auth/service.py">auth/service.py:35–48, 208–238</a>, <a href="file:///home/linux/etch/backend/app/auth/deps.py">auth/deps.py:54–73</a>, <a href="file:///home/linux/etch/backend/app/config.py">config.py:16</a>. Старый токен успешно декодирован после реального вызова <code>change_password</code> с временным тестовым ключом.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · производительность</span><h3>Argon2 выполняется синхронно внутри async-обработчиков</h3></div>
+      <p>Хэширование и проверка пароля блокируют event loop worker-а. Локальный замер — около 58 мс для одного вызова; это не нагрузочный benchmark, но подтверждает сам механизм блокировки. При одновременных login/registration/change-password задерживаются и независимые запросы.</p>
+      <p><span class="label">Исправление:</span> вынести Argon2 в ограниченный thread pool, ограничить параллелизм по CPU/RAM и измерить p95/p99 при смешанной нагрузке.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/auth/utils.py">auth/utils.py:7–12</a>, вызовы: <a href="file:///home/linux/etch/backend/app/auth/service.py">auth/service.py:103–111, 223–231</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · конфигурация</span><h3>Пароли БД и Redis с особыми символами ломают URL</h3></div>
+      <p>DSN собирается строковой интерполяцией без URL-encoding. Синтетический пароль <code>test@host</code> разобрался SQLAlchemy как другой host; Redis-пароли с <code>#</code> или <code>/</code> также ломают парсинг. Это создаёт неочевидные отказы при нормальной ротации секретов.</p>
+      <p><span class="label">Исправление:</span> создавать SQLAlchemy <code>URL.create(...)</code>; для Redis использовать структурированный URL/quoted credentials. Добавить тесты на <code>@:/#%[]</code>.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/config.py">config.py:45–49</a>. Подтверждено локальным парсингом сформированных URL без сетевого подключения.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · API-контракт</span><h3>Допустимый username может не иметь доступного URL профиля</h3></div>
+      <p>Регулярное выражение <code>^\S+$</code> разрешает символ <code>/</code>, но профиль адресуется одним path-сегментом. Имя <code>abc/def</code> проходит Pydantic, а <code>/users/profile/abc%2Fdef</code> даёт 404 после декодирования маршрута.</p>
+      <p><span class="label">Исправление:</span> ограничить username URL-safe алфавитом и зарезервированными словами; канонический идентификатор профиля лучше строить по UUID, а username оставить изменяемым slug.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/common/types.py">common/types.py:55–63</a>, <a href="file:///home/linux/etch/backend/app/users/router.py">users/router.py:68–80</a>. Подтверждено ASGI-запросом.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · сессии</span><h3>Список авторизационных сессий не представляет устройства и растёт без границ</h3></div>
+      <p>При login не записываются IP и user-agent; API отдаёт главным образом <code>null</code> и <code>revoked_at</code>. Каждая refresh-ротация создаёт новую строку, а чтение возвращает всю историю без пагинации, фильтра активных записей и retention. Нет идентификатора устройства, признака текущей сессии и точечного отзыва.</p>
+      <p><span class="label">Исправление:</span> отделить семейство устройства от ротаций токена, сохранять безопасные метаданные, добавить список активных устройств, отзыв, пагинацию и очистку истории.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/auth/service.py">auth/service.py:136–153, 186–206</a>, <a href="file:///home/linux/etch/backend/app/auth/repository.py">auth/repository.py:43–55</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · обучение</span><h3>Повторный resume теряет активное время</h3></div>
+      <p>Событие <code>resume</code> без начисления предыдущего интервала заменяет tracker и timestamp. Повторный запрос, вторая вкладка или retry через 20 секунд обнуляют эти 20 секунд; старый tracker после этого отвергается.</p>
+      <p><span class="label">Исправление:</span> начислять допустимый предыдущий интервал перед takeover либо сделать повторный resume идемпотентным.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/training_sessions/service.py">training_sessions/service.py:68–87, 445–495</a>. Воспроизведено с фиксированным временем: начислено 0 мс вместо 20 000 мс.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · эксплуатация</span><h3>Backfill времени не отличает legacy от корректного современного нуля</h3></div>
+      <p>Скрипт выбирает все завершённые сессии с <code>active_study_time_ms = 0</code>. Современная сессия законно может иметь ноль, если клиент не отправлял activity или интервалы превышали порог. <code>--apply</code> заменит этот ноль оценкой по времени ответов.</p>
+      <p><span class="label">Исправление:</span> ограничить обработку датой/ID миграции или признаком версии telemetry; хранить measured и estimated отдельно.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/scripts/backfill_training_session_time.py">scripts/backfill_training_session_time.py:23–53, 164–189</a>. Скрипт безопасно работает в dry-run по умолчанию — это плюс.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · схема БД</span><h3>Миграции не соответствуют ограничениям ORM-моделей</h3></div>
+      <p>Полный offline-upgrade из семи Alembic-ревизий не создаёт ряд ограничений, объявленных в моделях: проверки username/email и пять проверок колоды, включая неотрицательные counters/version и запрет self-source. База, развёрнутая миграциями, слабее модели.</p>
+      <p><span class="label">Исправление:</span> отдельная миграция с preflight-поиском плохих данных, очисткой и последующим добавлением ограничений. В CI сравнивать metadata и схему временной PostgreSQL.</p>
+      <div class="evidence">Отсутствуют: <code>username_min_length</code>, <code>username_trimmed</code>, <code>email_trimmed</code>, <code>ck_deck_saves_count_ge_0</code>, <code>ck_deck_words_count_ge_0</code>, <code>ck_deck_version_ge_1</code>, <code>ck_deck_title_not_blank</code>, <code>ck_deck_source_not_self</code>. Код: <a href="file:///home/linux/etch/backend/app/users/models.py">users/models.py:134–159</a>, <a href="file:///home/linux/etch/backend/app/decks/models.py">decks/models.py:120–144</a>.</div>
+    </article>
+
+    <article class="finding p2">
+      <div class="finding-head"><span class="badge p2">P2 · удаление аккаунта</span><h3>Удаление пользователя обходит уже существующую политику архива</h3></div>
+      <p>Удаление отдельной публичной колоды пытается сохранить копию для подписчиков, а удаление её владельца просто каскадно удаляет колоды и сохранения. В коде есть TODO и незаконченный helper; у него дополнительная ошибка — скопированные карточки связываются со старой колодой.</p>
+      <p><span class="label">Исправление:</span> сначала определить продуктовую политику, затем один общий транзакционный workflow удаления/отзыва. Не включать текущий helper без исправления связей и интеграционных тестов.</p>
+      <div class="evidence">Код: <a href="file:///home/linux/etch/backend/app/users/service.py">users/service.py:318–418</a>. Латентная ошибка helper-а сейчас не является достижимой runtime-ошибкой.</div>
+    </article>
+  </section>
+
+  <section id="p3">
+    <h2>P3 — неточности и долги</h2>
+    <div class="cols">
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3</span><h3>Параметр days работает только для 7</h3></div><p><code>get_user_activity_for_last_days()</code> всегда начинает с today−6, а затем генерирует запрошенное число дней. При <code>days=1</code> возвращается дата шестидневной давности, при 30 — диапазон уйдёт в будущее. Текущий caller передаёт 7, поэтому дефект пока скрыт.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/training_sessions/service.py">training_sessions/service.py:291–326</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3</span><h3>Каталог имеет нестабильный порядок</h3></div><p>Offset-пагинация сортирует только по <code>saves_count DESC</code>. При равных значениях порядок не определён, поэтому между страницами возможны повторы/пропуски. Добавить хотя бы <code>Deck.id DESC</code>; для растущего каталога перейти на курсор.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/decks/repository.py">decks/repository.py:206–240</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3 · продукт</span><h3>Свою колоду нельзя добавить в избранное</h3></div><p>У владельца создаётся <code>UserDeck.is_saved=False</code>; favourite требует <code>is_saved=True</code>, а сохранить собственную колоду запрещено. Если избранное должно работать со всей библиотекой, это продуктовая ошибка; иначе ограничение нужно явно отразить в UI/API.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/decks/service.py">decks/service.py:503–508, 1082, 1137</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3</span><h3>Версия колоды отражает не все изменения</h3></div><p>Редактирование текста карточки и прямое удаление карточки не всегда увеличивают <code>Deck.version</code>. Сейчас <code>last_seen_version</code> почти не используется, но это сломает будущую синхронизацию и уведомления об обновлениях.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/cards/service.py">cards/service.py:144–180</a>, <a href="file:///home/linux/etch/backend/app/decks/repository.py">decks/repository.py:789–799</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3 · политика</span><h3>Rate limit отключается при сбое Redis</h3></div><p>Лимитер fail-open: ошибка Redis даёт <code>None</code>, которое разрешает запрос. Для обычного API это доступность, но login/registration/change-password при сбое остаются без защиты и одновременно запускают тяжёлый Argon2.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/redis/service.py">redis/service.py:81–131</a>. Это условный риск, а не признак текущего сбоя Redis.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3 · приватность</span><h3>Completed-сессия доступна анонимно</h3></div><p>Любую завершённую сессию можно прочитать без проверки приватности колоды; ответ раскрывает UUID/название и результаты. Возможно, это задуманный sharing. Политику нужно сформулировать и закрепить тестом доступа.</p><div class="evidence"><a href="file:///home/linux/etch/backend/app/training_sessions/service.py">training_sessions/service.py:110–123</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3 · deploy</span><h3>Production-контейнер запускается с reload</h3></div><p>Dockerfile всегда стартует Uvicorn с <code>--reload</code>, а Compose публикует PostgreSQL и служебные UI наружу. Для локальной разработки это удобно; production-профиль должен иметь отдельную команду, health/readiness checks, зависимости readiness и закреплённые образы.</p><div class="evidence"><a href="file:///home/linux/etch/backend/Dockerfile">Dockerfile:19</a>, <a href="file:///home/linux/etch/docker-compose.yml">docker-compose.yml:20–77</a>.</div></article>
+      <article class="finding p3"><div class="finding-head"><span class="badge p3">P3 · контракт</span><h3>Ошибки тела JSON имеют два формата</h3></div><p>Некорректный JSON вроде <code>{</code> проходит через общий handler и получает стабильный <code>VALIDATION_ERROR</code>, а невалидный UTF-8 возвращает стандартный FastAPI <code>{"detail": ...}</code>. Если frontend полагается на <code>code</code>, контракт неполон.</p><div class="evidence">Подтверждено ASGI-запросами к <code>POST /users/create</code>: 422 со стабильным code и 400 со стандартным detail.</div></article>
+    </div>
+  </section>
+
+  <section id="tests">
+    <h2>Состояние тестов и проверки</h2>
+    <table>
+      <tbody>
+        <tr><th>Unit suite</th><td>480 тестов: 402 passed, 78 failed, 0 skipped; 47.27 с</td></tr>
+        <tr><th>Покрытие</th><td>1721 / 3441 statements, 50.01%; сервисы покрыты слабее всего: DeckService 16%, TrainingSessionService 18%, UserService 19%, BFF 25%, CardService 25%, AuthService 32%</td></tr>
+        <tr><th>Integration</th><td>В <code>tests/integration/</code> нет <code>test_*.py</code>; реальная PostgreSQL/Redis связка тестами не проверяется</td></tr>
+        <tr><th>Синтаксис</th><td>98 Python-файлов приложения, тестов, миграций и скриптов успешно разобраны AST; 23 532 строки в рассмотренном наборе</td></tr>
+        <tr><th>API</th><td>OpenAPI успешно построен: 38 paths, 44 операции</td></tr>
+        <tr><th>Миграции</th><td>Одна голова, семь последовательных ревизий; полный offline SQL успешно сгенерирован</td></tr>
+      </tbody>
+    </table>
+    <p>Падения не равны 78 отдельным runtime-багам. Большой кластер вызван устаревшими тестами: добавлено обязательное <code>owner_username</code>, переименованы методы сервисов, удалены/изменены маршруты. Отдельные полезные сигналы: лимит карточек ожидается 422, но отдаёт 200; login-тест ожидает lowercase username, фактически регистр сохраняется; training-тест ожидает lowercase ответа, фактически сохраняется исходный регистр при case-insensitive сравнении.</p>
+    <div class="callout"><strong>Что делать с тестами.</strong> Сначала восстановить зелёный baseline контрактов. Затем добавить service/repository integration tests с PostgreSQL для четырёх P1-сценариев, конкурентных save/archive/submit и миграций. Не стоит компенсировать это ещё большим числом route-тестов с полностью замоканным сервисом.</div>
+  </section>
+
+  <section id="strengths">
+    <h2>Что сделано хорошо</h2>
+    <div class="cols">
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Основа</span><h3>Понятное разделение слоёв</h3></div><p>Router, service, repository, schema и Unit of Work разделены последовательно. Это позволяет исправлять транзакционные сценарии без переписывания API.</p></article>
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Auth</span><h3>Хорошая база токенов</h3></div><p>Argon2, случайные refresh token, HMAC-хэш с pepper, транзакционная ротация под <code>FOR UPDATE</code>, Secure/HttpOnly/SameSite cookies.</p></article>
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Данные</span><h3>Есть важные блокировки и ограничения</h3></div><p>Операции порядка карточек блокируют колоду; затронутые колоды блокируются стабильно; есть лимиты размера, уникальность позиции и проверки состояния тренировок.</p></article>
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Обучение</span><h3>Снимки карточек сохраняют историю</h3></div><p>Текст и язык элемента тренировки отделены от дальнейших правок Card; повторный ответ не начисляет статистику повторно; stale tracker игнорируется.</p></article>
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Cache</span><h3>Повреждённый payload не обрушает чтение</h3></div><p>Кэш трактует невалидные значения как miss; page generations уже дают подходящую основу для корректной инвалидации списков.</p></article>
+      <article class="finding ok"><div class="finding-head"><span class="badge ok">Наблюдаемость</span><h3>Есть request-id и безопасное логирование query</h3></div><p>Чувствительные query-поля редактируются, есть duration/status/outcome и отдельная диагностика SQL с отключёнными параметрами по умолчанию.</p></article>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2>Куда двигаться дальше</h2>
+    <div class="roadmap">
+      <article class="phase"><h3>Стабилизация данных и приватности</h3><p>Исправить четыре P1 как один lifecycle: публикация → save → start session → отзыв публикации/удаление → завершение → история. Убрать обычного пользователя ID 1 из архива. Добавить миграции недостающих constraints и интеграционные тесты PostgreSQL.</p><p class="small">Критерий готовности: ни действие автора, ни удаление аккаунта не меняют чужую историю и не раскрывают отозванный контент.</p></article>
+      <article class="phase"><h3>Согласованный кэш и зелёный CI</h3><p>Централизовать invalidation matrix, закрыть cache-fill races версиями, исправить JOIN, запустить PostgreSQL и Redis в CI. Восстановить 480/480 unit-тестов и добавить небольшой набор сквозных сценариев вместо массового дублирования mock-тестов.</p><p class="small">Критерий готовности: изменения видимости, имени, счётчиков и сортировки наблюдаются сразу и одинаково через прямой API и BFF.</p></article>
+      <article class="phase"><h3>Надёжная авторизация и эксплуатация</h3><p>Вынести Argon2 из event loop, определить отзыв access token, построить модель устройств/сессий, обработать Redis degradation для auth, исправить DSN. Разделить dev/prod контейнеры; добавить health/readiness, структурированные метрики ошибок, cache hit ratio и latency.</p><p class="small">Критерий готовности: предсказуемая деградация и измеримые SLO, а смена пароля соответствует заявленной политике безопасности.</p></article>
+      <article class="phase"><h3>Учебный продукт</h3><p>После стабилизации добавить состояние знания на уровне карточки, интервальные повторения, персональную очередь «сегодня», повтор ошибок и прогноз следующего повторения. Текущие агрегаты колоды недостаточны для качественного spaced repetition.</p><p class="small">Полезные метрики: retention D1/D7/D30, доля завершённых сессий, due cards completed, повторные ошибки, медианное активное время, качество интервалов.</p></article>
+      <article class="phase"><h3>Каталог и социальные функции</h3><p>Зафиксировать авторство архивов, лицензию/право на отзыв публикации, стабильную cursor-pagination и ранжирование. Добавить версии колоды, уведомления сохранившим пользователям и явный выбор: продолжить старую версию или перейти на новую.</p><p class="small">Микросервисы пока не нужны: модульный монолит с PostgreSQL и Redis проще довести до корректности и наблюдаемости.</p></article>
+    </div>
+  </section>
+
+  <section id="method">
+    <h2>Область и ограничения аудита</h2>
+    <ul>
+      <li>Просмотрен только backend: приложение, тесты, Alembic, скрипты, Docker/Compose и Redis-конфигурация. Frontend не анализировался.</li>
+      <li>Проверено текущее рабочее дерево с уже существовавшими незакоммиченными изменениями. Хэши файлов backend и <code>git status</code> после аудита совпали со снимком до аудита.</li>
+      <li>Рабочие PostgreSQL и Redis не запускались и данные не изменялись. Выводы по FK/SQL основаны на моделях, миграциях и сгенерированном offline SQL.</li>
+      <li>Изолированные воспроизведения использовали реальные методы сервисов, ASGI-приложение и mock-границы БД/Redis; временные результаты сохранены только в <code>/tmp</code>.</li>
+      <li>Условные продуктовые вопросы помечены отдельно: публичность completed-сессий, favourite собственной колоды, fail-open rate limit и семантика отзыва JWT.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Отчёт создан как автономный HTML. Он не загружает внешние шрифты, скрипты или ресурсы. Файлы проекта не изменены.
+  </footer>
+</main>
+</body>
+</html>

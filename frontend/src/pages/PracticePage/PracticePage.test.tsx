@@ -17,6 +17,11 @@ const usePracticeSessionMock = vi.hoisted(() => vi.fn());
 const usePracticeDeckAvailabilityMock = vi.hoisted(() => vi.fn());
 const usePracticeHistoryMock = vi.hoisted(() => vi.fn());
 const resetPracticeHistoryCacheMock = vi.hoisted(() => vi.fn());
+const useAuthMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../auth/hooks/useAuth", () => ({
+  useAuth: useAuthMock,
+}));
 
 vi.mock("../../features/practice/model/usePracticeSession", () => ({
   usePracticeSession: usePracticeSessionMock,
@@ -87,6 +92,7 @@ function createHistorySession(
   return {
     uuid: SESSION_UUID,
     deckUuid: DECK_UUID,
+    deckTitle: "Английский на каждый день",
     status: "completed",
     requestedCount: 12,
     actualCount: 12,
@@ -118,6 +124,10 @@ function renderPractice(pathname: string, state?: unknown, locale: AppLocale = "
 
 describe("PracticePage", () => {
   beforeEach(() => {
+    useAuthMock.mockReset();
+    useAuthMock.mockReturnValue({
+      user: { uuid: "d2f61c35-11d0-489e-837d-3845418ba39e" },
+    });
     usePracticeSessionMock.mockReset();
     usePracticeSessionMock.mockReturnValue(createPracticeResult());
     usePracticeDeckAvailabilityMock.mockReset();
@@ -135,9 +145,11 @@ describe("PracticePage", () => {
     const markup = renderPractice("/practice");
 
     expect(markup).toContain("Тренировочные сессии");
-    expect(markup).toContain("Завершённые");
-    expect(markup).toContain("Незавершённые");
-    expect(markup).toContain("Брошенные");
+    expect(markup).toContain(">все</button>");
+    expect(markup).toContain(">завершённые</button>");
+    expect(markup).toContain(">незавершённые</button>");
+    expect(markup).toContain(">брошенные</button>");
+    expect(markup).toContain('data-active-filter="all"');
     expect(markup).toContain("Здесь появятся ваши тренировки");
     expect(markup).toContain('data-practice-mode="setup"');
     expect(markup).not.toContain('aria-label="На главную"');
@@ -150,9 +162,10 @@ describe("PracticePage", () => {
     const markup = renderPractice("/practice", undefined, "en-US");
 
     expect(markup).toContain("Practice sessions");
-    expect(markup).toContain("Completed");
-    expect(markup).toContain("In progress");
-    expect(markup).toContain("Abandoned");
+    expect(markup).toContain(">all</button>");
+    expect(markup).toContain(">completed</button>");
+    expect(markup).toContain(">in progress</button>");
+    expect(markup).toContain(">abandoned</button>");
     expect(markup).toContain("Your practice sessions will appear here");
   });
 
@@ -179,6 +192,33 @@ describe("PracticePage", () => {
     expect(markup).toContain("Начать");
     expect(usePracticeSessionMock).toHaveBeenCalledWith(null, DECK_UUID);
     expect(usePracticeDeckAvailabilityMock).toHaveBeenCalledWith(DECK_UUID);
+  });
+
+  it("offers the entire deck only while it fits into one session", () => {
+    usePracticeDeckAvailabilityMock.mockReturnValue({
+      state: { status: "ready", deckUuid: DECK_UUID, wordsCount: 500 },
+      retry: vi.fn(),
+    });
+
+    const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
+
+    expect(markup).toContain("Вся колода");
+    expect(markup).toContain("От 1 до 500 карточек за сессию");
+  });
+
+  it("replaces the entire deck option with the session limit for a larger deck", () => {
+    usePracticeDeckAvailabilityMock.mockReturnValue({
+      state: { status: "ready", deckUuid: DECK_UUID, wordsCount: 4200 },
+      retry: vi.fn(),
+    });
+
+    const markup = renderPractice(`/practice?deck=${DECK_UUID}`);
+
+    expect(markup).not.toContain("Вся колода");
+    expect(markup).toContain("500 карточек");
+    expect(markup.match(/<input[^>]*aria-label="Количество карточек"[^>]*>/)?.[0]).toContain(
+      'max="500"',
+    );
   });
 
   it.each([403, 404])("renders a private deck-safe not-found state for status %s", (status) => {
@@ -212,7 +252,7 @@ describe("PracticePage", () => {
     expect(markup).not.toContain("Настройка сессии");
   });
 
-  it("renders previous sessions with their status, direction, counters, and repeat action", () => {
+  it("renders previous sessions with a compact result summary and actions", () => {
     usePracticeHistoryMock.mockReturnValue(
       createHistoryResult({
         status: "ready",
@@ -220,6 +260,7 @@ describe("PracticePage", () => {
           createHistorySession(),
           createHistorySession({
             uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac11",
+            deckTitle: "Русский — английский",
             status: "in_progress",
             actualCount: 4,
             correctCount: 3,
@@ -230,6 +271,7 @@ describe("PracticePage", () => {
           }),
           createHistorySession({
             uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac12",
+            deckTitle: "Слова для путешествий",
             status: "abandoned",
             actualCount: 2,
             correctCount: 1,
@@ -245,21 +287,64 @@ describe("PracticePage", () => {
     expect(markup).toContain("Завершена");
     expect(markup).toContain("Не завершена");
     expect(markup).toContain("Брошена");
-    expect(markup).toContain('aria-label="Слово в перевод"');
-    expect(markup).toContain('aria-label="Перевод в слово"');
-    expect(markup).not.toContain("→");
+    expect(markup).toContain("Английский на каждый день");
+    expect(markup).toContain("Русский — английский");
+    expect(markup).toContain("Слова для путешествий");
+    expect(markup.match(/aria-haspopup="dialog"/g)).toHaveLength(3);
+    expect(markup).toContain(
+      'aria-label="Открыть предпросмотр колоды «Английский на каждый день»"',
+    );
+    expect(markup).not.toContain(">Колода</span>");
+    expect(markup).not.toContain('aria-label="Слово в перевод"');
+    expect(markup).not.toContain('aria-label="Перевод в слово"');
+    expect(markup).toContain("<dt>Верно</dt>");
+    expect(markup).toContain("<strong>9</strong><span>/ 12</span>");
+    expect(markup).toContain("<dt>Точность</dt><dd>75%</dd>");
+    expect(markup.match(/Ещё 8 карточек до конца/g)).toHaveLength(1);
     expect(markup.match(/Повторить/g)).toHaveLength(2);
     expect(markup.match(/Продолжить/g)).toHaveLength(1);
-    expect(markup.match(/aria-label="Точность сессии"/g)).toHaveLength(3);
-    expect(markup.match(/aria-describedby=/g)).toHaveLength(3);
-    expect(markup.match(/role="meter"/g)).toHaveLength(3);
-    expect(markup.match(/role="tooltip"/g)).toHaveLength(3);
-    expect(markup.match(/tabindex="0"/g)).toHaveLength(3);
-    expect(markup).toContain("Правильных ответов — 75%");
+    expect(markup).not.toContain('role="meter"');
+    expect(markup).not.toContain('role="tooltip"');
     expect(markup.match(/aria-label="Открыть историю сессии"/g)).toHaveLength(2);
     expect(markup).toContain(`/practice/sessions/${SESSION_UUID}/history`);
     expect(markup).toContain("/practice/sessions/019c05e5-bc86-70e6-8f5c-d31bfa1aac12/history");
     expect(markup).not.toContain("/practice/sessions/019c05e5-bc86-70e6-8f5c-d31bfa1aac11/history");
+  });
+
+  it("localizes the remaining card count for an unfinished session", () => {
+    usePracticeHistoryMock.mockReturnValue(
+      createHistoryResult({
+        status: "ready",
+        sessions: [
+          createHistorySession({
+            status: "in_progress",
+            requestedCount: 2,
+            actualCount: 1,
+            correctCount: 1,
+            wrongCount: 0,
+            finishedAt: null,
+          }),
+        ],
+      }),
+    );
+
+    const markup = renderPractice("/practice", undefined, "en-US");
+
+    expect(markup).toContain("1 card left");
+    expect(markup).not.toContain("1 cards left");
+  });
+
+  it("opens a deck preview from a direct preview query", () => {
+    usePracticeHistoryMock.mockReturnValue(
+      createHistoryResult({ status: "ready", sessions: [createHistorySession()] }),
+    );
+
+    const markup = renderPractice(`/practice?preview=${DECK_UUID}`);
+
+    expect(markup).toContain("<dialog");
+    expect(markup).toContain(">Предпросмотр колоды</span>");
+    expect(markup).toContain("Загружаем предпросмотр…");
+    expect(usePracticeSessionMock).toHaveBeenCalledWith(null, null);
   });
 
   it("loads resume mode from the session query and renders the active card", () => {
@@ -278,28 +363,40 @@ describe("PracticePage", () => {
     expect(markup).toContain("карточек пропущено");
   });
 
-  it("reduces the prompt size before a long word wraps by a few characters", () => {
-    usePracticeSessionMock.mockReturnValue(
-      createPracticeResult(
-        createReadyState({
-          session: createSession({
-            cards: [
-              {
-                sequenceNumber: 1,
-                promptText: "приостанавливать",
-                promptLanguage: "ru",
-                answerLanguage: "en",
-              },
-            ],
-            totalCount: 1,
+  it("starts every prompt at the shared base size before layout fitting", () => {
+    const maximumLengthPrompt = `${"слово ".repeat(42)}дом`;
+    const prompts = [
+      "снижаться, уменьшаться",
+      "сталкиваться с проблемой или ситуацией",
+      maximumLengthPrompt,
+    ];
+
+    expect(Array.from(maximumLengthPrompt)).toHaveLength(255);
+
+    prompts.forEach((promptText) => {
+      usePracticeSessionMock.mockReturnValue(
+        createPracticeResult(
+          createReadyState({
+            session: createSession({
+              cards: [
+                {
+                  sequenceNumber: 1,
+                  promptText,
+                  promptLanguage: "ru",
+                  answerLanguage: "en",
+                },
+              ],
+              totalCount: 1,
+            }),
           }),
-        }),
-      ),
-    );
+        ),
+      );
 
-    const markup = renderPractice(`/practice?session=${SESSION_UUID}`);
+      const markup = renderPractice(`/practice?session=${SESSION_UUID}`);
 
-    expect(markup).toMatch(/<h1[^>]*data-text-size="medium"[^>]*>приостанавливать<\/h1>/);
+      expect(markup).toContain(`data-text-size="regular"`);
+      expect(markup).toContain(`>${promptText}</h1>`);
+    });
   });
 
   it("does not offer a futile retry when resume reports a finished session", () => {

@@ -9,11 +9,17 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth.cookies import clear_tokens_cookie, get_refresh_cookie, set_tokens_cookie
 from app.auth.deps import AuthServiceDeps, CurrentUser
-from app.auth.schemas import AccessTokenResponse, LoginRequest, AuthSessionResponse
+from app.auth.schemas import (
+    AccessTokenResponse,
+    AuthSessionResponse,
+    ChangePasswordRequest,
+    LoginRequest,
+)
 from app.redis.rate_limiters import (
     auth_actions_rate_limit,
     auth_sessions_rate_limit,
     login_rate_limit,
+    password_change_rate_limit,
 )
 from fastapi import APIRouter, Depends, Request, Response, status
 
@@ -69,6 +75,26 @@ async def refresh(
 ) -> None:
     tokens = await auth_service.refresh(get_refresh_cookie(request))
     set_tokens_cookie(tokens.access_token, tokens.refresh_token, response)
+
+
+@router.put(
+    "/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(password_change_rate_limit)],
+)
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: CurrentUser,
+    auth_service: AuthServiceDeps,
+):
+    await auth_service.change_password(
+        user_id=current_user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_tokens_cookie(response=response)
+    return response
 
 
 @router.get(

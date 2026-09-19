@@ -39,6 +39,7 @@ describe("CatalogPage", () => {
         {
           uuid: "714d882d-726e-4dcb-9303-a8bf4638429c",
           ownerUuid: "d2f61c35-11d0-489e-837d-3845418ba39e",
+          ownerUsername: "deck-owner",
           title: "Daily Words",
           description: "Core vocabulary",
           totalWordsCount: 48,
@@ -67,6 +68,22 @@ describe("CatalogPage", () => {
     expect(markup).toContain('aria-label="Страница 2, текущая"');
     expect(markup).toContain('aria-current="page"');
     expect(markup).toContain('aria-label="Перейти на страницу 3"');
+    expect(markup).toContain('aria-label="Открыть страницу колоды «Daily Words»"');
+    expect(markup).toContain('data-deck-action="open"');
+    expect(markup).toContain('href="/decks/714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/users/deck-owner"');
+    expect(markup).toContain('aria-label="Открыть профиль пользователя @deck-owner"');
+    expect(markup).toContain(">@deck-owner</span>");
+    expect(markup).not.toContain('<circle cx="12" cy="8.2" r="3.2"');
     expect(markup).not.toContain("Показать ещё");
+  });
+
+  it("opens a deck preview from a direct preview query while preserving the catalog page", () => {
+    const markup = renderCatalog("/catalog?page=2&preview=714d882d-726e-4dcb-9303-a8bf4638429c");
+
+    expect(useCatalogDecksMock).toHaveBeenCalledWith("", 2);
+    expect(markup).toContain("<dialog");
+    expect(markup).toContain(">Предпросмотр колоды</span>");
+    expect(markup).toContain("Загружаем предпросмотр…");
   });
 });
