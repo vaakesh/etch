@@ -221,7 +221,8 @@ def ensure_config_files() -> None:
             continue
         print(
             f"automatically copied {example} → {target} "
-            "(using values from the template)."
+            f"(using values from the template). replace the template values in {target} "
+            "with your own configuration before starting the application."
         )
 
 

@@ -13,6 +13,7 @@ test:
 	uv run --no-project python setup.py check test
 	docker compose -f docker-compose-test.yml up --build -d
 	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync alembic upgrade head
+	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync pytest -o log_cli=false --show-capture=no
 
 .PHONY: up rebuild down config test check certs prod-check prod-up prod-build prod-down
 
