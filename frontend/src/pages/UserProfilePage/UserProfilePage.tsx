@@ -21,6 +21,7 @@ import {
 } from "../../i18n";
 import { CatalogDeckPreview } from "../CatalogPage/CatalogDeckPreview";
 import catalogStyles from "../CatalogPage/CatalogPage.module.css";
+import { ProfileLogout } from "./ProfileLogout";
 import styles from "./UserProfilePage.module.css";
 
 const SAVE_COUNT_FORMS = {
@@ -345,6 +346,7 @@ export function UserProfilePage() {
       data-preview-start-theme="aqua-breeze"
     >
       <div className={styles.profile}>
+        {isOwnProfile || (user !== null && user.username === username) ? <ProfileLogout /> : null}
         {profileState.status === "loading" ? <ProfileSkeleton label={messages.loading} /> : null}
 
         {profileState.status === "error" ? (

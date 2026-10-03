@@ -1,14 +1,4 @@
-import {
-  Suspense,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-  type PointerEvent,
-  type SyntheticEvent,
-} from "react";
+import { Suspense, useState, type CSSProperties } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
@@ -38,16 +28,7 @@ const MESSAGES = defineMessages(
     unavailable: "Раздел пока не подключён",
     expand: "Развернуть боковое меню",
     collapse: "Свернуть боковое меню",
-    profile: "Мой профиль",
     openProfile: (username: string) => `Открыть мой профиль @${username}`,
-    logout: "Выйти",
-    logoutEyebrow: "Аккаунт",
-    logoutTitle: "Выйти из Etch?",
-    logoutDescription:
-      "Сессия на этом устройстве завершится. Ваши колоды и прогресс останутся на месте.",
-    logoutCancel: "Остаться",
-    logoutConfirm: "Выйти",
-    logoutPending: "Выходим…",
   },
   {
     navigation: {
@@ -63,21 +44,13 @@ const MESSAGES = defineMessages(
     unavailable: "This section is not available yet",
     expand: "Expand sidebar",
     collapse: "Collapse sidebar",
-    profile: "My profile",
     openProfile: (username: string) => `Open my profile @${username}`,
-    logout: "Sign out",
-    logoutEyebrow: "Account",
-    logoutTitle: "Sign out of Etch?",
-    logoutDescription:
-      "Your session on this device will end. Your decks and progress will stay right where they are.",
-    logoutCancel: "Stay signed in",
-    logoutConfirm: "Sign out",
-    logoutPending: "Signing out…",
   },
 );
 
 interface NavigationStyle extends CSSProperties {
   "--active-index": number;
+  "--compact-active-index": number;
 }
 
 const NAVIGATION_ITEMS: readonly NavigationItem[] = [
@@ -114,16 +87,19 @@ interface SidebarProfile {
 
 interface SidebarProps {
   collapsed: boolean;
-  onRequestLogout: () => void;
   profile: SidebarProfile | null;
 }
 
-function Sidebar({ collapsed, onRequestLogout, profile }: SidebarProps) {
+function Sidebar({ collapsed, profile }: SidebarProps) {
   const messages = useLocalizedMessages(MESSAGES);
   const { pathname } = useLocation();
   const activeIndex = NAVIGATION_ITEMS.findIndex((item) => isNavigationItemActive(pathname, item));
+  const compactActiveIndex = NAVIGATION_ITEMS.filter((item) => item.to).findIndex((item) =>
+    isNavigationItemActive(pathname, item),
+  );
   const navigationStyle: NavigationStyle = {
     "--active-index": Math.max(activeIndex, 0),
+    "--compact-active-index": Math.max(compactActiveIndex, 0),
   };
 
   return (
@@ -147,11 +123,7 @@ function Sidebar({ collapsed, onRequestLogout, profile }: SidebarProps) {
           <span aria-hidden="true" className={styles.profileAvatar}>
             {Array.from(profile.username)[0]?.toLocaleUpperCase() ?? "U"}
           </span>
-          <span className={styles.profileDetails}>
-            <span>{messages.profile}</span>
-            <strong>@{profile.username}</strong>
-          </span>
-          <DashboardIcon className={styles.profileChevron} name="chevron" />
+          <span className={styles.profileDetails}>@{profile.username}</span>
         </Link>
       )}
 
@@ -201,114 +173,15 @@ function Sidebar({ collapsed, onRequestLogout, profile }: SidebarProps) {
           })}
         </ul>
       </nav>
-
-      <div className={styles.sidebarFooter}>
-        <button
-          aria-haspopup="dialog"
-          aria-label={messages.logout}
-          className={styles.logoutButton}
-          onClick={onRequestLogout}
-          title={messages.logout}
-          type="button"
-        >
-          <DashboardIcon className={styles.logoutIcon} name="logout" />
-          <span className={styles.logoutLabel}>{messages.logout}</span>
-        </button>
-      </div>
     </aside>
-  );
-}
-
-interface LogoutDialogProps {
-  isPending: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-function LogoutDialog({ isPending, onClose, onConfirm }: LogoutDialogProps) {
-  const messages = useLocalizedMessages(MESSAGES);
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const titleId = useId();
-  const descriptionId = useId();
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-
-    if (dialog !== null && !dialog.open) {
-      dialog.showModal();
-    }
-  }, []);
-
-  function closeDialog(): void {
-    if (!isPending) {
-      dialogRef.current?.close();
-    }
-  }
-
-  function handleBackdropPointerDown(event: PointerEvent<HTMLDialogElement>): void {
-    if (event.target === event.currentTarget) {
-      closeDialog();
-    }
-  }
-
-  function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
-    if (isPending) {
-      event.preventDefault();
-    }
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    onConfirm();
-  }
-
-  return (
-    <dialog
-      aria-describedby={descriptionId}
-      aria-labelledby={titleId}
-      aria-modal="true"
-      className={styles.logoutDialog}
-      onCancel={handleCancel}
-      onClose={onClose}
-      onPointerDown={handleBackdropPointerDown}
-      ref={dialogRef}
-    >
-      <form className={styles.logoutDialogShell} onSubmit={handleSubmit}>
-        <div className={styles.logoutDialogBody}>
-          <span aria-hidden="true" className={styles.logoutDialogMark}>
-            <DashboardIcon name="logout" />
-          </span>
-          <span className={styles.logoutDialogEyebrow}>{messages.logoutEyebrow}</span>
-          <h2 id={titleId}>{messages.logoutTitle}</h2>
-          <p id={descriptionId}>{messages.logoutDescription}</p>
-        </div>
-
-        <div className={styles.logoutDialogActions}>
-          <button
-            autoFocus
-            className={styles.logoutDialogCancel}
-            disabled={isPending}
-            onClick={closeDialog}
-            type="button"
-          >
-            {messages.logoutCancel}
-          </button>
-          <button className={styles.logoutDialogConfirm} disabled={isPending} type="submit">
-            {isPending ? messages.logoutPending : messages.logoutConfirm}
-          </button>
-        </div>
-      </form>
-    </dialog>
   );
 }
 
 export function AppShell() {
   const messages = useLocalizedMessages(MESSAGES);
-  const { logout, user } = useAuth();
+  const { user } = useAuth();
   const { pathname } = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-  const [isLogoutPending, setIsLogoutPending] = useState(false);
   const profile =
     user === null
       ? null
@@ -329,13 +202,6 @@ export function AppShell() {
     .filter((className) => className !== null)
     .join(" ");
 
-  function handleLogout(): void {
-    setIsLogoutPending(true);
-    void logout().catch(() => {
-      setIsLogoutPending(false);
-    });
-  }
-
   return (
     <div className={shellClassName}>
       <button
@@ -350,25 +216,13 @@ export function AppShell() {
         <DashboardIcon className={styles.sidebarToggleIcon} name="chevron" />
       </button>
 
-      <Sidebar
-        collapsed={isSidebarCollapsed}
-        onRequestLogout={() => setIsLogoutDialogOpen(true)}
-        profile={profile}
-      />
+      <Sidebar collapsed={isSidebarCollapsed} profile={profile} />
 
       <div className={styles.content}>
         <Suspense fallback={<PageLoader contained tone="light" />}>
           <Outlet />
         </Suspense>
       </div>
-
-      {isLogoutDialogOpen ? (
-        <LogoutDialog
-          isPending={isLogoutPending}
-          onClose={() => setIsLogoutDialogOpen(false)}
-          onConfirm={handleLogout}
-        />
-      ) : null}
     </div>
   );
 }

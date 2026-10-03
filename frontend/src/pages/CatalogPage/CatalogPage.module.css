@@ -353,6 +353,14 @@
   gap: 20px;
 }
 
+.page .grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22.5rem), 1fr));
+}
+
+.page .grid .skeleton {
+  display: block;
+}
+
 .deckCard,
 .skeleton {
   min-width: 0;
@@ -385,6 +393,10 @@
     background-color 190ms ease,
     border-color 190ms ease,
     box-shadow 190ms ease;
+}
+
+.page .deckCard {
+  container: catalog-deck / inline-size;
 }
 
 .deckCard:not(:has(.saveError)) {
@@ -867,6 +879,38 @@
 @media (hover: hover) and (pointer: fine) {
   .startButton:hover svg {
     transform: translateX(3px);
+  }
+}
+
+.page .footer {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+}
+
+.page .previewButton,
+.page .startButton {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 12px;
+  line-height: 1.3;
+}
+
+.page .previewButton svg {
+  flex: 0 0 auto;
+}
+
+.page .previewButton span,
+.page .startButton span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@container catalog-deck (max-width: 25rem) {
+  .page .footer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 }
 

@@ -4,10 +4,21 @@
   box-sizing: border-box;
 }
 
+:root {
+  --app-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
+}
+
 html,
 body,
 #root {
   min-height: 100%;
+  background: var(--app-background);
+}
+
+body,
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 html[data-theme="dark"] {
@@ -58,6 +69,7 @@ html[data-theme="dark"] {
   --dark-shadow-strong: rgb(0 0 0 / 34%);
   --dark-scrim: rgb(10 12 10 / 72%);
   --dark-page-background: var(--dark-background);
+  --app-background: var(--dark-page-background);
   color-scheme: dark;
   accent-color: var(--dark-cta);
 }
@@ -78,12 +90,12 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: var(--loader-background, #c3b8f5);
+  background: var(--app-background);
 }
 
 html[data-theme="dark"] body {
   color: var(--dark-text);
-  background: var(--loader-background, var(--dark-background));
+  background: var(--app-background);
 }
 
 .page-loader {

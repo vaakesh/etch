@@ -58,6 +58,7 @@
     </script>
     <style>
       :root {
+        --app-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
         --loader-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
         --loader-track: rgb(73 56 115 / 14%);
         --loader-accent: #493873;
@@ -70,6 +71,7 @@
       }
 
       :root[data-theme="dark"] {
+        --app-background: #171a18;
         --loader-background: #171a18;
         --loader-track: rgb(159 186 174 / 12%);
         --loader-accent: #9fbaae;
@@ -79,6 +81,13 @@
       body,
       #root {
         min-height: 100%;
+        background: var(--app-background);
+      }
+
+      body,
+      #root {
+        min-height: 100vh;
+        min-height: 100dvh;
       }
 
       #root[data-booting] {
@@ -87,7 +96,7 @@
 
       body {
         margin: 0;
-        background: var(--loader-background);
+        background: var(--app-background);
       }
 
       #boot-loader {

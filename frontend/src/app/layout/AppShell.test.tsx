@@ -92,27 +92,28 @@ describe("AppShell", () => {
     expect(markup).toContain('aria-label="Go to home"');
     expect(markup).toContain('title="This section is not available yet"');
     expect(markup).toContain('aria-label="Open my profile @alice"');
-    expect(markup).toContain(">My profile</span>");
-    expect(markup).toContain("<strong>@alice</strong>");
-    expect(markup).toContain('aria-label="Sign out"');
-    expect(markup).toContain(">Sign out</span>");
+    expect(markup).toContain(">@alice</span>");
+    expect(markup).not.toContain(">Sign out</span>");
   });
 
-  it("places a distinct current-user profile card before navigation and sign out at the end", () => {
+  it("places the compact current-user profile before navigation without sign out", () => {
     const markup = renderShell("/");
     const profileIndex = markup.indexOf('aria-label="Открыть мой профиль @alice"');
     const navigationIndex = markup.indexOf('aria-label="Основная навигация"');
-    const logoutIndex = markup.indexOf('aria-label="Выйти"');
 
     expect(markup).toMatch(
       /<a[^>]*aria-label="Открыть мой профиль @alice"[^>]*href="\/users\/alice"[^>]*>/,
     );
-    expect(markup).toContain(">Мой профиль</span>");
-    expect(markup).toContain("<strong>@alice</strong>");
-    expect(markup).toContain('aria-label="Выйти"');
-    expect(markup).toContain(">Выйти</span>");
+    const profileLink = markup.match(
+      /<a[^>]*aria-label="Открыть мой профиль @alice"[^>]*>.*?<\/a>/,
+    )?.[0];
+
+    expect(profileLink).toMatch(/<span aria-hidden="true"[^>]*>A<\/span>/);
+    expect(profileLink).toContain(">@alice</span>");
+    expect(profileLink).not.toContain("Мой профиль</span>");
+    expect(profileLink).not.toContain("<svg");
+    expect(markup).not.toContain(">Выйти</span>");
     expect(profileIndex).toBeGreaterThan(-1);
     expect(profileIndex).toBeLessThan(navigationIndex);
-    expect(logoutIndex).toBeGreaterThan(navigationIndex);
   });
 });
