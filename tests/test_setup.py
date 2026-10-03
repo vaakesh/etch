@@ -3,6 +3,7 @@
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import tempfile
@@ -68,7 +69,7 @@ class SetupTests(unittest.TestCase):
         if public:
             setup.write_new(self.public, self.public_pem, 0o644)
 
-    def project_config(self):
+    def project_config(self, profile="dev"):
         for directory in (
             "backend/app",
             "backend/alembic",
@@ -77,7 +78,7 @@ class SetupTests(unittest.TestCase):
         ):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
         for filename in (
-            "docker-compose-dev.yml",
+            f"docker-compose-{profile}.yml",
             ".env",
             "backend/.env",
             "frontend/.env",
@@ -256,18 +257,14 @@ class SetupTests(unittest.TestCase):
             setup.ensure_certs(interactive=False)
         self.assertEqual(self.public.read_bytes(), b"broken public")
 
-    def test_private_permissions_are_fixed_only_after_confirmation(self):
+    def test_existing_private_permissions_are_preserved_without_confirmation(self):
         self.install_keys()
         self.private.chmod(0o644)
-        with self.assertRaisesRegex(setup.SetupError, "chmod 600"):
-            setup.ensure_certs(interactive=False)
-        self.assertEqual(stat.S_IMODE(self.private.stat().st_mode), 0o644)
-        with (
-            patch.object(setup.sys.stdin, "isatty", return_value=True),
-            patch("builtins.input", return_value="y"),
-        ):
-            setup.ensure_certs(interactive=True)
-        self.assertEqual(stat.S_IMODE(self.private.stat().st_mode), 0o600)
+        with patch("builtins.input", side_effect=AssertionError("unexpected prompt")):
+            for interactive in (False, True):
+                with self.subTest(interactive=interactive):
+                    setup.ensure_certs(interactive=interactive)
+                    self.assertEqual(stat.S_IMODE(self.private.stat().st_mode), 0o644)
         self.assertEqual(self.private.read_bytes(), self.private_pem)
 
     def test_atomic_publish_never_overwrites_and_cleans_temporary_file(self):
@@ -294,6 +291,32 @@ class SetupTests(unittest.TestCase):
             setup.check_project("dev")
         self.assertIn("dev checks passed", self.output.getvalue())
         self.assertNotIn("secret-must-not-appear", self.output.getvalue())
+
+    def test_prod_check_accepts_manually_configured_key_ownership_and_permissions(self):
+        config = self.project_config("prod")
+        self.install_keys()
+        self.private.chmod(0o644)
+        original_stat = Path.stat
+
+        def manually_configured_stat(path, *args, **kwargs):
+            metadata = original_stat(path, *args, **kwargs)
+            if path in (self.directory, self.private, self.public):
+                values = list(metadata)
+                values[4] = 4242  # st_uid
+                values[5] = 4242  # st_gid
+                return os.stat_result(values)
+            return metadata
+
+        with (
+            self.docker_runner(config),
+            patch.object(setup, "require_tool"),
+            patch.object(Path, "stat", manually_configured_stat),
+            patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
+        ):
+            setup.check_project("prod")
+        self.assertIn("prod checks passed", self.output.getvalue())
+        self.assertEqual(stat.S_IMODE(self.private.stat().st_mode), 0o644)
+        self.assertEqual(self.private.read_bytes(), self.private_pem)
 
     def test_missing_bind_mount_stops_before_generating_keys(self):
         config = self.project_config()

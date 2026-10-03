@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -179,15 +178,6 @@ def ensure_certs(interactive: bool) -> None:
         raise SetupError(
             "the private and public jwt keys do not match. existing keys were not changed."
         )
-    if private.stat().st_mode & 0o077:
-        if not interactive:
-            raise SetupError(
-                "the private key is accessible to the group or others. run chmod 600 backend/certs/jwt-private.pem."
-            )
-        confirm(
-            "the private key is accessible to the group or others. set permissions to 600?"
-        )
-        private.chmod(0o600)
     print("jwt keys are valid and match each other.")
 
 
@@ -314,23 +304,6 @@ def check_project(profile: str) -> None:
                 require_path(source, "directory" if source.is_dir() else "file")
 
     ensure_certs(interactive=True)
-    if profile == "prod":
-        private = cert_directory / "jwt-private.pem"
-        if private.stat().st_uid != 1000:
-            raise SetupError(
-                "the prod api runs with uid 1000. set the private key owner: sudo chown 1000:1000 backend/certs/jwt-private.pem."
-            )
-        for path in (cert_directory, private, cert_directory / "jwt-public.pem"):
-            metadata = path.stat()
-            permissions = stat.S_IMODE(metadata.st_mode)
-            shift = (
-                6 if metadata.st_uid == 1000 else 3 if metadata.st_gid == 1000 else 0
-            )
-            needed = 5 if path.is_dir() else 4
-            if (permissions >> shift) & needed != needed:
-                raise SetupError(
-                    f"the prod api with uid 1000 cannot read {path.relative_to(ROOT)}. check ownership and permissions."
-                )
     print(
         f"{profile} checks passed. the application can start; run migrations separately."
     )

@@ -2,6 +2,36 @@
 
 requires docker with compose, uv, make, and openssl. run commands from the repository root with docker running.
 
+on a fresh ubuntu system, install the tools for local development:
+
+```sh
+sudo apt update
+sudo apt install -y ca-certificates curl make openssl
+curl --fail --silent --show-error --location https://get.docker.com -o /tmp/etch-docker-install.sh
+sudo sh /tmp/etch-docker-install.sh
+sudo systemctl enable --now docker
+sudo usermod --append --groups docker "$(id -un)"
+curl --fail --silent --show-error --location https://astral.sh/uv/install.sh | sh
+```
+
+if the uv installer fails, use pipx instead:
+
+```sh
+sudo apt install -y pipx
+pipx install uv
+pipx ensurepath
+```
+
+log out and back in to apply docker group membership and refresh your shell path, then check:
+
+```sh
+docker info
+docker compose version
+uv --version
+```
+
+installation details: [docker](https://docs.docker.com/engine/install/ubuntu/), [uv](https://docs.astral.sh/uv/getting-started/installation/), [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html).
+
 ## quick start
 
 ```sh
