@@ -2435,9 +2435,23 @@
     padding: 26px 22px;
   }
 
-  .settingsCard,
+  .settingsCard {
+    display: contents;
+  }
+
+  .settingsCard > .settingGroup {
+    margin: 24px 22px;
+  }
+
+  .scopeGroup {
+    grid-row: 3;
+    width: auto;
+  }
+
   .setupPreview {
+    grid-row: 2;
     padding: 24px 22px;
+    border-bottom: 1px solid var(--practice-line);
   }
 
   .sideOptions,
@@ -2562,6 +2576,10 @@
   .setupPreview,
   .setupBottom {
     padding-inline: 18px;
+  }
+
+  .settingsCard > .settingGroup {
+    margin-inline: 18px;
   }
 
   .previewCard {

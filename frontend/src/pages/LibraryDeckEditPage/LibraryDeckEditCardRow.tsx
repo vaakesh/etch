@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { isApiError } from "../../api";
+import { useAnchoredPopover } from "../../components/useAnchoredPopover";
 import type {
   EditableLibraryCard,
   UpdateLibraryCardInput,
@@ -131,39 +132,7 @@ function CardActions({
   const messages = useLocalizedMessages(MESSAGES);
   const menuId = useId();
   const triggerId = useId();
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-  function positionMenu(): void {
-    const menu = menuRef.current;
-    const trigger = triggerRef.current;
-
-    if (menu === null || trigger === null) {
-      return;
-    }
-
-    const triggerRect = trigger.getBoundingClientRect();
-    const viewportPadding = 12;
-    const menuWidth = Math.min(216, window.innerWidth - viewportPadding * 2);
-    const estimatedMenuHeight = 105;
-    const left = Math.min(
-      Math.max(viewportPadding, triggerRect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
-    const hasRoomBelow =
-      triggerRect.bottom + estimatedMenuHeight + viewportPadding <= window.innerHeight;
-    const top = hasRoomBelow
-      ? triggerRect.bottom + 7
-      : Math.max(viewportPadding, triggerRect.top - estimatedMenuHeight - 7);
-
-    menu.style.setProperty("--card-actions-menu-left", `${left}px`);
-    menu.style.setProperty("--card-actions-menu-top", `${top}px`);
-    menu.style.setProperty("--card-actions-menu-width", `${menuWidth}px`);
-    menu.style.setProperty(
-      "--card-actions-menu-origin",
-      hasRoomBelow ? "top right" : "bottom right",
-    );
-  }
+  const { menuRef, triggerRef, toggleMenu } = useAnchoredPopover();
 
   return (
     <div className={libraryStyles.cardActions}>
@@ -172,7 +141,7 @@ function CardActions({
         className={libraryStyles.cardActionsTrigger}
         data-card-actions-trigger="true"
         id={triggerId}
-        onClick={positionMenu}
+        onClick={toggleMenu}
         popoverTarget={menuId}
         popoverTargetAction="toggle"
         ref={triggerRef}

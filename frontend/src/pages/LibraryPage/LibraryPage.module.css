@@ -623,7 +623,7 @@ a.navigationItem:hover {
   z-index: 0;
   display: grid;
   min-height: 70px;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 34px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 44px;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -668,8 +668,8 @@ a.navigationItem:hover {
 
 .cardActionsTrigger {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   place-items: center;
   color: #b8b8b8;
@@ -684,12 +684,19 @@ a.navigationItem:hover {
     transform 160ms ease;
 }
 
-.cardActionsTrigger:hover,
 .cardActionsTrigger:focus-visible,
 .cardActionsTrigger:has(+ .cardActionsMenu:popover-open) {
   color: #f4f4f1;
   background: #585858;
   border-color: #6f6f6f;
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  .cardActionsTrigger:hover {
+    color: #f4f4f1;
+    background: #585858;
+    border-color: #6f6f6f;
+  }
 }
 
 .cardActionsTrigger:active {
@@ -710,9 +717,12 @@ a.navigationItem:hover {
   box-sizing: border-box;
   width: var(--card-actions-menu-width, 216px);
   max-width: calc(100vw - 24px);
+  max-height: var(--card-actions-menu-max-height, calc(100dvh - 24px));
   margin: 0;
   padding: 9px 8px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: #d2d2d2;
   background: #333333;
   border: 1px solid #555555;
@@ -736,7 +746,7 @@ a.navigationItem:hover {
 .cardActionsMenu button {
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   gap: 9px;
   padding: 0 9px;
@@ -756,11 +766,18 @@ a.navigationItem:hover {
     opacity 150ms ease;
 }
 
-.cardActionsMenu button:not(:disabled):hover,
 .cardActionsMenu button:not(:disabled):focus-visible {
   color: #f5f5f2;
   background: #414141;
   opacity: 1;
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  .cardActionsMenu button:not(:disabled):hover {
+    color: #f5f5f2;
+    background: #414141;
+    opacity: 1;
+  }
 }
 
 .cardActionsMenu button:disabled {
@@ -2377,7 +2394,7 @@ a.navigationItem:hover {
   }
 
   .cardRow {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) 34px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) 44px;
     gap: 8px;
   }
 }
@@ -2496,7 +2513,7 @@ a.navigationItem:hover {
   }
   .cardRow {
     min-height: 78px;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
     gap: 7px;
     padding: 9px 10px;
   }
@@ -2582,7 +2599,7 @@ a.navigationItem:hover {
 @media (max-width: 420px) {
   .cardRow {
     min-height: 122px;
-    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) 44px;
     grid-template-rows: auto auto;
     padding: 12px;
   }
@@ -4825,8 +4842,8 @@ a.navigationItem:hover {
 
 .page .cardActionsTrigger {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   place-items: center;
   color: var(--library-muted);
@@ -4841,7 +4858,6 @@ a.navigationItem:hover {
     transform 160ms ease;
 }
 
-.page .cardActionsTrigger:hover,
 .page .cardActionsTrigger:focus-visible,
 .page .cardActionsTrigger:has(+ .cardActionsMenu:popover-open) {
   color: var(--library-brown-deep);
@@ -4849,6 +4865,16 @@ a.navigationItem:hover {
   border-color: rgb(118 98 207 / 36%);
   box-shadow: 0 6px 14px rgb(73 56 115 / 12%);
   transform: translateY(-1px);
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  .page .cardActionsTrigger:hover {
+    color: var(--library-brown-deep);
+    background: rgb(216 207 252 / 92%);
+    border-color: rgb(118 98 207 / 36%);
+    box-shadow: 0 6px 14px rgb(73 56 115 / 12%);
+    transform: translateY(-1px);
+  }
 }
 
 .page .cardActionsTrigger:active {
@@ -4869,9 +4895,12 @@ a.navigationItem:hover {
   box-sizing: border-box;
   width: var(--card-actions-menu-width, 216px);
   max-width: calc(100vw - 24px);
+  max-height: var(--card-actions-menu-max-height, calc(100dvh - 24px));
   margin: 0;
   padding: 8px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--library-ink);
   background: rgb(255 255 255 / 92%);
   border: 1px solid rgb(255 255 255 / 70%);
@@ -4894,12 +4923,12 @@ a.navigationItem:hover {
 .page .cardActionsMenu button {
   display: flex;
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   align-items: center;
   gap: 10px;
   padding: 0 11px;
   color: inherit;
-  font-size: 0.77rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -4914,12 +4943,20 @@ a.navigationItem:hover {
     transform 150ms ease;
 }
 
-.page .cardActionsMenu button:not(:disabled):hover,
 .page .cardActionsMenu button:not(:disabled):focus-visible {
   color: var(--library-brown-deep);
   background: linear-gradient(100deg, rgb(221 248 245 / 88%), rgb(238 234 255 / 76%));
   opacity: 1;
   transform: translateX(2px);
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  .page .cardActionsMenu button:not(:disabled):hover {
+    color: var(--library-brown-deep);
+    background: linear-gradient(100deg, rgb(221 248 245 / 88%), rgb(238 234 255 / 76%));
+    opacity: 1;
+    transform: translateX(2px);
+  }
 }
 
 .page .cardActionsMenu button:not(:disabled):active {
@@ -7494,16 +7531,24 @@ a.navigationItem:hover {
   border-color: var(--dark-border);
 }
 
-:global(html[data-theme="dark"]) .cardActionsTrigger:hover,
 :global(html[data-theme="dark"]) .cardActionsTrigger:focus-visible,
 :global(html[data-theme="dark"]) .cardActionsTrigger:has(+ .cardActionsMenu:popover-open),
-:global(html[data-theme="dark"]) .page .cardActionsTrigger:hover,
 :global(html[data-theme="dark"]) .page .cardActionsTrigger:focus-visible,
 :global(html[data-theme="dark"]) .page .cardActionsTrigger:has(+ .cardActionsMenu:popover-open) {
   color: var(--dark-cyan);
   background: var(--dark-cyan-soft);
   border-color: var(--dark-border-accent);
   box-shadow: 0 6px 14px var(--dark-shadow);
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  :global(html[data-theme="dark"]) .cardActionsTrigger:hover,
+  :global(html[data-theme="dark"]) .page .cardActionsTrigger:hover {
+    color: var(--dark-cyan);
+    background: var(--dark-cyan-soft);
+    border-color: var(--dark-border-accent);
+    box-shadow: 0 6px 14px var(--dark-shadow);
+  }
 }
 
 :global(html[data-theme="dark"]) .cardActionsMenu,
@@ -7518,12 +7563,18 @@ a.navigationItem:hover {
   backdrop-filter: none;
 }
 
-:global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):hover,
 :global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):focus-visible,
-:global(html[data-theme="dark"]) .page .cardActionsMenu button:not(:disabled):hover,
 :global(html[data-theme="dark"]) .page .cardActionsMenu button:not(:disabled):focus-visible {
   color: var(--dark-cyan);
   background: var(--dark-surface-hover);
+}
+
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  :global(html[data-theme="dark"]) .cardActionsMenu button:not(:disabled):hover,
+  :global(html[data-theme="dark"]) .page .cardActionsMenu button:not(:disabled):hover {
+    color: var(--dark-cyan);
+    background: var(--dark-surface-hover);
+  }
 }
 
 :global(html[data-theme="dark"]) .cardActionsDivider,
@@ -8352,7 +8403,7 @@ a.navigationItem:hover {
   }
 
   .page [data-deck-layout="compact"] .deckActions {
-    width: 96px;
+    width: 44px;
     grid-template-columns: minmax(0, 1fr);
     grid-area: 2 / 3;
   }
@@ -8395,17 +8446,21 @@ a.navigationItem:hover {
     min-width: 0;
     padding-inline: 10px;
   }
+}
 
+@media (max-width: 600px) {
   .page [data-deck-layout="compact"] .deckCard {
-    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .page [data-deck-layout="compact"] .deckHero {
-    grid-area: 1 / 1;
+    grid-area: 1 / 1 / 2 / 3;
+    padding-right: 56px;
   }
 
   .page [data-deck-layout="compact"] .accuracyHint {
     grid-area: 1 / 2;
+    justify-self: end;
   }
 
   .page [data-deck-layout="compact"] .deckMeta {
@@ -8413,7 +8468,7 @@ a.navigationItem:hover {
   }
 
   .page [data-deck-layout="compact"] .deckManagement {
-    grid-area: 2 / 1 / 3 / 3;
+    grid-area: 2 / 2;
     justify-self: end;
   }
 
@@ -8423,8 +8478,24 @@ a.navigationItem:hover {
     grid-area: 3 / 1 / 4 / 3;
   }
 
+  .page [data-deck-layout="compact"] .startButton {
+    min-height: 44px;
+    gap: 8px;
+    padding: 8px 12px;
+    line-height: 1.3;
+  }
+
   .page [data-deck-layout="compact"] .startButton > span {
     display: inline;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 860px), (pointer: coarse) {
+  .page .cardActionsMenu {
+    backdrop-filter: none;
   }
 }
 

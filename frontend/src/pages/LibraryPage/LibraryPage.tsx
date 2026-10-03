@@ -10,6 +10,7 @@ import {
   type SessionCacheScope,
 } from "../../auth/model/session-cache";
 import { DashboardIcon } from "../../components/DashboardVisuals";
+import { useAnchoredPopover } from "../../components/useAnchoredPopover";
 import {
   createDeckDetailsNavigationState,
   getDeckDetailsPath,
@@ -899,39 +900,7 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
   const messages = useLocalizedMessages(MESSAGES);
   const menuId = useId();
   const triggerId = useId();
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-  function positionMenu(): void {
-    const menu = menuRef.current;
-    const trigger = triggerRef.current;
-
-    if (menu === null || trigger === null) {
-      return;
-    }
-
-    const triggerRect = trigger.getBoundingClientRect();
-    const viewportPadding = 12;
-    const menuWidth = Math.min(216, window.innerWidth - viewportPadding * 2);
-    const estimatedMenuHeight = 142;
-    const left = Math.min(
-      Math.max(viewportPadding, triggerRect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
-    const hasRoomBelow =
-      triggerRect.bottom + estimatedMenuHeight + viewportPadding <= window.innerHeight;
-    const top = hasRoomBelow
-      ? triggerRect.bottom + 7
-      : Math.max(viewportPadding, triggerRect.top - estimatedMenuHeight - 7);
-
-    menu.style.setProperty("--card-actions-menu-left", `${left}px`);
-    menu.style.setProperty("--card-actions-menu-top", `${top}px`);
-    menu.style.setProperty("--card-actions-menu-width", `${menuWidth}px`);
-    menu.style.setProperty(
-      "--card-actions-menu-origin",
-      hasRoomBelow ? "top right" : "bottom right",
-    );
-  }
+  const { menuRef, triggerRef, toggleMenu } = useAnchoredPopover();
 
   function handleEdit(): void {
     menuRef.current?.hidePopover();
@@ -954,7 +923,7 @@ function CardActions({ card, isDeleting, onAdd, onDelete, onEdit }: CardActionsP
         aria-label={messages.cardActions(card.backText)}
         className={styles.cardActionsTrigger}
         id={triggerId}
-        onClick={positionMenu}
+        onClick={toggleMenu}
         popoverTarget={menuId}
         popoverTargetAction="toggle"
         ref={triggerRef}

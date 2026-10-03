@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { isApiError } from "../../api";
 import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
@@ -367,7 +367,6 @@ function ProgressMetric({ icon, label, value, detail, tone }: ProgressMetricProp
 
 interface ActivityChartScale {
   max: number;
-  peak: number;
   ticks: readonly number[];
 }
 
@@ -396,7 +395,7 @@ function createActivityChartScale(activity: readonly HomeWeeklyActivityDay[]): A
   const highestValue = Math.max(0, ...activity.map((activityDay) => activityDay.value));
 
   if (highestValue === 0) {
-    return { max: 0, peak: 0, ticks: [0] };
+    return { max: 0, ticks: [0] };
   }
 
   const targetIntervalCount = Math.min(3, highestValue);
@@ -405,25 +404,34 @@ function createActivityChartScale(activity: readonly HomeWeeklyActivityDay[]): A
   const intervalCount = Math.round(max / step);
   const ticks = Array.from({ length: intervalCount + 1 }, (_, index) => max - index * step);
 
-  return { max, peak: highestValue, ticks };
+  return { max, ticks };
 }
 
-function getActivityTooltipBottom(scale: ActivityChartScale): number {
-  const peakHeight =
-    scale.max > 0 ? (scale.peak / scale.max) * ACTIVITY_PLOT_HEIGHT : ACTIVITY_PLOT_HEIGHT;
+function getActivityTooltipBottom(value: number, scaleMax: number): number {
+  const barHeight = scaleMax > 0 ? (value / scaleMax) * ACTIVITY_PLOT_HEIGHT : 0;
+  const visibleBarHeight = value > 0 ? Math.max(4, barHeight) : 0;
 
-  return Math.round(ACTIVITY_LABEL_AREA_HEIGHT + peakHeight + ACTIVITY_TOOLTIP_GAP);
+  return Math.round(ACTIVITY_LABEL_AREA_HEIGHT + visibleBarHeight + ACTIVITY_TOOLTIP_GAP);
 }
 
 interface WeeklyActivityBarProps {
   activityDay: HomeWeeklyActivityDay;
   scaleMax: number;
-  tooltipBottom: number;
+  isTooltipOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
 }
 
-function WeeklyActivityBar({ activityDay, scaleMax, tooltipBottom }: WeeklyActivityBarProps) {
+function WeeklyActivityBar({
+  activityDay,
+  scaleMax,
+  isTooltipOpen,
+  onToggle,
+  onClose,
+}: WeeklyActivityBarProps) {
   const tooltipId = useId();
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
   const weekday = formatShortWeekday(activityDay.date, locale);
@@ -434,25 +442,53 @@ function WeeklyActivityBar({ activityDay, scaleMax, tooltipBottom }: WeeklyActiv
     ? `${styles.weeklyBar} ${styles.weeklyBarOpen}`
     : styles.weeklyBar;
 
+  useEffect(() => {
+    const bar = barRef.current;
+    const tooltip = tooltipRef.current;
+    const plot = bar?.parentElement;
+    if (bar === null || tooltip === null || plot === null || plot === undefined) {
+      return;
+    }
+
+    const positionTooltip = () => {
+      const plotWidth = Number.parseFloat(getComputedStyle(plot).width);
+      const plotRect = plot.getBoundingClientRect();
+      if (plotWidth <= 0 || plotRect.width <= 0) {
+        return;
+      }
+
+      tooltip.style.setProperty("--activity-tooltip-max-width", `${plotWidth}px`);
+      // Convert viewport measurements to layout pixels during the panel's entrance animation.
+      const scale = plotRect.width / plotWidth;
+      const barRect = bar.getBoundingClientRect();
+      const triggerRect = bar.firstElementChild?.getBoundingClientRect() ?? barRect;
+      const width = Number.parseFloat(getComputedStyle(tooltip).width);
+      const center = (triggerRect.left - plotRect.left + triggerRect.width / 2) / scale;
+      const left = Math.max(0, Math.min(center - width / 2, plotWidth - width));
+
+      tooltip.style.left = `${left - (barRect.left - plotRect.left) / scale}px`;
+      tooltip.style.setProperty("--activity-tooltip-arrow", `${center - left}px`);
+    };
+
+    positionTooltip();
+    const observer = new ResizeObserver(positionTooltip);
+    observer.observe(plot);
+    observer.observe(tooltip);
+    return () => observer.disconnect();
+  }, [dateLabel, valueLabel]);
+
   return (
-    <div className={barClassName}>
+    <div className={barClassName} ref={barRef}>
       <button
         aria-describedby={tooltipId}
         aria-label={dateLabel}
         className={styles.barTrigger}
-        onBlur={() => setIsTooltipOpen(false)}
+        onBlur={onClose}
+        onClick={onToggle}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
-            setIsTooltipOpen(false);
+            onClose();
             event.currentTarget.blur();
-          } else if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setIsTooltipOpen((isOpen) => !isOpen);
-          }
-        }}
-        onPointerDown={(event) => {
-          if (event.button === 0) {
-            setIsTooltipOpen((isOpen) => !isOpen);
           }
         }}
         type="button"
@@ -471,8 +507,9 @@ function WeeklyActivityBar({ activityDay, scaleMax, tooltipBottom }: WeeklyActiv
       <span
         className={styles.activityTooltip}
         id={tooltipId}
+        ref={tooltipRef}
         role="tooltip"
-        style={{ bottom: `${tooltipBottom}px` }}
+        style={{ bottom: `${getActivityTooltipBottom(activityDay.value, scaleMax)}px` }}
       >
         <time aria-hidden="true" dateTime={activityDay.date}>
           {dateLabel}
@@ -489,14 +526,29 @@ interface ProgressPanelProps {
 }
 
 function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
+  const [activeTooltipDate, setActiveTooltipDate] = useState<string | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
   const chartValues = [...weeklyActivity]
     .sort((first, second) => first.date.localeCompare(second.date))
     .slice(-7);
   const chartScale = createActivityChartScale(chartValues);
-  const tooltipBottom = getActivityTooltipBottom(chartScale);
   const studiedWordsCount = localizeCount(progress.wordsExplored, WORD_COUNT_FORMS, locale);
+
+  useEffect(() => {
+    if (activeTooltipDate === null) {
+      return;
+    }
+
+    const closeOutsideChart = (event: PointerEvent) => {
+      if (event.target instanceof Node && !chartRef.current?.contains(event.target)) {
+        setActiveTooltipDate(null);
+      }
+    };
+    document.addEventListener("pointerdown", closeOutsideChart);
+    return () => document.removeEventListener("pointerdown", closeOutsideChart);
+  }, [activeTooltipDate]);
 
   return (
     <aside aria-labelledby="progress-heading" className={styles.progressPanel}>
@@ -566,13 +618,23 @@ function ProgressPanel({ progress, weeklyActivity }: ProgressPanelProps) {
                   />
                 ))}
               </div>
-              <div className={styles.weeklyBars}>
+              <div className={styles.weeklyBars} ref={chartRef}>
                 {chartValues.map((activityDay) => (
                   <WeeklyActivityBar
                     activityDay={activityDay}
+                    isTooltipOpen={activeTooltipDate === activityDay.date}
                     key={activityDay.date}
+                    onClose={() =>
+                      setActiveTooltipDate((activeDate) =>
+                        activeDate === activityDay.date ? null : activeDate,
+                      )
+                    }
+                    onToggle={() =>
+                      setActiveTooltipDate((activeDate) =>
+                        activeDate === activityDay.date ? null : activityDay.date,
+                      )
+                    }
                     scaleMax={chartScale.max}
-                    tooltipBottom={tooltipBottom}
                   />
                 ))}
               </div>

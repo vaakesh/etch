@@ -530,7 +530,6 @@
   min-height: 4px;
 }
 
-.barTrigger:hover .barFill,
 .barTrigger:focus-visible .barFill {
   filter: saturate(1.12) brightness(1.05);
   transform: scaleX(1.14);
@@ -544,10 +543,10 @@
 .activityTooltip {
   position: absolute;
   z-index: 5;
-  left: 50%;
+  left: 0;
   display: grid;
   width: max-content;
-  max-width: min(190px, calc(100vw - 48px));
+  max-width: min(190px, calc(100vw - 48px), var(--activity-tooltip-max-width, 190px));
   justify-items: start;
   gap: 3px;
   padding: 10px 12px;
@@ -560,7 +559,7 @@
   box-shadow: 0 12px 28px rgb(39 30 66 / 22%);
   opacity: 0;
   transform: scale(0.98);
-  translate: -50% 6px;
+  translate: 0 6px;
   transition:
     opacity 150ms ease,
     transform 180ms var(--home-spring),
@@ -571,7 +570,7 @@
 .activityTooltip::after {
   position: absolute;
   bottom: -5px;
-  left: 50%;
+  left: var(--activity-tooltip-arrow, 50%);
   width: 9px;
   height: 9px;
   content: "";
@@ -586,7 +585,7 @@
   font-size: 0.61rem;
   font-weight: 550;
   line-height: 1.3;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .activityTooltip strong {
@@ -594,48 +593,29 @@
   font-variant-numeric: tabular-nums;
   font-weight: 680;
   line-height: 1.35;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.weeklyBar:hover .activityTooltip,
-.weeklyBar:focus-within .activityTooltip,
+:global(html[data-keyboard-navigation="true"]) .weeklyBar:focus-within .activityTooltip,
 .weeklyBarOpen .activityTooltip {
   visibility: visible;
   opacity: 1;
   transform: scale(1);
-  translate: -50% 0;
-}
-
-.weeklyBar:first-child .activityTooltip {
-  left: 0;
-  translate: 0 6px;
-}
-
-.weeklyBar:first-child:hover .activityTooltip,
-.weeklyBar:first-child:focus-within .activityTooltip,
-.weeklyBarOpen:first-child .activityTooltip {
   translate: 0 0;
 }
 
-.weeklyBar:first-child .activityTooltip::after {
-  left: 16px;
-}
+@media (hover: hover) and (pointer: fine) {
+  .barTrigger:hover .barFill {
+    filter: saturate(1.12) brightness(1.05);
+    transform: scaleX(1.14);
+  }
 
-.weeklyBar:last-child .activityTooltip {
-  right: 0;
-  left: auto;
-  translate: 0 6px;
-}
-
-.weeklyBar:last-child:hover .activityTooltip,
-.weeklyBar:last-child:focus-within .activityTooltip,
-.weeklyBarOpen:last-child .activityTooltip {
-  translate: 0 0;
-}
-
-.weeklyBar:last-child .activityTooltip::after {
-  right: 12px;
-  left: auto;
+  .weeklyBar:hover .activityTooltip {
+    visibility: visible;
+    opacity: 1;
+    transform: scale(1);
+    translate: 0 0;
+  }
 }
 
 .noActivity {
