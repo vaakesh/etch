@@ -16,13 +16,13 @@ const RESPONSE = {
     user_total_study_time: 120,
   },
   user_weekly_activity: [
-    { date: "2026-07-12", percent: 55 },
-    { date: "2026-07-13", percent: 67 },
-    { date: "2026-07-14", percent: 32 },
-    { date: "2026-07-15", percent: 12 },
-    { date: "2026-07-16", percent: 0 },
-    { date: "2026-07-17", percent: 38 },
-    { date: "2026-07-18", percent: 100 },
+    { date: "2026-07-12", value: 55 },
+    { date: "2026-07-13", value: 67 },
+    { date: "2026-07-14", value: 32 },
+    { date: "2026-07-15", value: 12 },
+    { date: "2026-07-16", value: 0 },
+    { date: "2026-07-17", value: 38 },
+    { date: "2026-07-18", value: 100 },
   ],
 };
 

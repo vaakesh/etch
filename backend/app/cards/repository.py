@@ -4,9 +4,10 @@ from uuid import UUID
 
 from app.cards.models import Card
 from app.cards.schemas import InternalCard
+from app.common.query import apply_date_pagination, apply_search
 from app.common.types import SearchQuery
 from app.decks.models import Deck, DeckCard
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -15,20 +16,23 @@ class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_ids(
-        self,
-        card_ids: list[int],
-    ) -> list[Card]:
-        stmt = (
-            select(Card)
-            .where(
-                Card.id.in_(card_ids),
-            )
-        )
-        result = await self.session.execute(stmt)
-        rows = result.scalars().all()
-        return rows
+    # base
+    async def get(self, card_id: int) -> Card:
+        return await self.session.get(Card, card_id)
 
+    def add(self, card: Card) -> None:
+        self.session.add(card)
+
+    def add_all(self, cards: list[Card]) -> None:
+        self.session.add_all(cards)
+
+    async def refresh(self, card: Card) -> None:
+        await self.session.refresh(card)
+
+    async def delete(self, card: Card) -> None:
+        await self.session.delete(card)
+
+    # read
     async def get_by_uuid(
             self, 
             card_uuid: UUID,
@@ -36,59 +40,11 @@ class CardRepository:
         ) -> Card | None:
         stmt = select(Card).where(Card.uuid == card_uuid)
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=Card).execution_options(
+                populate_existing=True,
+            )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-
-    async def get_all_by_user_id(
-        self,
-        user_id: int,
-        search_query: SearchQuery = None,
-        cursor_updated_at: datetime | None = None,
-        cursor_id: int | None = None,
-        limit: int = 50,
-    ) -> tuple[list[Card], bool]:
-        stmt = (
-            select(Card)
-            .where(
-                Card.user_id == user_id,
-            )
-        )
-
-        if cursor_updated_at is not None and cursor_id is not None:
-            stmt = stmt.where(
-                or_(
-                    Card.updated_at < cursor_updated_at,
-                    and_(
-                        Card.updated_at == cursor_updated_at,
-                        Card.id < cursor_id,
-                    )
-                )
-            )
-
-        logger.info("entered here")
-        if search_query:
-            logger.info(f"has search_query = '{search_query}'")
-            terms = search_query.split()
-
-            stmt = stmt.where(
-                *(
-                    or_(
-                        Card.front_text.icontains(term, autoescape=True),
-                        Card.back_text.icontains(term, autoescape=True),
-                    )
-                    for term in terms
-                )
-            )
-
-
-        stmt = stmt.order_by(Card.updated_at.desc(), Card.id.desc())
-        stmt = stmt.limit(limit + 1)
-
-        result = await self.session.execute(stmt)
-        rows = result.scalars().all()
-        has_more = len(rows) > limit
-        return rows[:limit], has_more
 
     async def get_card_in_deck(
         self,
@@ -122,17 +78,49 @@ class CardRepository:
         rows = result.scalar_one_or_none()
         return rows
 
-    def add_all(self, cards: list[Card]) -> None:
-        self.session.add_all(cards)
+    async def get_by_ids(
+        self,
+        card_ids: list[int],
+    ) -> list[Card]:
+        stmt = (
+            select(Card)
+            .where(
+                Card.id.in_(card_ids),
+            )
+        )
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        return rows
 
-    def add(self, card: Card) -> None:
-        self.session.add(card)
+    async def get_all_by_user_id(
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 50,
+    ) -> tuple[list[Card], bool]:
+        stmt = (
+            select(Card)
+            .where(
+                Card.user_id == user_id,
+            )
+        )
 
-    async def delete(self, card: Card) -> None:
-        await self.session.delete(card)
+        if search_query:
+            logger.info(f"has search_query = '{search_query}'")
+        stmt = apply_search(stmt, search_query, Card.front_text, Card.back_text)
 
-    async def refresh(self, card: Card) -> None:
-        await self.session.refresh(card)
+        stmt = apply_date_pagination(
+            stmt,
+            date_column=Card.updated_at,
+            id_column=Card.id,
+            cursor_at=cursor_updated_at,
+            cursor_id=cursor_id,
+            limit=limit,
+        )
 
-    async def get(self, card_id: int) -> Card:
-        return await self.session.get(Card, card_id)
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more

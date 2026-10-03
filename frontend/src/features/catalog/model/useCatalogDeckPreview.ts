@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCatalogDeckPreview, getCatalogPreviewCardPage } from "../api/catalog-api";
+import { getCatalogDeckPreviewInitialData, getCatalogPreviewCardPage } from "../api/catalog-api";
+import {
+  getCatalogPreviewBatchOffset,
+  getCatalogPreviewCardsForPage,
+  getCatalogPreviewPageCount,
+} from "./catalog-preview-pagination";
 import type { CatalogDeckPreview, CatalogPreviewCard } from "./catalog-types";
 
 export type CatalogDeckPreviewStatus = "loading" | "success" | "error";
@@ -7,62 +12,52 @@ export type CatalogDeckPreviewStatus = "loading" | "success" | "error";
 interface CatalogDeckPreviewState {
   status: CatalogDeckPreviewStatus;
   deck: CatalogDeckPreview | null;
-  cards: readonly CatalogPreviewCard[];
-  nextOffset: number;
-  hasMore: boolean;
+  cardBatches: Readonly<Record<number, readonly CatalogPreviewCard[]>>;
+  currentPage: number;
   error: unknown | null;
-  isLoadingMore: boolean;
-  loadMoreError: unknown | null;
+  isPageLoading: boolean;
+  pageError: unknown | null;
 }
 
-export interface UseCatalogDeckPreviewResult extends CatalogDeckPreviewState {
+export interface UseCatalogDeckPreviewResult {
+  status: CatalogDeckPreviewStatus;
+  deck: CatalogDeckPreview | null;
+  cards: readonly CatalogPreviewCard[];
+  currentPage: number;
+  pageCount: number;
+  error: unknown | null;
+  isPageLoading: boolean;
+  pageError: unknown | null;
   retry: () => void;
-  loadMore: () => void;
+  retryPage: () => void;
+  selectPage: (page: number) => void;
 }
 
 const INITIAL_STATE: CatalogDeckPreviewState = {
   status: "loading",
   deck: null,
-  cards: [],
-  nextOffset: 0,
-  hasMore: false,
+  cardBatches: {},
+  currentPage: 1,
   error: null,
-  isLoadingMore: false,
-  loadMoreError: null,
+  isPageLoading: false,
+  pageError: null,
 };
-
-function appendUniqueCards(
-  currentCards: readonly CatalogPreviewCard[],
-  nextCards: readonly CatalogPreviewCard[],
-): readonly CatalogPreviewCard[] {
-  const knownCardUuids = new Set(currentCards.map((card) => card.uuid));
-
-  return [...currentCards, ...nextCards.filter((card) => !knownCardUuids.has(card.uuid))];
-}
-
-function pageHasMore(
-  loadedCount: number,
-  returnedFullPage: boolean,
-  totalWordsCount: number,
-): boolean {
-  return returnedFullPage && loadedCount < totalWordsCount;
-}
 
 export function useCatalogDeckPreview(deckUuid: string): UseCatalogDeckPreviewResult {
   const [state, setState] = useState<CatalogDeckPreviewState>(INITIAL_STATE);
   const initialControllerRef = useRef<AbortController | null>(null);
-  const loadMoreControllerRef = useRef<AbortController | null>(null);
+  const pageControllerRef = useRef<AbortController | null>(null);
   const requestRevisionRef = useRef(0);
 
-  const loadFirstPage = useCallback((): void => {
+  const loadFirstBatch = useCallback((): void => {
     initialControllerRef.current?.abort();
-    loadMoreControllerRef.current?.abort();
+    pageControllerRef.current?.abort();
 
     const controller = new AbortController();
     const requestRevision = requestRevisionRef.current + 1;
     requestRevisionRef.current = requestRevision;
     initialControllerRef.current = controller;
-    loadMoreControllerRef.current = null;
+    pageControllerRef.current = null;
 
     queueMicrotask(() => {
       if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
@@ -70,31 +65,23 @@ export function useCatalogDeckPreview(deckUuid: string): UseCatalogDeckPreviewRe
       }
     });
 
-    void Promise.all([
-      getCatalogDeckPreview(deckUuid, controller.signal),
-      getCatalogPreviewCardPage(deckUuid, 0, controller.signal),
-    ])
-      .then(([deck, cardPage]) => {
+    void getCatalogDeckPreviewInitialData(deckUuid, controller.signal)
+      .then(({ deck, cardPage }) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
           setState({
             status: "success",
             deck,
-            cards: cardPage.cards,
-            nextOffset: cardPage.nextOffset,
-            hasMore: pageHasMore(cardPage.nextOffset, cardPage.hasMore, deck.totalWordsCount),
+            cardBatches: { 0: cardPage.cards },
+            currentPage: 1,
             error: null,
-            isLoadingMore: false,
-            loadMoreError: null,
+            isPageLoading: false,
+            pageError: null,
           });
         }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState({
-            ...INITIAL_STATE,
-            status: "error",
-            error,
-          });
+          setState({ ...INITIAL_STATE, status: "error", error });
         }
       })
       .finally(() => {
@@ -104,69 +91,104 @@ export function useCatalogDeckPreview(deckUuid: string): UseCatalogDeckPreviewRe
       });
   }, [deckUuid]);
 
-  const loadMore = useCallback((): void => {
-    if (
-      state.status !== "success" ||
-      state.deck === null ||
-      !state.hasMore ||
-      state.isLoadingMore ||
-      loadMoreControllerRef.current !== null
-    ) {
-      return;
-    }
+  const loadPage = useCallback(
+    (page: number, force = false): void => {
+      if (state.status !== "success" || state.deck === null) {
+        return;
+      }
 
-    const offset = state.nextOffset;
-    const totalWordsCount = state.deck.totalWordsCount;
-    const requestRevision = requestRevisionRef.current;
-    const controller = new AbortController();
-    loadMoreControllerRef.current = controller;
+      const pageCount = getCatalogPreviewPageCount(state.deck.totalWordsCount);
+      const targetPage = Math.min(Math.max(1, Math.floor(page)), Math.max(pageCount, 1));
+      const batchOffset = getCatalogPreviewBatchOffset(targetPage);
+      const cachedCards = state.cardBatches[batchOffset];
 
-    setState((currentState) => ({
-      ...currentState,
-      isLoadingMore: true,
-      loadMoreError: null,
-    }));
+      pageControllerRef.current?.abort();
+      pageControllerRef.current = null;
 
-    void getCatalogPreviewCardPage(deckUuid, offset, controller.signal)
-      .then((page) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState((currentState) => ({
-            ...currentState,
-            cards: appendUniqueCards(currentState.cards, page.cards),
-            nextOffset: page.nextOffset,
-            hasMore: pageHasMore(page.nextOffset, page.hasMore, totalWordsCount),
-            isLoadingMore: false,
-            loadMoreError: null,
-          }));
-        }
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          setState((currentState) => ({
-            ...currentState,
-            isLoadingMore: false,
-            loadMoreError: error,
-          }));
-        }
-      })
-      .finally(() => {
-        if (loadMoreControllerRef.current === controller) {
-          loadMoreControllerRef.current = null;
-        }
-      });
-  }, [deckUuid, state.deck, state.hasMore, state.isLoadingMore, state.nextOffset, state.status]);
+      if (cachedCards !== undefined && !force) {
+        setState((currentState) => ({
+          ...currentState,
+          currentPage: targetPage,
+          isPageLoading: false,
+          pageError: null,
+        }));
+        return;
+      }
+
+      const controller = new AbortController();
+      const requestRevision = requestRevisionRef.current;
+      pageControllerRef.current = controller;
+      setState((currentState) => ({
+        ...currentState,
+        currentPage: targetPage,
+        isPageLoading: true,
+        pageError: null,
+      }));
+
+      void getCatalogPreviewCardPage(deckUuid, batchOffset, controller.signal)
+        .then((cardPage) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setState((currentState) => ({
+              ...currentState,
+              cardBatches: {
+                ...currentState.cardBatches,
+                [batchOffset]: cardPage.cards,
+              },
+              isPageLoading: false,
+              pageError: null,
+            }));
+          }
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+            setState((currentState) => ({
+              ...currentState,
+              isPageLoading: false,
+              pageError: error,
+            }));
+          }
+        })
+        .finally(() => {
+          if (pageControllerRef.current === controller) {
+            pageControllerRef.current = null;
+          }
+        });
+    },
+    [deckUuid, state.cardBatches, state.deck, state.status],
+  );
 
   useEffect(() => {
-    loadFirstPage();
+    loadFirstBatch();
 
     return () => {
       requestRevisionRef.current += 1;
       initialControllerRef.current?.abort();
-      loadMoreControllerRef.current?.abort();
+      pageControllerRef.current?.abort();
       initialControllerRef.current = null;
-      loadMoreControllerRef.current = null;
+      pageControllerRef.current = null;
     };
-  }, [loadFirstPage]);
+  }, [loadFirstBatch]);
 
-  return { ...state, retry: loadFirstPage, loadMore };
+  const pageCount =
+    state.deck === null ? 0 : getCatalogPreviewPageCount(state.deck.totalWordsCount);
+  const batchOffset = getCatalogPreviewBatchOffset(state.currentPage);
+  const cards = getCatalogPreviewCardsForPage(
+    state.cardBatches[batchOffset] ?? [],
+    batchOffset,
+    state.currentPage,
+  );
+
+  return {
+    status: state.status,
+    deck: state.deck,
+    cards,
+    currentPage: state.currentPage,
+    pageCount,
+    error: state.error,
+    isPageLoading: state.isPageLoading,
+    pageError: state.pageError,
+    retry: loadFirstBatch,
+    retryPage: () => loadPage(state.currentPage, true),
+    selectPage: loadPage,
+  };
 }

@@ -1,3 +1,5 @@
+import { MAX_DECK_SIZE, fitsIntoDeck, getDeckFreeSlots } from "./deck-capacity";
+import { isValidCardLanguage } from "./input-validation";
 import type { ImportLibraryCardsInput } from "./library-types";
 
 const MAX_CARDS = 500;
@@ -10,9 +12,26 @@ export type CardImportIssue =
   | { code: "cards-array" }
   | { code: "cards-empty" }
   | { code: "cards-limit"; limit: number }
+  | { code: "deck-capacity"; limit: number; freeSlots: number }
   | { code: "card-object"; path: string }
   | { code: "text"; path: string; maxLength: number }
   | { code: "language"; path: string };
+
+/** Импорт не поместится в колоду — backend ответил бы 409, проверяем заранее. */
+export function checkDeckCapacity(
+  deckWordsCount: number,
+  importedCardsCount: number,
+): CardImportIssue | null {
+  if (fitsIntoDeck(deckWordsCount, importedCardsCount)) {
+    return null;
+  }
+
+  return {
+    code: "deck-capacity",
+    limit: MAX_DECK_SIZE,
+    freeSlots: getDeckFreeSlots(deckWordsCount),
+  };
+}
 
 export type CardImportParseResult =
   { ok: true; value: ImportLibraryCardsInput } | { ok: false; issue: CardImportIssue };
@@ -71,7 +90,7 @@ function readText(
   if (
     typeof value !== "string" ||
     value.trim().length === 0 ||
-    value.trim().length > MAX_CARD_TEXT_LENGTH
+    [...value.trim()].length > MAX_CARD_TEXT_LENGTH
   ) {
     return { ok: false, issue: { code: "text", path, maxLength: MAX_CARD_TEXT_LENGTH } };
   }
@@ -88,7 +107,7 @@ function readLanguage(
     return { ok: true, value: defaultValue };
   }
 
-  if (typeof value !== "string" || value.trim().length < 2 || value.trim().length > 3) {
+  if (typeof value !== "string" || !isValidCardLanguage(value)) {
     return { ok: false, issue: { code: "language", path } };
   }
 

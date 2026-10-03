@@ -1,4 +1,5 @@
 import { ApiError } from "../../../api";
+import { MAX_SESSION_SIZE } from "./practice-session-size";
 import type {
   CardSide,
   PracticeActivityResponse,
@@ -163,12 +164,17 @@ function parsePracticeCard(
   value: unknown,
   index: number,
   knownSequenceNumbers: Set<number>,
+  totalCount: number,
 ): PracticeCard {
   const path = `practice.cards[${index}]`;
   const card = readRecord(value, path);
   const sequenceNumber = readInteger(card.sequence_number, `${path}.sequence_number`);
 
-  if (sequenceNumber < 1 || knownSequenceNumbers.has(sequenceNumber)) {
+  if (
+    sequenceNumber < 1 ||
+    sequenceNumber > totalCount ||
+    knownSequenceNumbers.has(sequenceNumber)
+  ) {
     return invalidPracticeResponse(`${path}.sequence_number`);
   }
   knownSequenceNumbers.add(sequenceNumber);
@@ -196,7 +202,7 @@ export function parsePracticeSession(value: unknown): PracticeSession {
   if (promptSide === answerSide) {
     return invalidPracticeResponse("practice.answer_side");
   }
-  if (totalCount < 1) {
+  if (totalCount < 1 || totalCount > MAX_SESSION_SIZE) {
     return invalidPracticeResponse("practice.total_count");
   }
   if (answeredCount < 0 || answeredCount > totalCount) {
@@ -214,7 +220,7 @@ export function parsePracticeSession(value: unknown): PracticeSession {
 
   const knownSequenceNumbers = new Set<number>();
   const cards = session.cards.map((card, index) =>
-    parsePracticeCard(card, index, knownSequenceNumbers),
+    parsePracticeCard(card, index, knownSequenceNumbers, totalCount),
   );
 
   for (let index = 1; index < cards.length; index += 1) {
@@ -231,7 +237,7 @@ export function parsePracticeSession(value: unknown): PracticeSession {
 
   return {
     uuid: readUuid(session.training_session_uuid, "practice.training_session_uuid"),
-    deckUuid: readUuid(session.deck_uuid, "practice.deck_uuid"),
+    deckUuid: readNullableUuid(session.deck_uuid, "practice.deck_uuid"),
     promptSide,
     answerSide,
     totalCount,
@@ -269,7 +275,7 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
   const path = `practiceHistory.items[${index}]`;
   const session = readRecord(value, path);
   const requestedCount = readInteger(session.requested_count, `${path}.requested_count`);
-  const actualCount = readInteger(session.actual_count, `${path}.actual_count`);
+  const answeredCount = readInteger(session.answered_count, `${path}.answered_count`);
   const correctCount = readInteger(session.correct_count, `${path}.correct_count`);
   const wrongCount = readInteger(session.wrong_count, `${path}.wrong_count`);
   const promptSide = readCardSide(session.prompt_side, `${path}.prompt_side`);
@@ -278,14 +284,16 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
   const finishedAt =
     finishedAtValue === null ? null : readDateTime(finishedAtValue, `${path}.finished_at`);
   const status = readTrainingSessionStatus(session.status, `${path}.status`);
+  const startedAt = readDateTime(session.started_at, `${path}.started_at`);
 
   if (
-    requestedCount < 0 ||
-    actualCount < 0 ||
-    actualCount > requestedCount ||
+    requestedCount < 1 ||
+    requestedCount > MAX_SESSION_SIZE ||
+    answeredCount < 0 ||
+    answeredCount > requestedCount ||
     correctCount < 0 ||
     wrongCount < 0 ||
-    correctCount + wrongCount !== actualCount
+    correctCount + wrongCount !== answeredCount
   ) {
     return invalidPracticeResponse(`${path}.counts`);
   }
@@ -293,17 +301,28 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
     return invalidPracticeResponse(`${path}.answer_side`);
   }
 
+  if ((status === "in_progress") !== (finishedAt === null)) {
+    return invalidPracticeResponse(`${path}.finished_at`);
+  }
+  if (status === "completed" && answeredCount !== requestedCount) {
+    return invalidPracticeResponse(`${path}.answered_count`);
+  }
+  if (finishedAt !== null && Date.parse(finishedAt) < Date.parse(startedAt)) {
+    return invalidPracticeResponse(`${path}.finished_at`);
+  }
+
   return {
     uuid: readUuid(session.uuid, `${path}.uuid`),
-    deckUuid: readUuid(session.deck_uuid, `${path}.deck_uuid`),
+    deckUuid: readNullableUuid(session.deck_uuid, `${path}.deck_uuid`),
+    deckTitle: readNullableString(session.deck_title, `${path}.deck_title`),
     status,
     requestedCount,
-    actualCount,
+    answeredCount,
     correctCount,
     wrongCount,
     promptSide,
     answerSide,
-    startedAt: readDateTime(session.started_at, `${path}.started_at`),
+    startedAt,
     finishedAt,
   };
 }
@@ -343,7 +362,7 @@ function parsePracticeSessionHistoryItem(
   const isCorrect = readNullableBoolean(item.is_correct, `${path}.is_correct`);
   const userTypedText = readNullableString(item.user_typed_text, `${path}.user_typed_text`);
 
-  if (sequenceNumber < 1) {
+  if (sequenceNumber < 1 || sequenceNumber > MAX_SESSION_SIZE) {
     return invalidPracticeResponse(`${path}.sequence_number`);
   }
   if (isAnswered !== (isCorrect !== null)) {
@@ -402,7 +421,7 @@ export function parseSubmitPracticeAnswerResult(value: unknown): SubmitPracticeA
     "practiceAnswer.time_to_complete",
   );
 
-  if (totalCount < 1) {
+  if (totalCount < 1 || totalCount > MAX_SESSION_SIZE) {
     return invalidPracticeResponse("practiceAnswer.total_count");
   }
   if (answeredCount < 1 || answeredCount > totalCount) {

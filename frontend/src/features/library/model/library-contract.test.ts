@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isApiError } from "../../../api";
 import {
   parseDeckCardPage,
+  parseCreatedLibraryDeck,
   parseEditableLibraryDeck,
   parseImportLibraryCardsResult,
   parseLibraryCardPage,
@@ -11,6 +12,7 @@ import {
 
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const OWNER_UUID = "d2f61c35-11d0-489e-837d-3845418ba39e";
+const OWNER_USERNAME = "deck-owner";
 const CARD_UUID = "413b1910-5d07-4c67-93a0-6b8946c59b15";
 
 const VALID_CARD_DETAIL = {
@@ -25,9 +27,11 @@ const VALID_CARD_DETAIL = {
 const VALID_DECK_DETAIL = {
   uuid: DECK_UUID,
   owner_uuid: OWNER_UUID,
+  owner_username: OWNER_USERNAME,
   title: "Daily Words",
   description: "Core vocabulary",
   words_count: 48,
+  saves_count: 12,
   is_public: false,
   updated_at: "2026-07-21T18:30:00Z",
 };
@@ -185,15 +189,33 @@ describe("parseLibraryDeckOptionPage", () => {
 });
 
 describe("parseLibraryDeckPage", () => {
+  it.each([0, 1, 12345])("preserves %s saves from the existing deck response", (savesCount) => {
+    const deck = { ...VALID_DECK_DETAIL, saves_count: savesCount };
+    const page = { ...VALID_DECK_PAGE, items: [{ ...VALID_DECK_PAGE.items[0], deck }] };
+
+    expect(parseLibraryDeckPage(page).decks[0].savesCount).toBe(savesCount);
+    expect(parseCreatedLibraryDeck(deck).savesCount).toBe(savesCount);
+  });
+
+  it.each([-1, 1.5, "12", null, undefined])("rejects invalid save counts: %s", (savesCount) => {
+    const deck = { ...VALID_DECK_DETAIL, saves_count: savesCount };
+    const page = { ...VALID_DECK_PAGE, items: [{ ...VALID_DECK_PAGE.items[0], deck }] };
+
+    expect(() => parseLibraryDeckPage(page)).toThrow();
+    expect(() => parseCreatedLibraryDeck(deck)).toThrow();
+  });
+
   it("maps CursorPage[LibraryDeckItemResponse] for both normal and favourite requests", () => {
     expect(parseLibraryDeckPage(VALID_DECK_PAGE)).toEqual({
       decks: [
         {
           uuid: DECK_UUID,
           ownerUuid: OWNER_UUID,
+          ownerUsername: OWNER_USERNAME,
           title: "Daily Words",
           description: null,
           totalWordsCount: 48,
+          savesCount: 12,
           accuracy: 75,
           isFavourite: true,
           updatedAt: "2026-07-17T10:30:00Z",

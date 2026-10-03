@@ -1,10 +1,12 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, create_autospec
 
 from fastapi import FastAPI
 import pytest
 
 from app.auth.deps import (
-    get_current_user, 
+    get_current_user,
+    get_current_user_with_settings,
     get_optional_current_user
 )
 from app.users.deps import get_user_service
@@ -85,11 +87,17 @@ def user_settings(request):
     overrides = getattr(request, "param", {})
     return make_user_settings(**overrides)
 
+@pytest.fixture
+def current_user_with_settings(current_user, user_settings):
+    data = {**vars(current_user), "settings": user_settings}
+    return SimpleNamespace(**data)
+
 @pytest.fixture(autouse=True)
 def override_current_users(
     app: FastAPI,
     current_user,
     optional_current_user,
+    current_user_with_settings,
 ):
     async def provide_current_user():
         return current_user
@@ -97,10 +105,16 @@ def override_current_users(
     async def provide_optional_current_user():
         return optional_current_user
 
+    async def provide_current_user_with_settings():
+        return current_user_with_settings
+
     app.dependency_overrides[get_current_user] = provide_current_user
     app.dependency_overrides[
         get_optional_current_user
     ] = provide_optional_current_user
+    app.dependency_overrides[
+        get_current_user_with_settings
+    ] = provide_current_user_with_settings
 
     yield
 
@@ -110,6 +124,10 @@ def override_current_users(
     )
     app.dependency_overrides.pop(
         get_optional_current_user,
+        None,
+    )
+    app.dependency_overrides.pop(
+        get_current_user_with_settings,
         None,
     )
 

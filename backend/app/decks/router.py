@@ -1,4 +1,4 @@
-from uuid import UUID
+from pydantic import UUID7
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
 from app.cards.deps import CardServiceDeps
@@ -16,9 +16,12 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from .deps import DeckServiceDeps, UserDeckServiceDeps
 from .schemas import (
+    ArchivedDeckResponse,
     CreateDeckRequest,
+    ArchiveOfferResponse,
     DeckCardResponse,
     DeckResponse,
+    PreserveArchivedDeckResponse,
     ReorderCards,
     UpdateDeckRequest,
 )
@@ -27,12 +30,59 @@ router = APIRouter(prefix="/decks")
 
 
 @router.get(
+    "/archives",
+    response_model=list[ArchiveOfferResponse],
+    dependencies=[Depends(decks_rate_limit)],
+)
+async def get_archives(
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+):
+    return await deck_service.get_archives_for_user(current_user.id)
+
+
+@router.get(
+    "/archives/{deck_uuid}",
+    response_model=ArchivedDeckResponse,
+    dependencies=[Depends(decks_rate_limit)],
+)
+async def get_archive_deck(
+    deck_uuid: UUID7,
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+):
+    return await deck_service.get_archive_deck(
+        deck_uuid=deck_uuid, user_id=current_user.id,
+    )
+
+
+@router.get(
+    "/archives/{deck_uuid}/cards",
+    response_model=list[CardResponse],
+    dependencies=[Depends(decks_rate_limit)],
+)
+async def get_archive_cards(
+    deck_uuid: UUID7,
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    return await deck_service.get_archive_cards(
+        deck_uuid=deck_uuid,
+        user_id=current_user.id,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
     "/{deck_uuid}",
     response_model=DeckResponse,
     dependencies=[Depends(public_decks_rate_limit)],
 )
 async def get_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
 ):
@@ -55,6 +105,7 @@ async def create_deck(
         payload, 
         user_id=current_user.id,
         user_uuid=current_user.uuid,
+        user_username=current_user.username,
     )
 
 @router.patch(
@@ -63,14 +114,13 @@ async def create_deck(
     dependencies=[Depends(decks_rate_limit)],
 )
 async def update_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     payload: UpdateDeckRequest,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
     return await deck_service.update_deck(
         user_id=current_user.id,
-        user_uuid=current_user.uuid,
         deck_uuid=deck_uuid,
         payload=payload,
     )
@@ -81,7 +131,7 @@ async def update_deck(
     dependencies=[Depends(decks_rate_limit)],
 )
 async def delete_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
@@ -92,17 +142,38 @@ async def delete_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
+
+@router.post(
+    "/{deck_uuid}/preserve",
+    response_model=PreserveArchivedDeckResponse,
+    dependencies=[Depends(decks_rate_limit)],
+)
+async def preserve_archived_deck(
+    deck_uuid: UUID7,
+    current_user: CurrentUser,
+    deck_service: DeckServiceDeps,
+):
+    result = await deck_service.preserve_archived_deck(
+        archive_deck_uuid=deck_uuid,
+        user_id=current_user.id,
+    )
+    return PreserveArchivedDeckResponse(
+        uuid=result.deck_uuid,
+        already_preserved=result.already_preserved,
+        copy_deleted=result.copy_deleted,
+    )
+
 @router.get(
     "/{deck_uuid}/cards",
     response_model=list[CardResponse],
     dependencies=[Depends(public_decks_rate_limit)],
 )
 async def get_deck_cards(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
     offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=50),
+    limit: int = Query(default=50, ge=1, le=500),
 ):
     return await deck_service.get_deck_cards(
         user_id=current_user.id if current_user else None,
@@ -111,31 +182,14 @@ async def get_deck_cards(
         limit=limit,
     )
 
-@router.get(
-    "/{deck_uuid}/cards/{card_uuid}",
-    response_model=CardResponse,
-    dependencies=[Depends(public_decks_rate_limit)],
-)
-async def get_card_in_deck(
-    deck_uuid: UUID,
-    card_uuid: UUID,
-    current_user: OptionalCurrentUser,
-    card_service: CardServiceDeps,
-):
-    return await card_service.get_card_in_deck(
-        card_uuid=card_uuid,
-        deck_uuid=deck_uuid,
-        viewer_id=current_user.id if current_user else None,
-    )
-
 @router.post(
     "/{deck_uuid}/cards/remove/{card_uuid}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(decks_rate_limit)],
 )
 async def remove_card_from_deck(
-    deck_uuid: UUID,
-    card_uuid: UUID,
+    deck_uuid: UUID7,
+    card_uuid: UUID7,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
@@ -147,13 +201,12 @@ async def remove_card_from_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
-# todo: complete the logic of cards reordering
 @router.post(
     "/{deck_uuid}/cards/reorder",
     dependencies=[Depends(decks_rate_limit)],
 )
 async def reorder_deck_cards(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     payload: ReorderCards,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
@@ -172,7 +225,7 @@ async def reorder_deck_cards(
     dependencies=[Depends(deck_import_rate_limit)],
 )
 async def load_cards_to_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     payload: LoadCardsRequest,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
@@ -189,25 +242,23 @@ async def load_cards_to_deck(
     dependencies=[Depends(decks_rate_limit)],
 )
 async def add_card_to_deck(
-    deck_uuid: UUID,
-    card_uuid: UUID,
+    deck_uuid: UUID7,
+    card_uuid: UUID7,
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
 ):
-    new_deck_card = await deck_service.add_card_to_deck(
+    return await deck_service.add_card_to_deck(
         user_id=current_user.id,
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
-    return new_deck_card
-
 
 @router.patch(
     "/{deck_uuid}/set-favourite",
     dependencies=[Depends(decks_rate_limit)],
 )
 async def set_favourite(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
     value: bool = True,
@@ -219,14 +270,13 @@ async def set_favourite(
     )
     return user_deck.is_favourite
 
-
 @router.post(
     "/{deck_uuid}/save",
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(decks_rate_limit)],
 )
 async def save_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
 ):
@@ -243,7 +293,7 @@ async def save_deck(
     dependencies=[Depends(decks_rate_limit)],
 )
 async def unsave_deck(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
 ):

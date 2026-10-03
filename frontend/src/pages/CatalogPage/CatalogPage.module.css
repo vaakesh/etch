@@ -1,4 +1,5 @@
-.page {
+.page,
+.previewDialog {
   --catalog-lavender: #c3b8f5;
   --catalog-aqua: #9be8e0;
   --catalog-pink: #f5c6e8;
@@ -9,7 +10,158 @@
   --catalog-purple-soft: #eeeaff;
   --catalog-aqua-soft: #ddf8f5;
   --catalog-line: rgb(64 43 103 / 18%);
+  --catalog-action: #22d3ee;
+  --catalog-action-bright: #67e8f9;
+  --catalog-action-deep: #0e7490;
+  --catalog-on-action: #082f49;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #073d44;
+  --catalog-start-accent-light: #d8f9fc;
+  --catalog-start-accent: #9beef5;
+  --catalog-start-accent-deep: #5ed5df;
+  --catalog-preview-ink: color-mix(
+    in srgb,
+    var(--catalog-action-deep) 76%,
+    var(--catalog-ink-deep)
+  );
+  --catalog-preview-bg: color-mix(in srgb, var(--catalog-action) 12%, rgb(255 255 255 / 78%));
+  --catalog-preview-bg-hover: color-mix(in srgb, var(--catalog-action-bright) 24%, #fff);
+  --catalog-preview-border: color-mix(in srgb, var(--catalog-action-deep) 28%, transparent);
+  --catalog-preview-border-hover: color-mix(in srgb, var(--catalog-action-deep) 58%, transparent);
   --catalog-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page[data-preview-start-theme="aqua-breeze"],
+.saveButton[data-save-theme="aqua-breeze"] {
+  --catalog-action: #22d3ee;
+  --catalog-action-bright: #67e8f9;
+  --catalog-action-deep: #0e7490;
+  --catalog-on-action: #082f49;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #073d44;
+  --catalog-start-accent-light: #d8f9fc;
+  --catalog-start-accent: #9beef5;
+  --catalog-start-accent-deep: #5ed5df;
+}
+
+.page[data-preview-start-theme="mint-lagoon"],
+.saveButton[data-save-theme="mint-lagoon"] {
+  --catalog-action: #2dd4bf;
+  --catalog-action-bright: #5eead4;
+  --catalog-action-deep: #0f766e;
+  --catalog-on-action: #062c2a;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #064e3b;
+  --catalog-start-accent-light: #dcfce7;
+  --catalog-start-accent: #86efac;
+  --catalog-start-accent-deep: #34d399;
+}
+
+.page[data-preview-start-theme="violet-dream"],
+.saveButton[data-save-theme="violet-dream"] {
+  --catalog-action: #a78bfa;
+  --catalog-action-bright: #c4b5fd;
+  --catalog-action-deep: #6d28d9;
+  --catalog-on-action: #211538;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #2e1065;
+  --catalog-start-accent-light: #ede9fe;
+  --catalog-start-accent: #c4b5fd;
+  --catalog-start-accent-deep: #8b5cf6;
+}
+
+.page[data-preview-start-theme="berry-blush"],
+.saveButton[data-save-theme="berry-blush"] {
+  --catalog-action: #f472b6;
+  --catalog-action-bright: #f9a8d4;
+  --catalog-action-deep: #be185d;
+  --catalog-on-action: #3b0a25;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #500724;
+  --catalog-start-accent-light: #fce7f3;
+  --catalog-start-accent: #f9a8d4;
+  --catalog-start-accent-deep: #ec4899;
+}
+
+.page[data-preview-start-theme="coral-sunset"],
+.saveButton[data-save-theme="coral-sunset"] {
+  --catalog-action: #fb7185;
+  --catalog-action-bright: #fda4af;
+  --catalog-action-deep: #be123c;
+  --catalog-on-action: #3f0a14;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #431407;
+  --catalog-start-accent-light: #ffedd5;
+  --catalog-start-accent: #fdba74;
+  --catalog-start-accent-deep: #fb7185;
+}
+
+.page[data-preview-start-theme="peach-lilac"],
+.saveButton[data-save-theme="peach-lilac"] {
+  --catalog-action: #fb923c;
+  --catalog-action-bright: #fdba74;
+  --catalog-action-deep: #c2410c;
+  --catalog-on-action: #431407;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #3b0764;
+  --catalog-start-accent-light: #fae8ff;
+  --catalog-start-accent: #e9d5ff;
+  --catalog-start-accent-deep: #c084fc;
+}
+
+.page[data-preview-start-theme="lime-mint"],
+.saveButton[data-save-theme="lime-mint"] {
+  --catalog-action: #a3e635;
+  --catalog-action-bright: #bef264;
+  --catalog-action-deep: #3f6212;
+  --catalog-on-action: #1a2e05;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #14532d;
+  --catalog-start-accent-light: #ecfccb;
+  --catalog-start-accent: #bef264;
+  --catalog-start-accent-deep: #4ade80;
+}
+
+.page[data-preview-start-theme="sky-orchid"],
+.saveButton[data-save-theme="sky-orchid"] {
+  --catalog-action: #38bdf8;
+  --catalog-action-bright: #7dd3fc;
+  --catalog-action-deep: #0369a1;
+  --catalog-on-action: #082f49;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #1e1b4b;
+  --catalog-start-accent-light: #e0e7ff;
+  --catalog-start-accent: #a5b4fc;
+  --catalog-start-accent-deep: #8b5cf6;
+}
+
+.page[data-preview-start-theme="rose-water"],
+.saveButton[data-save-theme="rose-water"] {
+  --catalog-action: #f9a8d4;
+  --catalog-action-bright: #fbcfe8;
+  --catalog-action-deep: #9d174d;
+  --catalog-on-action: #500724;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #164e63;
+  --catalog-start-accent-light: #cffafe;
+  --catalog-start-accent: #67e8f9;
+  --catalog-start-accent-deep: #22d3ee;
+}
+
+.page[data-preview-start-theme="amber-violet"],
+.saveButton[data-save-theme="amber-violet"] {
+  --catalog-action: #fbbf24;
+  --catalog-action-bright: #fcd34d;
+  --catalog-action-deep: #a16207;
+  --catalog-on-action: #451a03;
+  --catalog-on-action-active: #fff;
+  --catalog-start-ink: #3b0764;
+  --catalog-start-accent-light: #f3e8ff;
+  --catalog-start-accent: #d8b4fe;
+  --catalog-start-accent-deep: #a855f7;
+}
+
+.page {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -31,18 +183,25 @@
 
 .page *,
 .page *::before,
-.page *::after {
+.page *::after,
+.previewDialog *,
+.previewDialog *::before,
+.previewDialog *::after {
   box-sizing: border-box;
 }
 
 .page button,
-.page input {
+.page input,
+.page a,
+.previewDialog button {
   font: inherit;
   -webkit-tap-highlight-color: transparent;
 }
 
 .page button:focus-visible,
-.page input:focus-visible {
+.page input:focus-visible,
+.page a:focus-visible,
+.previewDialog button:focus-visible {
   outline: 3px solid rgb(73 56 115 / 34%);
   outline-offset: 3px;
 }
@@ -285,7 +444,6 @@
 }
 
 .deckTitleBlock h2 {
-  display: -webkit-box;
   margin: 0;
   overflow: hidden;
   color: var(--catalog-ink-deep);
@@ -293,13 +451,65 @@
   font-weight: 680;
   line-height: 1.16;
   letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
+}
+
+.deckDetailsLink {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 0.34em;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 5px;
+  touch-action: manipulation;
+  transition: color 180ms ease;
+}
+
+.deckDetailsText {
+  display: -webkit-box;
+  min-width: 0;
+  padding-bottom: 0.08em;
+  overflow: hidden;
+  background-image: linear-gradient(90deg, var(--catalog-action-deep), var(--catalog-start-accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 2px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.deckDetailsLink svg {
+  width: 0.86em;
+  height: 0.86em;
+  flex: 0 0 auto;
+  margin-top: 0.1em;
+  color: var(--catalog-action-deep);
+  overflow: visible;
+  transition:
+    color 180ms ease,
+    transform 200ms var(--catalog-spring);
+}
+
+.deckDetailsLink:hover,
+.deckDetailsLink:focus-visible {
+  color: var(--catalog-action-deep);
+}
+
+.deckDetailsLink:hover svg,
+.deckDetailsLink:focus-visible svg {
+  transform: translate(2px, -2px);
+}
+
+.deckDetailsLink:focus-visible {
+  outline-color: color-mix(in srgb, var(--catalog-action-deep) 52%, transparent);
+  outline-offset: 4px;
 }
 
 .owner {
   display: flex;
+  width: fit-content;
   min-width: 0;
   align-items: center;
   gap: 7px;
@@ -307,12 +517,13 @@
   color: var(--catalog-muted);
   font-size: 0.76rem;
   font-weight: 620;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: color 180ms ease;
 }
 
-.owner svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
+.owner:hover,
+.owner:focus-visible {
   color: var(--catalog-purple);
 }
 
@@ -323,34 +534,63 @@
 }
 
 .saveButton {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
-  min-width: 122px;
-  min-height: 44px;
+  min-width: 132px;
+  min-height: 46px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 12px;
-  color: var(--catalog-purple);
-  font-size: 0.76rem;
-  font-weight: 680;
+  gap: 8px;
+  padding: 0 16px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  background: rgb(244 240 255 / 92%);
-  border: 1px solid rgb(90 68 145 / 24%);
-  border-radius: 13px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+  background-color: var(--catalog-action);
+  border: 0;
+  border-radius: 999px;
   transition:
-    color 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
+    background-color 360ms var(--catalog-spring),
+    opacity 180ms ease,
     transform 180ms var(--catalog-spring);
 }
 
-.saveButton:hover:not(:disabled) {
-  background: #fff;
-  border-color: rgb(90 68 145 / 42%);
-  box-shadow: 0 7px 17px rgb(73 56 115 / 13%);
-  transform: translateY(-1px);
+.saveButton::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-color: var(--catalog-action-deep);
+  border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition:
+    background-color 260ms ease,
+    transform 520ms var(--catalog-spring);
+}
+
+.saveButton > * {
+  position: relative;
+  z-index: 1;
+}
+
+.saveButton svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  stroke-width: 2;
+}
+
+.saveButton:hover:not(:disabled),
+.saveButton:focus-visible:not(:disabled) {
+  color: #fff;
+  background-color: var(--catalog-action-bright);
+  transform: translateY(-2px);
 }
 
 .saveButton:active:not(:disabled) {
@@ -364,20 +604,25 @@
 
 .saveButtonActive {
   color: #fff;
-  background: #5c478a;
-  border-color: #5c478a;
-  box-shadow:
-    0 8px 18px rgb(73 56 115 / 20%),
-    inset 0 1px 0 rgb(255 255 255 / 14%);
 }
 
-.saveButtonActive:hover:not(:disabled) {
+.saveButtonActive::before {
+  transform: scaleX(1);
+}
+
+.saveButtonActive:hover:not(:disabled),
+.saveButtonActive:focus-visible:not(:disabled) {
   color: #fff;
-  background: #493873;
-  border-color: #493873;
-  box-shadow:
-    0 10px 22px rgb(73 56 115 / 27%),
-    inset 0 1px 0 rgb(255 255 255 / 14%);
+  background-color: var(--catalog-action-bright);
+}
+
+.saveButtonActive:hover:not(:disabled)::before,
+.saveButtonActive:focus-visible:not(:disabled)::before {
+  background-color: color-mix(
+    in srgb,
+    var(--catalog-action-deep) 84%,
+    var(--catalog-action-bright)
+  );
 }
 
 .ownDeckBadge {
@@ -388,11 +633,11 @@
   justify-content: center;
   gap: 7px;
   padding: 0 12px;
-  color: #2f746c;
+  color: var(--catalog-purple);
   font-size: 0.76rem;
   font-weight: 700;
-  background: rgb(217 246 241 / 92%);
-  border: 1px solid rgb(47 116 108 / 20%);
+  background: color-mix(in srgb, var(--catalog-lavender) 38%, rgb(255 255 255 / 88%));
+  border: 1px solid color-mix(in srgb, var(--catalog-purple) 28%, transparent);
   border-radius: 13px;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
 }
@@ -402,7 +647,7 @@
   height: 20px;
   padding: 3px;
   color: #fff;
-  background: #3f8f85;
+  background: var(--catalog-purple);
   border-radius: 50%;
   stroke-width: 2.4;
 }
@@ -493,7 +738,10 @@
 .footer {
   display: flex;
   min-width: 0;
-  justify-content: flex-end;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   grid-area: footer;
 }
 
@@ -505,12 +753,12 @@
   justify-content: center;
   gap: 7px;
   padding: 0 14px;
-  color: var(--catalog-purple);
+  color: var(--catalog-preview-ink);
   font-size: 0.78rem;
   font-weight: 680;
   cursor: pointer;
-  background: rgb(255 255 255 / 58%);
-  border: 1px solid rgb(73 56 115 / 20%);
+  background: var(--catalog-preview-bg);
+  border: 1px solid var(--catalog-preview-border);
   border-radius: 12px;
   transition:
     background-color 180ms ease,
@@ -519,10 +767,11 @@
     transform 180ms var(--catalog-spring);
 }
 
-.previewButton:hover {
-  background: rgb(255 255 255 / 82%);
-  border-color: rgb(73 56 115 / 38%);
-  box-shadow: 0 7px 17px rgb(73 56 115 / 13%);
+.previewButton:hover,
+.previewButton:focus-visible {
+  background: var(--catalog-preview-bg-hover);
+  border-color: var(--catalog-preview-border-hover);
+  box-shadow: 0 7px 17px color-mix(in srgb, var(--catalog-action-deep) 15%, transparent);
 }
 
 .previewButton:active {
@@ -532,6 +781,93 @@
 .previewButton svg {
   width: 17px;
   height: 17px;
+}
+
+.startButton {
+  display: inline-flex;
+  width: auto;
+  min-width: 144px;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--catalog-start-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  background: linear-gradient(
+    100deg,
+    var(--catalog-start-accent-light) 0%,
+    var(--catalog-start-accent) 48%,
+    var(--catalog-start-accent-deep) 100%
+  );
+  background-position: 0 50%;
+  background-size: 180% 100%;
+  border: 1px solid
+    color-mix(in srgb, var(--catalog-start-accent-deep) 84%, var(--catalog-start-ink));
+  border-radius: 999px;
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--catalog-start-accent-deep) 18%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 48%);
+  transform: translateY(0) scale(1);
+  transition:
+    color 180ms ease,
+    background-position 320ms ease,
+    border-color 200ms ease,
+    box-shadow 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.startButton:hover,
+.startButton:focus-visible {
+  color: var(--catalog-start-ink);
+  background-position: 100% 50%;
+  border-color: var(--catalog-start-accent-deep);
+  box-shadow:
+    0 11px 22px color-mix(in srgb, var(--catalog-start-accent-deep) 24%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 58%);
+}
+
+.startButton:focus-visible {
+  outline-color: color-mix(in srgb, var(--catalog-start-accent-deep) 52%, transparent);
+  transform: translateY(-1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .startButton:hover {
+    transform: translateY(-1px) scale(1.015);
+  }
+}
+
+.startButton:active {
+  background-position: 72% 50%;
+  box-shadow:
+    0 5px 12px color-mix(in srgb, var(--catalog-start-accent-deep) 16%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 42%);
+  transform: translateY(0) scale(0.99);
+}
+
+.startButton svg {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--catalog-start-ink);
+  stroke-width: 2;
+  transform: translateX(0);
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.startButton:focus-visible svg {
+  transform: translateX(3px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .startButton:hover svg {
+    transform: translateX(3px);
+  }
 }
 
 .previewDialog {
@@ -578,10 +914,65 @@
   min-height: 68px;
   align-items: center;
   justify-content: flex-end;
+  gap: 10px;
   padding: 12px clamp(20px, 3vw, 34px);
   background: rgb(251 250 255 / 86%);
   border-bottom: 1px solid var(--catalog-line);
   backdrop-filter: blur(18px);
+}
+
+.previewOpenButton {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 16px;
+  color: var(--catalog-purple);
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 1;
+  text-decoration: none;
+  background: linear-gradient(135deg, rgb(255 255 255 / 88%), rgb(226 249 245 / 88%));
+  border: 1px solid rgb(73 56 115 / 22%);
+  border-radius: 14px;
+  box-shadow: 0 7px 18px rgb(73 56 115 / 9%);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.previewOpenButton:hover,
+.previewOpenButton:focus-visible {
+  color: #38275f;
+  border-color: rgb(73 56 115 / 42%);
+  box-shadow: 0 10px 24px rgb(73 56 115 / 14%);
+  transform: translateY(-1px);
+}
+
+.previewOpenButton:focus-visible {
+  outline: 3px solid rgb(118 98 207 / 28%);
+  outline-offset: 3px;
+}
+
+.previewOpenButton:active {
+  box-shadow: 0 5px 12px rgb(73 56 115 / 10%);
+  transform: translateY(0) scale(0.98);
+}
+
+.previewOpenButton svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  transition: transform 180ms ease;
+}
+
+.previewOpenButton:hover svg,
+.previewOpenButton:focus-visible svg {
+  transform: translateX(2px);
 }
 
 .previewTopbar button {
@@ -629,6 +1020,29 @@
   border-bottom: 1px solid var(--catalog-line);
 }
 
+.previewHeroTopline {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: clamp(24px, 3vw, 34px);
+}
+
+.previewOwnerBadge {
+  display: inline-flex;
+  max-width: min(100%, 320px);
+  min-height: 32px;
+  align-items: center;
+  padding: 0 11px;
+  overflow: hidden;
+  color: var(--catalog-purple);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgb(238 234 255 / 82%);
+  border: 1px solid rgb(94 72 152 / 18%);
+  border-radius: 999px;
+}
+
 .previewHero h2 {
   max-width: 880px;
   margin: 0;
@@ -650,39 +1064,82 @@
   overflow-wrap: anywhere;
 }
 
-.previewMeta {
+.previewFacts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  justify-items: start;
+  gap: 11px;
   margin: 30px 0 0;
 }
 
-.previewMeta > div {
+.previewKeyStats {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.previewKeyStats > div {
+  position: relative;
+  display: flex;
   min-width: 0;
-  padding: 13px 15px;
-  background: rgb(255 255 255 / 68%);
-  border: 1px solid rgb(73 56 115 / 13%);
-  border-radius: 13px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+  align-items: baseline;
+  gap: 7px;
 }
 
-.previewMeta dt {
+.previewKeyStats > div + div {
+  margin-left: 22px;
+  padding-left: 23px;
+}
+
+.previewKeyStats > div + div::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 1px;
+  content: "";
+  background: var(--catalog-line);
+}
+
+.previewKeyStats dt {
+  order: 2;
   color: var(--catalog-muted);
-  font-size: 0.65rem;
-  font-weight: 680;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
+  font-size: 0.72rem;
+  font-weight: 620;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
-.previewMeta dd {
-  margin: 6px 0 0;
-  overflow: hidden;
+.previewKeyStats dd {
+  order: 1;
+  margin: 0;
   color: var(--catalog-ink-deep);
-  font-size: 0.86rem;
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
   font-variant-numeric: tabular-nums;
-  font-weight: 680;
-  text-overflow: ellipsis;
+  font-weight: 740;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.previewUpdatedMeta {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.previewUpdatedMeta span {
+  opacity: 0.8;
+}
+
+.previewUpdatedMeta time {
+  color: var(--catalog-ink-deep);
+  font-weight: 620;
 }
 
 .previewCards {
@@ -703,13 +1160,6 @@
   font-size: clamp(1.45rem, 2vw, 1.8rem);
   font-weight: 700;
   letter-spacing: -0.035em;
-}
-
-.previewCardsHeader > span {
-  color: var(--catalog-muted);
-  font-size: 0.78rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 680;
 }
 
 .previewCardList {
@@ -771,14 +1221,7 @@
   overflow-wrap: anywhere;
 }
 
-.previewLoadMore {
-  display: grid;
-  justify-items: center;
-  gap: 9px;
-  margin-top: 22px;
-}
-
-.previewLoadMore button,
+.previewPageState button,
 .previewState button {
   min-width: 146px;
   min-height: 44px;
@@ -796,22 +1239,107 @@
     transform 180ms ease;
 }
 
-.previewLoadMore button:hover:not(:disabled),
+.previewPageState button:hover,
 .previewState button:hover {
   box-shadow: 0 12px 28px rgb(73 56 115 / 30%);
   transform: translateY(-1px);
 }
 
-.previewLoadMore button:disabled {
-  cursor: wait;
-  opacity: 0.7;
+.previewPageState {
+  display: grid;
+  min-height: 180px;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--catalog-muted);
+  font-size: 0.82rem;
+  font-weight: 620;
+  text-align: center;
+  background: rgb(255 255 255 / 52%);
+  border: 1px solid rgb(73 56 115 / 12%);
+  border-radius: 15px;
 }
 
-.previewLoadMore p {
+.previewPageState p {
   margin: 0;
   color: #9b3f63;
-  font-size: 0.76rem;
-  font-weight: 620;
+}
+
+.previewPagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.previewPaginationList {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.previewPaginationButton,
+.previewPaginationArrow {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  color: var(--catalog-purple);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgb(255 255 255 / 68%);
+  border: 1px solid rgb(73 56 115 / 18%);
+  border-radius: 12px;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.previewPaginationButton:hover,
+.previewPaginationArrow:hover:not(:disabled) {
+  background: #fff;
+  border-color: rgb(73 56 115 / 42%);
+}
+
+.previewPaginationButtonActive {
+  color: #fff;
+  background: var(--catalog-purple);
+  border-color: var(--catalog-purple);
+}
+
+.previewPaginationButtonActive:hover {
+  background: var(--catalog-purple);
+}
+
+.previewPaginationArrow:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.previewPaginationArrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+.previewPaginationEllipsis {
+  display: grid;
+  width: 24px;
+  height: 44px;
+  place-items: center;
+  color: var(--catalog-muted);
+  font-weight: 700;
 }
 
 .previewEmpty {
@@ -1126,8 +1654,9 @@
     padding: 9px 16px;
   }
 
-  .previewMeta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .previewOpenButton {
+    min-width: 0;
+    padding-inline: 13px;
   }
 
   .previewCardList li {
@@ -1167,8 +1696,31 @@
     padding-inline: 10px;
   }
 
-  .previewButton {
+  .footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .previewButton,
+  .startButton {
     width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .previewButton {
+    gap: 6px;
+    font-size: 0.74rem;
+  }
+
+  .startButton {
+    gap: 7px;
+    font-size: 0.82rem;
+  }
+
+  .startButton svg {
+    display: none;
   }
 
   .previewHero,
@@ -1181,10 +1733,6 @@
     font-size: clamp(1.75rem, 9vw, 2.35rem);
   }
 
-  .previewMeta {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .previewCardsHeader {
     align-items: flex-end;
   }
@@ -1192,13 +1740,29 @@
   .previewCardSide {
     padding: 14px 15px 16px;
   }
+
+  .previewPagination {
+    gap: 4px;
+  }
+
+  .previewPaginationList {
+    gap: 4px;
+  }
+
+  .previewPaginationEllipsis {
+    width: 18px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .page,
   .page *,
   .page *::before,
-  .page *::after {
+  .page *::after,
+  .previewDialog,
+  .previewDialog *,
+  .previewDialog *::before,
+  .previewDialog *::after {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
     transition-duration: 1ms !important;
@@ -1215,7 +1779,8 @@
   }
 }
 
-:global(html[data-theme="dark"]) .page {
+:global(html[data-theme="dark"]) .page,
+:global(html[data-theme="dark"]) .previewDialog {
   --catalog-lavender: var(--dark-cta);
   --catalog-aqua: var(--dark-info);
   --catalog-pink: var(--dark-pink);
@@ -1228,12 +1793,17 @@
   --catalog-line: var(--dark-border);
   color: var(--dark-text);
   color-scheme: dark;
+}
+
+:global(html[data-theme="dark"]) .page {
   background: var(--dark-page-background);
   scrollbar-color: var(--dark-scrollbar) transparent;
 }
 
 :global(html[data-theme="dark"]) .page button:focus-visible,
-:global(html[data-theme="dark"]) .page input:focus-visible {
+:global(html[data-theme="dark"]) .page input:focus-visible,
+:global(html[data-theme="dark"]) .page a:focus-visible,
+:global(html[data-theme="dark"]) .previewDialog button:focus-visible {
   outline-color: var(--dark-focus);
 }
 
@@ -1302,36 +1872,43 @@
   }
 }
 
+:global(html[data-theme="dark"]) .deckDetailsText {
+  background-image: linear-gradient(
+    90deg,
+    var(--catalog-action-bright),
+    var(--catalog-start-accent-light)
+  );
+}
+
+:global(html[data-theme="dark"]) .deckDetailsLink:hover,
+:global(html[data-theme="dark"]) .deckDetailsLink:focus-visible,
+:global(html[data-theme="dark"]) .deckDetailsLink svg {
+  color: var(--catalog-action-bright);
+}
+
 :global(html[data-theme="dark"]) .saveButton {
-  color: var(--dark-text);
-  background: var(--dark-surface-raised);
-  border-color: var(--dark-border-strong);
-  box-shadow: inset 0 1px 0 var(--dark-highlight);
+  color: #fff;
+  background-color: var(--catalog-action);
 }
 
 :global(html[data-theme="dark"]) .saveButton:hover:not(:disabled) {
-  color: var(--dark-text);
-  background: var(--dark-surface-hover);
-  border-color: var(--dark-cta);
-  box-shadow: 0 8px 20px var(--dark-shadow);
+  color: #fff;
+  background-color: var(--catalog-action-bright);
 }
 
 :global(html[data-theme="dark"]) .saveButtonActive {
-  color: var(--dark-on-cta);
-  background: var(--dark-cta);
-  border-color: var(--dark-cta);
-  box-shadow:
-    0 10px 24px var(--dark-shadow),
-    inset 0 1px 0 var(--dark-highlight-strong);
+  color: #fff;
+  background-color: var(--catalog-action);
 }
 
-:global(html[data-theme="dark"]) .saveButtonActive:hover:not(:disabled) {
-  color: var(--dark-on-cta);
-  background: var(--dark-cta-hover);
-  border-color: var(--dark-cta-hover);
-  box-shadow:
-    0 12px 28px var(--dark-shadow-strong),
-    inset 0 1px 0 var(--dark-highlight-strong);
+:global(html[data-theme="dark"]) .saveButtonActive:hover:not(:disabled),
+:global(html[data-theme="dark"]) .saveButtonActive:focus-visible:not(:disabled) {
+  color: #fff;
+  background-color: var(--catalog-action-bright);
+}
+
+:global(html[data-theme="dark"]) .startButton:focus-visible {
+  outline-color: color-mix(in srgb, var(--catalog-start-accent-deep) 62%, white);
 }
 
 :global(html[data-theme="dark"]) .saveError {
@@ -1341,15 +1918,15 @@
 }
 
 :global(html[data-theme="dark"]) .ownDeckBadge {
-  color: var(--dark-info);
-  background: var(--dark-info-soft);
-  border-color: var(--dark-info);
+  color: color-mix(in srgb, var(--dark-cta) 72%, white);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
   box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
 :global(html[data-theme="dark"]) .ownDeckBadge svg {
   color: var(--dark-on-accent);
-  background: var(--dark-info);
+  background: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .stats > span {
@@ -1378,17 +1955,18 @@
 }
 
 :global(html[data-theme="dark"]) .previewButton {
-  color: var(--dark-text);
-  background: var(--dark-surface-raised);
-  border-color: var(--dark-border-strong);
+  color: color-mix(in srgb, var(--catalog-action-bright) 72%, white);
+  background: color-mix(in srgb, var(--catalog-action-deep) 20%, var(--dark-surface-raised));
+  border-color: color-mix(in srgb, var(--catalog-action-deep) 68%, var(--dark-border-strong));
   box-shadow: inset 0 1px 0 var(--dark-highlight);
 }
 
-:global(html[data-theme="dark"]) .previewButton:hover {
-  color: var(--dark-text);
-  background: var(--dark-surface-hover);
-  border-color: var(--dark-cta);
-  box-shadow: 0 9px 22px var(--dark-shadow);
+:global(html[data-theme="dark"]) .previewButton:hover,
+:global(html[data-theme="dark"]) .previewButton:focus-visible {
+  color: color-mix(in srgb, var(--catalog-action-bright) 82%, white);
+  background: color-mix(in srgb, var(--catalog-action-deep) 32%, var(--dark-surface-hover));
+  border-color: color-mix(in srgb, var(--catalog-action-bright) 72%, var(--dark-border-strong));
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--catalog-action-deep) 24%, transparent);
 }
 
 :global(html[data-theme="dark"]) .previewDialog {
@@ -1415,6 +1993,20 @@
   backdrop-filter: none;
 }
 
+:global(html[data-theme="dark"]) .previewOpenButton {
+  color: var(--dark-text);
+  background: linear-gradient(135deg, var(--dark-surface-raised), var(--dark-cta-soft));
+  border-color: var(--dark-border-strong);
+  box-shadow: 0 8px 20px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .previewOpenButton:hover,
+:global(html[data-theme="dark"]) .previewOpenButton:focus-visible {
+  color: var(--dark-text);
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+}
+
 :global(html[data-theme="dark"]) .previewTopbar button {
   color: var(--dark-text);
   background: var(--dark-surface-raised);
@@ -1436,7 +2028,8 @@
 }
 
 :global(html[data-theme="dark"]) .previewHero h2,
-:global(html[data-theme="dark"]) .previewMeta dd,
+:global(html[data-theme="dark"]) .previewKeyStats dd,
+:global(html[data-theme="dark"]) .previewUpdatedMeta time,
 :global(html[data-theme="dark"]) .previewCardsHeader h3,
 :global(html[data-theme="dark"]) .previewCardSide p,
 :global(html[data-theme="dark"]) .previewState h2 {
@@ -1444,9 +2037,10 @@
 }
 
 :global(html[data-theme="dark"]) .previewHero > p,
-:global(html[data-theme="dark"]) .previewMeta dt,
-:global(html[data-theme="dark"]) .previewCardsHeader > span,
+:global(html[data-theme="dark"]) .previewKeyStats dt,
+:global(html[data-theme="dark"]) .previewUpdatedMeta,
 :global(html[data-theme="dark"]) .previewEmpty,
+:global(html[data-theme="dark"]) .previewPageState,
 :global(html[data-theme="dark"]) .previewState p {
   color: var(--dark-text-muted);
 }
@@ -1455,14 +2049,20 @@
   color: var(--dark-info);
 }
 
-:global(html[data-theme="dark"]) .previewMeta > div,
 :global(html[data-theme="dark"]) .previewCardList li,
-:global(html[data-theme="dark"]) .previewEmpty {
+:global(html[data-theme="dark"]) .previewEmpty,
+:global(html[data-theme="dark"]) .previewPageState {
   background: var(--dark-surface-raised);
   border-color: var(--dark-border);
   box-shadow:
     0 10px 28px var(--dark-shadow),
     inset 0 1px 0 var(--dark-highlight);
+}
+
+:global(html[data-theme="dark"]) .previewOwnerBadge {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
 }
 
 :global(html[data-theme="dark"]) .previewCardNumber {
@@ -1475,7 +2075,7 @@
   border-color: var(--dark-border);
 }
 
-:global(html[data-theme="dark"]) .previewLoadMore button,
+:global(html[data-theme="dark"]) .previewPageState button,
 :global(html[data-theme="dark"]) .previewState button {
   color: var(--dark-on-cta);
   background: var(--dark-cta);
@@ -1483,15 +2083,35 @@
   box-shadow: 0 12px 28px var(--dark-shadow);
 }
 
-:global(html[data-theme="dark"]) .previewLoadMore button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .previewPageState button:hover,
 :global(html[data-theme="dark"]) .previewState button:hover {
   background: var(--dark-cta-hover);
   border-color: var(--dark-cta-hover);
   box-shadow: 0 14px 32px var(--dark-shadow-strong);
 }
 
-:global(html[data-theme="dark"]) .previewLoadMore p {
+:global(html[data-theme="dark"]) .previewPageState p {
   color: var(--dark-danger);
+}
+
+:global(html[data-theme="dark"]) .previewPaginationButton,
+:global(html[data-theme="dark"]) .previewPaginationArrow {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border-strong);
+}
+
+:global(html[data-theme="dark"]) .previewPaginationButton:hover,
+:global(html[data-theme="dark"]) .previewPaginationArrow:hover:not(:disabled) {
+  background: var(--dark-surface-hover);
+  border-color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .previewPaginationButtonActive,
+:global(html[data-theme="dark"]) .previewPaginationButtonActive:hover {
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  border-color: var(--dark-cta);
 }
 
 :global(html[data-theme="dark"]) .previewLoading span {

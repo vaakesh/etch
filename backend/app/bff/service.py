@@ -7,17 +7,18 @@ from uuid import UUID
 
 from app.bff.schemas import (
     CatalogDeckItemResponse,
+    DailyActivityResponse,
     HomeDashboardResponse,
     HomeDeckItemResponse,
     LibraryCardItemResponse,
     LibraryDeckItemResponse,
-    UserProgressResponse,
 )
 from app.cards.schemas import CardResponse, InternalCard
 from app.cards.service import CardService
 from app.common.schemas import CursorPage
 from app.common.types import PositiveInt, SearchQuery
-from app.common.utils import calculate_accuracy, make_user_deck_identity, utcnow
+from app.common.utils import utcnow
+from app.decks.utils import calculate_accuracy, make_user_deck_identity
 from app.decks.errors import UserDeckNotFoundError
 from app.decks.models import UserDeck
 from app.decks.schemas import (
@@ -34,6 +35,7 @@ from app.redis.service import (
 )
 from app.training_sessions.schemas import PracticeSessionResponse
 from app.training_sessions.service import TrainingSessionService
+from app.users.service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,10 @@ class BffService:
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+        self.user_service = UserService(
+            uow_factory=uow_factory,
+            cache_service=cache_service,
+        )
         self.deck_service = DeckService(
             uow_factory=uow_factory,
             cache_service=cache_service,
@@ -68,315 +74,7 @@ class BffService:
             cache_service=cache_service,
         )
 
-    @staticmethod
-    def _build_library_deck(
-        deck: InternalDeck,
-        user_deck: InternalUserDeck,
-        cards: list[InternalCard],
-    ) -> LibraryDeckItemResponse:
-        return LibraryDeckItemResponse(
-            deck=DeckResponse.model_validate(obj=deck),
-            viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck),
-            preview_cards=[
-                CardResponse.model_validate(obj=card)
-                for card in cards
-            ],
-        )
-
-    @staticmethod
-    def _build_library_card(
-        card: InternalCard,
-    ) -> LibraryCardItemResponse:
-        return LibraryCardItemResponse(
-            card=CardResponse.model_validate(card),
-        )
-
-    async def get_catalog_page(
-        self,
-        user_id: int,
-        search_query: SearchQuery = None,
-        page: int = 1,
-        limit: int = 50,
-    ) -> list[CatalogDeckItemResponse]:
-        decks = await self.deck_service.get_public_decks(
-            search_query=search_query,
-            page=page,
-            limit=limit,
-        )
-        user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
-            deck_ids=[deck.id for deck in decks],
-            user_id=user_id,
-        )
-        user_decks_by_identity: dict[tuple[int, int], InternalUserDeck] = {}
-        for user_deck in user_decks:
-            user_decks_by_identity[
-                make_user_deck_identity(
-                    user_id=user_deck.user_id,
-                    deck_id=user_deck.deck_id,
-                )
-            ] = user_deck
-
-        return [
-            CatalogDeckItemResponse(
-                deck=DeckResponse.model_validate(deck),
-                viewer_state=DeckViewerStateResponse.validate(
-                    user_deck=user_decks_by_identity[
-                        make_user_deck_identity(
-                            user_id=user_id,
-                            deck_id=deck.id,
-                        )
-                    ]
-                ) if make_user_deck_identity(
-                    user_id=user_id,
-                    deck_id=deck.id,
-                ) in user_decks_by_identity else None
-            )
-            for deck in decks
-        ]
-
-    async def get_home_dashboard(
-            self,
-            user_id: int,
-        ) -> HomeDashboardResponse:
-        page = await self.deck_service.get_owned_decks(
-            owner_id=user_id,
-            search_query=None,
-            cursor=None,
-            limit=6,
-        )
-
-        decks = page.items
-
-        user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
-            deck_ids=[deck.id for deck in decks],
-            user_id=user_id,
-        )
-        user_decks_by_deck_id = {
-            user_deck.deck_id: user_deck
-            for user_deck in user_decks
-        }
-
-        today = utcnow().date()
-        from_date = today - timedelta(days=6)
-        to_date = today + timedelta(days=1)
-
-        daily_activities = await self.training_session_service.user_daily_activity(
-            user_id=user_id,
-            from_date=from_date,
-            to_date=to_date,
-        )
-
-        user_weekly_activity = []
-        while from_date < to_date:
-            user_weekly_activity.append(
-                {
-                    "date": from_date,
-                    "value": daily_activities[from_date],
-                }
-            )
-
-            from_date += timedelta(days=1)
-
-        result = HomeDashboardResponse(
-            decks=[
-                HomeDeckItemResponse(
-                    uuid=deck.uuid,
-                    owner_uuid=deck.owner_uuid,
-                    title=deck.title,
-                    description=deck.description,
-                    words_count=deck.words_count,
-                    user_accuracy=calculate_accuracy(
-                        user_decks_by_deck_id.get(deck.id, None),
-                    ),
-                    updated_at=deck.updated_at,
-                ) for deck in decks
-            ],
-            progress=await self.training_session_service.get_user_progress(
-                user_id=user_id,
-            ),
-            user_weekly_activity=user_weekly_activity,
-        )
-        return result
-
-    async def _fetch_and_cache_library_deck_page_cards_previews(
-        self,
-        user_id: int,
-        deck_ids: list[int],
-    ) -> dict[int, list[InternalCard]]:
-        if not deck_ids:
-            return {}
-
-        fetched_by_deck = (
-            await self.deck_service.get_all_cards_by_deck_ids(
-                user_id=user_id,
-                deck_ids=deck_ids,
-                offset=0,
-                limit=2,
-            )
-        )
-
-        all_fetched_cards = [
-            card
-            for cards in list(fetched_by_deck.values())
-            for card in cards
-        ]
-
-        await asyncio.gather(
-            self.cache_service.cache_deck_cards(
-                deck_cards={
-                    deck_id: [card.id for card in cards]
-                    for deck_id, cards in fetched_by_deck.items()
-                }
-            ),
-            self.cache_service.cache_cards(
-                cards=all_fetched_cards,
-            ),
-        )
-
-        return fetched_by_deck
-
-    async def _get_user_decks_by_deck_ids(
-        self,
-        user_id: int,
-        deck_ids: list[int],
-    ) -> dict[UserDeckIdentity, InternalUserDeck]:
-        lookup_user_decks = await self.cache_service.get_cached_user_decks(
-            user_id=user_id,
-            deck_ids=deck_ids,
-        )
-        user_decks: dict[UserDeckIdentity, UserDeck] = lookup_user_decks.cached
-        if lookup_user_decks.missing:
-            identities = lookup_user_decks.missing
-            missing_deck_ids: list[int] = []
-            for identity in identities:
-                missing_deck_ids.append(identity[1])
-            fetched_user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
-                deck_ids=missing_deck_ids,
-                user_id=user_id,
-            )
-            await self.cache_service.cache_user_decks(
-                user_id=user_id,
-                user_decks=fetched_user_decks,
-            )
-            for fetched_user_deck in fetched_user_decks:
-                user_decks[
-                    (fetched_user_deck.user_id, fetched_user_deck.deck_id)
-                ] = fetched_user_deck
-        return user_decks
-
-    async def _fetch_and_cache_library_deck_page_decks(
-        self,
-        user_id: int,
-        user_uuid: UUID,
-        expected_generation: int | None,
-        search_query: SearchQuery = None,
-        is_favourite: bool = False,
-        cursor: str | None = None,
-        limit: int = 50,
-    ) -> CursorPage[InternalDeck]:
-        """
-        source-of-truth чтение library page из БД + кэширование
-        """
-        if not is_favourite:
-            page = await self.deck_service.get_library_decks(
-                user_id=user_id,
-                search_query=search_query,
-                cursor=cursor,
-                limit=limit,
-            )
-            decks, next_cursor, has_more = (
-                page.items, 
-                page.next_cursor, 
-                page.has_more
-            )
-        else:
-            decks, next_cursor, has_more = (
-                await self.user_deck_service.get_my_favourite_decks(
-                    user_id=user_id,
-                    search_query=search_query,
-                    cursor=cursor,
-                    limit=limit,
-                )
-            )
-
-        await asyncio.gather(
-            self.cache_service.cache_library_decks_page(
-                user_id=user_id,
-                deck_ids=[deck.id for deck in decks],
-                next_cursor=next_cursor,
-                has_more=has_more,
-                expected_generation=expected_generation,
-                search_query=search_query,
-                is_favourite=is_favourite,
-                cursor=cursor,
-                limit=limit,
-            ),
-            self.cache_service.cache_decks(
-                decks=decks,
-            ),
-        )
-
-        return CursorPage[InternalDeck](
-            items=decks,
-            next_cursor=next_cursor,
-            has_more=has_more,
-        )
-
-    async def get_decks_library_page(
-        self,
-        user_id: int,
-        user_uuid: UUID,
-        search_query: SearchQuery = None,
-        is_favourite: bool = False,
-        cursor: str | None = None,
-        limit: int = 50,
-    ) -> CursorPage[LibraryDeckItemResponse]:
-        library_result = await self._get_decks_library_deck_page(
-            user_id=user_id,
-            user_uuid=user_uuid,
-            search_query=search_query,
-            is_favourite=is_favourite,
-            cursor=cursor,
-            limit=limit,
-        )
-
-        if not library_result.items:
-            return CursorPage[LibraryDeckItemResponse](
-                items=[],
-                next_cursor=library_result.next_cursor,
-                has_more=library_result.has_more,
-            )
-
-        decks = library_result.items
-
-        cards_by_deck, user_decks = await asyncio.gather(
-            self._get_cards_library_deck_page(
-                user_id=user_id,
-                deck_ids=[deck.id for deck in decks],
-            ),
-            self._get_user_decks_by_deck_ids(
-                user_id=user_id,
-                deck_ids=[deck.id for deck in decks],
-            )
-        )
-        # проверка, что все UserDecks существуют
-        for deck in decks:
-            if (user_id, deck.id) not in user_decks:
-                raise UserDeckNotFoundError()
-
-
-        result = CursorPage[LibraryDeckItemResponse](
-            items=[
-                self._build_library_deck(
-                    deck=deck,
-                    user_deck=user_decks[(user_id, deck.id)],
-                    cards=cards_by_deck[deck.id]
-                ) for deck in decks
-            ],
-            next_cursor=library_result.next_cursor,
-            has_more=library_result.has_more,
-        )
-        return result
+    # helpers
 
     async def _get_decks_library_deck_page(
         self,
@@ -449,7 +147,21 @@ class BffService:
             )
 
             await self.cache_service.cache_decks(
-                decks=fetched_decks,
+                decks=[deck for deck in fetched_decks.values()],
+            )
+
+        if not self._check_user_can_view_decks(
+            decks=list(decks_by_id.values()),
+            user_id=user_id,
+        ):
+            return await self._fetch_and_cache_library_deck_page_decks(
+                user_id=user_id,
+                user_uuid=user_uuid,
+                expected_generation=page_lookup.generation,
+                search_query=search_query,
+                is_favourite=is_favourite,
+                cursor=cursor,
+                limit=limit,
             )
 
         return CursorPage[InternalDeck](
@@ -460,6 +172,35 @@ class BffService:
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
         )
+
+    async def _get_user_decks_by_deck_ids(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+    ) -> dict[UserDeckIdentity, InternalUserDeck]:
+        lookup_user_decks = await self.cache_service.get_cached_user_decks(
+            user_id=user_id,
+            deck_ids=deck_ids,
+        )
+        user_decks: dict[UserDeckIdentity, UserDeck] = lookup_user_decks.cached
+        if lookup_user_decks.missing:
+            identities = lookup_user_decks.missing
+            missing_deck_ids: list[int] = []
+            for identity in identities:
+                missing_deck_ids.append(identity[1])
+            fetched_user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
+                deck_ids=missing_deck_ids,
+                user_id=user_id,
+            )
+            await self.cache_service.cache_user_decks(
+                user_id=user_id,
+                user_decks=fetched_user_decks,
+            )
+            for fetched_user_deck in fetched_user_decks:
+                user_decks[
+                    (fetched_user_deck.user_id, fetched_user_deck.deck_id)
+                ] = fetched_user_deck
+        return user_decks
 
     async def _get_cards_library_deck_page(
         self,
@@ -641,6 +382,111 @@ class BffService:
             has_more=cached_page.has_more,
         )
 
+    def _check_user_can_view_decks(
+        self,
+        decks: list[InternalDeck],
+        user_id: int,
+    ) -> bool:
+        for deck in decks:
+            if deck.user_id != user_id and not deck.is_public:
+                return False
+        return True
+
+    async def _fetch_and_cache_library_deck_page_decks(
+        self,
+        user_id: int,
+        user_uuid: UUID,
+        expected_generation: int | None,
+        search_query: SearchQuery = None,
+        is_favourite: bool = False,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> CursorPage[InternalDeck]:
+        """
+        source-of-truth чтение library page из БД + кэширование
+        """
+        if not is_favourite:
+            page = await self.deck_service.get_library_decks(
+                user_id=user_id,
+                search_query=search_query,
+                cursor=cursor,
+                limit=limit,
+            )
+            decks, next_cursor, has_more = (
+                page.items, 
+                page.next_cursor, 
+                page.has_more
+            )
+        else:
+            decks, next_cursor, has_more = (
+                await self.user_deck_service.get_my_favourite_decks(
+                    user_id=user_id,
+                    search_query=search_query,
+                    cursor=cursor,
+                    limit=limit,
+                )
+            )
+
+        await asyncio.gather(
+            self.cache_service.cache_library_decks_page(
+                user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
+                next_cursor=next_cursor,
+                has_more=has_more,
+                expected_generation=expected_generation,
+                search_query=search_query,
+                is_favourite=is_favourite,
+                cursor=cursor,
+                limit=limit,
+            ),
+            self.cache_service.cache_decks(
+                decks=decks,
+            ),
+        )
+
+        return CursorPage[InternalDeck](
+            items=decks,
+            next_cursor=next_cursor,
+            has_more=has_more,
+        )
+
+    async def _fetch_and_cache_library_deck_page_cards_previews(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+    ) -> dict[int, list[InternalCard]]:
+        if not deck_ids:
+            return {}
+
+        fetched_by_deck = (
+            await self.deck_service.get_all_cards_by_deck_ids(
+                user_id=user_id,
+                deck_ids=deck_ids,
+                offset=0,
+                limit=2,
+            )
+        )
+
+        all_fetched_cards = [
+            card
+            for cards in list(fetched_by_deck.values())
+            for card in cards
+        ]
+
+        await asyncio.gather(
+            self.cache_service.cache_deck_cards(
+                deck_cards={
+                    deck_id: [card.id for card in cards]
+                    for deck_id, cards in fetched_by_deck.items()
+                }
+            ),
+            self.cache_service.cache_cards(
+                cards=all_fetched_cards,
+            ),
+        )
+
+        return fetched_by_deck
+
     async def _fetch_and_cache_cards_library_cards_page(
         self,
         user_id: int,
@@ -651,7 +497,7 @@ class BffService:
     ) -> CursorPage[InternalCard]:
         
         # no cache -> get from db
-        cards, next_cursor, has_more = await self.card_service.get_all_by_user_id(
+        cards, next_cursor, has_more = await self.card_service.get_cards_by_user_id(
             user_id=user_id,
             search_query=search_query,
             cursor=cursor,
@@ -681,6 +527,180 @@ class BffService:
             has_more=has_more,
         )
 
+    @staticmethod
+    def _build_library_deck(
+        deck: InternalDeck,
+        user_deck: InternalUserDeck,
+        cards: list[InternalCard],
+    ) -> LibraryDeckItemResponse:
+        return LibraryDeckItemResponse(
+            deck=DeckResponse.model_validate(obj=deck),
+            viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck),
+            preview_cards=[
+                CardResponse.model_validate(obj=card)
+                for card in cards
+            ],
+        )
+
+    @staticmethod
+    def _build_library_card(
+        card: InternalCard,
+    ) -> LibraryCardItemResponse:
+        return LibraryCardItemResponse(
+            card=CardResponse.model_validate(card),
+        )
+
+    # read
+
+    async def get_home_dashboard(
+            self,
+            user_id: int,
+        ) -> HomeDashboardResponse:
+        page = await self.deck_service.get_owned_decks(
+            owner_id=user_id,
+            search_query=None,
+            cursor=None,
+            limit=6,
+        )
+
+        decks = page.items
+
+        user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
+            deck_ids=[deck.id for deck in decks],
+            user_id=user_id,
+        )
+        user_decks_by_deck_id = {
+            user_deck.deck_id: user_deck
+            for user_deck in user_decks
+        }
+
+        user_daily_activity: list[DailyActivityResponse] = (
+            await self.training_session_service.get_user_activity_for_last_days(
+                user_id=user_id,
+                days=7,
+            )
+        )
+
+        result = HomeDashboardResponse(
+            decks=[
+                HomeDeckItemResponse(
+                    uuid=deck.uuid,
+                    owner_uuid=deck.owner_uuid,
+                    title=deck.title,
+                    description=deck.description,
+                    words_count=deck.words_count,
+                    user_accuracy=calculate_accuracy(
+                        user_decks_by_deck_id.get(deck.id, None),
+                    ),
+                    updated_at=deck.updated_at,
+                ) for deck in decks
+            ],
+            progress=await self.training_session_service.get_user_progress(
+                user_id=user_id,
+            ),
+            user_weekly_activity=user_daily_activity,
+        )
+        return result
+
+    async def get_catalog_page(
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        page: int = 1,
+        limit: int = 50,
+    ) -> list[CatalogDeckItemResponse]:
+        decks = await self.deck_service.get_public_decks(
+            search_query=search_query,
+            page=page,
+            limit=limit,
+        )
+        user_decks = await self.user_deck_service.get_user_decks_by_deck_ids(
+            deck_ids=[deck.id for deck in decks],
+            user_id=user_id,
+        )
+        user_decks_by_identity: dict[tuple[int, int], InternalUserDeck] = {}
+        for user_deck in user_decks:
+            user_decks_by_identity[
+                make_user_deck_identity(
+                    user_id=user_deck.user_id,
+                    deck_id=user_deck.deck_id,
+                )
+            ] = user_deck
+
+        return [
+            CatalogDeckItemResponse(
+                deck=DeckResponse.model_validate(deck),
+                viewer_state=DeckViewerStateResponse.validate(
+                    user_deck=user_decks_by_identity[
+                        make_user_deck_identity(
+                            user_id=user_id,
+                            deck_id=deck.id,
+                        )
+                    ]
+                ) if make_user_deck_identity(
+                    user_id=user_id,
+                    deck_id=deck.id,
+                ) in user_decks_by_identity else None
+            )
+            for deck in decks
+        ]
+
+    async def get_decks_library_page(
+        self,
+        user_id: int,
+        user_uuid: UUID,
+        search_query: SearchQuery = None,
+        is_favourite: bool = False,
+        cursor: str | None = None,
+        limit: int = 50,
+    ) -> CursorPage[LibraryDeckItemResponse]:
+        library_result = await self._get_decks_library_deck_page(
+            user_id=user_id,
+            user_uuid=user_uuid,
+            search_query=search_query,
+            is_favourite=is_favourite,
+            cursor=cursor,
+            limit=limit,
+        )
+
+        if not library_result.items:
+            return CursorPage[LibraryDeckItemResponse](
+                items=[],
+                next_cursor=library_result.next_cursor,
+                has_more=library_result.has_more,
+            )
+
+        decks = library_result.items
+
+        cards_by_deck, user_decks = await asyncio.gather(
+            self._get_cards_library_deck_page(
+                user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
+            ),
+            self._get_user_decks_by_deck_ids(
+                user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
+            )
+        )
+        # проверка, что все UserDecks существуют
+        for deck in decks:
+            if (user_id, deck.id) not in user_decks:
+                raise UserDeckNotFoundError()
+
+
+        result = CursorPage[LibraryDeckItemResponse](
+            items=[
+                self._build_library_deck(
+                    deck=deck,
+                    user_deck=user_decks[(user_id, deck.id)],
+                    cards=cards_by_deck[deck.id]
+                ) for deck in decks
+            ],
+            next_cursor=library_result.next_cursor,
+            has_more=library_result.has_more,
+        )
+        return result
+
     async def get_cards_library_page(
             self,
             user_id: int,
@@ -703,6 +723,19 @@ class BffService:
             has_more=cards_page.has_more,
         )
 
+    async def resume_practice_session(
+            self,
+            user_id: int,
+            training_session_uuid: UUID,
+    ) -> PracticeSessionResponse:
+        response = await self.training_session_service.resume_practice_session(
+            user_id=user_id,
+            training_session_uuid=training_session_uuid,
+        )
+        return response
+
+    # write
+
     async def start_practice_session(
             self,
             user_id: PositiveInt,
@@ -715,16 +748,5 @@ class BffService:
             deck_uuid=deck_uuid,
             prompt_side=prompt_side,
             words_per_session=words_per_session,
-        )
-        return response
-
-    async def resume_practice_session(
-            self,
-            user_id: int,
-            training_session_uuid: UUID,
-    ) -> PracticeSessionResponse:
-        response = await self.training_session_service.resume_practice_session(
-            user_id=user_id,
-            training_session_uuid=training_session_uuid,
         )
         return response

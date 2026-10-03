@@ -46,4 +46,10 @@ describe("getCatalogPaginationTokens", () => {
     expect(getPageNumbers(tokens)).toHaveLength(5);
     expect(getPageNumbers(tokens)).toEqual([1, 83, 84, 85, 100]);
   });
+
+  it("supports a wider adaptive window for deck previews", () => {
+    const tokens = getCatalogPaginationTokens(100, 56, 7);
+
+    expect(getPageNumbers(tokens)).toEqual([1, 54, 55, 56, 57, 58, 100]);
+  });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
+import { isValidDeckTitle } from "../../features/library/model/input-validation";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import type {
   EditableLibraryDeck,
@@ -178,7 +179,7 @@ function getDeckSaveErrorMessage(error: unknown, messages: DeckSaveErrorMessages
   if (error.status === 403 || error.status === 404) {
     return messages.notFound;
   }
-  if (error.status === 409) {
+  if (hasApiErrorCode(error, API_ERROR_CODES.deckAlreadyExists) || error.status === 409) {
     return messages.conflict;
   }
   if (error.status === 422) {
@@ -271,7 +272,7 @@ function DeckDetailsForm({
   const descriptionValue = normalizedDescription.length === 0 ? null : normalizedDescription;
   const hasChanges =
     title !== deck.title || description !== (deck.description ?? "") || isPublic !== deck.isPublic;
-  const canSave = normalizedTitle.length >= 3 && normalizedTitle.length <= 50 && hasChanges;
+  const canSave = isValidDeckTitle(normalizedTitle) && hasChanges;
 
   useEffect(() => {
     isMountedRef.current = true;

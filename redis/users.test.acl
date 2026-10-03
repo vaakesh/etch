@@ -1,0 +1,3 @@
+user default off
+
+user test reset on >test_password ~* &* +@all

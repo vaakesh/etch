@@ -1,4 +1,4 @@
-from uuid import UUID
+from pydantic import UUID7
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.cards.deps import CardServiceDeps, get_card_service
@@ -27,7 +27,7 @@ async def create_card(
 
 @router.patch("/{card_uuid}", response_model=CardResponse)
 async def update_card(
-    card_uuid: UUID,
+    card_uuid: UUID7,
     payload: UpdateCardRequest,
     current_user: CurrentUser,
     card_service: CardServiceDeps,
@@ -41,7 +41,7 @@ async def update_card(
 
 @router.delete("/{card_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_card(
-    card_uuid: UUID,
+    card_uuid: UUID7,
     current_user: CurrentUser,
     card_service: CardService = Depends(get_card_service),
 ):

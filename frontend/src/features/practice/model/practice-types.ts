@@ -11,7 +11,7 @@ export interface PracticeCard {
 
 export interface PracticeSession {
   uuid: string;
-  deckUuid: string;
+  deckUuid: string | null;
   promptSide: CardSide;
   answerSide: CardSide;
   totalCount: number;
@@ -24,10 +24,11 @@ export interface PracticeSession {
 
 export interface PracticeHistorySession {
   uuid: string;
-  deckUuid: string;
+  deckUuid: string | null;
+  deckTitle: string | null;
   status: TrainingSessionStatus;
   requestedCount: number;
-  actualCount: number;
+  answeredCount: number;
   correctCount: number;
   wrongCount: number;
   promptSide: CardSide;

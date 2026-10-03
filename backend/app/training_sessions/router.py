@@ -1,4 +1,5 @@
-from uuid import UUID
+from pydantic import UUID7
+from app.common.limits import MAX_SESSION_SIZE
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
 from app.redis.rate_limiters import (
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/training-sessions")
     dependencies=[Depends(public_training_sessions_rate_limit)],
 )
 async def get_training_session(
-    session_uuid: UUID,
+    session_uuid: UUID7,
     current_user: OptionalCurrentUser,
     training_session_service: TrainingSessionServiceDeps,
 ):
@@ -44,7 +45,7 @@ async def get_training_session(
     dependencies=[Depends(training_sessions_rate_limit)],
 )
 async def get_training_session_history(
-    session_uuid: UUID,
+    session_uuid: UUID7,
     current_user: CurrentUser,
     training_session_item_service: TrainingSessionServiceDeps,
     only_answered_items: bool = False,
@@ -74,14 +75,13 @@ async def get_training_session_history(
     ]
     return result
 
-
 @router.post(
     "/{session_uuid}/activity",
     response_model=TrainingSessionActivityResponse,
     dependencies=[Depends(training_session_activity_rate_limit)],
 )
 async def record_activity(
-    session_uuid: UUID,
+    session_uuid: UUID7,
     current_user: CurrentUser,
     payload: TrainingSessionActivityRequest,
     training_session_service: TrainingSessionServiceDeps,
@@ -98,11 +98,11 @@ async def record_activity(
         dependencies=[Depends(submit_answer_rate_limit)],
 )
 async def submit_answer(
-    training_session_uuid: UUID,
+    training_session_uuid: UUID7,
     user_answer: UserAnswer,
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
-    sequence_number: int = Path(ge=1),
+    sequence_number: int = Path(ge=1, le=MAX_SESSION_SIZE),
 ):
     return await training_session_service.submit_answer(
         user_id=current_user.id,

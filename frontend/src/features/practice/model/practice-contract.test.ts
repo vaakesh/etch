@@ -7,6 +7,7 @@ import {
   parsePracticeSessionHistory,
   parseSubmitPracticeAnswerResult,
 } from "./practice-contract";
+import { MAX_SESSION_SIZE } from "./practice-session-size";
 
 const DECK_UUID = "714d882d-726e-4dcb-9303-a8bf4638429c";
 const SESSION_UUID = "019c05e5-bc86-70e6-8f5c-d31bfa1aac10";
@@ -50,9 +51,10 @@ const VALID_ANSWER_RESULT = {
 const VALID_HISTORY_SESSION = {
   uuid: SESSION_UUID,
   deck_uuid: DECK_UUID,
+  deck_title: "French basics",
   status: "completed",
   requested_count: 3,
-  actual_count: 3,
+  answered_count: 3,
   correct_count: 2,
   wrong_count: 1,
   prompt_side: "front",
@@ -86,6 +88,13 @@ function expectInvalidPracticeResponse(run: () => unknown): void {
 }
 
 describe("parsePracticeSession", () => {
+  it("resumes snapshots after deck deletion", () => {
+    const session = parsePracticeSession({ ...VALID_SESSION, deck_uuid: null });
+
+    expect(session.deckUuid).toBeNull();
+    expect(session.cards).toHaveLength(2);
+    expect(session.cards[0]?.promptText).toBe("merci");
+  });
   it("maps the BFF session and preserves unanswered sequence numbers", () => {
     expect(parsePracticeSession(VALID_SESSION)).toEqual({
       uuid: SESSION_UUID,
@@ -134,20 +143,38 @@ describe("parsePracticeSession", () => {
     ["counter sum mismatch", { correct_count: 0, wrong_count: 0 }],
     ["non-opposite sides", { answer_side: "front" }],
     ["inconsistent remaining cards", { cards: [VALID_SESSION.cards[0]] }],
+    [
+      "total above the session limit",
+      { total_count: MAX_SESSION_SIZE + 1, answered_count: 0, correct_count: 0, wrong_count: 0 },
+    ],
   ])("rejects the %s invariant", (_caseName, override) => {
     expectInvalidPracticeResponse(() => parsePracticeSession({ ...VALID_SESSION, ...override }));
   });
 
-  it("accepts sparse original deck positions even when a number exceeds total_count", () => {
+  it("preserves sparse unanswered sequence numbers within the session size", () => {
     expect(
       parsePracticeSession({
         ...VALID_SESSION,
-        cards: [VALID_SESSION.cards[0], { ...VALID_SESSION.cards[1], sequence_number: 7 }],
+        total_count: 5,
+        answered_count: 3,
+        correct_count: 2,
+        wrong_count: 1,
+        cards: [VALID_SESSION.cards[0], { ...VALID_SESSION.cards[1], sequence_number: 5 }],
       }),
-    ).toMatchObject({ cards: [{ sequenceNumber: 2 }, { sequenceNumber: 7 }] });
+    ).toMatchObject({ cards: [{ sequenceNumber: 2 }, { sequenceNumber: 5 }] });
   });
 
-  it("rejects duplicate, non-positive, and unsorted card sequence numbers", () => {
+  it("rejects duplicate, out-of-range, and unsorted card sequence numbers", () => {
+    expectInvalidPracticeResponse(() =>
+      parsePracticeSession({
+        ...VALID_SESSION,
+        cards: [
+          VALID_SESSION.cards[0],
+          { ...VALID_SESSION.cards[1], sequence_number: VALID_SESSION.total_count + 1 },
+        ],
+      }),
+    );
+
     expectInvalidPracticeResponse(() =>
       parsePracticeSession({
         ...VALID_SESSION,
@@ -192,6 +219,21 @@ describe("parsePracticeDeckSummary", () => {
 });
 
 describe("parsePracticeHistoryPage", () => {
+  it("keeps history and counters when the deck is deleted", () => {
+    const page = parsePracticeHistoryPage({
+      items: [{ ...VALID_HISTORY_SESSION, deck_uuid: null }],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    expect(page.sessions[0]).toMatchObject({
+      deckUuid: null,
+      deckTitle: VALID_HISTORY_SESSION.deck_title,
+      answeredCount: 3,
+      correctCount: 2,
+      wrongCount: 1,
+    });
+  });
   it("maps the training-session cursor page", () => {
     expect(
       parsePracticeHistoryPage({
@@ -204,9 +246,10 @@ describe("parsePracticeHistoryPage", () => {
         {
           uuid: SESSION_UUID,
           deckUuid: DECK_UUID,
+          deckTitle: "French basics",
           status: "completed",
           requestedCount: 3,
-          actualCount: 3,
+          answeredCount: 3,
           correctCount: 2,
           wrongCount: 1,
           promptSide: "front",
@@ -220,19 +263,56 @@ describe("parsePracticeHistoryPage", () => {
     });
   });
 
-  it("preserves the status returned by the backend", () => {
+  it("preserves valid session statuses and rejects inconsistent completion states", () => {
     expect(
       parsePracticeHistoryPage({
-        items: [{ ...VALID_HISTORY_SESSION, status: "in_progress" }],
+        items: [{ ...VALID_HISTORY_SESSION, status: "in_progress", finished_at: null }],
         next_cursor: null,
         has_more: false,
       }).sessions[0],
-    ).toMatchObject({ status: "in_progress" });
+    ).toMatchObject({ status: "in_progress", finishedAt: null });
+
+    expect(
+      parsePracticeHistoryPage({
+        items: [
+          {
+            ...VALID_HISTORY_SESSION,
+            status: "abandoned",
+            answered_count: 1,
+            correct_count: 1,
+            wrong_count: 0,
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+      }).sessions[0],
+    ).toMatchObject({ status: "abandoned", answeredCount: 1 });
+
+    for (const override of [
+      { status: "in_progress" },
+      { status: "completed", finished_at: null },
+      { status: "abandoned", finished_at: null },
+      { answered_count: 2, correct_count: 1, wrong_count: 1 },
+      { finished_at: "2026-08-01T10:15:29Z" },
+    ]) {
+      expectInvalidPracticeResponse(() =>
+        parsePracticeHistoryPage({
+          items: [{ ...VALID_HISTORY_SESSION, ...override }],
+          next_cursor: null,
+          has_more: false,
+        }),
+      );
+    }
   });
 
   it.each([
     ["unknown status", { items: [{ ...VALID_HISTORY_SESSION, status: "finished" }] }],
+    ["invalid deck title", { items: [{ ...VALID_HISTORY_SESSION, deck_title: 42 }] }],
     ["invalid counters", { items: [{ ...VALID_HISTORY_SESSION, correct_count: 3 }] }],
+    [
+      "requested count above the session limit",
+      { items: [{ ...VALID_HISTORY_SESSION, requested_count: MAX_SESSION_SIZE + 1 }] },
+    ],
     ["same card side", { items: [{ ...VALID_HISTORY_SESSION, answer_side: "front" }] }],
     ["missing cursor", { has_more: true }],
   ])("rejects %s", (_caseName, override) => {
@@ -312,6 +392,11 @@ describe("parsePracticeSessionHistory", () => {
 
   it("rejects malformed lists and duplicate sequence numbers", () => {
     expectInvalidPracticeResponse(() => parsePracticeSessionHistory({ items: [] }));
+    expectInvalidPracticeResponse(() =>
+      parsePracticeSessionHistory([
+        { ...VALID_SESSION_HISTORY_ITEM, sequence_number: MAX_SESSION_SIZE + 1 },
+      ]),
+    );
     expectInvalidPracticeResponse(() =>
       parsePracticeSessionHistory([
         VALID_SESSION_HISTORY_ITEM,

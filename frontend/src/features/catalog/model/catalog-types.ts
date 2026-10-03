@@ -1,6 +1,7 @@
 export interface CatalogDeck {
   uuid: string;
   ownerUuid: string;
+  ownerUsername: string;
   title: string;
   description: string | null;
   totalWordsCount: number;
@@ -19,6 +20,7 @@ export interface CatalogDeckPage {
 export interface CatalogDeckPreview {
   uuid: string;
   ownerUuid: string;
+  ownerUsername: string;
   title: string;
   description: string | null;
   totalWordsCount: number;

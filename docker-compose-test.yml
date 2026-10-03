@@ -1,0 +1,110 @@
+name: etch-test
+
+services:
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.test
+    ports:
+      - "${api_port_test}:8000"
+    volumes:
+      - ./backend/alembic:/backend/alembic
+      - ./backend/app:/backend/app
+      - ./backend/certs:/backend/certs:ro
+      - ./backend/tests:/backend/tests
+      - ./backend/.python-version:/backend/.python-version
+      - ./backend/alembic.ini:/backend/alembic.ini
+      - ./backend/pyproject.toml:/backend/pyproject.toml
+      - ./backend/uv.lock:/backend/uv.lock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - uv
+        - run
+        - --no-sync
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5).close()"
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  postgres:
+    image: postgres:18.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${db_name_test}
+      POSTGRES_USER: ${db_user_test}
+      POSTGRES_PASSWORD: ${db_password_test}
+    volumes:
+      - pgdata18:/var/lib/postgresql
+    ports:
+      - "${db_port_test}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "${frontend_port_test}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    
+  redis:
+    image: redis:8.10.0-alpine
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+
+    ports: 
+      - "127.0.0.1:${redis_port_test}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/users.test.acl:/usr/local/etc/redis/users.acl:ro
+    healthcheck:
+      # NOAUTH also confirms Redis is ready when anonymous access is disabled.
+      test: ["CMD-SHELL", "redis-cli ping | grep -qE '^(PONG|NOAUTH)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    restart: unless-stopped
+    ports:
+      - "8979:8978"
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  cloudbeaver_data:
+  pgdata18:
+  redis_data:

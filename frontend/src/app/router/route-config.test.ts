@@ -1,7 +1,37 @@
 import { describe, expect, it } from "vitest";
+import { matchRoutes } from "react-router-dom";
 import { appRoutes } from "./route-config";
 
 describe("app route configuration", () => {
+  it.each(["/library/decks", "/library/cards"])(
+    "registers %s as a protected library view",
+    (path) => {
+      const route = appRoutes.find((item) => item.path === path);
+      expect(route?.access).toBe("protected");
+      expect(route?.Component).toBeDefined();
+      expect(
+        matchRoutes(
+          appRoutes.map(({ path }) => ({ path })),
+          path,
+        )?.at(-1)?.route.path,
+      ).toBe(path);
+    },
+  );
+
+  it("matches the archive route independently of deck details and editing", () => {
+    const archive = appRoutes.find(({ path }) => path === "/library/decks/archive");
+    expect(archive?.access).toBe("protected");
+    const routes = appRoutes.map(({ path }) => ({ path }));
+    for (const path of ["/library/decks/archive", "/library/decks/archive/"]) {
+      expect(matchRoutes(routes, path)?.at(-1)?.route.path).toBe("/library/decks/archive");
+    }
+    expect(
+      matchRoutes(routes, "/library/0199c27d-9a31-7e11-8f08-b193932384e5/edit")?.at(-1)?.route.path,
+    ).toBe("/library/:deck_uuid/edit");
+    expect(
+      matchRoutes(routes, "/decks/0199c27d-9a31-7e11-8f08-b193932384e5")?.at(-1)?.route.path,
+    ).toBe("/decks/:deck_uuid");
+  });
   it("registers /login as a guest-only route", () => {
     const loginRoute = appRoutes.find(({ path }) => path === "/login");
 
@@ -42,6 +72,30 @@ describe("app route configuration", () => {
       "en-US": "Deck editor — Etch",
     });
     expect(deckEditorRoute?.Component).toBeDefined();
+  });
+
+  it("registers the deck details page as a protected route", () => {
+    const deckDetailsRoute = appRoutes.find(({ path }) => path === "/decks/:deck_uuid");
+
+    expect(deckDetailsRoute).toBeDefined();
+    expect(deckDetailsRoute?.access).toBe("protected");
+    expect(deckDetailsRoute?.title).toEqual({
+      "ru-RU": "Колода — Etch",
+      "en-US": "Deck — Etch",
+    });
+    expect(deckDetailsRoute?.Component).toBeDefined();
+  });
+
+  it("registers user profiles as a protected route", () => {
+    const userProfileRoute = appRoutes.find(({ path }) => path === "/users/:username");
+
+    expect(userProfileRoute).toBeDefined();
+    expect(userProfileRoute?.access).toBe("protected");
+    expect(userProfileRoute?.title).toEqual({
+      "ru-RU": "Профиль — Etch",
+      "en-US": "Profile — Etch",
+    });
+    expect(userProfileRoute?.Component).toBeDefined();
   });
 
   it("registers /practice as a protected route", () => {

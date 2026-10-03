@@ -1,4 +1,4 @@
-export const LIBRARY_PATH = "/library";
+export const LIBRARY_PATH = "/library/decks";
 
 export const LIBRARY_CREATE_DECK_NAVIGATION_STATE = {
   libraryAction: "create-deck",

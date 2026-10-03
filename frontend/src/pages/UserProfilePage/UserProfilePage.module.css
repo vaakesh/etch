@@ -1,0 +1,639 @@
+.profilePage {
+  position: relative;
+  isolation: isolate;
+}
+
+.profilePage::before,
+.profilePage::after {
+  position: fixed;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(2px);
+}
+
+.profilePage::before {
+  top: -190px;
+  right: -120px;
+  width: 410px;
+  height: 410px;
+  background: rgb(245 198 232 / 30%);
+}
+
+.profilePage::after {
+  bottom: -230px;
+  left: 12%;
+  width: 460px;
+  height: 460px;
+  background: rgb(155 232 224 / 24%);
+}
+
+.profile {
+  width: min(1520px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(28px, 3vw, 40px) clamp(20px, 2.2vw, 32px) clamp(48px, 5vw, 64px);
+}
+
+.content {
+  display: grid;
+  gap: clamp(30px, 4vw, 44px);
+  animation: profileEnter 380ms var(--catalog-spring) both;
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(330px, 0.68fr);
+  align-items: center;
+  gap: clamp(18px, 2.6vw, 34px);
+  padding: clamp(24px, 3vw, 38px);
+  overflow: hidden;
+  color: var(--catalog-ink-deep);
+  background: rgb(255 255 255 / 64%);
+  border: 1px solid rgb(255 255 255 / 68%);
+  border-radius: 30px;
+  box-shadow:
+    0 22px 52px rgb(73 56 115 / 14%),
+    inset 0 1px 0 rgb(255 255 255 / 78%);
+  backdrop-filter: blur(24px) saturate(1.12);
+}
+
+.hero::after {
+  position: absolute;
+  right: -75px;
+  bottom: -105px;
+  width: 220px;
+  height: 220px;
+  content: "";
+  pointer-events: none;
+  border: 38px solid rgb(155 232 224 / 22%);
+  border-radius: 50%;
+}
+
+.ownHero {
+  border-color: rgb(115 88 186 / 25%);
+  box-shadow:
+    0 24px 58px rgb(73 56 115 / 17%),
+    inset 0 1px 0 rgb(255 255 255 / 84%);
+}
+
+.ownHero::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 5px;
+  content: "";
+  background: linear-gradient(90deg, var(--catalog-purple), #69cfc4, #e99bc8);
+}
+
+.avatar {
+  display: grid;
+  width: clamp(84px, 9vw, 116px);
+  aspect-ratio: 1;
+  place-items: center;
+  color: #fff;
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+  font-weight: 680;
+  line-height: 1;
+  background: linear-gradient(145deg, var(--catalog-purple), #8bded5);
+  border: 1px solid rgb(255 255 255 / 62%);
+  border-radius: 31%;
+  box-shadow:
+    0 18px 34px rgb(73 56 115 / 20%),
+    inset 0 1px 0 rgb(255 255 255 / 36%);
+  transform: rotate(-3deg);
+}
+
+.identity {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.identityMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.eyebrow {
+  display: inline-block;
+  color: var(--catalog-purple);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.ownBadge {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  color: #286e68;
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1;
+  background: rgb(155 232 224 / 38%);
+  border: 1px solid rgb(38 158 131 / 18%);
+  border-radius: 999px;
+}
+
+.ownBadge svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+
+.identity h1 {
+  margin: 0;
+  max-width: 100%;
+  padding-block: 0.08em 0.12em;
+  color: var(--catalog-ink-deep);
+  font-size: clamp(2.2rem, 4.2vw, 3.45rem);
+  font-weight: 680;
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+  overflow-wrap: anywhere;
+}
+
+.joinedAt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 15px 0 0;
+  color: var(--catalog-muted);
+  font-size: 0.82rem;
+  font-weight: 580;
+}
+
+.joinedAt svg {
+  width: 18px;
+  height: 18px;
+  color: var(--catalog-purple);
+}
+
+.joinedAt time {
+  color: var(--catalog-ink);
+  font-weight: 680;
+}
+
+.summary {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.summary > div {
+  display: grid;
+  min-width: 0;
+  min-height: 104px;
+  align-content: center;
+  gap: 5px;
+  padding: 17px;
+  background: rgb(238 234 255 / 60%);
+  border: 1px solid rgb(118 98 207 / 14%);
+  border-radius: 18px;
+}
+
+.summary > div:last-child {
+  background: rgb(221 248 245 / 66%);
+  border-color: rgb(38 158 131 / 15%);
+}
+
+.summary dt {
+  color: var(--catalog-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.summary dd {
+  margin: 0;
+  color: var(--catalog-ink-deep);
+  font-size: clamp(1.65rem, 3vw, 2.25rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 680;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.decksSection {
+  display: grid;
+  gap: 22px;
+}
+
+.sectionHeader {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.sectionHeader h2,
+.sectionHeader p {
+  margin: 0;
+}
+
+.sectionHeader h2 {
+  color: var(--catalog-ink-deep);
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 680;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+}
+
+.sectionHeader p {
+  color: var(--catalog-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 620;
+}
+
+.ownerLink {
+  width: fit-content;
+  color: var(--catalog-muted);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: color 180ms ease;
+}
+
+.ownerLink:hover,
+.ownerLink:focus-visible {
+  color: var(--catalog-purple);
+}
+
+.emptyState,
+.state {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  color: var(--catalog-ink-deep);
+  background: rgb(255 255 255 / 62%);
+  border: 1px solid rgb(255 255 255 / 68%);
+  border-radius: 24px;
+  box-shadow:
+    0 18px 42px rgb(73 56 115 / 12%),
+    inset 0 1px 0 rgb(255 255 255 / 76%);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.emptyState {
+  gap: 8px;
+  min-height: 280px;
+  align-content: center;
+  padding: 34px;
+}
+
+.emptyIcon {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 5px;
+  place-items: center;
+  color: var(--catalog-purple);
+  background: rgb(238 234 255 / 76%);
+  border-radius: 19px;
+}
+
+.emptyIcon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.emptyState h3,
+.emptyState p,
+.state h1,
+.state p {
+  margin: 0;
+}
+
+.emptyState h3 {
+  font-size: 1.28rem;
+}
+
+.emptyState p,
+.state p {
+  max-width: 430px;
+  color: var(--catalog-muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.state {
+  min-height: min(520px, calc(100dvh - 80px));
+  align-content: center;
+  gap: 12px;
+  padding: 38px;
+  animation: profileEnter 380ms var(--catalog-spring) both;
+}
+
+.stateMark {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 4px;
+  place-items: center;
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 750;
+  background: var(--catalog-purple);
+  border-radius: 18px;
+  box-shadow: 0 13px 28px rgb(73 56 115 / 22%);
+}
+
+.state h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  letter-spacing: -0.05em;
+}
+
+.state button,
+.loadMore button {
+  min-height: 46px;
+  padding: 0 20px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--catalog-purple);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 10px 23px rgb(73 56 115 / 20%);
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms var(--catalog-spring);
+}
+
+.state button {
+  margin-top: 8px;
+}
+
+.state button:hover,
+.state button:focus-visible,
+.loadMore button:hover:not(:disabled),
+.loadMore button:focus-visible:not(:disabled) {
+  background: var(--catalog-purple-deep);
+  box-shadow: 0 13px 28px rgb(73 56 115 / 26%);
+  transform: translateY(-1px);
+}
+
+.loadMore {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.loadMore p {
+  margin: 0;
+  color: #913957;
+  font-size: 0.8rem;
+  font-weight: 620;
+}
+
+.loadMore button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.loading {
+  display: grid;
+  gap: 34px;
+}
+
+.heroSkeleton {
+  min-height: 210px;
+  background: linear-gradient(
+    110deg,
+    rgb(255 255 255 / 42%) 8%,
+    rgb(255 255 255 / 72%) 18%,
+    rgb(255 255 255 / 42%) 33%
+  );
+  background-size: 220% 100%;
+  border: 1px solid rgb(255 255 255 / 58%);
+  border-radius: 30px;
+  animation: profileShimmer 1.25s linear infinite;
+}
+
+@keyframes profileEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes profileShimmer {
+  to {
+    background-position-x: -220%;
+  }
+}
+
+@media (max-width: 1040px) {
+  .hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .summary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .profile {
+    padding: 22px 16px 42px;
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 26px 20px;
+    text-align: center;
+  }
+
+  .avatar {
+    width: 92px;
+  }
+
+  .joinedAt {
+    justify-content: center;
+  }
+
+  .identityMeta {
+    justify-content: center;
+  }
+
+  .summary {
+    width: 100%;
+  }
+
+  .sectionHeader {
+    align-items: start;
+    flex-direction: column;
+    gap: 7px;
+  }
+}
+
+@media (max-width: 420px) {
+  .profile {
+    padding-inline: 12px;
+  }
+
+  .hero {
+    border-radius: 24px;
+  }
+
+  .summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summary > div {
+    min-height: 88px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content,
+  .state,
+  .heroSkeleton,
+  .state button,
+  .loadMore button {
+    animation: none;
+    transition: none;
+  }
+
+  .state button:hover,
+  .state button:focus-visible,
+  .loadMore button:hover:not(:disabled),
+  .loadMore button:focus-visible:not(:disabled) {
+    transform: none;
+  }
+}
+
+:global(html[data-theme="dark"]) .profilePage::before,
+:global(html[data-theme="dark"]) .profilePage::after {
+  display: none;
+}
+
+:global(html[data-theme="dark"]) .hero,
+:global(html[data-theme="dark"]) .emptyState,
+:global(html[data-theme="dark"]) .state {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border);
+  box-shadow:
+    0 22px 52px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight);
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .hero::after {
+  border-color: var(--dark-cyan-soft);
+}
+
+:global(html[data-theme="dark"]) .ownHero {
+  border-color: var(--dark-border-accent);
+  box-shadow:
+    0 24px 58px var(--dark-shadow),
+    inset 0 1px 0 var(--dark-highlight);
+}
+
+:global(html[data-theme="dark"]) .ownHero::before {
+  background: linear-gradient(90deg, var(--dark-cta), var(--dark-cyan), var(--dark-pink));
+}
+
+:global(html[data-theme="dark"]) .avatar {
+  color: var(--dark-on-cta);
+  background: linear-gradient(145deg, var(--dark-cta), var(--dark-cyan));
+  border-color: var(--dark-border-strong);
+  box-shadow: 0 18px 34px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .eyebrow,
+:global(html[data-theme="dark"]) .joinedAt svg,
+:global(html[data-theme="dark"]) .ownerLink:hover,
+:global(html[data-theme="dark"]) .ownerLink:focus-visible {
+  color: var(--dark-cta);
+}
+
+:global(html[data-theme="dark"]) .ownBadge {
+  color: var(--dark-cyan);
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-accent);
+}
+
+:global(html[data-theme="dark"]) .identity h1,
+:global(html[data-theme="dark"]) .joinedAt time,
+:global(html[data-theme="dark"]) .summary dd,
+:global(html[data-theme="dark"]) .sectionHeader h2,
+:global(html[data-theme="dark"]) .emptyState h3,
+:global(html[data-theme="dark"]) .state h1 {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .joinedAt,
+:global(html[data-theme="dark"]) .summary dt,
+:global(html[data-theme="dark"]) .sectionHeader p,
+:global(html[data-theme="dark"]) .emptyState p,
+:global(html[data-theme="dark"]) .state p,
+:global(html[data-theme="dark"]) .ownerLink {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .summary > div {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .summary > div:last-child {
+  background: var(--dark-cyan-soft);
+  border-color: var(--dark-border-strong);
+}
+
+:global(html[data-theme="dark"]) .emptyIcon {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+}
+
+:global(html[data-theme="dark"]) .stateMark,
+:global(html[data-theme="dark"]) .state button,
+:global(html[data-theme="dark"]) .loadMore button {
+  color: var(--dark-on-cta);
+  background: var(--dark-cta);
+  box-shadow: 0 10px 23px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .state button:hover,
+:global(html[data-theme="dark"]) .state button:focus-visible,
+:global(html[data-theme="dark"]) .loadMore button:hover:not(:disabled),
+:global(html[data-theme="dark"]) .loadMore button:focus-visible:not(:disabled) {
+  background: var(--dark-cta-hover);
+}
+
+:global(html[data-theme="dark"]) .heroSkeleton {
+  background: linear-gradient(
+    110deg,
+    var(--dark-surface) 8%,
+    var(--dark-surface-raised) 18%,
+    var(--dark-surface) 33%
+  );
+  background-size: 220% 100%;
+  border-color: var(--dark-border);
+}

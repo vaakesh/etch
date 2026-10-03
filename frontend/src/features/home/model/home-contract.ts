@@ -137,10 +137,7 @@ function parseDeck(value: unknown, index: number): HomeDeck {
 
 function parseProgress(value: unknown): HomeProgress {
   const progress = readRecord(value, "progress");
-  const wordsExplored = readInteger(
-    progress.user_words_explored,
-    "progress.user_words_explored",
-  );
+  const wordsExplored = readInteger(progress.user_words_explored, "progress.user_words_explored");
   const weeklyAccuracy = readInteger(
     progress.user_weekly_accuracy,
     "progress.user_weekly_accuracy",

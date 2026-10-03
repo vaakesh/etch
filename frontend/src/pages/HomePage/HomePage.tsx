@@ -17,6 +17,10 @@ import {
   LIBRARY_PATH,
 } from "../../features/library/model/library-navigation";
 import {
+  createDeckDetailsNavigationState,
+  getDeckDetailsPath,
+} from "../../features/decks/model/deck-details-navigation";
+import {
   WORD_COUNT_FORMS,
   defineMessages,
   localizeCount,
@@ -47,11 +51,12 @@ const MESSAGES = defineMessages(
     accuracy: "Точность колоды",
     correctAnswers: (value: string) => `Правильных ответов — ${value}`,
     noDescription: "Без описания",
+    openDeckPage: (title: string) => `Открыть страницу колоды «${title}»`,
     lastUpdated: (value: string) => `Последнее обновление: ${value}`,
     updated: "Обновлено",
     configurePractice: (title: string) => `Настроить тренировку по колоде «${title}»`,
     startPractice: (title: string) => `Начать тренировку по колоде «${title}»`,
-    start: "Начать",
+    start: "Начать тренировку",
     emptyTitle: "Здесь появятся ваши колоды",
     emptyDescription: "Когда колоды будут добавлены, главная страница покажет их прогресс.",
     yourDecks: "Ваши колоды",
@@ -87,11 +92,12 @@ const MESSAGES = defineMessages(
     accuracy: "Deck accuracy",
     correctAnswers: (value: string) => `Correct answers — ${value}`,
     noDescription: "No description",
+    openDeckPage: (title: string) => `Open the “${title}” deck page`,
     lastUpdated: (value: string) => `Last updated: ${value}`,
     updated: "Updated",
     configurePractice: (title: string) => `Configure practice for “${title}”`,
     startPractice: (title: string) => `Start practicing “${title}”`,
-    start: "Start",
+    start: "Start practice",
     emptyTitle: "Your decks will appear here",
     emptyDescription: "Once you add decks, the home page will show their progress.",
     yourDecks: "Your decks",
@@ -199,7 +205,16 @@ function DeckCard({ deck }: DeckCardProps) {
     <article className={styles.deckCard}>
       <div className={styles.deckCopy}>
         <div className={styles.deckHeading}>
-          <h3>{deck.title}</h3>
+          <h3>
+            <Link
+              aria-label={messages.openDeckPage(deck.title)}
+              className={styles.deckTitleLink}
+              state={createDeckDetailsNavigationState("home")}
+              to={getDeckDetailsPath(deck.uuid)}
+            >
+              {deck.title}
+            </Link>
+          </h3>
           <span className={accuracyHintClassName}>
             <span
               aria-describedby={accuracyTooltipId}
@@ -262,7 +277,18 @@ function DeckCard({ deck }: DeckCardProps) {
         title={messages.startPractice(deck.title)}
         to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
       >
-        {messages.start}
+        <span>{messages.start}</span>
+        <svg
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+          viewBox="0 0 24 24"
+        >
+          <path d="M5 12h14m-6-6 6 6-6 6" />
+        </svg>
       </Link>
     </article>
   );
@@ -296,7 +322,7 @@ function DecksSection({ decks }: { decks: readonly HomeDeck[] }) {
       <div className={styles.sectionHeading}>
         <h2 id="decks-heading">{messages.yourDecks}</h2>
         {decks.length > 0 ? (
-          <Link className={styles.sectionAction} to="/library">
+          <Link className={styles.sectionAction} to={LIBRARY_PATH}>
             {messages.allDecks}
             <DashboardIcon name="chevron" />
           </Link>

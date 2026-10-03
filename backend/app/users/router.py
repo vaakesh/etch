@@ -1,12 +1,13 @@
 from datetime import datetime
-from uuid import UUID
+import logging
+from pydantic import UUID7
 
 from app.auth.cookies import clear_tokens_cookie
-from app.auth.deps import AuthServiceDeps, CurrentUser, CurrentUserWithSettings, OptionalCurrentUser
+from app.auth.deps import CurrentUser, CurrentUserWithSettings, OptionalCurrentUser
 from app.cards.deps import CardServiceDeps
 from app.cards.schemas import CardResponse
 from app.common.schemas import CursorPage
-from app.common.types import PageLimit, PaginationCursor, SearchQuery
+from app.common.types import PageLimit, PaginationCursor, SearchQuery, Username
 from app.decks.deps import DeckServiceDeps, UserDeckServiceDeps
 from app.decks.schemas import DeckListItemResponse, DeckResponse
 from app.training_sessions.deps import (
@@ -18,18 +19,17 @@ from app.training_sessions.schemas import (
 )
 from app.users.deps import UserServiceDeps
 from app.users.schemas import (
-    ChangePasswordRequest,
     CreateUserRequest,
     PrivateUserResponse,
-    PublicUserResponse,
     UpdateUserRequest,
+    UserProfileResponse,
     UserSettingsResponse,
-    UserSettingsUpdate,
+    UpdateUserSettingsRequest,
 )
 from fastapi import APIRouter, Depends, Query, Response, status
+from opentelemetry import trace
 
 from app.redis.rate_limiters import (
-    password_change_rate_limit,
     profile_rate_limit,
     public_users_rate_limit,
     registration_rate_limit,
@@ -37,6 +37,7 @@ from app.redis.rate_limiters import (
 )
 
 router = APIRouter(prefix="/users")
+logger = logging.getLogger(__name__)
 
 @router.get(
     "/me",
@@ -46,17 +47,93 @@ router = APIRouter(prefix="/users")
 async def get_me(
     current_user: CurrentUserWithSettings,
 ):
-    return PrivateUserResponse(
-        uuid=current_user.uuid,
-        username=current_user.username,
-        email=current_user.email,
-        created_at=current_user.created_at,
-        updated_at=current_user.updated_at,
-        settings=UserSettingsResponse(
-            locale=current_user.settings.locale,
-            theme=current_user.settings.theme,
-            show_previews_for_long=current_user.settings.show_previews_for_long,
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("get_me.build_response") as span:
+        span.set_attribute("app.endpoint", "/users/me")
+        response = PrivateUserResponse.from_user_with_settings(
+            user=current_user,
         )
+        return response
+
+# checked
+@router.post(
+    "/create",
+    response_model=PrivateUserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(registration_rate_limit)],
+)
+async def create_user(
+    payload: CreateUserRequest,
+    user_service: UserServiceDeps,
+):
+    new_user = await user_service.create_user(payload)
+    return PrivateUserResponse.from_user_with_settings(
+        user=new_user,
+    )
+
+# checked
+@router.patch(
+    "/me",
+    status_code=status.HTTP_200_OK,
+    response_model=PrivateUserResponse,
+    dependencies=[Depends(users_rate_limit)],
+)
+async def update_user(
+    payload: UpdateUserRequest,
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
+):
+    return await user_service.update_user(
+        current_user_id=current_user.id,
+        payload=payload,
+    )
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(users_rate_limit)],
+)
+async def delete_user(
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
+):
+    await user_service.delete_user(
+        current_user_id=current_user.id,
+    )
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_tokens_cookie(response=response)
+    return response
+
+# checked
+@router.patch(
+    "/me/settings",
+    status_code=status.HTTP_200_OK,
+    response_model=UserSettingsResponse,
+    dependencies=[Depends(users_rate_limit)],
+)
+async def update_settings(
+    current_user: CurrentUser,
+    user_service: UserServiceDeps,
+    payload: UpdateUserSettingsRequest,
+):
+    return await user_service.update_user_settings(
+        current_user_id=current_user.id,
+        payload=payload,
+    )
+
+@router.get(
+    path="/profile/{username}",
+    dependencies=[Depends(public_users_rate_limit)],
+    response_model=UserProfileResponse,
+)
+async def get_user_profile(
+    username: Username,
+    current_user: OptionalCurrentUser,
+    user_service: UserServiceDeps,
+):
+    return await user_service.get_user_profile(
+        viewer_id=current_user.id if current_user else None,
+        username=username,
     )
 
 @router.get(
@@ -66,49 +143,14 @@ async def get_me(
 async def get_user_daily_activity(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
-    from_date: datetime,
-    to_date: datetime | None = None,
+    from_datetime: datetime,
+    to_datetime: datetime | None = None,
 ):
-    return await training_session_service.user_daily_activity(
+    return await training_session_service.get_user_activity(
         user_id=current_user.id,
-        from_date=from_date,
-        to_date=to_date,
+        from_datetime=from_datetime,
+        to_datetime=to_datetime,
     )
-
-@router.patch(
-    "/me/settings",
-    response_model=UserSettingsResponse,
-    dependencies=[Depends(users_rate_limit)],
-)
-async def change_settings(
-    current_user: CurrentUser,
-    user_service: UserServiceDeps,
-    payload: UserSettingsUpdate,
-):
-    new_user_settings = await user_service.update_user_settings(
-        current_user_id=current_user.id,
-        payload=payload,
-    )
-    return new_user_settings
-
-@router.put(
-    "/me/password",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(password_change_rate_limit)],
-)
-async def change_password(
-    payload: ChangePasswordRequest,
-    current_user: CurrentUser,
-    auth_service: AuthServiceDeps,
-):
-    await auth_service.change_password(
-        user_id=current_user.id,
-        current_password=payload.current_password,
-        new_password=payload.new_password,
-    )
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    clear_tokens_cookie(response=response)
-    return response
 
 @router.get(
     "/me/decks",
@@ -136,31 +178,6 @@ async def get_my_decks(
     )
 
 @router.get(
-    "/me/cards",
-    response_model=CursorPage[CardResponse],
-    dependencies=[Depends(users_rate_limit)],
-)
-async def get_my_cards(
-    current_user: CurrentUser,
-    card_service: CardServiceDeps,
-    search_query: SearchQuery = None,
-    limit: PageLimit = 50,
-    cursor: PaginationCursor = None,
-):
-    cards, next_cursor, has_more = await card_service.get_all_by_user_id(
-        user_id=current_user.id,
-        search_query=search_query,
-        cursor=cursor,
-        limit=limit,
-    )
-
-    return CursorPage[CardResponse](
-        items=cards,
-        next_cursor=next_cursor,
-        has_more=has_more,
-    )
-
-@router.get(
     "/me/training-sessions",
     response_model=CursorPage[TrainingSessionResponse],
     dependencies=[Depends(users_rate_limit)],
@@ -173,7 +190,7 @@ async def get_my_training_sessions(
     cursor: PaginationCursor = None,
 ):
     training_sessions, next_cursor, has_more = (
-        await training_session_service.get_all_by_user_uuid(
+        await training_session_service.get_sessions_by_user_uuid(
             user_uuid=current_user.uuid,
             status=status,
             cursor=cursor,
@@ -206,118 +223,12 @@ async def get_my_saved_decks(
     return saved_decks
 
 @router.get(
-    "/{user_uuid}",
-    response_model=PublicUserResponse,
-    dependencies=[Depends(public_users_rate_limit)],
-)
-async def get_public_user(
-    user_uuid: UUID,
-    user_service: UserServiceDeps,
-):
-    user = await user_service.get_by_uuid(
-        user_uuid=user_uuid,
-    )
-    return user
-
-@router.post(
-    "/create", 
-    response_model=PrivateUserResponse,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(registration_rate_limit)],
-)
-async def create_user(
-    payload: CreateUserRequest,
-    user_service: UserServiceDeps,
-):
-    new_user = await user_service.create_user(payload)
-    return PrivateUserResponse(
-        uuid=new_user.uuid,
-        username=new_user.username,
-        email=new_user.email,
-        created_at=new_user.created_at,
-        updated_at=new_user.updated_at,
-        settings=UserSettingsResponse(
-            locale=new_user.settings.locale,
-            theme=new_user.settings.theme,
-            show_previews_for_long=new_user.settings.show_previews_for_long,
-        )
-    )
-
-@router.patch(
-    "/me",
-    response_model=PrivateUserResponse,
-    dependencies=[Depends(users_rate_limit)],
-)
-async def update_user(
-    payload: UpdateUserRequest,
-    current_user: CurrentUser,
-    user_service: UserServiceDeps,
-):
-    updated_user = await user_service.update_user(
-        current_user_id=current_user.id,
-        payload=payload,
-    )
-    return PrivateUserResponse(
-        uuid=updated_user.uuid,
-        username=updated_user.username,
-        email=updated_user.email,
-        created_at=updated_user.created_at,
-        updated_at=updated_user.updated_at,
-        settings=UserSettingsResponse(
-            locale=updated_user.settings.locale,
-            theme=updated_user.settings.theme,
-            show_previews_for_long=updated_user.settings.show_previews_for_long,
-        )
-    )
-
-@router.delete(
-    "/me",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(users_rate_limit)],
-)
-async def delete_user(
-    current_user: CurrentUser,
-    user_service: UserServiceDeps,
-):
-    await user_service.delete_user(
-        current_user_id=current_user.id,
-    )
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    clear_tokens_cookie(response=response)
-    return response
-
-@router.get(
-    "/{user_uuid}/training-sessions", 
-    response_model=CursorPage[TrainingSessionResponse],
-    dependencies=[Depends(public_users_rate_limit)],
-)
-async def get_public_training_sessions_by_user(
-    user_uuid: UUID,
-    training_session_service: TrainingSessionServiceDeps,
-    cursor: PaginationCursor = None,
-    limit: PageLimit = 20,
-):
-    training_sessions, next_cursor, has_more = (
-        await training_session_service.get_all_by_user_uuid(
-            user_uuid=user_uuid,
-            status=TrainingSessionStatus.COMPLETED,
-            cursor=cursor,
-            limit=limit,
-        )
-    )
-    return CursorPage[TrainingSessionResponse](
-        items=training_sessions,
-        next_cursor=next_cursor,
-        has_more=has_more,
-    )
-
-@router.get(
     "/{user_uuid}/decks",
     response_model=CursorPage[DeckResponse],
     dependencies=[Depends(public_users_rate_limit)],
 )
 async def get_public_decks_by_user(
-    user_uuid: UUID,
+    user_uuid: UUID7,
     current_user: OptionalCurrentUser,
     deck_service: DeckServiceDeps,
     search_query: SearchQuery = None,
@@ -326,14 +237,14 @@ async def get_public_decks_by_user(
 ):
     page = await deck_service.get_public_by_owner_uuid(
         owner_uuid=user_uuid,
-        viewer_id=current_user.id,
+        viewer_id=current_user.id if current_user else None,
         search_query=search_query,
         cursor=cursor,
         limit=limit,
     )
 
     return CursorPage[DeckResponse](
-        items=page.decks,
+        items=page.items,
         next_cursor=page.next_cursor,
         has_more=page.has_more,
     )

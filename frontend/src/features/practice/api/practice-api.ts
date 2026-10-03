@@ -27,8 +27,12 @@ interface RecordPracticeActivityOptions {
   keepalive?: boolean;
 }
 
-function assertExpectedUuid(expectedUuid: string, actualUuid: string, resource: string): void {
-  if (actualUuid.toLowerCase() !== expectedUuid.toLowerCase()) {
+function assertExpectedUuid(
+  expectedUuid: string,
+  actualUuid: string | null,
+  resource: string,
+): void {
+  if (actualUuid?.toLowerCase() !== expectedUuid.toLowerCase()) {
     throw new ApiError({
       status: 0,
       code: "INVALID_PRACTICE_RESPONSE",

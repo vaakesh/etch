@@ -2,6 +2,7 @@
 __pycache__
 .venv
 backend/certs/
+backend/scripts
 .githubtoken
 .agents
 skills-lock.json
@@ -13,3 +14,5 @@ bob.py
 .mypy_cache
 .ty_cache
 .vscode
+*.html
+*.sql

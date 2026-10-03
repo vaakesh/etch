@@ -26,8 +26,8 @@ class TestGetHomeDashboard:
         bff_service.get_home_dashboard.return_value = {
             "decks": [
                 {
-                    "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                    "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                    "uuid": "0198ad01-b200-7000-8000-000000000200",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
                     "title": "Test deck",
                     "description": "Test deck description",
                     "words_count": 10,
@@ -42,8 +42,8 @@ class TestGetHomeDashboard:
                 "user_total_study_time": 3600,
             },
             "user_weekly_activity": [
-                {"date": "2026-08-14", "percent": 50},
-                {"date": "2026-08-15", "percent": 100},
+                {"date": "2026-08-14", "value": 50},
+                {"date": "2026-08-15", "value": 100},
             ],
         }
 
@@ -52,8 +52,8 @@ class TestGetHomeDashboard:
         expected = {
             "decks": [
                 {
-                    "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                    "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                    "uuid": "0198ad01-b200-7000-8000-000000000200",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
                     "title": "Test deck",
                     "description": "Test deck description",
                     "words_count": 10,
@@ -68,8 +68,8 @@ class TestGetHomeDashboard:
                 "user_total_study_time": 3600,
             },
             "user_weekly_activity": [
-                {"date": "2026-08-14", "percent": 50},
-                {"date": "2026-08-15", "percent": 100},
+                {"date": "2026-08-14", "value": 50},
+                {"date": "2026-08-15", "value": 100},
             ],
         }
 
@@ -77,7 +77,6 @@ class TestGetHomeDashboard:
         assert response.json() == expected
         bff_service.get_home_dashboard.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_returns_empty_home_collections(
@@ -114,7 +113,6 @@ class TestGetHomeDashboard:
         assert response.json() == expected
         bff_service.get_home_dashboard.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -128,8 +126,9 @@ class TestGetCatalogPage:
         bff_service.get_catalog_page.return_value = [
             {
                 "deck": {
-                    "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                    "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                    "uuid": "0198ad01-b200-7000-8000-000000000200",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+                    "owner_username": "test-user",
                     "title": "Saved deck",
                     "description": "Saved description",
                     "words_count": 10,
@@ -149,14 +148,15 @@ class TestGetCatalogPage:
             },
             {
                 "deck": {
-                    "uuid": "11111111-1111-1111-1111-111111111111",
-                    "owner_uuid": "22222222-2222-2222-2222-222222222222",
+                    "uuid": "0198ad01-b200-7000-8000-000000000201",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000043",
+                    "owner_username": "other-user",
                     "title": "New deck",
                     "description": None,
                     "words_count": 3,
                     "is_public": True,
                     "saves_count": 0,
-                    "updated_at": None,
+                    "updated_at": "2026-08-15T15:00:00Z",
                 },
                 "viewer_state": None,
             },
@@ -167,8 +167,9 @@ class TestGetCatalogPage:
         expected = [
             {
                 "deck": {
-                    "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                    "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                    "uuid": "0198ad01-b200-7000-8000-000000000200",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+                    "owner_username": "test-user",
                     "title": "Saved deck",
                     "description": "Saved description",
                     "words_count": 10,
@@ -188,14 +189,15 @@ class TestGetCatalogPage:
             },
             {
                 "deck": {
-                    "uuid": "11111111-1111-1111-1111-111111111111",
-                    "owner_uuid": "22222222-2222-2222-2222-222222222222",
+                    "uuid": "0198ad01-b200-7000-8000-000000000201",
+                    "owner_uuid": "0198ad01-b200-7000-8000-000000000043",
+                    "owner_username": "other-user",
                     "title": "New deck",
                     "description": None,
                     "words_count": 3,
                     "is_public": True,
                     "saves_count": 0,
-                    "updated_at": None,
+                    "updated_at": "2026-08-15T15:00:00Z",
                 },
                 "viewer_state": None,
             },
@@ -346,6 +348,7 @@ class TestGetCatalogPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -363,8 +366,9 @@ class TestGetDecksLibraryPage:
             "items": [
                 {
                     "deck": {
-                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                        "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                        "uuid": "0198ad01-b200-7000-8000-000000000200",
+                        "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+                        "owner_username": "test-user",
                         "title": "Test deck",
                         "description": "Test deck description",
                         "words_count": 10,
@@ -383,7 +387,7 @@ class TestGetDecksLibraryPage:
                     },
                     "preview_cards": [
                         {
-                            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            "uuid": "0198ad01-b200-7000-8000-000000000100",
                             "front_text": "привет",
                             "back_text": "hello",
                             "front_lang": "ru",
@@ -403,8 +407,9 @@ class TestGetDecksLibraryPage:
             "items": [
                 {
                     "deck": {
-                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                        "owner_uuid": "12345678-1234-5678-1234-567812345678",
+                        "uuid": "0198ad01-b200-7000-8000-000000000200",
+                        "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+                        "owner_username": "test-user",
                         "title": "Test deck",
                         "description": "Test deck description",
                         "words_count": 10,
@@ -423,7 +428,7 @@ class TestGetDecksLibraryPage:
                     },
                     "preview_cards": [
                         {
-                            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            "uuid": "0198ad01-b200-7000-8000-000000000100",
                             "front_text": "привет",
                             "back_text": "hello",
                             "front_lang": "ru",
@@ -590,6 +595,7 @@ class TestGetDecksLibraryPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -606,7 +612,10 @@ class TestGetDecksLibraryPage:
         response = await client.get("/bff/library/decks")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "User deck progress not found"}
+        assert response.json() == {
+            "code": "USER_DECK_NOT_FOUND",
+            "message": "User deck progress not found",
+        }
         bff_service.get_decks_library_page.assert_awaited_once_with(
             user_id=current_user.id,
             user_uuid=current_user.uuid,
@@ -628,14 +637,24 @@ class TestGetCardsLibraryPage:
             "items": [
                 {
                     "card": {
-                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "uuid": "0198ad01-b200-7000-8000-000000000100",
                         "front_text": "привет",
                         "back_text": "hello",
                         "front_lang": "ru",
                         "back_lang": "en",
                         "updated_at": "2026-08-15T15:00:00Z",
                     }
-                }
+                },
+                {
+                    "card": {
+                        "uuid": "0198ad01-b200-7000-8000-000000000101",
+                        "front_text": "пока",
+                        "back_text": "bye",
+                        "front_lang": "ru",
+                        "back_lang": "en",
+                        "updated_at": "2026-08-15T16:00:00Z",
+                    }
+                },
             ],
             "next_cursor": "next-card-cursor",
             "has_more": True,
@@ -647,14 +666,24 @@ class TestGetCardsLibraryPage:
             "items": [
                 {
                     "card": {
-                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "uuid": "0198ad01-b200-7000-8000-000000000100",
                         "front_text": "привет",
                         "back_text": "hello",
                         "front_lang": "ru",
                         "back_lang": "en",
                         "updated_at": "2026-08-15T15:00:00Z",
                     }
-                }
+                },
+                {
+                    "card": {
+                        "uuid": "0198ad01-b200-7000-8000-000000000101",
+                        "front_text": "пока",
+                        "back_text": "bye",
+                        "front_lang": "ru",
+                        "back_lang": "en",
+                        "updated_at": "2026-08-15T16:00:00Z",
+                    }
+                },
             ],
             "next_cursor": "next-card-cursor",
             "has_more": True,
@@ -664,7 +693,6 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             search_query=None,
             cursor=None,
             limit=50,
@@ -690,17 +718,28 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             search_query=None,
             cursor=None,
             limit=50,
         )
 
+    @pytest.mark.parametrize(
+        ("query", "expected_query", "cursor", "limit"),
+        [
+            pytest.param("  HeLLo  ", "hello", "card-cursor", 25, id="normalizes_query"),
+            pytest.param("a", "a", None, 1, id="minimum_values"),
+            pytest.param("a" * 50, "a" * 50, "c" * 512, 100, id="maximum_values"),
+        ],
+    )
     async def test_passes_normalized_search_and_pagination(
         self,
         client: AsyncClient,
         current_user,
         bff_service: AsyncMock,
+        query,
+        expected_query,
+        cursor,
+        limit,
     ):
         bff_service.get_cards_library_page.return_value = {
             "items": [],
@@ -711,9 +750,9 @@ class TestGetCardsLibraryPage:
         response = await client.get(
             "/bff/library/cards",
             params={
-                "q": "  HeLLo  ",
-                "cursor": "card-cursor",
-                "limit": 25,
+                "q": query,
+                "limit": limit,
+                **({"cursor": cursor} if cursor is not None else {}),
             },
         )
 
@@ -723,10 +762,9 @@ class TestGetCardsLibraryPage:
         assert response.json() == expected
         bff_service.get_cards_library_page.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
-            search_query="hello",
-            cursor="card-cursor",
-            limit=25,
+            search_query=expected_query,
+            cursor=cursor,
+            limit=limit,
         )
 
     @pytest.mark.parametrize(
@@ -766,6 +804,50 @@ class TestGetCardsLibraryPage:
                 },
                 id="limit_not_integer",
             ),
+            pytest.param(
+                {"q": "   "},
+                {
+                    "type": "string_too_short",
+                    "loc": ["query", "q"],
+                    "msg": "String should have at least 1 character",
+                    "input": "   ",
+                    "ctx": {"min_length": 1},
+                },
+                id="query_blank_after_strip",
+            ),
+            pytest.param(
+                {"cursor": "c" * 513},
+                {
+                    "type": "string_too_long",
+                    "loc": ["query", "cursor"],
+                    "msg": "String should have at most 512 characters",
+                    "input": "c" * 513,
+                    "ctx": {"max_length": 512},
+                },
+                id="cursor_too_long",
+            ),
+            pytest.param(
+                {"limit": 0},
+                {
+                    "type": "greater_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": "0",
+                    "ctx": {"ge": 1},
+                },
+                id="limit_below_minimum",
+            ),
+            pytest.param(
+                {"limit": 101},
+                {
+                    "type": "less_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be less than or equal to 100",
+                    "input": "101",
+                    "ctx": {"le": 100},
+                },
+                id="limit_above_maximum",
+            ),
         ],
     )
     async def test_rejects_invalid_query_params(
@@ -779,6 +861,7 @@ class TestGetCardsLibraryPage:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -794,8 +877,8 @@ class TestStartPracticeSession:
     ):
         payload = {"prompt_side": "front", "words_per_session": 10}
         bff_service.start_practice_session.return_value = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
             "total_count": 10,
@@ -814,13 +897,13 @@ class TestStartPracticeSession:
         }
 
         response = await client.post(
-            "/bff/practice/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/start",
+            "/bff/practice/0198ad01-b200-7000-8000-000000000200/start",
             json=payload,
         )
 
         expected = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
             "total_count": 10,
@@ -842,21 +925,23 @@ class TestStartPracticeSession:
         assert response.json() == expected
         bff_service.start_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
-            deck_uuid=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            deck_uuid=UUID("0198ad01-b200-7000-8000-000000000200"),
             prompt_side="front",
             words_per_session=10,
         )
 
-    async def test_accepts_minimum_words_and_back_prompt(
+    @pytest.mark.parametrize("words_per_session", [1, 500])
+    async def test_accepts_boundary_words_and_back_prompt(
         self,
         client: AsyncClient,
         current_user,
         bff_service: AsyncMock,
+        words_per_session,
     ):
-        payload = {"prompt_side": "back", "words_per_session": 1}
+        payload = {"prompt_side": "back", "words_per_session": words_per_session}
         bff_service.start_practice_session.return_value = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "back",
             "answer_side": "front",
             "total_count": 1,
@@ -868,13 +953,13 @@ class TestStartPracticeSession:
         }
 
         response = await client.post(
-            "/bff/practice/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/start",
+            "/bff/practice/0198ad01-b200-7000-8000-000000000200/start",
             json=payload,
         )
 
         expected = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "back",
             "answer_side": "front",
             "total_count": 1,
@@ -889,9 +974,9 @@ class TestStartPracticeSession:
         assert response.json() == expected
         bff_service.start_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
-            deck_uuid=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            deck_uuid=UUID("0198ad01-b200-7000-8000-000000000200"),
             prompt_side="back",
-            words_per_session=1,
+            words_per_session=words_per_session,
         )
 
     @pytest.mark.parametrize(
@@ -919,6 +1004,17 @@ class TestStartPracticeSession:
                 },
                 id="words_below_minimum",
             ),
+            pytest.param(
+                {"prompt_side": "front", "words_per_session": 501},
+                {
+                    "type": "less_than_equal",
+                    "loc": ["body", "words_per_session"],
+                    "msg": "Input should be less than or equal to 500",
+                    "input": 501,
+                    "ctx": {"le": 500},
+                },
+                id="words_above_maximum",
+            ),
         ],
     )
     async def test_rejects_invalid_payload(
@@ -929,12 +1025,13 @@ class TestStartPracticeSession:
         bff_service: AsyncMock,
     ):
         response = await client.post(
-            "/bff/practice/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/start",
+            "/bff/practice/0198ad01-b200-7000-8000-000000000200/start",
             json=payload,
         )
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -963,12 +1060,13 @@ class TestStartPracticeSession:
         bff_service: AsyncMock,
     ):
         response = await client.post(
-            "/bff/practice/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/start",
+            "/bff/practice/0198ad01-b200-7000-8000-000000000200/start",
             json=payload,
         )
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1010,15 +1108,15 @@ class TestStartPracticeSession:
         bff_service.start_practice_session.side_effect = service_error
 
         response = await client.post(
-            "/bff/practice/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/start",
+            "/bff/practice/0198ad01-b200-7000-8000-000000000200/start",
             json={"prompt_side": "front", "words_per_session": 10},
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
         bff_service.start_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
-            deck_uuid=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            deck_uuid=UUID("0198ad01-b200-7000-8000-000000000200"),
             prompt_side="front",
             words_per_session=10,
         )
@@ -1034,6 +1132,7 @@ class TestStartPracticeSession:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1062,8 +1161,8 @@ class TestResumePracticeSession:
         bff_service: AsyncMock,
     ):
         bff_service.resume_practice_session.return_value = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
             "total_count": 10,
@@ -1082,12 +1181,12 @@ class TestResumePracticeSession:
         }
 
         response = await client.get(
-            "/bff/practice/dddddddd-dddd-dddd-dddd-dddddddddddd/resume"
+            "/bff/practice/0198ad01-b200-7000-8000-000000000400/resume"
         )
 
         expected = {
-            "training_session_uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
             "total_count": 10,
@@ -1109,7 +1208,7 @@ class TestResumePracticeSession:
         assert response.json() == expected
         bff_service.resume_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
-            training_session_uuid=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            training_session_uuid=UUID("0198ad01-b200-7000-8000-000000000400"),
         )
 
     @pytest.mark.parametrize(
@@ -1147,14 +1246,14 @@ class TestResumePracticeSession:
         bff_service.resume_practice_session.side_effect = service_error
 
         response = await client.get(
-            "/bff/practice/dddddddd-dddd-dddd-dddd-dddddddddddd/resume"
+            "/bff/practice/0198ad01-b200-7000-8000-000000000400/resume"
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
         bff_service.resume_practice_session.assert_awaited_once_with(
             user_id=current_user.id,
-            training_session_uuid=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            training_session_uuid=UUID("0198ad01-b200-7000-8000-000000000400"),
         )
 
     async def test_rejects_invalid_training_session_uuid(
@@ -1165,6 +1264,7 @@ class TestResumePracticeSession:
         response = await client.get("/bff/practice/not-a-uuid/resume")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

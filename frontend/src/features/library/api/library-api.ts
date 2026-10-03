@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, isApiError } from "../../../api";
+import { API_ERROR_CODES, ApiError, apiFetch, hasApiErrorCode } from "../../../api";
 import {
   parseCreatedLibraryCard,
   parseCreatedLibraryDeck,
@@ -148,7 +148,7 @@ export async function addLibraryCardToDeck(
     });
     return "added";
   } catch (error: unknown) {
-    if (isApiError(error) && error.status === 409) {
+    if (hasApiErrorCode(error, API_ERROR_CODES.deckCardAlreadyExists)) {
       return "already-present";
     }
 

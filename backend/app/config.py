@@ -13,7 +13,7 @@ class AuthJWT(BaseModel):
     private_key_path: Path
     public_key_path: Path
     algorithm: str = "RS256"
-    access_token_expire_minutes: int = 50
+    access_token_expire_minutes: int = 5
     refresh_token_expire_days: int = 7
 
     @model_validator(mode="after")
@@ -29,8 +29,6 @@ class AuthJWT(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         env_nested_delimiter="__",
     )
     db_host: str
@@ -41,12 +39,14 @@ class Settings(BaseSettings):
     refresh_pepper: str
     redis_user: str
     redis_password: str
+    redis_name: str
+    redis_port: int
 
     def database_url(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     def redis_url(self) -> str:
-        return f"redis://{self.redis_user}:{self.redis_password}@redis:6379/0"
+        return f"redis://{self.redis_user}:{self.redis_password}@{self.redis_name}:{self.redis_port}/0"
     
 
     auth_jwt: AuthJWT

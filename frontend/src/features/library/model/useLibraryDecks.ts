@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionCacheScope } from "../../../auth/hooks/useSessionCacheScope";
+import { isSessionCacheScopeActive } from "../../../auth/model/session-cache";
+import {
+  getCachedLibraryDecks,
+  setCachedLibraryDecks,
+  subscribeToLibraryDeckSaveChanges,
+} from "./library-decks-cache";
 import {
   createLibraryDeck,
   deleteLibraryDeck,
@@ -18,7 +25,7 @@ import type {
 
 export type LibraryDecksStatus = "loading" | "success" | "error";
 
-interface LibraryDecksState {
+export interface LibraryDecksState {
   searchQuery: string;
   status: LibraryDecksStatus;
   decks: readonly LibraryDeckItem[];
@@ -62,16 +69,8 @@ const INITIAL_STATE: LibraryDecksState = {
   deleteErrors: {},
 };
 
-interface LibraryDecksCache {
-  currentUserUuid: string | null;
-  state: LibraryDecksState;
-  onlyFavourites: boolean;
-}
-
 type LibraryDecksStateUpdate =
   LibraryDecksState | ((currentState: LibraryDecksState) => LibraryDecksState);
-
-let cachedLibraryDecks: LibraryDecksCache | null = null;
 
 function appendUniqueDecks(
   currentDecks: readonly LibraryDeckItem[],
@@ -86,9 +85,11 @@ function toLibraryDeck(deck: CreatedLibraryDeck, ownerUuid: string): LibraryDeck
   return {
     uuid: deck.uuid,
     ownerUuid,
+    ownerUsername: deck.ownerUsername,
     title: deck.title,
     description: deck.description,
     totalWordsCount: deck.totalWordsCount,
+    savesCount: deck.savesCount,
     accuracy: 0,
     isFavourite: false,
     updatedAt: deck.updatedAt,
@@ -100,18 +101,23 @@ export function useLibraryDecks(
   currentUserUuid: string | null = null,
   searchQuery = "",
 ): UseLibraryDecksResult {
+  const cacheScope = useSessionCacheScope();
   const normalizedSearchQuery = searchQuery.trim();
+  const cachedLibraryDecks = getCachedLibraryDecks(cacheScope);
   const cachedStateAtMount =
     cachedLibraryDecks?.currentUserUuid === currentUserUuid &&
     cachedLibraryDecks.state.searchQuery === normalizedSearchQuery
       ? cachedLibraryDecks
       : null;
-  const shouldLoadOnMountRef = useRef(cachedStateAtMount === null);
   const [state, setState] = useState<LibraryDecksState>(cachedStateAtMount?.state ?? INITIAL_STATE);
   const [onlyFavourites, setOnlyFavouritesState] = useState(
     cachedStateAtMount?.onlyFavourites ?? false,
   );
   const onlyFavouritesRef = useRef(cachedStateAtMount?.onlyFavourites ?? false);
+  const [stateScopeKey, setStateScopeKey] = useState<string | null>(
+    cachedStateAtMount === null ? null : (cacheScope?.key ?? null),
+  );
+  const loadedScopeKeyRef = useRef(cachedStateAtMount === null ? null : (cacheScope?.key ?? null));
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);
@@ -125,17 +131,25 @@ export function useLibraryDecks(
 
   const setCachedState = useCallback(
     (update: LibraryDecksStateUpdate): void => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
+
+      setStateScopeKey(cacheScope.key);
       setState((currentState) => {
         const nextState = typeof update === "function" ? update(currentState) : update;
-        cachedLibraryDecks = {
-          currentUserUuid,
-          state: nextState,
-          onlyFavourites: onlyFavouritesRef.current,
-        };
+        setCachedLibraryDecks(
+          {
+            currentUserUuid,
+            state: nextState,
+            onlyFavourites: onlyFavouritesRef.current,
+          },
+          cacheScope,
+        );
         return nextState;
       });
     },
-    [currentUserUuid],
+    [cacheScope, currentUserUuid],
   );
 
   const loadFirstPage = useCallback(
@@ -151,17 +165,35 @@ export function useLibraryDecks(
       deleteControllerRefs.current.forEach((controller) => controller.abort());
       deleteControllerRefs.current.clear();
 
+      if (!isSessionCacheScopeActive(cacheScope) || currentUserUuid !== cacheScope.userUuid) {
+        requestRevisionRef.current += 1;
+        loadedScopeKeyRef.current = null;
+        onlyFavouritesRef.current = false;
+        queueMicrotask(() => {
+          setStateScopeKey(null);
+          setOnlyFavouritesState(false);
+          setState({ ...INITIAL_STATE, searchQuery: loadSearchQuery });
+        });
+        return;
+      }
+
       const controller = new AbortController();
       const requestRevision = requestRevisionRef.current + 1;
       const requestedSearchQuery = loadSearchQuery;
       requestRevisionRef.current = requestRevision;
       searchQueryRef.current = requestedSearchQuery;
-      cachedLibraryDecks = null;
+      loadedScopeKeyRef.current = cacheScope.key;
+      setCachedLibraryDecks(null, cacheScope);
       initialControllerRef.current = controller;
       loadMoreControllerRef.current = null;
 
       queueMicrotask(() => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+        if (
+          !controller.signal.aborted &&
+          requestRevisionRef.current === requestRevision &&
+          isSessionCacheScopeActive(cacheScope)
+        ) {
+          setStateScopeKey(cacheScope.key);
           setState({ ...INITIAL_STATE, searchQuery: requestedSearchQuery });
         }
       });
@@ -213,11 +245,12 @@ export function useLibraryDecks(
           }
         });
     },
-    [setCachedState],
+    [cacheScope, currentUserUuid, setCachedState],
   );
 
   const loadMore = useCallback((): void => {
     if (
+      !isSessionCacheScopeActive(cacheScope) ||
       state.status !== "success" ||
       state.isLoadingMore ||
       loadMoreControllerRef.current !== null ||
@@ -278,6 +311,7 @@ export function useLibraryDecks(
         }
       });
   }, [
+    cacheScope,
     setCachedState,
     state.hasMore,
     state.isLoadingMore,
@@ -289,6 +323,7 @@ export function useLibraryDecks(
   const setFavourite = useCallback(
     (deckUuid: string, value: boolean): void => {
       if (
+        !isSessionCacheScopeActive(cacheScope) ||
         state.status !== "success" ||
         !state.decks.some((deck) => deck.uuid === deckUuid) ||
         favouriteControllerRefs.current.has(deckUuid)
@@ -348,12 +383,13 @@ export function useLibraryDecks(
           }
         });
     },
-    [setCachedState, state.decks, state.status],
+    [cacheScope, setCachedState, state.decks, state.status],
   );
 
   const deleteDeck = useCallback(
     (deckUuid: string): void => {
       if (
+        !isSessionCacheScopeActive(cacheScope) ||
         state.status !== "success" ||
         !state.decks.some((deck) => deck.uuid === deckUuid) ||
         deleteControllerRefs.current.has(deckUuid)
@@ -404,7 +440,7 @@ export function useLibraryDecks(
           }
         });
     },
-    [setCachedState, state.decks, state.status],
+    [cacheScope, setCachedState, state.decks, state.status],
   );
 
   const setOnlyFavourites = useCallback(
@@ -426,6 +462,9 @@ export function useLibraryDecks(
 
   const createDeck = useCallback(
     async (input: CreateLibraryDeckInput): Promise<void> => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
       createControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -483,7 +522,7 @@ export function useLibraryDecks(
         }
       }
     },
-    [currentUserUuid, loadFirstPage, setCachedState],
+    [cacheScope, currentUserUuid, loadFirstPage, setCachedState],
   );
 
   const importCards = useCallback(
@@ -518,6 +557,8 @@ export function useLibraryDecks(
     [setCachedState],
   );
 
+  useEffect(() => subscribeToLibraryDeckSaveChanges(() => loadFirstPage()), [loadFirstPage]);
+
   useEffect(() => {
     if (previousSearchQueryRef.current === normalizedSearchQuery) {
       return;
@@ -540,9 +581,36 @@ export function useLibraryDecks(
       cleanupTimerRef.current = null;
     }
 
-    if (shouldLoadOnMountRef.current) {
-      shouldLoadOnMountRef.current = false;
-      loadFirstPage();
+    if (!isSessionCacheScopeActive(cacheScope) || currentUserUuid !== cacheScope.userUuid) {
+      requestRevisionRef.current += 1;
+      initialControllerRef.current?.abort();
+      loadMoreControllerRef.current?.abort();
+      createControllerRef.current?.abort();
+      importControllerRef.current?.abort();
+      favouriteControllers.forEach((controller) => controller.abort());
+      favouriteControllers.clear();
+      deleteControllers.forEach((controller) => controller.abort());
+      deleteControllers.clear();
+      loadedScopeKeyRef.current = null;
+      onlyFavouritesRef.current = false;
+      queueMicrotask(() => {
+        setStateScopeKey(null);
+        setOnlyFavouritesState(false);
+        setState({ ...INITIAL_STATE, searchQuery: normalizedSearchQuery });
+      });
+    } else if (loadedScopeKeyRef.current !== cacheScope.key) {
+      const cachedState = getCachedLibraryDecks(cacheScope);
+      if (cachedState?.state.searchQuery === normalizedSearchQuery) {
+        loadedScopeKeyRef.current = cacheScope.key;
+        onlyFavouritesRef.current = cachedState.onlyFavourites;
+        queueMicrotask(() => {
+          setStateScopeKey(cacheScope.key);
+          setOnlyFavouritesState(cachedState.onlyFavourites);
+          setState(cachedState.state);
+        });
+      } else {
+        queueMicrotask(loadFirstPage);
+      }
     }
 
     return () => {
@@ -562,16 +630,19 @@ export function useLibraryDecks(
         cleanupTimerRef.current = null;
       }, 0);
     };
-  }, [loadFirstPage]);
+  }, [cacheScope, currentUserUuid, loadFirstPage, normalizedSearchQuery]);
 
   const visibleState =
+    cacheScope !== null &&
+    stateScopeKey === cacheScope.key &&
     state.searchQuery === normalizedSearchQuery
       ? state
       : { ...INITIAL_STATE, searchQuery: normalizedSearchQuery };
 
   return {
     ...visibleState,
-    onlyFavourites,
+    onlyFavourites:
+      cacheScope !== null && stateScopeKey === cacheScope.key ? onlyFavourites : false,
     retry,
     loadMore,
     createDeck,

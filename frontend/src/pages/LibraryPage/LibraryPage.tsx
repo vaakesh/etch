@@ -1,8 +1,19 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { useSessionCacheScope } from "../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  getSessionCacheEntry,
+  setSessionCacheEntry,
+  type SessionCacheScope,
+} from "../../auth/model/session-cache";
 import { DashboardIcon } from "../../components/DashboardVisuals";
+import {
+  createDeckDetailsNavigationState,
+  getDeckDetailsPath,
+} from "../../features/decks/model/deck-details-navigation";
 import { shouldOpenDeckCreator } from "../../features/library/model/library-navigation";
 import { useLongTextPreviewsEnabled } from "../../features/settings/model/useLongTextPreviewsEnabled";
 import type {
@@ -16,6 +27,7 @@ import {
   type UseLibraryCardsResult,
 } from "../../features/library/model/useLibraryCards";
 import { useLibraryDecks } from "../../features/library/model/useLibraryDecks";
+import { useLibraryDeckLayout } from "../../features/library/model/useLibraryDeckLayout";
 import {
   CARDS_LOADED_COUNT_FORMS,
   DECKS_LOADED_COUNT_FORMS,
@@ -26,14 +38,57 @@ import {
   useLocale,
   useLocalizedMessages,
   type AppLocale,
+  type LocalizedCountForms,
 } from "../../i18n";
 import { AddCardToDeckDialog } from "./AddCardToDeckDialog";
+import { ArchiveIcon } from "./ArchiveIcon";
 import { CardImportDialog } from "./CardImportDialog";
 import { CardEditorDialog } from "./CardEditorDialog";
 import { DeckCreatorDialog } from "./DeckCreatorDialog";
 import { DeckDeleteDialog } from "./DeckDeleteDialog";
 import styles from "./LibraryPage.module.css";
 import { OverflowingCardText } from "./OverflowingCardText";
+
+const SAVE_COUNT_FORMS = {
+  "ru-RU": { one: "сохранение", few: "сохранения", many: "сохранений", other: "сохранения" },
+  "en-US": { one: "save", other: "saves" },
+} satisfies LocalizedCountForms;
+
+type LibraryActionTheme =
+  | "aqua-flash"
+  | "berry-burst"
+  | "cherry-rush"
+  | "coral-pop"
+  | "lime-punch"
+  | "mango-sun"
+  | "mint-splash"
+  | "plum-jam"
+  | "tangerine-zest"
+  | "violet-bloom";
+
+// Change only this value to preview another coordinated action palette.
+const LIBRARY_ACTION_THEME: LibraryActionTheme = "aqua-flash";
+
+type LibraryStartTheme =
+  | "amber-sun"
+  | "aqua-capsule"
+  | "berry-spark"
+  | "coral-launch"
+  | "graphite-neon"
+  | "indigo-focus"
+  | "lime-energy"
+  | "mint-arrow"
+  | "ruby-drive"
+  | "violet-glow";
+
+// Change only this value to preview another Start button style.
+const LIBRARY_START_THEME: LibraryStartTheme = "aqua-capsule";
+
+type LibraryDeckTitleStyle =
+  "accent-rail" | "boxed-arrow" | "dotted-signal" | "gradient-underline" | "soft-pill";
+
+// Change only this value to preview another clickable deck title style.
+const LIBRARY_DECK_TITLE_STYLE: LibraryDeckTitleStyle = "gradient-underline";
 
 const MESSAGES = defineMessages(
   {
@@ -52,6 +107,7 @@ const MESSAGES = defineMessages(
       cardDeleteNotFound: "Карточка уже удалена или больше не существует.",
       cardDeleteServer: "Сервер временно не может удалить карточку.",
       favouriteNotFound: "Колода больше не найдена.",
+      favouriteUnsaved: "Сначала сохраните колоду, чтобы добавить её в избранное.",
       favouriteGeneric: "Не удалось изменить избранное. Попробуйте ещё раз.",
       deckDeleteGeneric: "Не удалось удалить колоду. Попробуйте ещё раз.",
       deckDeleteNotFound: "Колода уже удалена или больше не существует.",
@@ -79,7 +135,8 @@ const MESSAGES = defineMessages(
     updated: "Обновлено",
     configurePractice: (title: string) => `Настроить тренировку по колоде «${title}»`,
     startPractice: (title: string) => `Начать тренировку по колоде «${title}»`,
-    start: "Начать",
+    openDeckPage: (title: string) => `Открыть страницу колоды «${title}»`,
+    start: "Начать тренировку",
     cardActions: (text: string) => `Действия с карточкой «${text}»`,
     actions: "Действия",
     edit: "Редактировать",
@@ -116,6 +173,11 @@ const MESSAGES = defineMessages(
     cardSearchEmptyDescription: "Попробуйте изменить запрос или проверить написание.",
     clearCardSearch: "Очистить поиск по карточкам",
     favouritesOnly: "Только любимые",
+    showArchives: "Показать архивные колоды",
+    archiveLabel: "Архив колод",
+    deckLayout: "Вид колод",
+    fullDeckLayout: "Полный вид",
+    compactDeckLayout: "Компактный вид",
     searchUnavailable: "Поиск недоступен",
     favouritesLoadError: "Любимые колоды не загрузились",
     libraryLoadError: "Библиотека не загрузилась",
@@ -142,6 +204,7 @@ const MESSAGES = defineMessages(
       cardDeleteNotFound: "This card was already deleted or no longer exists.",
       cardDeleteServer: "The server cannot delete the card right now.",
       favouriteNotFound: "This deck could not be found.",
+      favouriteUnsaved: "Save the deck before adding it to favorites.",
       favouriteGeneric: "We couldn't update your favorites. Try again.",
       deckDeleteGeneric: "We couldn't delete the deck. Try again.",
       deckDeleteNotFound: "This deck was already deleted or no longer exists.",
@@ -169,7 +232,8 @@ const MESSAGES = defineMessages(
     updated: "Updated",
     configurePractice: (title: string) => `Configure practice for “${title}”`,
     startPractice: (title: string) => `Start practicing “${title}”`,
-    start: "Start",
+    openDeckPage: (title: string) => `Open the “${title}” deck page`,
+    start: "Start practice",
     cardActions: (text: string) => `Actions for card “${text}”`,
     actions: "Actions",
     edit: "Edit",
@@ -206,6 +270,11 @@ const MESSAGES = defineMessages(
     cardSearchEmptyDescription: "Try a different query or check the spelling.",
     clearCardSearch: "Clear card search",
     favouritesOnly: "Favorites only",
+    showArchives: "Show archived decks",
+    archiveLabel: "Deck archive",
+    deckLayout: "Deck layout",
+    fullDeckLayout: "Full view",
+    compactDeckLayout: "Compact view",
     searchUnavailable: "Search is unavailable",
     favouritesLoadError: "Favorite decks didn't load",
     libraryLoadError: "The library didn't load",
@@ -221,12 +290,13 @@ const MESSAGES = defineMessages(
 type LibraryView = "decks" | "cards";
 
 interface LibraryUiState {
-  currentUserUuid: string | null;
-  activeView: LibraryView;
   hasOpenedCards: boolean;
+  deckSearchQuery: string;
+  cardSearchQuery: string;
+  scrollTop: number | null;
 }
 
-let cachedLibraryUiState: LibraryUiState | null = null;
+const LIBRARY_UI_CACHE_KEY = createSessionCacheKey<LibraryUiState>("library.ui");
 
 const dateFormatters = new Map<AppLocale, Intl.DateTimeFormat>();
 
@@ -316,6 +386,9 @@ function getCardDeleteErrorMessage(error: unknown, messages: (typeof MESSAGES)["
 }
 
 function getFavouriteErrorMessage(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): string {
+  if (hasApiErrorCode(error, API_ERROR_CODES.cannotFavouriteUnsavedDeck)) {
+    return messages.errors.favouriteUnsaved;
+  }
   if (isApiError(error)) {
     if (error.status === 403 || error.status === 404) {
       return messages.errors.favouriteNotFound;
@@ -342,7 +415,7 @@ function getDeckDeleteErrorMessage(error: unknown, messages: (typeof MESSAGES)["
   return messages.errors.deckDeleteGeneric;
 }
 
-function Glyph({ name }: { name: "delete" | "heart" | "pencil" | "play" | "sparkles" }) {
+function Glyph({ name }: { name: "arrow" | "delete" | "heart" | "open" | "pencil" | "sparkles" }) {
   if (name === "heart") {
     return (
       <svg
@@ -372,10 +445,33 @@ function Glyph({ name }: { name: "delete" | "heart" | "pencil" | "play" | "spark
       </svg>
     );
   }
-  if (name === "play") {
+  if (name === "arrow") {
     return (
-      <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M8.2 5.6c0-1.1 1.2-1.8 2.1-1.2l9 5.4a2.5 2.5 0 0 1 0 4.3l-9 5.4c-.9.6-2.1-.1-2.1-1.2Z" />
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+        viewBox="0 0 24 24"
+      >
+        <path d="M5 12h14m-6-6 6 6-6 6" />
+      </svg>
+    );
+  }
+  if (name === "open") {
+    return (
+      <svg
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        viewBox="0 0 24 24"
+      >
+        <path d="M7 17 17 7M8 7h9v9" />
       </svg>
     );
   }
@@ -486,6 +582,7 @@ interface DeckCardProps {
   isFavouriteUpdating: boolean;
   onDelete: (deckUuid: string) => void;
   onFavouriteChange: (deckUuid: string, value: boolean) => void;
+  onOpenDetails: () => void;
 }
 
 function DeckCard({
@@ -497,6 +594,7 @@ function DeckCard({
   isFavouriteUpdating,
   onDelete,
   onFavouriteChange,
+  onOpenDetails,
 }: DeckCardProps) {
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
@@ -506,6 +604,7 @@ function DeckCard({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const updatedAtLabel = formatUpdatedAt(deck.updatedAt ?? null, locale);
   const wordCount = localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
+  const savesCount = localizeCount(deck.savesCount, SAVE_COUNT_FORMS, locale);
   const favouriteErrorId = `favourite-error-${deck.uuid}`;
   const deleteErrorId = `delete-error-${deck.uuid}`;
   const favouriteAction = deck.isFavourite ? messages.removeFavourite : messages.addFavourite;
@@ -517,7 +616,24 @@ function DeckCard({
       data-deck-uuid={deck.uuid}
     >
       <div className={styles.deckTopline}>
-        <AccuracyStat value={deck.accuracy} />
+        <div className={styles.deckSignals}>
+          <AccuracyStat value={deck.accuracy} />
+          <span className={styles.deckSaves} title={savesCount.text}>
+            <svg
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.7"
+              viewBox="0 0 24 24"
+            >
+              <path d="M6.5 20V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v15L12 16.5Z" />
+            </svg>
+            <span>{savesCount.formattedValue}</span>
+            <span className={styles.visuallyHidden}> {savesCount.unit}</span>
+          </span>
+        </div>
         <div className={styles.deckManagement}>
           <button
             aria-describedby={favouriteError === null ? undefined : favouriteErrorId}
@@ -581,7 +697,20 @@ function DeckCard({
 
       <div className={styles.deckHero}>
         <div className={styles.deckCopy}>
-          <h2 title={longTextPreviewsEnabled ? deck.title : undefined}>{deck.title}</h2>
+          <h2>
+            <Link
+              aria-label={messages.openDeckPage(deck.title)}
+              className={styles.deckDetailsLink}
+              data-deck-action="open"
+              onClick={onOpenDetails}
+              state={createDeckDetailsNavigationState("library")}
+              title={longTextPreviewsEnabled ? deck.title : messages.openDeckPage(deck.title)}
+              to={getDeckDetailsPath(deck.uuid)}
+            >
+              <span className={styles.deckDetailsText}>{deck.title}</span>
+              <Glyph name="open" />
+            </Link>
+          </h2>
           <OverflowingCardText
             className={styles.deckDescription}
             label={messages.deckDescription}
@@ -660,27 +789,30 @@ function DeckCard({
             </time>
           ) : null}
         </footer>
-        {isDeleting ? (
-          <button
-            aria-label={messages.deckDeleting(deck.title)}
-            className={styles.startButton}
-            disabled
-            title={messages.deckDeletingShort}
-            type="button"
-          >
-            <span>{messages.deleting}</span>
-          </button>
-        ) : (
-          <Link
-            aria-label={messages.configurePractice(deck.title)}
-            className={styles.startButton}
-            title={messages.startPractice(deck.title)}
-            to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
-          >
-            <Glyph name="play" />
-            <span>{messages.start}</span>
-          </Link>
-        )}
+        <div className={styles.deckActions}>
+          {isDeleting ? (
+            <button
+              aria-label={messages.deckDeleting(deck.title)}
+              className={styles.startButton}
+              disabled
+              title={messages.deckDeletingShort}
+              type="button"
+            >
+              <span>{messages.deleting}</span>
+              <Glyph name="arrow" />
+            </button>
+          ) : (
+            <Link
+              aria-label={messages.configurePractice(deck.title)}
+              className={styles.startButton}
+              title={messages.startPractice(deck.title)}
+              to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
+            >
+              <span>{messages.start}</span>
+              <Glyph name="arrow" />
+            </Link>
+          )}
+        </div>
       </div>
       {isDeleteDialogOpen ? (
         <DeckDeleteDialog
@@ -1241,28 +1373,39 @@ export function LibraryImportButton({ onImport }: { onImport: () => void }) {
 }
 
 export function LibraryPage() {
+  const cacheScope = useSessionCacheScope();
+
+  return <LibraryPageContent cacheScope={cacheScope} key={cacheScope?.key ?? "signed-out"} />;
+}
+
+function LibraryPageContent({ cacheScope }: { cacheScope: SessionCacheScope | null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
   const currentUserUuid = user?.uuid ?? null;
+  const { deckLayout, changeDeckLayout } = useLibraryDeckLayout();
   const openDeckCreatorFromNavigation = shouldOpenDeckCreator(location.state);
-  const cachedUiStateAtMount =
-    cachedLibraryUiState?.currentUserUuid === currentUserUuid ? cachedLibraryUiState : null;
-  const [activeView, setActiveView] = useState<LibraryView>(
-    cachedUiStateAtMount?.activeView ?? "decks",
-  );
+  const cachedUiStateAtMount = getSessionCacheEntry(cacheScope, LIBRARY_UI_CACHE_KEY) ?? null;
+  const activeView: LibraryView = location.pathname === "/library/cards" ? "cards" : "decks";
   const [hasOpenedCards, setHasOpenedCards] = useState(
-    cachedUiStateAtMount?.hasOpenedCards ?? false,
+    cachedUiStateAtMount?.hasOpenedCards ?? activeView === "cards",
   );
+  const cardsOpened = hasOpenedCards || activeView === "cards";
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(openDeckCreatorFromNavigation);
   const [isCardImportOpen, setIsCardImportOpen] = useState(false);
   const [useCompactDeckLoading, setUseCompactDeckLoading] = useState(false);
-  const [deckSearchQuery, setDeckSearchQuery] = useState("");
-  const [cardSearchQuery, setCardSearchQuery] = useState("");
+  const [deckSearchQuery, setDeckSearchQuery] = useState(
+    cachedUiStateAtMount?.deckSearchQuery ?? "",
+  );
+  const [cardSearchQuery, setCardSearchQuery] = useState(
+    cachedUiStateAtMount?.cardSearchQuery ?? "",
+  );
   const [cardAssignedNoticeKey, setCardAssignedNoticeKey] = useState<number | null>(null);
+  const pageRef = useRef<HTMLElement | null>(null);
+  const restoreScrollTopRef = useRef(cachedUiStateAtMount?.scrollTop ?? null);
   const cardSearchInputRef = useRef<HTMLInputElement | null>(null);
   const cardAssignedNoticeSequenceRef = useRef(0);
   const cardAssignedNoticeTimeoutRef = useRef<number | null>(null);
@@ -1270,9 +1413,9 @@ export function LibraryPage() {
   const isCardSearchActive = cardSearchQuery.trim().length > 0;
   const library = useLibraryDecks(currentUserUuid, deckSearchQuery);
   const cardLibrary = useLibraryCards({
-    enabled: hasOpenedCards,
+    enabled: cardsOpened,
     onDeleteSuccess: library.retry,
-    ...(hasOpenedCards ? { searchQuery: cardSearchQuery } : {}),
+    ...(cardsOpened ? { searchQuery: cardSearchQuery } : {}),
   });
   const loadedDeckCount = localizeCount(
     library.decks.length,
@@ -1284,20 +1427,45 @@ export function LibraryPage() {
   const loadedCardCount = localizeCount(cardLibrary.cards.length, CARDS_LOADED_COUNT_FORMS, locale);
   const importDecks = library.decks.filter((deck) => deck.ownerUuid === currentUserUuid);
 
+  useLayoutEffect(() => {
+    const scrollTop = restoreScrollTopRef.current;
+    if (scrollTop === null || library.status !== "success" || pageRef.current === null) {
+      return;
+    }
+
+    pageRef.current.scrollTop = scrollTop;
+    restoreScrollTopRef.current = null;
+    const cachedLibraryUiState = getSessionCacheEntry(cacheScope, LIBRARY_UI_CACHE_KEY);
+    if (cachedLibraryUiState !== undefined) {
+      setSessionCacheEntry(cacheScope, LIBRARY_UI_CACHE_KEY, {
+        ...cachedLibraryUiState,
+        scrollTop: null,
+      });
+    }
+  }, [cacheScope, library.status]);
+
   useEffect(() => {
-    if (!openDeckCreatorFromNavigation) {
+    const isLegacyLibraryPath = location.pathname === "/library";
+    if (!isLegacyLibraryPath && !openDeckCreatorFromNavigation) {
       return;
     }
 
     void navigate(
       {
-        pathname: location.pathname,
+        pathname: isLegacyLibraryPath ? "/library/decks" : location.pathname,
         search: location.search,
         hash: location.hash,
       },
-      { replace: true, state: null },
+      { replace: true, state: isLegacyLibraryPath ? location.state : null },
     );
-  }, [location.hash, location.pathname, location.search, navigate, openDeckCreatorFromNavigation]);
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    openDeckCreatorFromNavigation,
+  ]);
 
   useEffect(
     () => () => {
@@ -1309,14 +1477,26 @@ export function LibraryPage() {
   );
 
   function handleViewChange(view: LibraryView): void {
-    const nextHasOpenedCards = hasOpenedCards || view === "cards";
-    cachedLibraryUiState = {
-      currentUserUuid,
-      activeView: view,
+    const nextHasOpenedCards = cardsOpened || view === "cards";
+    setSessionCacheEntry(cacheScope, LIBRARY_UI_CACHE_KEY, {
       hasOpenedCards: nextHasOpenedCards,
-    };
-    setActiveView(view);
+      deckSearchQuery,
+      cardSearchQuery,
+      scrollTop: null,
+    });
     setHasOpenedCards(nextHasOpenedCards);
+    if (location.pathname !== `/library/${view}`) {
+      void navigate(`/library/${view}`);
+    }
+  }
+
+  function captureLibraryUiState(): void {
+    setSessionCacheEntry(cacheScope, LIBRARY_UI_CACHE_KEY, {
+      hasOpenedCards: cardsOpened,
+      deckSearchQuery,
+      cardSearchQuery,
+      scrollTop: pageRef.current?.scrollTop ?? 0,
+    });
   }
 
   function handleCardAssigned(): void {
@@ -1334,7 +1514,13 @@ export function LibraryPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <main
+      className={styles.page}
+      data-action-theme={LIBRARY_ACTION_THEME}
+      data-deck-title-style={LIBRARY_DECK_TITLE_STYLE}
+      data-start-theme={LIBRARY_START_THEME}
+      ref={pageRef}
+    >
       <section className={styles.library}>
         <header className={styles.libraryHeader}>
           <div>
@@ -1349,7 +1535,18 @@ export function LibraryPage() {
             }
           >
             {activeView === "decks" ? (
-              <LibraryImportButton onImport={() => setIsCardImportOpen(true)} />
+              <>
+                <Link
+                  aria-label={messages.showArchives}
+                  className={styles.archiveAction}
+                  onClick={captureLibraryUiState}
+                  to="/library/decks/archive"
+                >
+                  <ArchiveIcon />
+                  <span>{messages.archiveLabel}</span>
+                </Link>
+                <LibraryImportButton onImport={() => setIsCardImportOpen(true)} />
+              </>
             ) : null}
             <LibraryCreateButton
               activeView={activeView}
@@ -1362,7 +1559,7 @@ export function LibraryPage() {
         <div className={styles.toolbar}>
           <LibraryTabs activeView={activeView} onChange={handleViewChange} />
           {activeView === "decks" ? (
-            <div className={styles.toolbarDetails}>
+            <div className={`${styles.toolbarDetails} ${styles.decksToolbarDetails}`}>
               <label className={styles.deckSearchField}>
                 <span className={styles.visuallyHidden}>{messages.searchLabel}</span>
                 <input
@@ -1401,6 +1598,52 @@ export function LibraryPage() {
                   </span>
                 </div>
               ) : null}
+              <div
+                aria-label={messages.deckLayout}
+                className={styles.deckLayoutSwitch}
+                role="group"
+              >
+                <button
+                  aria-controls="library-decks-panel"
+                  aria-label={messages.fullDeckLayout}
+                  aria-pressed={deckLayout === "full"}
+                  onClick={() => changeDeckLayout("full")}
+                  title={messages.fullDeckLayout}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="3.5" y="3.5" width="6" height="6" rx="1.5" />
+                    <rect x="14.5" y="3.5" width="6" height="6" rx="1.5" />
+                    <rect x="3.5" y="14.5" width="6" height="6" rx="1.5" />
+                    <rect x="14.5" y="14.5" width="6" height="6" rx="1.5" />
+                  </svg>
+                </button>
+                <button
+                  aria-controls="library-decks-panel"
+                  aria-label={messages.compactDeckLayout}
+                  aria-pressed={deckLayout === "compact"}
+                  onClick={() => changeDeckLayout("compact")}
+                  title={messages.compactDeckLayout}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.7"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M8 5h12M8 12h12M8 19h12M3.5 5H4M3.5 12H4M3.5 19H4" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ) : (
             <div className={`${styles.toolbarDetails} ${styles.cardsToolbarDetails}`}>
@@ -1472,6 +1715,7 @@ export function LibraryPage() {
           aria-labelledby="library-decks-tab"
           aria-busy={library.status === "loading" || library.isLoadingMore}
           className={styles.libraryPanel}
+          data-deck-layout={deckLayout}
           hidden={activeView !== "decks"}
           id="library-decks-panel"
           role="tabpanel"
@@ -1534,6 +1778,7 @@ export function LibraryPage() {
                     key={deck.uuid}
                     onDelete={library.deleteDeck}
                     onFavouriteChange={library.setFavourite}
+                    onOpenDetails={captureLibraryUiState}
                   />
                 ))}
               </div>
@@ -1557,7 +1802,7 @@ export function LibraryPage() {
           ) : null}
         </section>
 
-        {hasOpenedCards ? (
+        {cardsOpened ? (
           <LibraryCardsPanel
             cardLibrary={cardLibrary}
             isSearchActive={isCardSearchActive}

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import type { CreateLibraryDeckInput } from "../../features/library/model/library-types";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
+import { isValidDeckTitle } from "../../features/library/model/input-validation";
 import styles from "./LibraryPage.module.css";
 
 const MESSAGES = defineMessages(
@@ -77,7 +78,7 @@ function getDeckCreateErrorMessage(error: unknown, messages: (typeof MESSAGES)["
   if (error.status === 403) {
     return messages.errors.forbidden;
   }
-  if (error.status === 409) {
+  if (hasApiErrorCode(error, API_ERROR_CODES.deckAlreadyExists) || error.status === 409) {
     return messages.errors.conflict;
   }
   if (error.status === 422) {
@@ -142,8 +143,7 @@ export function DeckCreatorDialog({ onClose, onSave }: DeckCreatorDialogProps) {
   const [isPublic, setIsPublic] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown | null>(null);
-  const normalizedTitleLength = title.trim().length;
-  const canSave = normalizedTitleLength >= 3 && normalizedTitleLength <= 50;
+  const canSave = isValidDeckTitle(title);
 
   useEffect(() => {
     isMountedRef.current = true;

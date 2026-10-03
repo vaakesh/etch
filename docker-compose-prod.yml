@@ -1,0 +1,135 @@
+name: etch-prod
+
+services:
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./backend/.env
+    volumes:
+      - type: bind
+        source: ./backend/certs
+        target: /backend/certs
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - uv
+        - run
+        - --no-sync
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5).close()"
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: ${db_name}
+      POSTGRES_USER: ${db_user}
+      POSTGRES_PASSWORD: ${db_password}
+    volumes:
+      - pgdata18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: frontend
+      dockerfile: Dockerfile.prod
+    environment:
+      SITE_DOMAIN: ${site_domain_prod}
+      ALLOWED_IP: ${allowed_ip_prod}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_config:/config
+      - caddy_data:/data
+      - type: bind
+        source: ./frontend/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.0-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - redis_data:/data
+      - type: bind
+        source: ./redis/redis.conf
+        target: /usr/local/etc/redis/redis.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./redis/users.acl
+        target: /usr/local/etc/redis/users.acl
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      # NOAUTH also confirms Redis is ready when anonymous access is disabled.
+      test: ["CMD-SHELL", "redis-cli ping | grep -qE '^(PONG|NOAUTH)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    ports:
+      - "127.0.0.1:${cloudbeaver_port}:8978"
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "127.0.0.1:${redisinsight_port}:5540"
+    volumes:
+      - redisinsight:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_config:
+  caddy_data:
+  cloudbeaver_data:
+  pgdata18:
+  redis_data:
+  redisinsight:

@@ -3,6 +3,11 @@ class DeckNotFoundError(Exception):
         super().__init__(message)
 
 
+class DeckNotArchivedError(Exception):
+    def __init__(self, message: str = "Deck is not archived"):
+        super().__init__(message)
+
+
 class UserDeckNotFoundError(Exception):
     def __init__(self, message: str = "User deck progress not found"):
         super().__init__(message)
@@ -33,6 +38,11 @@ class DeckIsNotSavedError(Exception):
         super().__init__(message)
 
 
+class CannotFavouriteUnsavedDeckError(Exception):
+    def __init__(self, message: str = "Save the deck before adding it to favourites"):
+        super().__init__(message)
+
+
 class DeckIsNotFavouriteError(Exception):
     def __init__(self, message: str = "Deck is not in favourites"):
         super().__init__(message)
@@ -50,4 +60,19 @@ class DeckIsEmptyError(Exception):
 
 class InvalidDeckCardPositionError(Exception):
     def __init__(self, message: str = "Invalid card position in deck"):
+        super().__init__(message)
+
+
+class DeckSizeLimitExceededError(Exception):
+    def __init__(
+            self,
+            limit: int,
+            current: int,
+            requested: int,
+        ):
+        remaining = max(limit - current, 0)
+        message = (
+            f"Deck size limit exceeded: deck has {current}/{limit} cards, "
+            f"cannot add {requested} more (only {remaining} slots left)"
+        )
         super().__init__(message)

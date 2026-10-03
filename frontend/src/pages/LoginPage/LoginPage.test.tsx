@@ -38,7 +38,8 @@ describe("LoginPage", () => {
     expect(markup).toContain('type="password"');
     expect(markup).toContain('minLength="8"');
     expect(markup).toContain('maxLength="128"');
-    expect(markup.match(/pattern="\\S\+"/g)).toHaveLength(2);
+    expect(markup.match(/pattern="\\S\+"/g)).toHaveLength(1);
+    expect(markup).toContain('pattern="[A-Za-z0-9_\\-]+"');
     expect(markup.match(/readonly=""/gi)).toHaveLength(2);
     expect(markup).not.toMatch(/autocomplete="(?:username|current-password)"/i);
     expect(markup).not.toContain('type="email"');
@@ -56,7 +57,7 @@ describe("LoginPage", () => {
     expect(markup).toContain('type="email"');
     expect(markup).toContain('autoComplete="email"');
     expect(markup).toContain('autoComplete="new-password"');
-    expect(markup).toContain("3–18 символов, без пробелов.");
+    expect(markup).toContain("3–18 символов: латинские буквы, цифры, _ или -.");
     expect(markup).toContain("8–128 символов, без пробелов.");
     expect(markup).not.toContain('readonly=""');
   });

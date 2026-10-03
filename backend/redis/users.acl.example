@@ -1,7 +1,0 @@
-user default off
-
-user admin reset on >app-password-change-me ~* &* +@all
-
-user readonly on >readonly-password-change-me ~app:* resetchannels -@all +@read
-
-user healthcheck on >health-password-change-me ~* resetchannels -@all +ping

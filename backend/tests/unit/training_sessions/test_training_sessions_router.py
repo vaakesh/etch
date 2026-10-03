@@ -24,7 +24,61 @@ from tests.unit.factories import (
 )
 
 
+class TestTrainingSessionUuidValidation:
+    @pytest.fixture
+    def bff_service(self, app):
+        from app.bff.deps import get_bff_service
+        from app.bff.service import BffService
+        from unittest.mock import create_autospec
+
+        service = create_autospec(BffService, instance=True)
+        async def provide_bff_service():
+            return service
+
+        app.dependency_overrides[get_bff_service] = provide_bff_service
+        yield service
+        app.dependency_overrides.pop(get_bff_service, None)
+
+    @pytest.mark.parametrize("method, path, payload, field", [
+        ("GET", "/training-sessions/{uuid}", None, "session_uuid"),
+        ("GET", "/training-sessions/{uuid}/history", None, "session_uuid"),
+        ("POST", "/training-sessions/{uuid}/activity", {"event": "resume"}, "session_uuid"),
+        ("PUT", "/training-sessions/{uuid}/items/1/submit", {"action": "skip"}, "training_session_uuid"),
+        ("GET", "/bff/practice/{uuid}/resume", None, "training_session_uuid"),
+        ("POST", "/bff/practice/{uuid}/start", {"prompt_side": "front", "words_per_session": 1}, "deck_uuid"),
+    ])
+    async def test_rejects_uuid_v4_before_calling_service(self, client, training_session_service, bff_service, method, path, payload, field):
+        value = "0198ad01-b200-4000-8000-000000000400"
+
+        response = await client.request(method, path.format(uuid=value), json=payload)
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "code": "VALIDATION_ERROR", "message": "Validation error",
+            "details": [{"type": "uuid_version", "loc": ["path", field],
+                         "msg": "UUID version 7 expected", "input": value,
+                         "ctx": {"expected_version": 7}}],
+        }
+        assert training_session_service.mock_calls == []
+        assert bff_service.mock_calls == []
+
+
 class TestGetTrainingSession:
+    async def test_returns_preserved_session_without_deck(self, client, training_session_service):
+        training_session = make_training_session(deck=None)
+        training_session_service.get_by_uuid.return_value = training_session
+
+        response = await client.get(f"/training-sessions/{training_session.uuid}")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": None, "deck_title": None, "status": "in_progress",
+            "requested_count": 10, "answered_count": 3, "correct_count": 2, "wrong_count": 1,
+            "prompt_side": "front", "answer_side": "back",
+            "started_at": "2026-08-15T16:00:00Z", "finished_at": None,
+        }
+
     async def test_returns_session_for_authenticated_viewer(
         self,
         client: AsyncClient,
@@ -37,11 +91,12 @@ class TestGetTrainingSession:
         response = await client.get(f"/training-sessions/{training_session.uuid}")
 
         expected = {
-            "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
+            "deck_title": "Test deck",
             "status": "in_progress",
             "requested_count": 10,
-            "actual_count": 3,
+            "answered_count": 3,
             "correct_count": 2,
             "wrong_count": 1,
             "prompt_side": "front",
@@ -66,6 +121,7 @@ class TestGetTrainingSession:
     ):
         training_session = make_training_session(
             status=TrainingSessionStatus.COMPLETED,
+            requested_count=3,
             finished_at=datetime(2026, 8, 15, 17, 0, tzinfo=UTC),
         )
         training_session_service.get_by_uuid.return_value = training_session
@@ -73,11 +129,12 @@ class TestGetTrainingSession:
         response = await client.get(f"/training-sessions/{training_session.uuid}")
 
         expected = {
-            "uuid": "dddddddd-dddd-dddd-dddd-dddddddddddd",
-            "deck_uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
+            "deck_title": "Test deck",
             "status": "completed",
-            "requested_count": 10,
-            "actual_count": 3,
+            "requested_count": 3,
+            "answered_count": 3,
             "correct_count": 2,
             "wrong_count": 1,
             "prompt_side": "front",
@@ -108,7 +165,7 @@ class TestGetTrainingSession:
         response = await client.get(f"/training-sessions/{training_session.uuid}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Training session not found"}
+        assert response.json()["message"] == "Training session not found"
 
         training_session_service.get_by_uuid.assert_awaited_once_with(
             session_uuid=training_session.uuid,
@@ -123,6 +180,7 @@ class TestGetTrainingSession:
         response = await client.get("/training-sessions/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -154,9 +212,9 @@ class TestGetTrainingSessionHistory:
     ):
         first_item = make_training_session_item()
         second_item = make_training_session_item(
-            uuid=UUID("11111111-1111-1111-1111-111111111111"),
+            uuid=UUID("0198ad01-b200-7000-8000-000000000501"),
             sequence_number=2,
-            original_card_uuid=UUID("22222222-2222-2222-2222-222222222222"),
+            original_card_id=101,
             user_typed_text="bye",
             prompt_text="пока",
             answer_text="bye",
@@ -175,7 +233,7 @@ class TestGetTrainingSessionHistory:
 
         expected = [
             {
-                "item_uuid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                "item_uuid": "0198ad01-b200-7000-8000-000000000500",
                 "sequence_number": 1,
                 "prompt_text": "привет",
                 "answer_text": "hello",
@@ -186,7 +244,7 @@ class TestGetTrainingSessionHistory:
                 "is_correct": None,
             },
             {
-                "item_uuid": "11111111-1111-1111-1111-111111111111",
+                "item_uuid": "0198ad01-b200-7000-8000-000000000501",
                 "sequence_number": 2,
                 "prompt_text": "пока",
                 "answer_text": "bye",
@@ -336,6 +394,7 @@ class TestGetTrainingSessionHistory:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -376,7 +435,7 @@ class TestGetTrainingSessionHistory:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         training_session_service.get_session_history.assert_awaited_once_with(
             user_id=current_user.id,
@@ -394,6 +453,7 @@ class TestGetTrainingSessionHistory:
         response = await client.get("/training-sessions/not-a-uuid/history")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -596,7 +656,7 @@ class TestSubmitAnswer:
             sequence_number=1,
             user_answer=SubmittedAnswerRequest(
                 action="answer",
-                answer="hello",
+                answer="HeLLo",
             ),
         )
 
@@ -716,6 +776,7 @@ class TestSubmitAnswer:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -736,6 +797,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -770,6 +832,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -808,6 +871,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -875,7 +939,7 @@ class TestSubmitAnswer:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json()["message"] == expected_message
 
         training_session_service.submit_answer.assert_awaited_once_with(
             user_id=current_user.id,
@@ -896,6 +960,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -924,6 +989,7 @@ class TestSubmitAnswer:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {

@@ -5,6 +5,7 @@ import { AuthContext } from "./auth-context";
 import { isAuthSessionRejected } from "./auth-errors";
 import { authReducer, initialAuthState } from "./auth-reducer";
 import { withAuthMutationLock } from "./auth-mutation-lock";
+import { clearSessionCache, ensureSessionCache, startSessionCache } from "./session-cache";
 import { setUnauthorizedListener } from "./auth-session";
 import {
   getCurrentAuthSessionSequence,
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const user = await getCurrentUser(signal);
         if (isCurrentOperation(operation) && !signal.aborted) {
+          startSessionCache(user.uuid);
           dispatch({ type: "authorized", user });
         }
       } catch (error) {
@@ -107,6 +109,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
+          clearSessionCache();
           dispatch({ type: "unauthorized" });
         } else {
           dispatch({ type: "error", error: toError(error) });
@@ -144,6 +147,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               } catch {
                 // An aborted component still leaves the UI signed out if cleanup is unavailable.
               }
+              clearSessionCache();
               publishSessionEvent({ type: "signed-out" });
             }
             return;
@@ -158,6 +162,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
           const user = await getCurrentUser(signal, false);
           if (isCurrentOperation(operation) && !signal.aborted) {
+            startSessionCache(user.uuid);
             dispatch({ type: "authorized", user });
             publishSessionEvent({ type: "signed-in" });
           }
@@ -168,6 +173,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
           if (needsOwnCookieCleanup) {
             apiClient.invalidateSession();
+            clearSessionCache();
             try {
               await logoutRequest();
             } catch {
@@ -177,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
 
           if (isCurrentOperation(operation) && !signal.aborted) {
+            clearSessionCache();
             dispatch({ type: "unauthorized" });
           }
 
@@ -219,6 +226,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const user = await getCurrentUser(signal);
         if (isCurrentOperation(operation) && !signal.aborted) {
+          ensureSessionCache(user.uuid);
           dispatch({ type: "authorized", user });
         }
       } catch (error) {
@@ -228,6 +236,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
+          clearSessionCache();
           dispatch({ type: "unauthorized" });
         } else {
           dispatch({ type: "error", error: toError(error) });
@@ -252,6 +261,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       activeOperationRef.current = null;
       operationRef.current += 1;
       apiClient.invalidateSession();
+      clearSessionCache();
       dispatch({ type: "unauthorized" });
 
       if (pendingLogin) {
@@ -319,12 +329,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         activeOperationRef.current = null;
         operationRef.current += 1;
         apiClient.invalidateSession();
+        clearSessionCache();
         if (mountedRef.current) {
           dispatch({ type: "unauthorized" });
         }
         return;
       }
 
+      clearSessionCache();
       const { controller, operation, signal } = beginOperation(undefined, SESSION_SYNC_REASON);
       apiClient.startSession();
       dispatch({ type: "loading" });
@@ -333,6 +345,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
           const user = await getCurrentUser(signal);
           if (isCurrentOperation(operation) && !signal.aborted) {
+            startSessionCache(user.uuid);
             dispatch({ type: "authorized", user });
           }
         } catch (error) {

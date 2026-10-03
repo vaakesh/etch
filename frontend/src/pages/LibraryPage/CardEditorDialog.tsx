@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type PointerEvent } from "react";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import type {
   EditableLibraryCard,
   UpdateLibraryCardInput,
 } from "../../features/library/model/library-types";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
-import styles from "./LibraryPage.module.css";
+import { isValidCardLanguage } from "../../features/library/model/input-validation";
+import styles from "./CardEditorDialog.module.css";
 
 const MESSAGES = defineMessages(
   {
@@ -102,7 +103,7 @@ function getCardSaveErrorMessage(
   if (error.status === 404) {
     return messages.errors.notFound;
   }
-  if (error.status === 409) {
+  if (hasApiErrorCode(error, API_ERROR_CODES.cardAlreadyExists) || error.status === 409) {
     return messages.errors.conflict;
   }
   if (error.status === 422) {
@@ -166,10 +167,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
     frontLang !== card.frontLang ||
     backLang !== card.backLang;
   const hasRequiredTexts = [frontText, backText].every((value) => value.trim().length > 0);
-  const hasValidLanguages = [frontLang, backLang].every((value) => {
-    const length = value.trim().length;
-    return length >= 2 && length <= 3;
-  });
+  const hasValidLanguages = [frontLang, backLang].every(isValidCardLanguage);
   const canSave = hasChanges && hasRequiredTexts && hasValidLanguages;
 
   useEffect(() => {
@@ -323,6 +321,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 id={backLangId}
                 maxLength={3}
                 minLength={2}
+                pattern="[A-Za-z]{2,3}"
                 name="back_lang"
                 onChange={(event) => setBackLang(event.currentTarget.value)}
                 required
@@ -344,6 +343,7 @@ export function CardEditorDialog({ card, onClose, onSave }: CardEditorDialogProp
                 id={frontLangId}
                 maxLength={3}
                 minLength={2}
+                pattern="[A-Za-z]{2,3}"
                 name="front_lang"
                 onChange={(event) => setFrontLang(event.currentTarget.value)}
                 required

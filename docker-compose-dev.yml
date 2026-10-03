@@ -1,0 +1,134 @@
+name: etch-dev
+services:
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    ports:
+      - "${api_port}:8000"
+    volumes:
+      - ./backend/alembic:/backend/alembic
+      - ./backend/app:/backend/app
+      - ./backend/certs:/backend/certs:ro
+      - ./backend/.python-version:/backend/.python-version
+      - ./backend/alembic.ini:/backend/alembic.ini
+      - ./backend/pyproject.toml:/backend/pyproject.toml
+      - ./backend/uv.lock:/backend/uv.lock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - uv
+        - run
+        - --no-sync
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5).close()"
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: on-failure:10
+
+  postgres:
+    image: postgres:18.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${db_name}
+      POSTGRES_USER: ${db_user}
+      POSTGRES_PASSWORD: ${db_password}
+    volumes:
+      - pgdata18:/var/lib/postgresql
+    ports:
+      - "${db_port}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "${frontend_port}:5173"
+    volumes:
+      - ./frontend/public:/frontend/public
+      - ./frontend/src:/frontend/src
+      - ./frontend/.prettierignore:/frontend/.prettierignore
+      - ./frontend/eslint.config.js:/frontend/eslint.config.js
+      - ./frontend/index.html:/frontend/index.html
+      - ./frontend/package-lock.json:/frontend/package-lock.json
+      - ./frontend/package.json:/frontend/package.json
+      - ./frontend/prettier.config.mjs:/frontend/prettier.config.mjs
+      - ./frontend/tsconfig.app.json:/frontend/tsconfig.app.json
+      - ./frontend/tsconfig.json:/frontend/tsconfig.json
+      - ./frontend/tsconfig.node.json:/frontend/tsconfig.node.json
+      - ./frontend/vite.config.ts:/frontend/vite.config.ts
+      - ./frontend/vitest.config.ts:/frontend/vitest.config.ts
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    restart: unless-stopped
+    ports:
+      - "${cloudbeaver_port}:8978"
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+  redis:
+    image: redis:8.10.0-alpine
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+
+    ports: 
+      - "127.0.0.1:${redis_port}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/users.acl:/usr/local/etc/redis/users.acl:ro
+    healthcheck:
+      # NOAUTH also confirms Redis is ready when anonymous access is disabled.
+      test: ["CMD-SHELL", "redis-cli ping | grep -qE '^(PONG|NOAUTH)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "${redisinsight_port}:5540"
+    volumes:
+      - redisinsight:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  cloudbeaver_data:
+  pgdata18:
+  redis_data:
+  redisinsight:

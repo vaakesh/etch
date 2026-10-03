@@ -1,24 +1,31 @@
 from unittest.mock import AsyncMock
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
 from fastapi import status
 from httpx import AsyncClient
 
+from app.auth.deps import get_current_user
+from app.auth.errors import AccessTokenNotFoundError
 from app.cards.errors import CardNotFoundError
 from app.cards.schemas import CreateCardRequest
 from app.decks.errors import (
+    CannotFavouriteUnsavedDeckError,
     CannotSaveOwnDeckError,
     DeckAlreadyExistsError,
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
-    DeckIsNotFavouriteError,
     DeckIsNotSavedError,
     DeckNotFoundError,
+    DeckNotArchivedError,
+    DeckSizeLimitExceededError,
     InvalidDeckCardPositionError,
     PermissionDeniedError,
 )
 from app.decks.schemas import CreateDeckRequest, UpdateDeckRequest
+from app.decks.archiver import ArchiveExpiredError
 from tests.unit.factories import (
     make_card,
     make_deck,
@@ -35,13 +42,14 @@ class TestGetDeck:
         deck,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.return_value = deck
+        deck_service.get_visible_by_uuid.return_value = deck
 
         response = await client.get(f"/decks/{deck.uuid}")
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Test deck",
             "description": "Test deck description",
             "words_count": 10,
@@ -53,9 +61,9 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_awaited_once_with(
+        deck_service.get_visible_by_uuid.assert_awaited_once_with(
             deck_uuid=deck.uuid,
-            current_user_id=current_user.id,
+            viewer_id=current_user.id,
         )
 
     @pytest.mark.parametrize("optional_current_user", [None], indirect=True)
@@ -65,13 +73,14 @@ class TestGetDeck:
         deck,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.return_value = deck
+        deck_service.get_visible_by_uuid.return_value = deck
 
         response = await client.get(f"/decks/{deck.uuid}")
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Test deck",
             "description": "Test deck description",
             "words_count": 10,
@@ -83,9 +92,9 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_awaited_once_with(
+        deck_service.get_visible_by_uuid.assert_awaited_once_with(
             deck_uuid=deck.uuid,
-            current_user_id=None,
+            viewer_id=None,
         )
 
     async def test_returns_404_when_deck_not_found(
@@ -93,14 +102,20 @@ class TestGetDeck:
         client: AsyncClient,
         deck_service: AsyncMock,
     ):
-        deck_service.get_by_uuid.side_effect = DeckNotFoundError()
+        deck_service.get_visible_by_uuid.side_effect = DeckNotFoundError()
 
-        response = await client.get("/decks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        response = await client.get("/decks/0198ad01-b200-7000-8000-000000000200")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Deck not found"}
+        assert response.json() == {
+            "code": "DECK_NOT_FOUND",
+            "message": "Deck not found",
+        }
 
-        deck_service.get_by_uuid.assert_awaited_once()
+        deck_service.get_visible_by_uuid.assert_awaited_once_with(
+            deck_uuid=UUID("0198ad01-b200-7000-8000-000000000200"),
+            viewer_id=42,
+        )
 
     async def test_rejects_invalid_deck_uuid(
         self,
@@ -110,6 +125,7 @@ class TestGetDeck:
         response = await client.get("/decks/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -128,7 +144,7 @@ class TestGetDeck:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == expected
 
-        deck_service.get_by_uuid.assert_not_awaited()
+        deck_service.get_visible_by_uuid.assert_not_awaited()
 
 
 class TestCreateDeck:
@@ -149,8 +165,9 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Vocabulary",
             "description": "Words for the next lesson",
             "words_count": 10,
@@ -166,6 +183,7 @@ class TestCreateDeck:
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     async def test_applies_optional_field_defaults(
@@ -185,8 +203,9 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Vocabulary",
             "description": None,
             "words_count": 10,
@@ -206,6 +225,7 @@ class TestCreateDeck:
             ),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     async def test_normalizes_title_and_description(
@@ -229,8 +249,9 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Vocabulary",
             "description": "Words for the next lesson",
             "words_count": 10,
@@ -250,14 +271,16 @@ class TestCreateDeck:
             ),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     @pytest.mark.parametrize(
-        ("title", "description"),
+        ("title", "description", "expected_description"),
         [
-            pytest.param("abc", "", id="minimum_title_and_empty_description"),
+            pytest.param("abc", "", None, id="minimum_title_and_empty_description"),
             pytest.param(
                 "a" * 50,
+                "d" * 3000,
                 "d" * 3000,
                 id="maximum_title_and_description",
             ),
@@ -269,6 +292,7 @@ class TestCreateDeck:
         current_user,
         title,
         description,
+        expected_description,
         deck_service: AsyncMock,
     ):
         payload = {
@@ -286,10 +310,11 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": title,
-            "description": description,
+            "description": expected_description,
             "words_count": 10,
             "is_public": False,
             "saves_count": 5,
@@ -303,6 +328,7 @@ class TestCreateDeck:
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
     @pytest.mark.parametrize(
@@ -354,6 +380,7 @@ class TestCreateDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -368,6 +395,7 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json={})
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -396,12 +424,16 @@ class TestCreateDeck:
         response = await client.post("/decks/create", json=payload)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"message": "Deck already exists"}
+        assert response.json() == {
+            "code": "DECK_ALREADY_EXISTS",
+            "message": "Deck already exists",
+        }
 
         deck_service.create_deck.assert_awaited_once_with(
             CreateDeckRequest(**payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
+            user_username=current_user.username,
         )
 
 
@@ -424,8 +456,9 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Updated deck",
             "description": "Updated description",
             "words_count": 10,
@@ -439,7 +472,6 @@ class TestUpdateDeck:
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             payload=UpdateDeckRequest(**payload),
         )
@@ -491,8 +523,9 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": expected_title,
             "description": expected_description,
             "words_count": 10,
@@ -506,7 +539,6 @@ class TestUpdateDeck:
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             payload=UpdateDeckRequest(**payload),
         )
@@ -523,8 +555,9 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json={})
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Test deck",
             "description": "Test deck description",
             "words_count": 10,
@@ -538,7 +571,6 @@ class TestUpdateDeck:
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             payload=UpdateDeckRequest(),
         )
@@ -563,8 +595,9 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json=payload)
 
         expected = {
-            "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-            "owner_uuid": "12345678-1234-5678-1234-567812345678",
+            "uuid": "0198ad01-b200-7000-8000-000000000200",
+            "owner_uuid": "0198ad01-b200-7000-8000-000000000042",
+            "owner_username": "test-user",
             "title": "Updated deck",
             "description": "Updated description",
             "words_count": 10,
@@ -578,7 +611,6 @@ class TestUpdateDeck:
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             payload=UpdateDeckRequest(
                 title="Updated deck",
@@ -591,35 +623,35 @@ class TestUpdateDeck:
         [
             pytest.param(
                 {"title": "ab"},
-                {
+                [{
                     "type": "string_too_short",
-                    "loc": ["body", "title"],
+                    "loc": ["body", "title", "constrained-str"],
                     "msg": "String should have at least 3 characters",
                     "input": "ab",
                     "ctx": {"min_length": 3},
-                },
+                }, {"type": "none_required", "loc": ["body", "title", "none"], "msg": "Input should be None", "input": "ab"}],
                 id="title_too_short",
             ),
             pytest.param(
                 {"title": "a" * 51},
-                {
+                [{
                     "type": "string_too_long",
-                    "loc": ["body", "title"],
+                    "loc": ["body", "title", "constrained-str"],
                     "msg": "String should have at most 50 characters",
                     "input": "a" * 51,
                     "ctx": {"max_length": 50},
-                },
+                }, {"type": "none_required", "loc": ["body", "title", "none"], "msg": "Input should be None", "input": "a" * 51}],
                 id="title_too_long",
             ),
             pytest.param(
                 {"description": "d" * 3001},
-                {
+                [{
                     "type": "string_too_long",
                     "loc": ["body", "description"],
                     "msg": "String should have at most 3000 characters",
                     "input": "d" * 3001,
                     "ctx": {"max_length": 3000},
-                },
+                }],
                 id="description_too_long",
             ),
         ],
@@ -636,8 +668,9 @@ class TestUpdateDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
-            "details": [expected_detail],
+            "details": expected_detail,
         }
 
         deck_service.update_deck.assert_not_awaited()
@@ -656,6 +689,7 @@ class TestUpdateDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -673,23 +707,19 @@ class TestUpdateDeck:
         deck_service.update_deck.assert_not_awaited()
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
-                PermissionDeniedError(),
-                status.HTTP_403_FORBIDDEN,
-                "Permission denied",
-                id="permission_denied",
-            ),
-            pytest.param(
                 DeckAlreadyExistsError(),
                 status.HTTP_409_CONFLICT,
+                "DECK_ALREADY_EXISTS",
                 "Deck already exists",
                 id="deck_already_exists",
             ),
@@ -702,6 +732,7 @@ class TestUpdateDeck:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -711,11 +742,13 @@ class TestUpdateDeck:
         response = await client.patch(f"/decks/{deck.uuid}", json=payload)
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             payload=UpdateDeckRequest(**payload),
         )
@@ -731,6 +764,7 @@ class TestUpdateDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -768,23 +802,17 @@ class TestDeleteDeck:
         deck_service.delete_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
-            ),
-            pytest.param(
-                PermissionDeniedError(),
-                status.HTTP_403_FORBIDDEN,
-                "Permission denied",
-                id="permission_denied",
             ),
         ],
     )
@@ -795,6 +823,7 @@ class TestDeleteDeck:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -803,12 +832,14 @@ class TestDeleteDeck:
         response = await client.delete(f"/decks/{deck.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.delete_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_rejects_invalid_deck_uuid(
@@ -820,6 +851,7 @@ class TestDeleteDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -848,7 +880,7 @@ class TestGetDeckCards:
     ):
         first_card = make_card()
         second_card = make_card(
-            uuid=UUID("11111111-1111-1111-1111-111111111111"),
+            uuid=UUID("0198ad01-b200-7000-8000-000000000101"),
             front_text="пока",
             back_text="bye",
             front_lang="ru",
@@ -860,7 +892,7 @@ class TestGetDeckCards:
 
         expected = [
             {
-                "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "uuid": "0198ad01-b200-7000-8000-000000000100",
                 "front_text": "привет",
                 "back_text": "hello",
                 "front_lang": "ru",
@@ -868,7 +900,7 @@ class TestGetDeckCards:
                 "updated_at": "2026-08-15T15:00:00Z",
             },
             {
-                "uuid": "11111111-1111-1111-1111-111111111111",
+                "uuid": "0198ad01-b200-7000-8000-000000000101",
                 "front_text": "пока",
                 "back_text": "bye",
                 "front_lang": "ru",
@@ -932,6 +964,30 @@ class TestGetDeckCards:
             limit=25,
         )
 
+    async def test_accepts_maximum_card_limit(
+        self,
+        client: AsyncClient,
+        current_user,
+        deck,
+        deck_service: AsyncMock,
+    ):
+        deck_service.get_deck_cards.return_value = []
+
+        response = await client.get(
+            f"/decks/{deck.uuid}/cards",
+            params={"limit": 500},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == []
+
+        deck_service.get_deck_cards.assert_awaited_once_with(
+            user_id=current_user.id,
+            deck_uuid=deck.uuid,
+            offset=0,
+            limit=500,
+        )
+
     @pytest.mark.parametrize(
         ("params", "expected_detail"),
         [
@@ -958,13 +1014,13 @@ class TestGetDeckCards:
                 id="limit_below_minimum",
             ),
             pytest.param(
-                {"limit": 51},
+                {"limit": 501},
                 {
                     "type": "less_than_equal",
                     "loc": ["query", "limit"],
-                    "msg": "Input should be less than or equal to 50",
-                    "input": "51",
-                    "ctx": {"le": 50},
+                    "msg": "Input should be less than or equal to 500",
+                    "input": "501",
+                    "ctx": {"le": 500},
                 },
                 id="limit_above_maximum",
             ),
@@ -985,6 +1041,7 @@ class TestGetDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1003,7 +1060,10 @@ class TestGetDeckCards:
         response = await client.get(f"/decks/{deck.uuid}/cards")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Deck not found"}
+        assert response.json() == {
+            "code": "DECK_NOT_FOUND",
+            "message": "Deck not found",
+        }
 
         deck_service.get_deck_cards.assert_awaited_once_with(
             user_id=current_user.id,
@@ -1021,6 +1081,7 @@ class TestGetDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1039,135 +1100,6 @@ class TestGetDeckCards:
         deck_service.get_deck_cards.assert_not_awaited()
 
 
-class TestGetCardInDeck:
-    async def test_returns_card_for_authenticated_viewer(
-        self,
-        client: AsyncClient,
-        current_user,
-        deck,
-        card,
-        card_service: AsyncMock,
-    ):
-        card_service.get_card_in_deck.return_value = card
-
-        response = await client.get(f"/decks/{deck.uuid}/cards/{card.uuid}")
-
-        expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "front_text": "привет",
-            "back_text": "hello",
-            "front_lang": "ru",
-            "back_lang": "en",
-            "updated_at": "2026-08-15T15:00:00Z",
-        }
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == expected
-
-        card_service.get_card_in_deck.assert_awaited_once_with(
-            card_uuid=card.uuid,
-            deck_uuid=deck.uuid,
-            viewer_id=current_user.id,
-        )
-
-    @pytest.mark.parametrize("optional_current_user", [None], indirect=True)
-    async def test_returns_public_card_for_anonymous_viewer(
-        self,
-        client: AsyncClient,
-        deck,
-        card,
-        card_service: AsyncMock,
-    ):
-        card_service.get_card_in_deck.return_value = card
-
-        response = await client.get(f"/decks/{deck.uuid}/cards/{card.uuid}")
-
-        expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "front_text": "привет",
-            "back_text": "hello",
-            "front_lang": "ru",
-            "back_lang": "en",
-            "updated_at": "2026-08-15T15:00:00Z",
-        }
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == expected
-
-        card_service.get_card_in_deck.assert_awaited_once_with(
-            card_uuid=card.uuid,
-            deck_uuid=deck.uuid,
-            viewer_id=None,
-        )
-
-    async def test_returns_404_when_card_not_found(
-        self,
-        client: AsyncClient,
-        current_user,
-        deck,
-        card,
-        card_service: AsyncMock,
-    ):
-        card_service.get_card_in_deck.side_effect = CardNotFoundError()
-
-        response = await client.get(f"/decks/{deck.uuid}/cards/{card.uuid}")
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Card not found"}
-
-        card_service.get_card_in_deck.assert_awaited_once_with(
-            card_uuid=card.uuid,
-            deck_uuid=deck.uuid,
-            viewer_id=current_user.id,
-        )
-
-    @pytest.mark.parametrize(
-        ("deck_uuid", "card_uuid", "field"),
-        [
-            pytest.param(
-                "not-a-uuid",
-                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                "deck_uuid",
-                id="invalid_deck_uuid",
-            ),
-            pytest.param(
-                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                "not-a-uuid",
-                "card_uuid",
-                id="invalid_card_uuid",
-            ),
-        ],
-    )
-    async def test_rejects_invalid_uuid(
-        self,
-        client: AsyncClient,
-        deck_uuid,
-        card_uuid,
-        field,
-        card_service: AsyncMock,
-    ):
-        response = await client.get(f"/decks/{deck_uuid}/cards/{card_uuid}")
-
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
-        assert response.json() == {
-            "message": "Validation error",
-            "details": [
-                {
-                    "type": "uuid_parsing",
-                    "loc": ["path", field],
-                    "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
-                    ),
-                    "input": "not-a-uuid",
-                    "ctx": {"error": "invalid character: found `n` at 1"},
-                }
-            ],
-        }
-
-        card_service.get_card_in_deck.assert_not_awaited()
-
-
 class TestRemoveCardFromDeck:
     async def test_removes_card_from_deck(
         self,
@@ -1184,35 +1116,38 @@ class TestRemoveCardFromDeck:
 
         deck_service.remove_card_from_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
                 CardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "CARD_NOT_FOUND",
                 "Card not found",
                 id="card_not_found",
             ),
             pytest.param(
                 DeckCardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_CARD_NOT_FOUND",
                 "Deck card link not found",
                 id="deck_card_not_found",
             ),
             pytest.param(
                 PermissionDeniedError(),
                 status.HTTP_403_FORBIDDEN,
+                "DECK_PERMISSION_DENIED",
                 "Permission denied",
                 id="permission_denied",
             ),
@@ -1226,6 +1161,7 @@ class TestRemoveCardFromDeck:
         card,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -1234,11 +1170,13 @@ class TestRemoveCardFromDeck:
         response = await client.post(f"/decks/{deck.uuid}/cards/remove/{card.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.remove_card_from_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -1248,12 +1186,12 @@ class TestRemoveCardFromDeck:
         [
             pytest.param(
                 "not-a-uuid",
-                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "0198ad01-b200-7000-8000-000000000100",
                 "deck_uuid",
                 id="invalid_deck_uuid",
             ),
             pytest.param(
-                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "0198ad01-b200-7000-8000-000000000200",
                 "not-a-uuid",
                 "card_uuid",
                 id="invalid_card_uuid",
@@ -1272,6 +1210,7 @@ class TestRemoveCardFromDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1320,35 +1259,40 @@ class TestReorderDeckCards:
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
                 CardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "CARD_NOT_FOUND",
                 "Card not found",
                 id="card_not_found",
             ),
             pytest.param(
                 DeckCardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_CARD_NOT_FOUND",
                 "Deck card link not found",
                 id="deck_card_not_found",
             ),
             pytest.param(
                 PermissionDeniedError(),
                 status.HTTP_403_FORBIDDEN,
+                "DECK_PERMISSION_DENIED",
                 "Permission denied",
                 id="permission_denied",
             ),
             pytest.param(
                 InvalidDeckCardPositionError(),
                 status.HTTP_409_CONFLICT,
+                "INVALID_DECK_CARD_POSITION",
                 "Invalid card position in deck",
                 id="invalid_position",
             ),
@@ -1362,6 +1306,7 @@ class TestReorderDeckCards:
         card,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -1377,7 +1322,10 @@ class TestReorderDeckCards:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.reorder_cards.assert_awaited_once_with(
             user_id=current_user.id,
@@ -1391,7 +1339,7 @@ class TestReorderDeckCards:
         [
             pytest.param(
                 {
-                    "card_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "card_uuid": "0198ad01-b200-7000-8000-000000000100",
                     "to_position": 0,
                 },
                 {
@@ -1437,6 +1385,7 @@ class TestReorderDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1448,7 +1397,7 @@ class TestReorderDeckCards:
         [
             pytest.param({"to_position": 1}, "card_uuid", id="card_uuid_missing"),
             pytest.param(
-                {"card_uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+                {"card_uuid": "0198ad01-b200-7000-8000-000000000100"},
                 "to_position",
                 id="to_position_missing",
             ),
@@ -1469,6 +1418,7 @@ class TestReorderDeckCards:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1511,11 +1461,11 @@ class TestLoadCardsToDeck:
             "imported_count": 2,
             "cards": [
                 {
-                    "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "uuid": "0198ad01-b200-7000-8000-000000000100",
                     "position": 1,
                 },
                 {
-                    "uuid": "11111111-1111-1111-1111-111111111111",
+                    "uuid": "0198ad01-b200-7000-8000-000000000101",
                     "position": 2,
                 },
             ],
@@ -1530,11 +1480,11 @@ class TestLoadCardsToDeck:
             "imported_count": 2,
             "cards": [
                 {
-                    "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "uuid": "0198ad01-b200-7000-8000-000000000100",
                     "position": 1,
                 },
                 {
-                    "uuid": "11111111-1111-1111-1111-111111111111",
+                    "uuid": "0198ad01-b200-7000-8000-000000000101",
                     "position": 2,
                 },
             ],
@@ -1560,7 +1510,6 @@ class TestLoadCardsToDeck:
                 ),
             ],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_normalizes_all_card_fields(
@@ -1584,7 +1533,7 @@ class TestLoadCardsToDeck:
             "imported_count": 1,
             "cards": [
                 {
-                    "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "uuid": "0198ad01-b200-7000-8000-000000000100",
                     "position": 1,
                 }
             ],
@@ -1599,7 +1548,7 @@ class TestLoadCardsToDeck:
             "imported_count": 1,
             "cards": [
                 {
-                    "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "uuid": "0198ad01-b200-7000-8000-000000000100",
                     "position": 1,
                 }
             ],
@@ -1612,14 +1561,13 @@ class TestLoadCardsToDeck:
             deck_uuid=deck.uuid,
             cards=[
                 CreateCardRequest(
-                    front_text="доброе утро",
-                    back_text="good morning",
+                    front_text="ДОБРОЕ УТРО",
+                    back_text="GOOD MORNING",
                     front_lang="ru",
                     back_lang="en",
                 )
             ],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_accepts_maximum_number_of_cards(
@@ -1636,9 +1584,16 @@ class TestLoadCardsToDeck:
             "back_lang": "en",
         }
         payload = {"cards": [card_payload] * 500}
+        imported_cards = [
+            {
+                "uuid": f"0198ad01-b200-7000-8000-{position:012d}",
+                "position": position,
+            }
+            for position in range(1, 501)
+        ]
         deck_service.load_cards_to_deck.return_value = {
             "imported_count": 500,
-            "cards": [],
+            "cards": imported_cards,
         }
 
         response = await client.post(
@@ -1648,7 +1603,7 @@ class TestLoadCardsToDeck:
 
         expected = {
             "imported_count": 500,
-            "cards": [],
+            "cards": imported_cards,
         }
 
         assert response.status_code == status.HTTP_201_CREATED
@@ -1658,7 +1613,6 @@ class TestLoadCardsToDeck:
             deck_uuid=deck.uuid,
             cards=[CreateCardRequest(**card_payload)] * 500,
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -1745,6 +1699,7 @@ class TestLoadCardsToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -1831,6 +1786,7 @@ class TestLoadCardsToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -1849,6 +1805,7 @@ class TestLoadCardsToDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1886,6 +1843,7 @@ class TestLoadCardsToDeck:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -1910,19 +1868,22 @@ class TestLoadCardsToDeck:
         deck_service.load_cards_to_deck.assert_not_awaited()
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
-                PermissionDeniedError(),
-                status.HTTP_403_FORBIDDEN,
-                "Permission denied",
-                id="permission_denied",
+                DeckSizeLimitExceededError(limit=5000, current=5000, requested=1),
+                status.HTTP_409_CONFLICT,
+                "DECK_SIZE_LIMIT_EXCEEDED",
+                "Deck size limit exceeded: deck has 5000/5000 cards, "
+                "cannot add 1 more (only 0 slots left)",
+                id="deck_size_limit",
             ),
         ],
     )
@@ -1933,6 +1894,7 @@ class TestLoadCardsToDeck:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -1954,13 +1916,15 @@ class TestLoadCardsToDeck:
         )
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.load_cards_to_deck.assert_awaited_once_with(
             deck_uuid=deck.uuid,
             cards=[CreateCardRequest(**payload["cards"][0])],
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -1979,7 +1943,7 @@ class TestAddCardToDeck:
         response = await client.post(f"/decks/{deck.uuid}/cards/{card.uuid}")
 
         expected = {
-            "uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "uuid": "0198ad01-b200-7000-8000-000000000300",
             "position": 1,
         }
 
@@ -1988,37 +1952,48 @@ class TestAddCardToDeck:
 
         deck_service.add_card_to_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
                 CardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "CARD_NOT_FOUND",
                 "Card not found",
                 id="card_not_found",
             ),
             pytest.param(
                 PermissionDeniedError(),
                 status.HTTP_403_FORBIDDEN,
+                "DECK_PERMISSION_DENIED",
                 "Permission denied",
                 id="permission_denied",
             ),
             pytest.param(
                 DeckCardAlreadyExistsError(),
                 status.HTTP_409_CONFLICT,
+                "DECK_CARD_ALREADY_EXISTS",
                 "Card already exists in this deck",
                 id="card_already_in_deck",
+            ),
+            pytest.param(
+                DeckSizeLimitExceededError(limit=5000, current=5000, requested=1),
+                status.HTTP_409_CONFLICT,
+                "DECK_SIZE_LIMIT_EXCEEDED",
+                "Deck size limit exceeded: deck has 5000/5000 cards, "
+                "cannot add 1 more (only 0 slots left)",
+                id="deck_size_limit",
             ),
         ],
     )
@@ -2030,6 +2005,7 @@ class TestAddCardToDeck:
         card,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         deck_service: AsyncMock,
     ):
@@ -2038,11 +2014,13 @@ class TestAddCardToDeck:
         response = await client.post(f"/decks/{deck.uuid}/cards/{card.uuid}")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         deck_service.add_card_to_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             card_uuid=card.uuid,
         )
@@ -2052,12 +2030,12 @@ class TestAddCardToDeck:
         [
             pytest.param(
                 "not-a-uuid",
-                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "0198ad01-b200-7000-8000-000000000100",
                 "deck_uuid",
                 id="invalid_deck_uuid",
             ),
             pytest.param(
-                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "0198ad01-b200-7000-8000-000000000200",
                 "not-a-uuid",
                 "card_uuid",
                 id="invalid_card_uuid",
@@ -2076,6 +2054,7 @@ class TestAddCardToDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2113,7 +2092,6 @@ class TestSetFavourite:
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=True,
         )
@@ -2139,25 +2117,26 @@ class TestSetFavourite:
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=False,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
-                DeckIsNotFavouriteError(),
+                CannotFavouriteUnsavedDeckError(),
                 status.HTTP_409_CONFLICT,
-                "Deck is not in favourites",
-                id="deck_not_favourite",
+                "CANNOT_FAVOURITE_UNSAVED_DECK",
+                "Save the deck before adding it to favourites",
+                id="deck_not_saved",
             ),
         ],
     )
@@ -2168,6 +2147,7 @@ class TestSetFavourite:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         user_deck_service: AsyncMock,
     ):
@@ -2176,11 +2156,13 @@ class TestSetFavourite:
         response = await client.patch(f"/decks/{deck.uuid}/set-favourite")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         user_deck_service.set_favourite_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
             value=True,
         )
@@ -2197,6 +2179,7 @@ class TestSetFavourite:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2224,6 +2207,7 @@ class TestSetFavourite:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2257,22 +2241,23 @@ class TestSaveDeck:
 
         user_deck_service.save_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
                 CannotSaveOwnDeckError(),
                 status.HTTP_409_CONFLICT,
+                "CANNOT_SAVE_OWN_DECK",
                 "You cannot save your own deck",
                 id="own_deck",
             ),
@@ -2285,6 +2270,7 @@ class TestSaveDeck:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         user_deck_service: AsyncMock,
     ):
@@ -2293,11 +2279,13 @@ class TestSaveDeck:
         response = await client.post(f"/decks/{deck.uuid}/save")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         user_deck_service.save_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2310,6 +2298,7 @@ class TestSaveDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2343,28 +2332,30 @@ class TestUnsaveDeck:
 
         user_deck_service.unsave_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 DeckNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "DECK_NOT_FOUND",
                 "Deck not found",
                 id="deck_not_found",
             ),
             pytest.param(
                 CannotSaveOwnDeckError(),
                 status.HTTP_409_CONFLICT,
+                "CANNOT_SAVE_OWN_DECK",
                 "You cannot save your own deck",
                 id="own_deck",
             ),
             pytest.param(
                 DeckIsNotSavedError(),
                 status.HTTP_409_CONFLICT,
+                "DECK_IS_NOT_SAVED",
                 "Deck is not saved",
                 id="deck_not_saved",
             ),
@@ -2377,6 +2368,7 @@ class TestUnsaveDeck:
         deck,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         user_deck_service: AsyncMock,
     ):
@@ -2385,11 +2377,13 @@ class TestUnsaveDeck:
         response = await client.post(f"/decks/{deck.uuid}/unsave")
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         user_deck_service.unsave_deck.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             deck_uuid=deck.uuid,
         )
 
@@ -2402,6 +2396,7 @@ class TestUnsaveDeck:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -2418,3 +2413,245 @@ class TestUnsaveDeck:
         }
 
         user_deck_service.unsave_deck.assert_not_awaited()
+
+
+class TestGetArchives:
+    async def test_lists_only_service_returned_archive_offers(
+        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+    ):
+        deck_service.get_archives_for_user.return_value = [{
+            "uuid": UUID("0198ad01-b200-7000-8000-000000000201"),
+            "title": "Archived deck",
+            "expires_at": datetime(2030, 10, 1, tzinfo=UTC),
+            "preserved_deck_uuid": None,
+        }]
+
+        response = await client.get("/decks/archives")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == [{
+            "uuid": "0198ad01-b200-7000-8000-000000000201",
+            "title": "Archived deck",
+            "expires_at": "2030-10-01T00:00:00Z",
+            "preserved_deck_uuid": None,
+        }]
+        deck_service.get_archives_for_user.assert_awaited_once_with(current_user.id)
+
+
+class TestGetArchiveDeck:
+    async def test_returns_archive_details(
+        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+    ):
+        archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
+        deck_service.get_archive_deck.return_value = {
+            "uuid": archive_uuid,
+            "title": "Archived deck",
+            "description": "Archived description",
+            "words_count": 2,
+            "archived_at": datetime(2026, 9, 1, tzinfo=UTC),
+            "expires_at": datetime(2030, 10, 1, tzinfo=UTC),
+            "archive_reason": "deleted",
+            "source_deck_uuid_snapshot": UUID(
+                "0198ad01-b200-7000-8000-000000000202"
+            ),
+            "preserved_deck_uuid": None,
+        }
+
+        response = await client.get(f"/decks/archives/{archive_uuid}")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "uuid": "0198ad01-b200-7000-8000-000000000201",
+            "title": "Archived deck",
+            "description": "Archived description",
+            "words_count": 2,
+            "archived_at": "2026-09-01T00:00:00Z",
+            "expires_at": "2030-10-01T00:00:00Z",
+            "archive_reason": "deleted",
+            "source_deck_uuid_snapshot": "0198ad01-b200-7000-8000-000000000202",
+            "preserved_deck_uuid": None,
+        }
+        deck_service.get_archive_deck.assert_awaited_once_with(
+            deck_uuid=archive_uuid, user_id=current_user.id,
+        )
+
+    @pytest.mark.parametrize(
+        ("suffix", "method_name"),
+        [("", "get_archive_deck"), ("/cards", "get_archive_cards")],
+    )
+    @pytest.mark.parametrize(
+        ("service_error", "expected_status", "expected_code", "expected_message"),
+        [
+            (DeckNotArchivedError(), 409, "DECK_NOT_ARCHIVED", "Deck is not archived"),
+            (DeckNotFoundError(), 404, "DECK_NOT_FOUND", "Deck not found"),
+            (PermissionDeniedError(), 403, "DECK_PERMISSION_DENIED", "Permission denied"),
+            (ArchiveExpiredError("Archive preservation period has expired"),
+             410, "ARCHIVE_EXPIRED", "Archive preservation period has expired"),
+        ],
+    )
+    async def test_returns_archive_access_error(
+        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+        suffix, method_name, service_error, expected_status,
+        expected_code, expected_message,
+    ):
+        service_method = getattr(deck_service, method_name)
+        service_method.side_effect = service_error
+
+        response = await client.get(
+            f"/decks/archives/0198ad01-b200-7000-8000-000000000201{suffix}"
+        )
+
+        assert response.status_code == expected_status
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
+        expected_kwargs = {
+            "deck_uuid": UUID("0198ad01-b200-7000-8000-000000000201"),
+            "user_id": current_user.id,
+        }
+        if suffix == "/cards":
+            expected_kwargs.update(offset=0, limit=50)
+        service_method.assert_awaited_once_with(**expected_kwargs)
+
+
+class TestGetArchiveCards:
+    async def test_returns_card_page(
+        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+    ):
+        archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
+        deck_service.get_archive_cards.return_value = [{
+            "uuid": UUID("0198ad01-b200-7000-8000-000000000203"),
+            "front_text": "front",
+            "back_text": "back",
+            "front_lang": "en",
+            "back_lang": "ru",
+            "updated_at": datetime(2026, 9, 1, tzinfo=UTC),
+        }]
+
+        response = await client.get(
+            f"/decks/archives/{archive_uuid}/cards?offset=5&limit=10"
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == [{
+            "uuid": "0198ad01-b200-7000-8000-000000000203",
+            "front_text": "front",
+            "back_text": "back",
+            "front_lang": "en",
+            "back_lang": "ru",
+            "updated_at": "2026-09-01T00:00:00Z",
+        }]
+        deck_service.get_archive_cards.assert_awaited_once_with(
+            deck_uuid=archive_uuid,
+            user_id=current_user.id,
+            offset=5,
+            limit=10,
+        )
+
+    async def test_rejects_invalid_page_size(
+        self, client: AsyncClient, deck_service: AsyncMock,
+    ):
+        response = await client.get(
+            "/decks/archives/0198ad01-b200-7000-8000-000000000201/cards?limit=501"
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert response.json() == {
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [{
+                "type": "less_than_equal",
+                "loc": ["query", "limit"],
+                "msg": "Input should be less than or equal to 500",
+                "input": "501",
+                "ctx": {"le": 500},
+            }],
+        }
+        deck_service.get_archive_cards.assert_not_awaited()
+
+
+class TestPreserveArchivedDeck:
+    @pytest.mark.parametrize(("already_preserved", "copy_deleted"), [
+        (False, False), (True, False), (True, True),
+    ])
+    async def test_returns_private_copy_uuid(
+        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+        already_preserved, copy_deleted,
+    ):
+        archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
+        deck_service.preserve_archived_deck.return_value = SimpleNamespace(
+            deck_uuid=UUID("0198ad01-b200-7000-8000-000000000202"),
+            already_preserved=already_preserved,
+            copy_deleted=copy_deleted,
+        )
+
+        response = await client.post(f"/decks/{archive_uuid}/preserve")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "uuid": "0198ad01-b200-7000-8000-000000000202",
+            "already_preserved": already_preserved,
+            "copy_deleted": copy_deleted,
+        }
+        deck_service.preserve_archived_deck.assert_awaited_once_with(
+            archive_deck_uuid=archive_uuid, user_id=current_user.id,
+        )
+
+    async def test_returns_gone_when_archive_expired(
+        self, client: AsyncClient, deck_service: AsyncMock,
+    ):
+        deck_service.preserve_archived_deck.side_effect = ArchiveExpiredError(
+            "Archive preservation period has expired"
+        )
+
+        response = await client.post(
+            "/decks/0198ad01-b200-7000-8000-000000000201/preserve"
+        )
+
+        assert response.status_code == status.HTTP_410_GONE
+        assert response.json() == {
+            "code": "ARCHIVE_EXPIRED",
+            "message": "Archive preservation period has expired",
+        }
+
+
+class TestDeckAuthentication:
+    @pytest.mark.parametrize(("method", "suffix", "payload"), [
+        ("POST", "create", {"title": "English"}),
+        ("PATCH", "0198ad01-b200-7000-8000-000000000200", {}),
+        ("DELETE", "0198ad01-b200-7000-8000-000000000200", None),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/preserve", None),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/remove/0198ad01-b200-7000-8000-000000000100", None),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/reorder",
+         {"card_uuid": "0198ad01-b200-7000-8000-000000000100", "to_position": 1}),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/import",
+         {"cards": [{"front_text": "привет", "back_text": "hello"}]}),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/0198ad01-b200-7000-8000-000000000100", None),
+        ("PATCH", "0198ad01-b200-7000-8000-000000000200/set-favourite", None),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/save", None),
+        ("POST", "0198ad01-b200-7000-8000-000000000200/unsave", None),
+        ("GET", "archives", None),
+        ("GET", "archives/0198ad01-b200-7000-8000-000000000201", None),
+        ("GET", "archives/0198ad01-b200-7000-8000-000000000201/cards", None),
+    ])
+    async def test_returns_401_without_calling_deck_services(
+        self, app, client, deck_service, user_deck_service, monkeypatch,
+        method, suffix, payload,
+    ):
+        async def reject_unauthenticated_user():
+            raise AccessTokenNotFoundError()
+
+        monkeypatch.setitem(
+            app.dependency_overrides, get_current_user, reject_unauthenticated_user,
+        )
+
+        response = await client.request(method, f"/decks/{suffix}", json=payload)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {
+            "code": "ACCESS_TOKEN_NOT_FOUND",
+            "message": "Not authorized",
+        }
+        assert deck_service.mock_calls == []
+        assert user_deck_service.mock_calls == []

@@ -1,6 +1,6 @@
-from uuid import UUID
+from pydantic import UUID7
 
-from app.auth.deps import CurrentUser, get_current_user
+from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
     CatalogDeckItemResponse,
@@ -93,7 +93,7 @@ async def get_cards_library_page(
     dependencies=[Depends(start_practice_rate_limit)],
 )
 async def start_practice_session(
-    deck_uuid: UUID,
+    deck_uuid: UUID7,
     payload: StartPracticeSessionRequest,
     current_user: User = Depends(get_current_user),
     bff_service: BffService = Depends(get_bff_service),
@@ -110,7 +110,7 @@ async def start_practice_session(
     response_model=PracticeSessionResponse,
 )
 async def resume_practice_session(
-    training_session_uuid: UUID,
+    training_session_uuid: UUID7,
     current_user: User = Depends(get_current_user),
     bff_service: BffService = Depends(get_bff_service),
 ):

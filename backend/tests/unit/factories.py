@@ -5,7 +5,7 @@ from uuid import UUID
 from app.training_sessions.models import TrainingSessionStatus
 
 TEST_USER_UUID = UUID(
-    "12345678-1234-5678-1234-567812345678"
+    "0198ad01-b200-7000-8000-000000000042"
 )
 
 def make_user(**overrides):
@@ -45,13 +45,14 @@ def make_user_settings(**overrides):
 
 
 TEST_CARD_UUID = UUID(
-    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    "0198ad01-b200-7000-8000-000000000100"
 )
 
 def make_card(**overrides):
     data = {
         "id": 100,
         "uuid": TEST_CARD_UUID,
+        "learning_key": TEST_CARD_UUID,
         "user_id": 42,
         "front_text": "привет",
         "back_text": "hello",
@@ -71,10 +72,10 @@ def make_card(**overrides):
 
 
 TEST_DECK_UUID = UUID(
-    "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    "0198ad01-b200-7000-8000-000000000200"
 )
 TEST_DECK_CARD_UUID = UUID(
-    "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    "0198ad01-b200-7000-8000-000000000300"
 )
 
 def make_deck(**overrides):
@@ -84,7 +85,11 @@ def make_deck(**overrides):
         "id": 200,
         "uuid": TEST_DECK_UUID,
         "user_id": user.id,
-        "source_deck_id": None,
+        "state": "active",
+        "archived_at": None,
+        "expires_at": None,
+        "archive_reason": None,
+        "source_deck_uuid_snapshot": None,
         "title": "Test deck",
         "description": "Test deck description",
         "words_count": 10,
@@ -106,6 +111,7 @@ def make_deck(**overrides):
     deck = SimpleNamespace(**data)
 
     deck.owner_uuid = user.uuid
+    deck.owner_username = user.username
 
     return deck
 
@@ -149,23 +155,26 @@ def make_user_deck(**overrides):
 
 
 TEST_TRAINING_SESSION_UUID = UUID(
-    "dddddddd-dddd-dddd-dddd-dddddddddddd"
+    "0198ad01-b200-7000-8000-000000000400"
 )
 TEST_TRAINING_SESSION_ITEM_UUID = UUID(
-    "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+    "0198ad01-b200-7000-8000-000000000500"
 )
 
 def make_training_session(**overrides):
-    deck = overrides.pop("deck", None) or make_deck()
+    deck = overrides.pop("deck") if "deck" in overrides else make_deck()
 
     data = {
         "id": 400,
         "uuid": TEST_TRAINING_SESSION_UUID,
         "user_id": 42,
-        "deck_id": deck.id,
+        "deck_id": deck.id if deck is not None else None,
         "status": TrainingSessionStatus.IN_PROGRESS,
         "requested_count": 10,
-        "actual_count": 3,
+        "answered_count": 3,
+        "active_study_time_ms": 0,
+        "activity_tracker_uuid": None,
+        "activity_last_seen_at": None,
         "correct_count": 2,
         "wrong_count": 1,
         "prompt_side": "front",
@@ -182,8 +191,9 @@ def make_training_session(**overrides):
 
     session = SimpleNamespace(**data)
 
-    # Аналог TrainingSession.deck_uuid property
-    session.deck_uuid = deck.uuid
+    # Аналог TrainingSession.deck_uuid / deck_title properties
+    session.deck_uuid = deck.uuid if deck is not None else None
+    session.deck_title = deck.title if deck is not None else None
 
     return session
 
@@ -193,7 +203,7 @@ def make_training_session_item(**overrides):
         "uuid": TEST_TRAINING_SESSION_ITEM_UUID,
         "training_session_id": 400,
         "sequence_number": 1,
-        "original_card_uuid": TEST_CARD_UUID,
+        "original_card_id": 100,
         "user_typed_text": None,
         "prompt_text": "привет",
         "answer_text": "hello",
@@ -249,5 +259,3 @@ def make_token_pair(**overrides):
 
     data.update(overrides)
     return SimpleNamespace(**data)
-
-

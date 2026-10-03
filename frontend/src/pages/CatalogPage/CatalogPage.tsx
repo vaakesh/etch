@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { isApiError } from "../../api";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { useSessionCacheScope } from "../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  getSessionCacheEntry,
+  setSessionCacheEntry,
+  type SessionCacheScope,
+} from "../../auth/model/session-cache";
 import { DashboardIcon } from "../../components/DashboardVisuals";
 import { CATALOG_SEARCH_MAX_LENGTH } from "../../features/catalog/api/catalog-api";
 import type { CatalogDeck } from "../../features/catalog/model/catalog-types";
@@ -13,6 +20,10 @@ import {
   useCatalogDecks,
   type CatalogDeckSaveFailure,
 } from "../../features/catalog/model/useCatalogDecks";
+import {
+  createDeckDetailsNavigationState,
+  getDeckDetailsPath,
+} from "../../features/decks/model/deck-details-navigation";
 import {
   WORD_COUNT_FORMS,
   defineMessages,
@@ -33,6 +44,31 @@ const SAVE_COUNT_FORMS = {
   },
   "en-US": { one: "save", other: "saves" },
 } satisfies LocalizedCountForms;
+
+type CatalogButtonTheme =
+  | "amber-violet"
+  | "aqua-breeze"
+  | "berry-blush"
+  | "coral-sunset"
+  | "lime-mint"
+  | "mint-lagoon"
+  | "peach-lilac"
+  | "rose-water"
+  | "sky-orchid"
+  | "violet-dream";
+
+// These two values independently control the Save palette and the Preview/Start palette.
+const CATALOG_SAVE_THEME: CatalogButtonTheme = "berry-blush";
+const CATALOG_PREVIEW_START_THEME: CatalogButtonTheme = "aqua-breeze";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface CatalogUiState {
+  searchQuery: string;
+  scrollTop: number | null;
+}
+
+const CATALOG_UI_CACHE_KEY = createSessionCacheKey<CatalogUiState>("catalog.ui");
 
 const MESSAGES = defineMessages(
   {
@@ -59,11 +95,14 @@ const MESSAGES = defineMessages(
       network: "нет связи с сервером.",
       server: "сервер временно недоступен.",
     },
-    yourDeck: "Ваша колода",
-    otherOwner: "Другой пользователь",
     noDescription: "Без описания",
+    openOwnerProfile: (username: string) => `Открыть профиль пользователя @${username}`,
+    openDeckPage: (title: string) => `Открыть страницу колоды «${title}»`,
     preview: "Предпросмотр",
     previewDeck: (title: string) => `Предпросмотр колоды «${title}»`,
+    configurePractice: (title: string) => `Настроить тренировку по колоде «${title}»`,
+    startPractice: (title: string) => `Начать тренировку по колоде «${title}»`,
+    start: "Начать тренировку",
     loading: "Загружаем каталог…",
     empty: "Публичных колод пока нет",
     searchEmpty: "Ничего не найдено",
@@ -105,11 +144,14 @@ const MESSAGES = defineMessages(
       network: "the server could not be reached.",
       server: "the server is temporarily unavailable.",
     },
-    yourDeck: "Your deck",
-    otherOwner: "Another user",
     noDescription: "No description",
+    openOwnerProfile: (username: string) => `Open @${username}'s profile`,
+    openDeckPage: (title: string) => `Open the “${title}” deck page`,
     preview: "Preview",
     previewDeck: (title: string) => `Preview “${title}”`,
+    configurePractice: (title: string) => `Configure practice for “${title}”`,
+    startPractice: (title: string) => `Start practice for “${title}”`,
+    start: "Start practice",
     loading: "Loading catalog…",
     empty: "No public decks yet",
     searchEmpty: "Nothing found",
@@ -130,7 +172,7 @@ const MESSAGES = defineMessages(
   },
 );
 
-type CatalogIconName = "check" | "eye" | "heart" | "search" | "user" | "x";
+type CatalogIconName = "arrow" | "check" | "external" | "eye" | "heart" | "search" | "x";
 
 function CatalogIcon({ name }: { name: CatalogIconName }) {
   let content;
@@ -144,19 +186,16 @@ function CatalogIcon({ name }: { name: CatalogIconName }) {
     );
   } else if (name === "x") {
     content = <path d="m7 7 10 10M17 7 7 17" />;
-  } else if (name === "user") {
-    content = (
-      <>
-        <circle cx="12" cy="8.2" r="3.2" />
-        <path d="M5.5 20c.5-4 2.7-6.1 6.5-6.1S18 16 18.5 20" />
-      </>
-    );
   } else if (name === "heart") {
     content = (
       <path d="M12 20S4.5 15.8 4.5 9.8A4.3 4.3 0 0 1 12 6.9a4.3 4.3 0 0 1 7.5 2.9C19.5 15.8 12 20 12 20Z" />
     );
   } else if (name === "check") {
     content = <path d="m6.5 12.5 3.5 3.5 7.5-8" />;
+  } else if (name === "arrow") {
+    content = <path d="M5 12h14m-6-6 6 6-6 6" />;
+  } else if (name === "external") {
+    content = <path d="M7 17 17 7M8 7h9v9" />;
   } else {
     content = (
       <>
@@ -234,6 +273,7 @@ function CatalogDeckCard({
   currentUserUuid,
   isSaving,
   onPreview,
+  onOpenPage,
   onSavedChange,
   saveFailure,
 }: {
@@ -241,6 +281,7 @@ function CatalogDeckCard({
   currentUserUuid: string;
   isSaving: boolean;
   onPreview: (deckUuid: string, trigger: HTMLButtonElement) => void;
+  onOpenPage: () => void;
   onSavedChange: (deckUuid: string, value: boolean) => void;
   saveFailure: CatalogDeckSaveFailure | null;
 }) {
@@ -248,11 +289,10 @@ function CatalogDeckCard({
   const { locale } = useLocale();
   const words = localizeCount(deck.totalWordsCount, WORD_COUNT_FORMS, locale);
   const saves = localizeCount(deck.savesCount, SAVE_COUNT_FORMS, locale);
-  const ownerUsername =
-    deck.ownerUuid === currentUserUuid ? messages.yourDeck : messages.otherOwner;
   const isOwnDeck = deck.ownerUuid === currentUserUuid;
   const saveErrorId = `catalog-save-error-${deck.uuid}`;
-  const saveButtonClassName = deck.isSaved
+  const isVisuallySaved = isSaving ? !deck.isSaved : deck.isSaved;
+  const saveButtonClassName = isVisuallySaved
     ? `${styles.saveButton} ${styles.saveButtonActive}`
     : styles.saveButton;
 
@@ -260,11 +300,28 @@ function CatalogDeckCard({
     <article className={styles.deckCard} data-deck-uuid={deck.uuid}>
       <div className={styles.deckHeader}>
         <div className={styles.deckTitleBlock}>
-          <h2>{deck.title}</h2>
-          <span className={styles.owner}>
-            <CatalogIcon name="user" />
-            <span>{ownerUsername}</span>
-          </span>
+          <h2>
+            <Link
+              aria-label={messages.openDeckPage(deck.title)}
+              className={styles.deckDetailsLink}
+              data-deck-action="open"
+              onClick={onOpenPage}
+              state={createDeckDetailsNavigationState("catalog")}
+              title={messages.openDeckPage(deck.title)}
+              to={getDeckDetailsPath(deck.uuid)}
+            >
+              <span className={styles.deckDetailsText}>{deck.title}</span>
+              <CatalogIcon name="external" />
+            </Link>
+          </h2>
+          <Link
+            aria-label={messages.openOwnerProfile(deck.ownerUsername)}
+            className={styles.owner}
+            onClick={onOpenPage}
+            to={`/users/${encodeURIComponent(deck.ownerUsername)}`}
+          >
+            <span>@{deck.ownerUsername}</span>
+          </Link>
         </div>
         {isOwnDeck ? (
           <span aria-label={messages.ownDeckInLibrary(deck.title)} className={styles.ownDeckBadge}>
@@ -280,12 +337,14 @@ function CatalogDeckCard({
             }
             aria-pressed={deck.isSaved}
             className={saveButtonClassName}
+            data-save-theme={CATALOG_SAVE_THEME}
             disabled={isSaving}
             onClick={() => onSavedChange(deck.uuid, !deck.isSaved)}
             type="button"
           >
             {isSaving ? <span aria-hidden="true" className={styles.saveSpinner} /> : null}
             <span>{deck.isSaved ? messages.saved : messages.save}</span>
+            {isSaving ? null : <CatalogIcon name={deck.isSaved ? "check" : "heart"} />}
           </button>
         )}
       </div>
@@ -319,6 +378,15 @@ function CatalogDeckCard({
           <CatalogIcon name="eye" />
           <span>{messages.preview}</span>
         </button>
+        <Link
+          aria-label={messages.configurePractice(deck.title)}
+          className={styles.startButton}
+          title={messages.startPractice(deck.title)}
+          to={`/practice?deck=${encodeURIComponent(deck.uuid)}`}
+        >
+          <span>{messages.start}</span>
+          <CatalogIcon name="arrow" />
+        </Link>
       </footer>
     </article>
   );
@@ -389,19 +457,49 @@ function CatalogPagination({
 }
 
 export function CatalogPage() {
+  const cacheScope = useSessionCacheScope();
+
+  return <CatalogPageContent cacheScope={cacheScope} key={cacheScope?.key ?? "signed-out"} />;
+}
+
+function CatalogPageContent({ cacheScope }: { cacheScope: SessionCacheScope | null }) {
   const messages = useLocalizedMessages(MESSAGES);
   const { user } = useAuth();
+  const currentUserUuid = user?.uuid ?? "";
+  const cachedUiStateAtMount = getSessionCacheEntry(cacheScope, CATALOG_UI_CACHE_KEY) ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [previewDeckUuid, setPreviewDeckUuid] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState(cachedUiStateAtMount?.searchQuery ?? "");
   const pageRef = useRef<HTMLElement | null>(null);
-  const pageScrollTopRef = useRef<number | null>(null);
+  const pageScrollTopRef = useRef<number | null>(cachedUiStateAtMount?.scrollTop ?? null);
+  const restoreScrollTopRef = useRef(cachedUiStateAtMount?.scrollTop ?? null);
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const currentPage = parseCatalogPage(searchParams.get("page"));
+  const previewQuery = searchParams.get("preview");
+  const previewDeckUuid =
+    previewQuery !== null && UUID_PATTERN.test(previewQuery) ? previewQuery.toLowerCase() : null;
   const catalog = useCatalogDecks(searchQuery, currentPage);
   const pageCount = currentPage + (catalog.status === "success" && catalog.hasMore ? 1 : 0);
   const isSearchActive = searchQuery.trim().length > 0;
-  const currentUserUuid = user?.uuid ?? "";
+
+  useLayoutEffect(() => {
+    const scrollTop = restoreScrollTopRef.current;
+    if (scrollTop === null || catalog.status !== "success" || pageRef.current === null) {
+      return;
+    }
+
+    pageRef.current.scrollTop = scrollTop;
+    restoreScrollTopRef.current = null;
+    if (previewDeckUuid === null) {
+      pageScrollTopRef.current = null;
+    }
+    const cachedCatalogUiState = getSessionCacheEntry(cacheScope, CATALOG_UI_CACHE_KEY);
+    if (cachedCatalogUiState !== undefined) {
+      setSessionCacheEntry(cacheScope, CATALOG_UI_CACHE_KEY, {
+        ...cachedCatalogUiState,
+        scrollTop: null,
+      });
+    }
+  }, [cacheScope, catalog.status, previewDeckUuid]);
 
   function changePage(page: number, replace = false): void {
     const nextSearchParams = new URLSearchParams(searchParams);
@@ -465,11 +563,30 @@ export function CatalogPage() {
   function openPreview(deckUuid: string, trigger: HTMLButtonElement): void {
     pageScrollTopRef.current = pageRef.current?.scrollTop ?? null;
     previewTriggerRef.current = trigger;
-    setPreviewDeckUuid(deckUuid);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("preview", deckUuid);
+    setSearchParams(nextSearchParams);
+  }
+
+  function closePreview(): void {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("preview");
+    setSearchParams(nextSearchParams, { replace: true });
+  }
+
+  function captureCatalogUiState(): void {
+    setSessionCacheEntry(cacheScope, CATALOG_UI_CACHE_KEY, {
+      searchQuery,
+      scrollTop: pageScrollTopRef.current ?? pageRef.current?.scrollTop ?? 0,
+    });
   }
 
   return (
-    <main className={styles.page} ref={pageRef}>
+    <main
+      className={styles.page}
+      data-preview-start-theme={CATALOG_PREVIEW_START_THEME}
+      ref={pageRef}
+    >
       <div className={styles.catalog}>
         <header className={styles.header}>
           <h1>{messages.title}</h1>
@@ -538,6 +655,7 @@ export function CatalogPage() {
                     deck={deck}
                     isSaving={catalog.savingDeckUuids.includes(deck.uuid)}
                     key={deck.uuid}
+                    onOpenPage={captureCatalogUiState}
                     onPreview={openPreview}
                     onSavedChange={catalog.setSaved}
                     saveFailure={catalog.saveErrors[deck.uuid] ?? null}
@@ -556,9 +674,10 @@ export function CatalogPage() {
       </div>
       {previewDeckUuid === null ? null : (
         <CatalogDeckPreview
-          currentUserUuid={currentUserUuid}
           deckUuid={previewDeckUuid}
-          onClose={() => setPreviewDeckUuid(null)}
+          onClose={closePreview}
+          onOpenDeck={captureCatalogUiState}
+          returnTarget="catalog"
         />
       )}
     </main>

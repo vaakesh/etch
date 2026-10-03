@@ -1,0 +1,38 @@
+{$SITE_DOMAIN} {
+	@blocked not remote_ip {$ALLOWED_IP}
+	@api path /api /api/*
+
+	# Check the connection's IP before serving files or proxying API requests.
+	route {
+		respond @blocked "Forbidden" 403
+		encode zstd gzip
+
+		handle @api {
+			uri strip_prefix /api
+			reverse_proxy api:8000
+		}
+
+		# Vite generates hashed assets; missing assets must return 404, not HTML.
+		handle /assets/* {
+			root * /srv
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+
+		handle {
+			root * /srv
+			route {
+				try_files {path} /index.html
+				header /index.html Cache-Control "no-cache"
+			}
+			file_server
+		}
+	}
+}
+
+# Container healthcheck does not depend on external DNS or certificate issuance.
+http://127.0.0.1:8080 {
+	bind 127.0.0.1
+	root * /srv
+	file_server
+}

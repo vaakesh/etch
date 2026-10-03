@@ -4,6 +4,8 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
+from app.auth.deps import get_current_user
+from app.auth.errors import AccessTokenNotFoundError
 from app.cards.errors import (
     CardAlreadyExistsError,
     CardNotFoundError,
@@ -32,7 +34,7 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": "доброе утро",
             "back_text": "good morning",
             "front_lang": "ru",
@@ -46,7 +48,6 @@ class TestCreateCard:
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_applies_default_languages(
@@ -65,7 +66,7 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": "привет",
             "back_text": "hello",
             "front_lang": "ru",
@@ -84,7 +85,6 @@ class TestCreateCard:
                 back_lang="en",
             ),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     async def test_normalizes_all_fields(
@@ -100,8 +100,8 @@ class TestCreateCard:
             "back_lang": "  EN  ",
         }
         created_card = make_card(
-            front_text="доброе утро",
-            back_text="good morning",
+            front_text="ДОБРОЕ УТРО",
+            back_text="GOOD MORNING",
             front_lang="ru",
             back_lang="en",
         )
@@ -110,9 +110,9 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "front_text": "доброе утро",
-            "back_text": "good morning",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
+            "front_text": "ДОБРОЕ УТРО",
+            "back_text": "GOOD MORNING",
             "front_lang": "ru",
             "back_lang": "en",
             "updated_at": "2026-08-15T15:00:00Z",
@@ -123,13 +123,12 @@ class TestCreateCard:
 
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(
-                front_text="доброе утро",
-                back_text="good morning",
+                front_text="ДОБРОЕ УТРО",
+                back_text="GOOD MORNING",
                 front_lang="ru",
                 back_lang="en",
             ),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -179,7 +178,7 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": expected_front,
             "back_text": expected_back,
             "front_lang": payload["front_lang"],
@@ -193,7 +192,6 @@ class TestCreateCard:
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
     @pytest.mark.parametrize(
@@ -291,6 +289,7 @@ class TestCreateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [expected_detail],
         }
@@ -355,6 +354,7 @@ class TestCreateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": expected_details,
         }
@@ -376,12 +376,14 @@ class TestCreateCard:
         response = await client.post("/cards/", json=payload)
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json() == {"message": "Card already exists"}
+        assert response.json() == {
+            "code": "CARD_ALREADY_EXISTS",
+            "message": "Card already exists",
+        }
 
         card_service.create_card.assert_awaited_once_with(
             payload=CreateCardRequest(**payload),
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
         )
 
 
@@ -405,7 +407,7 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": "доброе утро",
             "back_text": "good morning",
             "front_lang": "rus",
@@ -488,7 +490,7 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": expected_front,
             "back_text": expected_back,
             "front_lang": expected_front_lang,
@@ -517,7 +519,7 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json={})
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": "привет",
             "back_text": "hello",
             "front_lang": "ru",
@@ -534,40 +536,17 @@ class TestUpdateCard:
             UpdateCardRequest(),
         )
 
-    async def test_accepts_null_for_all_nullable_fields(
-        self,
-        client: AsyncClient,
-        current_user,
-        card,
-        card_service: AsyncMock,
-    ):
-        payload = {
-            "front_text": None,
-            "back_text": None,
-            "front_lang": None,
-            "back_lang": None,
+    @pytest.mark.parametrize("field", ["front_text", "back_text", "front_lang", "back_lang"])
+    async def test_rejects_explicit_null(self, client, card, card_service, field):
+        response = await client.patch(f"/cards/{card.uuid}", json={field: None})
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "code": "VALIDATION_ERROR", "message": "Validation error",
+            "details": [{"type": "value_error", "loc": ["body", field],
+                         "msg": f"{field} value cannot be null", "input": None}],
         }
-        card_service.update_card.return_value = card
-
-        response = await client.patch(f"/cards/{card.uuid}", json=payload)
-
-        expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "front_text": "привет",
-            "back_text": "hello",
-            "front_lang": "ru",
-            "back_lang": "en",
-            "updated_at": "2026-08-15T15:00:00Z",
-        }
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == expected
-
-        card_service.update_card.assert_awaited_once_with(
-            card.uuid,
-            current_user.id,
-            UpdateCardRequest(**payload),
-        )
+        card_service.update_card.assert_not_awaited()
 
     async def test_normalizes_all_updated_fields(
         self,
@@ -583,8 +562,8 @@ class TestUpdateCard:
             "back_lang": "  EN  ",
         }
         updated_card = make_card(
-            front_text="доброе утро",
-            back_text="good morning",
+            front_text="ДОБРОЕ УТРО",
+            back_text="GOOD MORNING",
             front_lang="ru",
             back_lang="en",
         )
@@ -593,9 +572,9 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "front_text": "доброе утро",
-            "back_text": "good morning",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
+            "front_text": "ДОБРОЕ УТРО",
+            "back_text": "GOOD MORNING",
             "front_lang": "ru",
             "back_lang": "en",
             "updated_at": "2026-08-15T15:00:00Z",
@@ -608,8 +587,8 @@ class TestUpdateCard:
             card.uuid,
             current_user.id,
             UpdateCardRequest(
-                front_text="доброе утро",
-                back_text="good morning",
+                front_text="ДОБРОЕ УТРО",
+                back_text="GOOD MORNING",
                 front_lang="ru",
                 back_lang="en",
             ),
@@ -652,7 +631,7 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         expected = {
-            "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "uuid": "0198ad01-b200-7000-8000-000000000100",
             "front_text": payload["front_text"],
             "back_text": payload["back_text"],
             "front_lang": payload["front_lang"],
@@ -676,7 +655,7 @@ class TestUpdateCard:
                 {"front_text": ""},
                 {
                     "type": "string_too_short",
-                    "loc": ["body", "front_text"],
+                    "loc": ["body", "front_text", "constrained-str"],
                     "msg": "String should have at least 1 character",
                     "input": "",
                     "ctx": {"min_length": 1},
@@ -687,7 +666,7 @@ class TestUpdateCard:
                 {"back_text": "b" * 256},
                 {
                     "type": "string_too_long",
-                    "loc": ["body", "back_text"],
+                    "loc": ["body", "back_text", "constrained-str"],
                     "msg": "String should have at most 255 characters",
                     "input": "b" * 256,
                     "ctx": {"max_length": 255},
@@ -698,7 +677,7 @@ class TestUpdateCard:
                 {"front_lang": "r"},
                 {
                     "type": "string_too_short",
-                    "loc": ["body", "front_lang"],
+                    "loc": ["body", "front_lang", "constrained-str"],
                     "msg": "String should have at least 2 characters",
                     "input": "r",
                     "ctx": {"min_length": 2},
@@ -709,7 +688,7 @@ class TestUpdateCard:
                 {"back_lang": "engl"},
                 {
                     "type": "string_too_long",
-                    "loc": ["body", "back_lang"],
+                    "loc": ["body", "back_lang", "constrained-str"],
                     "msg": "String should have at most 3 characters",
                     "input": "engl",
                     "ctx": {"max_length": 3},
@@ -730,30 +709,39 @@ class TestUpdateCard:
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert response.json() == {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
-            "details": [expected_detail],
+            "details": [
+                expected_detail,
+                {"type": "none_required",
+                 "loc": ["body", expected_detail["loc"][1], "none"],
+                 "msg": "Input should be None", "input": expected_detail["input"]},
+            ],
         }
 
         card_service.update_card.assert_not_awaited()
 
     @pytest.mark.parametrize(
-        ("service_error", "expected_status", "expected_message"),
+        ("service_error", "expected_status", "expected_code", "expected_message"),
         [
             pytest.param(
                 CardNotFoundError(),
                 status.HTTP_404_NOT_FOUND,
+                "CARD_NOT_FOUND",
                 "Card not found",
                 id="card_not_found",
             ),
             pytest.param(
                 PermissionDeniedError(),
                 status.HTTP_403_FORBIDDEN,
+                "CARD_PERMISSION_DENIED",
                 "Permission denied",
                 id="permission_denied",
             ),
             pytest.param(
                 CardAlreadyExistsError(),
                 status.HTTP_409_CONFLICT,
+                "CARD_ALREADY_EXISTS",
                 "Card already exists",
                 id="card_already_exists",
             ),
@@ -766,6 +754,7 @@ class TestUpdateCard:
         card,
         service_error,
         expected_status,
+        expected_code,
         expected_message,
         card_service: AsyncMock,
     ):
@@ -775,7 +764,10 @@ class TestUpdateCard:
         response = await client.patch(f"/cards/{card.uuid}", json=payload)
 
         assert response.status_code == expected_status
-        assert response.json() == {"message": expected_message}
+        assert response.json() == {
+            "code": expected_code,
+            "message": expected_message,
+        }
 
         card_service.update_card.assert_awaited_once_with(
             card.uuid,
@@ -794,6 +786,7 @@ class TestUpdateCard:
         )
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -830,7 +823,6 @@ class TestDeleteCard:
 
         card_service.delete_card.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             card_uuid=card.uuid,
         )
 
@@ -846,11 +838,13 @@ class TestDeleteCard:
         response = await client.delete(f"/cards/{card.uuid}")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert response.json() == {"message": "Card not found"}
+        assert response.json() == {
+            "code": "CARD_NOT_FOUND",
+            "message": "Card not found",
+        }
 
         card_service.delete_card.assert_awaited_once_with(
             user_id=current_user.id,
-            user_uuid=current_user.uuid,
             card_uuid=card.uuid,
         )
 
@@ -862,6 +856,7 @@ class TestDeleteCard:
         response = await client.delete("/cards/not-a-uuid")
 
         expected = {
+            "code": "VALIDATION_ERROR",
             "message": "Validation error",
             "details": [
                 {
@@ -881,3 +876,29 @@ class TestDeleteCard:
         assert response.json() == expected
 
         card_service.delete_card.assert_not_awaited()
+
+
+class TestCardAuthentication:
+    @pytest.mark.parametrize(("method", "path", "payload"), [
+        ("POST", "/cards/", {"front_text": "привет", "back_text": "hello"}),
+        ("PATCH", "/cards/0198ad01-b200-7000-8000-000000000100", {}),
+        ("DELETE", "/cards/0198ad01-b200-7000-8000-000000000100", None),
+    ])
+    async def test_returns_401_without_calling_card_service(
+        self, app, client, card_service, monkeypatch, method, path, payload,
+    ):
+        async def reject_unauthenticated_user():
+            raise AccessTokenNotFoundError()
+
+        monkeypatch.setitem(
+            app.dependency_overrides, get_current_user, reject_unauthenticated_user,
+        )
+
+        response = await client.request(method, path, json=payload)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {
+            "code": "ACCESS_TOKEN_NOT_FOUND",
+            "message": "Not authorized",
+        }
+        assert card_service.mock_calls == []

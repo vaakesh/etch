@@ -7,7 +7,7 @@ import {
   type FormEvent,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { isApiError } from "../../api";
+import { API_ERROR_CODES, hasApiErrorCode, isApiError } from "../../api";
 import {
   hasSessionExpiredNotice,
   withoutSessionExpiredNotice,
@@ -34,10 +34,10 @@ const MESSAGES = defineMessages(
   {
     invalidCredentials: "Неверное имя пользователя или пароль.",
     invalidFormat:
-      "Имя пользователя — 3–18 символов без пробелов, пароль — 8–128 символов без пробелов.",
+      "Имя пользователя — 3–18 символов: латинские буквы, цифры, _ или -, пароль — 8–128 символов без пробелов.",
     registrationConflict: "Пользователь с таким именем или email уже существует.",
     registrationInvalidFormat:
-      "Проверьте поля: имя пользователя — 3–18 символов без пробелов, пароль — 8–128 символов без пробелов, email должен быть корректным.",
+      "Проверьте поля: имя пользователя — 3–18 символов: латинские буквы, цифры, _ или -, пароль — 8–128 символов без пробелов, email должен быть корректным.",
     networkError: "Не удалось связаться с сервером. Попробуйте ещё раз.",
     genericError: "Не удалось войти. Попробуйте ещё раз.",
     registrationError: "Не удалось создать аккаунт. Попробуйте ещё раз.",
@@ -59,7 +59,7 @@ const MESSAGES = defineMessages(
     registerLead: "Создайте аккаунт, чтобы собирать свой словарь и запоминать больше.",
     expired: "Сессия истекла. Войдите снова.",
     username: "Имя пользователя",
-    usernameHint: "3–18 символов, без пробелов.",
+    usernameHint: "3–18 символов: латинские буквы, цифры, _ или -.",
     email: "Email",
     password: "Пароль",
     passwordHint: "8–128 символов, без пробелов.",
@@ -71,10 +71,10 @@ const MESSAGES = defineMessages(
   {
     invalidCredentials: "Incorrect username or password.",
     invalidFormat:
-      "Username must be 3–18 characters without spaces; password must be 8–128 characters without spaces.",
+      "Username must be 3–18 characters: Latin letters, digits, _ or -; password must be 8–128 characters without spaces.",
     registrationConflict: "An account with this username or email already exists.",
     registrationInvalidFormat:
-      "Check the fields: username must be 3–18 characters without spaces, password must be 8–128 characters without spaces, and email must be valid.",
+      "Check the fields: username must be 3–18 characters: Latin letters, digits, _ or -, password must be 8–128 characters without spaces, and email must be valid.",
     networkError: "We couldn't reach the server. Try again.",
     genericError: "We couldn't sign you in. Try again.",
     registrationError: "We couldn't create your account. Try again.",
@@ -97,7 +97,7 @@ const MESSAGES = defineMessages(
     registerLead: "Create an account to build your vocabulary and remember more.",
     expired: "Your session expired. Sign in again.",
     username: "Username",
-    usernameHint: "3–18 characters, no spaces.",
+    usernameHint: "3–18 characters: Latin letters, digits, _ or -.",
     email: "Email",
     password: "Password",
     passwordHint: "8–128 characters, no spaces.",
@@ -110,7 +110,10 @@ const MESSAGES = defineMessages(
 
 function getLoginError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): FormError {
   if (isApiError(error)) {
-    if (INVALID_CREDENTIALS_STATUSES.has(error.status)) {
+    if (
+      hasApiErrorCode(error, API_ERROR_CODES.invalidLoginCredentials) ||
+      INVALID_CREDENTIALS_STATUSES.has(error.status)
+    ) {
       return { invalidFields: true, message: messages.invalidCredentials };
     }
 
@@ -128,7 +131,7 @@ function getLoginError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): Fo
 
 function getRegistrationError(error: unknown, messages: (typeof MESSAGES)["ru-RU"]): FormError {
   if (isApiError(error)) {
-    if (error.status === 409) {
+    if (hasApiErrorCode(error, API_ERROR_CODES.userAlreadyExists) || error.status === 409) {
       return { invalidFields: true, message: messages.registrationConflict };
     }
 
@@ -459,7 +462,7 @@ export function LoginPage() {
                   onChange={(event) => setUsername(event.target.value)}
                   onFocus={enableFormInput}
                   onPointerDown={enableFormInput}
-                  pattern="\S+"
+                  pattern="[A-Za-z0-9_\-]+"
                   readOnly={!isAcceptingInput && !isRegistration}
                   ref={usernameInputRef}
                   required

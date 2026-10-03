@@ -22,6 +22,9 @@ from app.redis.deps import get_redis
 from app.training_sessions.router import router as training_sessions_router
 from app.users.router import router as users_router
 from fastapi import FastAPI, Request, Response
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 
 
 
@@ -30,13 +33,18 @@ async def lifespan(app: FastAPI):
     redis = get_redis()
     setup_logging(
         use_colors=True,
-        log_sql=True,
+        log_sql=False,
         log_sql_parameters=False,
         slow_query_ms=200,
     )
 
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+    trace.set_tracer_provider(provider)
+
     yield
 
+    provider.shutdown()
     await redis.aclose()
     get_redis.cache_clear()
 
@@ -139,3 +147,4 @@ async def timing_middleware(
         return response
     finally:
         reset_request_context(context_token)
+

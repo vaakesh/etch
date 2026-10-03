@@ -97,6 +97,7 @@ function parseCatalogDeck(value: unknown, index: number): CatalogDeck {
   return {
     uuid: readUuid(deck.uuid, `${deckPath}.uuid`),
     ownerUuid: readUuid(deck.owner_uuid, `${deckPath}.owner_uuid`),
+    ownerUsername: readString(deck.owner_username, `${deckPath}.owner_username`),
     title: readString(deck.title, `${deckPath}.title`),
     description: readNullableString(deck.description, `${deckPath}.description`),
     totalWordsCount: readNonNegativeInteger(deck.words_count, `${deckPath}.words_count`),
@@ -121,6 +122,7 @@ export function parseCatalogDeckPreview(value: unknown): CatalogDeckPreview {
   return {
     uuid: readUuid(deck.uuid, "deck.uuid"),
     ownerUuid: readUuid(deck.owner_uuid, "deck.owner_uuid"),
+    ownerUsername: readString(deck.owner_username, "deck.owner_username"),
     title: readString(deck.title, "deck.title"),
     description: readNullableString(deck.description, "deck.description"),
     totalWordsCount: readNonNegativeInteger(deck.words_count, "deck.words_count"),

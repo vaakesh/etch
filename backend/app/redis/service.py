@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import random
 from collections.abc import Callable, Hashable
@@ -11,6 +11,7 @@ from app.common.schemas import CursorPage
 from app.common.types import NormalizedSearch
 from app.decks.models import UserDeck
 from app.decks.schemas import InternalDeck, InternalUserDeck
+from app.errors import RequestValueError
 from app.redis.errors import RateLimitError
 from app.redis.keys import (
     make_card_cache_key,
@@ -31,13 +32,17 @@ from app.redis.schemas import CacheLookupResult, LibraryPageCacheLookup, UserDec
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.users.schemas import InternalUser, InternalUserSettings
+from app.users.schemas import InternalUser, InternalUserSettings, UserProfileResponse
+from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
+from app.cards.repository import CardRepository
+from app.decks.utils import make_user_deck_identity
 
 USER_TTL = 60 * 60 * 3
 USER_ID_BY_UUID = 60 * 60 * 24 * 7
 CARD_ID_BY_UUID_TTL = 60 * 60 * 24 * 7
 DECK_ID_BY_UUID_TTL = 60 * 60 * 24 * 7
 USER_SETTINGS_TTL = 60 * 60
+USER_PROFILE_TTL = 60 * 10
 LIBRARY_PAGE_TTL = 60 * 5
 GENERATION_TTL = LIBRARY_PAGE_TTL * 3
 DECK_CARDS_TTL = 60 * 60
@@ -82,12 +87,23 @@ class RateLimit:
             f"{self.policy.route}"
         )
 
-        if not await self.rate_limiter.check(
+        can = await self.rate_limiter.check(
             redis_key=redis_key,
             requests=self.policy.requests,
             window_seconds=self.policy.window_seconds,
-        ):
+        )
+        if can is not None and not can:
             raise RateLimitError()
+
+RATE_LIMIT_SCRIPT = """
+    local value = redis.call('INCR', KEYS[1])
+
+    if value == 1 then
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+    end
+
+    return value
+"""
 
 class RedisRateLimiter:
     def __init__(self, redis: Redis):
@@ -98,30 +114,113 @@ class RedisRateLimiter:
         redis_key: str,
         requests: int,
         window_seconds: int,
+    ) -> bool | None:
+        try:
+            value = await self.redis.eval(
+                RATE_LIMIT_SCRIPT,
+                1,
+                redis_key,
+                window_seconds,
+            )
+
+            return value <= requests
+        except RedisError:
+            logger.warning(
+                "Redis cache operation failed; continuing without cache",
+                extra={"cache_operation": "check rate limit"},
+                exc_info=True,
+            )
+        
+        
+@dataclass
+class InvalidationContext:
+    cards: set[int] = field(default_factory=set)
+    decks: set[int] = field(default_factory=set)
+    users: set[int] = field(default_factory=set)
+
+class CacheInvalidator:
+    def __init__(
+        self,
+        cache_service: RedisCacheService,
+        deck_card_repository: DeckCardRepository,
+        user_deck_repository: UserDeckRepository,
     ):
-        value = await self.redis.get(
-            name=redis_key,
+        self.cache_service = cache_service
+        self.deck_card_repository = deck_card_repository
+        self.user_deck_repository = user_deck_repository
+
+    async def invalidate(
+        self,
+        affected_cards: list[int] | None = None,
+        affected_decks: list[int] | None = None,
+        affected_users: list[int] | None = None,
+    ) -> None:
+        context = InvalidationContext(
+            cards=set(affected_cards or []),
+            decks=set(affected_decks or []),
+            users=set(affected_users or []),
         )
-        if value is None:
-            await self.redis.set(
-                name=redis_key,
-                value="1",
-                ex=window_seconds,
+        await self._resolve_dependencies(
+            context=context,
+        )
+        await self._invalidate_cache(
+            context=context,
+        )
+
+    async def _resolve_dependencies(
+        self,
+        context: InvalidationContext,
+    ) -> None:
+        if context.cards:
+            deck_ids = await self.deck_card_repository.get_all_deck_ids_by_card_ids(
+                card_ids=context.cards,
             )
-            value = 1
-        else:
-            value = await self.redis.incrby(
-                name=redis_key,
-                amount=1,
+            context.decks.update(deck_ids)
+
+        if context.decks:
+            user_ids = await self.user_deck_repository.get_user_ids_by_deck_ids(
+                deck_ids=context.decks,
+            )
+            context.users.update(user_ids)
+
+    async def _invalidate_cache(
+        self,
+        context: InvalidationContext,
+    ) -> None:
+        cards = list(context.cards)
+        decks = list(context.decks)
+        users = list(context.users)
+
+        await self.cache_service.invalidate_cards(
+            card_ids=cards,
+        )
+
+        await self.cache_service.invalidate_decks(
+            deck_ids=decks,
+        )
+        await self.cache_service.invalidate_deck_cards(
+            deck_ids=decks,
+        )
+
+        await self.cache_service.invalidate_library_deck_pages(
+            user_ids=users,
+        )
+        await self.cache_service.invalidate_library_card_pages(
+            user_ids=users,
+        )
+
+        if users and decks:
+            await self.cache_service.invalidate_user_decks(
+                identities=[
+                    make_user_deck_identity(
+                        user_id=user_id,
+                        deck_id=deck_id,
+                    )
+                    for user_id in users
+                    for deck_id in decks
+                ]
             )
 
-        if int(value) > requests:
-            return False
-
-        return True
-        
-        
-    
 
 class RedisCacheService:
     """
@@ -247,13 +346,20 @@ class RedisCacheService:
         """
         key = key_generation_factory(user_id)
 
-        generation = await self._safe_get(key=key)
+        try:
+            generation = await self.redis.get(key)
+        except RedisError:
+            self._log_redis_error(operation=f"GET {key}")
+            return None
 
         if generation is None:
             return 0
 
         try:
-            return int(generation)
+            parsed_generation = int(generation)
+            if parsed_generation < 0:
+                raise ValueError("Library cache generation must be non-negative")
+            return parsed_generation
         except (TypeError, ValueError):
             logger.warning(
                 "Ignoring invalid library cache generation",
@@ -311,7 +417,7 @@ class RedisCacheService:
         """
         try:
             return deserializer(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, RequestValueError):
             logger.warning(
                 "Ignoring invalid cached value",
                 extra={
@@ -798,40 +904,50 @@ class RedisCacheService:
             ]
         )
 
-    async def invalidate_library_card_page(
+    async def invalidate_library_card_pages(
         self,
-        user_id: int,
+        user_ids: list[int],
     ) -> None:
-        key = make_library_cards_page_generation_cache_key(
-            user_id=user_id,
-        )
+        if not user_ids:
+            return
 
         try:
-            pipe = self.redis.pipeline(transaction=True)
-            pipe.incr(key)
-            pipe.expire(key, GENERATION_TTL)
+            pipe = self.redis.pipeline(transaction=False)
+
+            for user_id in user_ids:
+                key = make_library_cards_page_generation_cache_key(
+                    user_id=user_id,
+                )
+                pipe.incr(key)
+                pipe.expire(key, GENERATION_TTL)
             await pipe.execute()
+
         except RedisError:
             self._log_redis_error(
-                operation=f"INCR {key}",
+                operation=f"INCR library cards generations for {len(user_ids)} users",
             )
 
-    async def invalidate_library_deck_page(
+    async def invalidate_library_deck_pages(
         self,
-        user_id: int,
+        user_ids: list[int],
     ) -> None:
-        key = make_library_deck_page_generation_cache_key(
-            user_id=user_id,
-        )
+        if not user_ids:
+            return
 
         try:
-            pipe = self.redis.pipeline(transaction=True)
-            pipe.incr(key)
-            pipe.expire(key, GENERATION_TTL)
+            pipe = self.redis.pipeline(transaction=False)
+
+            for user_id in user_ids:
+                key = make_library_deck_page_generation_cache_key(
+                    user_id=user_id,
+                )
+                pipe.incr(key)
+                pipe.expire(key, GENERATION_TTL)
             await pipe.execute()
+
         except RedisError:
             self._log_redis_error(
-                operation=f"INCR {key}",
+                operation=f"INCR library decks generations for {len(user_ids)} users",
             )
 
     async def cache_deck_cards(

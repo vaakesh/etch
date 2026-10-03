@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionCacheScope } from "../../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  deleteSessionCacheEntry,
+  getSessionCacheEntry,
+  isSessionCacheScopeActive,
+  setSessionCacheEntry,
+} from "../../../auth/model/session-cache";
 import { getHomeDashboard } from "../api/home-api";
 import type { HomeDashboard } from "./home-types";
 
@@ -20,42 +28,64 @@ const INITIAL_STATE: HomeDashboardState = {
   error: null,
 };
 
-let cachedHomeDashboardState: HomeDashboardState | null = null;
+const HOME_DASHBOARD_CACHE_KEY = createSessionCacheKey<HomeDashboardState>("home.dashboard");
 
 export function useHomeDashboard(): UseHomeDashboardResult {
-  const cachedStateAtMount = cachedHomeDashboardState;
-  const shouldLoadOnMountRef = useRef(cachedStateAtMount === null);
+  const cacheScope = useSessionCacheScope();
+  const cachedStateAtMount = getSessionCacheEntry(cacheScope, HOME_DASHBOARD_CACHE_KEY);
   const [state, setState] = useState<HomeDashboardState>(cachedStateAtMount ?? INITIAL_STATE);
+  const [stateScopeKey, setStateScopeKey] = useState<string | null>(
+    cachedStateAtMount === undefined ? null : (cacheScope?.key ?? null),
+  );
   const activeControllerRef = useRef<AbortController | null>(null);
   const cleanupTimerRef = useRef<number | null>(null);
   const requestRevisionRef = useRef(0);
 
   const load = useCallback((): void => {
     activeControllerRef.current?.abort();
-    cachedHomeDashboardState = null;
 
+    if (!isSessionCacheScopeActive(cacheScope)) {
+      requestRevisionRef.current += 1;
+      activeControllerRef.current = null;
+      setStateScopeKey(null);
+      setState(INITIAL_STATE);
+      return;
+    }
+
+    deleteSessionCacheEntry(cacheScope, HOME_DASHBOARD_CACHE_KEY);
     const controller = new AbortController();
     const requestRevision = requestRevisionRef.current + 1;
     requestRevisionRef.current = requestRevision;
     activeControllerRef.current = controller;
     queueMicrotask(() => {
-      if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+      if (
+        !controller.signal.aborted &&
+        requestRevisionRef.current === requestRevision &&
+        isSessionCacheScopeActive(cacheScope)
+      ) {
+        setStateScopeKey(cacheScope.key);
         setState(INITIAL_STATE);
       }
     });
 
     void getHomeDashboard(controller.signal)
       .then((data) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          const nextState: HomeDashboardState = { status: "success", data, error: null };
-          cachedHomeDashboardState = nextState;
+        const nextState: HomeDashboardState = { status: "success", data, error: null };
+        if (
+          !controller.signal.aborted &&
+          requestRevisionRef.current === requestRevision &&
+          setSessionCacheEntry(cacheScope, HOME_DASHBOARD_CACHE_KEY, nextState)
+        ) {
           setState(nextState);
         }
       })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
-          const nextState: HomeDashboardState = { status: "error", data: null, error };
-          cachedHomeDashboardState = nextState;
+        const nextState: HomeDashboardState = { status: "error", data: null, error };
+        if (
+          !controller.signal.aborted &&
+          requestRevisionRef.current === requestRevision &&
+          setSessionCacheEntry(cacheScope, HOME_DASHBOARD_CACHE_KEY, nextState)
+        ) {
           setState(nextState);
         }
       })
@@ -64,7 +94,7 @@ export function useHomeDashboard(): UseHomeDashboardResult {
           activeControllerRef.current = null;
         }
       });
-  }, []);
+  }, [cacheScope]);
 
   useEffect(() => {
     if (cleanupTimerRef.current !== null) {
@@ -72,9 +102,24 @@ export function useHomeDashboard(): UseHomeDashboardResult {
       cleanupTimerRef.current = null;
     }
 
-    if (shouldLoadOnMountRef.current) {
-      shouldLoadOnMountRef.current = false;
-      load();
+    if (cacheScope === null) {
+      requestRevisionRef.current += 1;
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+      queueMicrotask(() => {
+        setStateScopeKey(null);
+        setState(INITIAL_STATE);
+      });
+    } else {
+      const cachedState = getSessionCacheEntry(cacheScope, HOME_DASHBOARD_CACHE_KEY);
+      if (cachedState !== undefined) {
+        queueMicrotask(() => {
+          setStateScopeKey(cacheScope.key);
+          setState(cachedState);
+        });
+      } else if (activeControllerRef.current === null || stateScopeKey !== cacheScope.key) {
+        load();
+      }
     }
 
     return () => {
@@ -85,7 +130,10 @@ export function useHomeDashboard(): UseHomeDashboardResult {
         cleanupTimerRef.current = null;
       }, 0);
     };
-  }, [load]);
+  }, [cacheScope, load, stateScopeKey]);
 
-  return { ...state, retry: load };
+  const visibleState =
+    cacheScope !== null && stateScopeKey === cacheScope.key ? state : INITIAL_STATE;
+
+  return { ...visibleState, retry: load };
 }

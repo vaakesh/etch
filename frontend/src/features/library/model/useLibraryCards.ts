@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSessionCacheScope } from "../../../auth/hooks/useSessionCacheScope";
+import {
+  createSessionCacheKey,
+  deleteSessionCacheEntry,
+  getSessionCacheEntry,
+  isSessionCacheScopeActive,
+  setSessionCacheEntry,
+} from "../../../auth/model/session-cache";
 import {
   createLibraryCard,
   deleteLibraryCard,
@@ -47,7 +55,7 @@ interface LibraryCardsCache {
   state: LibraryCardsState;
 }
 
-let cachedLibraryCards: LibraryCardsCache | null = null;
+const LIBRARY_CARDS_CACHE_KEY = createSessionCacheKey<LibraryCardsCache>("library.cards");
 
 function appendUniqueCards(
   currentCards: readonly LibraryCard[],
@@ -67,11 +75,16 @@ export function useLibraryCards({
   onDeleteSuccess?: () => void;
   searchQuery?: string;
 } = {}): UseLibraryCardsResult {
+  const cacheScope = useSessionCacheScope();
   const normalizedSearchQuery = searchQuery.trim().slice(0, LIBRARY_CARD_SEARCH_MAX_LENGTH);
+  const cachedLibraryCards = getSessionCacheEntry(cacheScope, LIBRARY_CARDS_CACHE_KEY);
   const cachedStateAtMount =
     cachedLibraryCards?.searchQuery === normalizedSearchQuery ? cachedLibraryCards.state : null;
-  const hasLoadedOrStartedRef = useRef(cachedStateAtMount !== null);
   const [state, setState] = useState<LibraryCardsState>(cachedStateAtMount ?? INITIAL_STATE);
+  const [stateScopeKey, setStateScopeKey] = useState<string | null>(
+    cachedStateAtMount === null ? null : (cacheScope?.key ?? null),
+  );
+  const loadedScopeKeyRef = useRef(cachedStateAtMount === null ? null : (cacheScope?.key ?? null));
   const initialControllerRef = useRef<AbortController | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
   const createControllerRef = useRef<AbortController | null>(null);
@@ -83,16 +96,28 @@ export function useLibraryCards({
   const loadedSearchQueryRef = useRef(normalizedSearchQuery);
   const previousSearchQueryRef = useRef(normalizedSearchQuery);
 
-  const setCachedState = useCallback((update: LibraryCardsStateUpdate): void => {
-    setState((currentState) => {
-      const nextState = typeof update === "function" ? update(currentState) : update;
-      cachedLibraryCards = {
-        searchQuery: loadedSearchQueryRef.current,
-        state: nextState,
-      };
-      return nextState;
-    });
-  }, []);
+  const setCachedState = useCallback(
+    (update: LibraryCardsStateUpdate): void => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
+
+      setStateScopeKey(cacheScope.key);
+      setState((currentState) => {
+        const nextState = typeof update === "function" ? update(currentState) : update;
+        if (
+          !setSessionCacheEntry(cacheScope, LIBRARY_CARDS_CACHE_KEY, {
+            searchQuery: loadedSearchQueryRef.current,
+            state: nextState,
+          })
+        ) {
+          return currentState;
+        }
+        return nextState;
+      });
+    },
+    [cacheScope],
+  );
 
   const loadFirstPage = useCallback(
     (loadSearchQuery = searchQueryRef.current): void => {
@@ -104,17 +129,33 @@ export function useLibraryCards({
       deleteControllersRef.current.forEach((controller) => controller.abort());
       deleteControllersRef.current.clear();
 
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        requestRevisionRef.current += 1;
+        loadedScopeKeyRef.current = null;
+        queueMicrotask(() => {
+          setStateScopeKey(null);
+          setState(INITIAL_STATE);
+        });
+        return;
+      }
+
       const controller = new AbortController();
       const requestRevision = requestRevisionRef.current + 1;
       const requestedSearchQuery = loadSearchQuery;
       requestRevisionRef.current = requestRevision;
       loadedSearchQueryRef.current = requestedSearchQuery;
-      cachedLibraryCards = null;
+      loadedScopeKeyRef.current = cacheScope.key;
+      deleteSessionCacheEntry(cacheScope, LIBRARY_CARDS_CACHE_KEY);
       initialControllerRef.current = controller;
       loadMoreControllerRef.current = null;
 
       queueMicrotask(() => {
-        if (!controller.signal.aborted && requestRevisionRef.current === requestRevision) {
+        if (
+          !controller.signal.aborted &&
+          requestRevisionRef.current === requestRevision &&
+          isSessionCacheScopeActive(cacheScope)
+        ) {
+          setStateScopeKey(cacheScope.key);
           setState(INITIAL_STATE);
         }
       });
@@ -152,11 +193,12 @@ export function useLibraryCards({
           }
         });
     },
-    [setCachedState],
+    [cacheScope, setCachedState],
   );
 
   const loadMore = useCallback((): void => {
     if (
+      !isSessionCacheScopeActive(cacheScope) ||
       state.status !== "success" ||
       state.isLoadingMore ||
       loadMoreControllerRef.current !== null ||
@@ -208,7 +250,14 @@ export function useLibraryCards({
           loadMoreControllerRef.current = null;
         }
       });
-  }, [setCachedState, state.hasMore, state.isLoadingMore, state.nextCursor, state.status]);
+  }, [
+    cacheScope,
+    setCachedState,
+    state.hasMore,
+    state.isLoadingMore,
+    state.nextCursor,
+    state.status,
+  ]);
 
   const retry = useCallback((): void => {
     loadFirstPage();
@@ -216,6 +265,9 @@ export function useLibraryCards({
 
   const createCard = useCallback(
     async (input: CreateLibraryCardInput): Promise<void> => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
       createControllerRef.current?.abort();
 
       const controller = new AbortController();
@@ -237,11 +289,14 @@ export function useLibraryCards({
         }
       }
     },
-    [loadFirstPage],
+    [cacheScope, loadFirstPage],
   );
 
   const updateCard = useCallback(
     async (cardUuid: string, input: UpdateLibraryCardInput): Promise<void> => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
       updateControllersRef.current.get(cardUuid)?.abort();
 
       const controller = new AbortController();
@@ -271,11 +326,14 @@ export function useLibraryCards({
         }
       }
     },
-    [loadFirstPage, setCachedState],
+    [cacheScope, loadFirstPage, setCachedState],
   );
 
   const deleteCard = useCallback(
     async (cardUuid: string): Promise<void> => {
+      if (!isSessionCacheScopeActive(cacheScope)) {
+        return;
+      }
       deleteControllersRef.current.get(cardUuid)?.abort();
 
       const controller = new AbortController();
@@ -301,7 +359,7 @@ export function useLibraryCards({
         }
       }
     },
-    [onDeleteSuccess, setCachedState],
+    [cacheScope, onDeleteSuccess, setCachedState],
   );
 
   useEffect(() => {
@@ -332,9 +390,32 @@ export function useLibraryCards({
       cleanupTimerRef.current = null;
     }
 
-    if (enabled && !hasLoadedOrStartedRef.current) {
-      hasLoadedOrStartedRef.current = true;
-      loadFirstPage();
+    if (cacheScope === null) {
+      requestRevisionRef.current += 1;
+      initialControllerRef.current?.abort();
+      loadMoreControllerRef.current?.abort();
+      createControllerRef.current?.abort();
+      updateControllers.forEach((controller) => controller.abort());
+      updateControllers.clear();
+      deleteControllers.forEach((controller) => controller.abort());
+      deleteControllers.clear();
+      loadedScopeKeyRef.current = null;
+      queueMicrotask(() => {
+        setStateScopeKey(null);
+        setState(INITIAL_STATE);
+      });
+    } else if (enabled && loadedScopeKeyRef.current !== cacheScope.key) {
+      const cachedState = getSessionCacheEntry(cacheScope, LIBRARY_CARDS_CACHE_KEY);
+      if (cachedState?.searchQuery === normalizedSearchQuery) {
+        loadedScopeKeyRef.current = cacheScope.key;
+        loadedSearchQueryRef.current = normalizedSearchQuery;
+        queueMicrotask(() => {
+          setStateScopeKey(cacheScope.key);
+          setState(cachedState.state);
+        });
+      } else {
+        queueMicrotask(loadFirstPage);
+      }
     }
 
     return () => {
@@ -352,10 +433,13 @@ export function useLibraryCards({
         cleanupTimerRef.current = null;
       }, 0);
     };
-  }, [enabled, loadFirstPage]);
+  }, [cacheScope, enabled, loadFirstPage, normalizedSearchQuery]);
+
+  const visibleState =
+    cacheScope !== null && stateScopeKey === cacheScope.key ? state : INITIAL_STATE;
 
   return {
-    ...state,
+    ...visibleState,
     retry,
     loadMore,
     createCard,

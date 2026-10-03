@@ -1,0 +1,10 @@
+node_modules
+dist
+.env*
+!.env
+.git
+coverage
+*.tsbuildinfo
+AGENTS.md
+*.test.ts
+*.test.tsx

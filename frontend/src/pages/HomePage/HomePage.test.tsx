@@ -36,13 +36,13 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
         totalStudyTimeSeconds: 4_200,
       },
       weeklyActivity: [
-        { date: "2026-07-12", percent: 40 },
-        { date: "2026-07-13", percent: 70 },
-        { date: "2026-07-14", percent: 55 },
-        { date: "2026-07-15", percent: 80 },
-        { date: "2026-07-16", percent: 30 },
-        { date: "2026-07-17", percent: 60 },
-        { date: "2026-07-18", percent: 90 },
+        { date: "2026-07-12", value: 40 },
+        { date: "2026-07-13", value: 70 },
+        { date: "2026-07-14", value: 55 },
+        { date: "2026-07-15", value: 80 },
+        { date: "2026-07-16", value: 30 },
+        { date: "2026-07-17", value: 60 },
+        { date: "2026-07-18", value: 90 },
       ],
     },
     error: null,
@@ -66,16 +66,18 @@ function renderHome(locale: AppLocale = "ru-RU"): string {
 describe("HomePage", () => {
   it("renders BFF dashboard content without duplicating the app navigation", () => {
     const markup = renderHome();
-    const accuracyTooltipIds = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map(
-      ([, id]) => id,
-    );
+    const accuracyTooltipIds = [
+      ...markup.matchAll(/<span[^>]*aria-describedby="([^"]+)"[^>]*role="meter"/g),
+    ].map(([, id]) => id);
 
     expect(markup).not.toContain('aria-label="Основная навигация"');
     expect(markup).toContain("Daily Words");
     expect(markup).toContain("Travel Essentials");
+    expect(markup).toContain('href="/decks/714d882d-726e-4dcb-9303-a8bf4638429c"');
+    expect(markup).toContain('href="/decks/f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
     expect(markup).toContain('href="/practice?deck=714d882d-726e-4dcb-9303-a8bf4638429c"');
     expect(markup).toContain('href="/practice?deck=f9b7ced5-fbea-4741-82fd-33ea144dab7c"');
-    expect(markup.match(/href="\/library"/g)).toHaveLength(2);
+    expect(markup.match(/href="\/library\/decks"/g)).toHaveLength(2);
     expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).toContain('title="Создать новую колоду в библиотеке"');
     expect(markup).not.toContain("Создание колоды не входит в данные /bff/home");
@@ -87,7 +89,7 @@ describe("HomePage", () => {
     expect(markup).toMatch(/<span[^>]*role="meter"[^>]*tabindex="0">64<\/span>/);
     expect(markup).toContain(`${styles.deckAccuracy} ${styles.deckAccuracyGreen}`);
     expect(markup).toContain(`${styles.deckAccuracy} ${styles.deckAccuracyYellow}`);
-    expect(markup.match(/role="tooltip"/g)).toHaveLength(2);
+    expect(accuracyTooltipIds).toHaveLength(2);
     expect(new Set(accuracyTooltipIds).size).toBe(2);
     accuracyTooltipIds.forEach((id) => expect(markup).toContain(`id="${id}"`));
     expect(markup).toContain("Точность колоды");
@@ -96,9 +98,12 @@ describe("HomePage", () => {
     expect(markup).not.toContain('role="progressbar"');
     expect(markup).toContain('dateTime="2026-07-17T10:30:00Z"');
     expect(markup).toContain("Обновлено");
-    expect(markup.match(/<time /g)).toHaveLength(1);
-    expect(markup).toContain("Вс, 2026-07-12: 40%");
-    expect(markup).toContain("Сб, 2026-07-18: 90%");
+    expect(markup.match(/<time /g)).toHaveLength(8);
+    expect(markup).toContain('dateTime="2026-07-12"');
+    expect(markup).toContain("Ответов по карточкам: 40");
+    expect(markup).toContain('dateTime="2026-07-18"');
+    expect(markup).toContain("Ответов по карточкам: 90");
+    expect(markup).not.toContain("NaN");
   });
 
   it("renders dashboard chrome in English", () => {
