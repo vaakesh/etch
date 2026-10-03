@@ -5,6 +5,9 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile.prod
+      args:
+        APP_UID: "${HOST_UID:?HOST_UID is required}"
+        APP_GID: "${HOST_GID:?HOST_GID is required}"
     env_file:
       - ./backend/.env
     volumes:

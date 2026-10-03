@@ -16,3 +16,4 @@ bob.py
 .vscode
 *.html
 *.sql
+.ssh*
