@@ -71,8 +71,8 @@
 
 .page button:focus-visible,
 .page a:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 40%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .main {
@@ -617,7 +617,7 @@
 
 :global(html[data-theme="dark"]) .page button:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .back {

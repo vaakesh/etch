@@ -178,7 +178,7 @@
 
 .page :is(button, a, input, textarea):focus-visible {
   outline: 0;
-  box-shadow: 0 0 0 3px var(--practice-focus);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .ambient,
@@ -340,7 +340,7 @@
 }
 
 .pausedOverlay:focus-visible {
-  box-shadow: inset 0 0 0 3px var(--practice-focus);
+  box-shadow: inset var(--ui-focus-shadow);
 }
 
 .pausedOverlayContent {
@@ -1231,7 +1231,7 @@
 
 .sideOption:has(input:focus-visible),
 .scopeOption:has(> input[type="radio"]:focus-visible) {
-  box-shadow: 0 0 0 3px var(--practice-focus);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .sideOption .directionLabel {
@@ -1332,7 +1332,7 @@
 .scopeInput:focus {
   background: var(--practice-surface);
   border-color: var(--practice-primary);
-  box-shadow: 0 0 0 3px var(--practice-focus);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .scopeInputInvalid {
@@ -1345,7 +1345,7 @@
 .scopeInputInvalid:focus {
   background: var(--practice-danger-soft);
   border-color: var(--practice-danger-strong);
-  box-shadow: 0 0 0 3px var(--practice-danger-soft);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .scopeHint {
@@ -2147,9 +2147,7 @@
 }
 
 .completionPanel:focus-visible {
-  box-shadow:
-    0 0 0 3px var(--practice-focus),
-    var(--practice-shadow-panel);
+  box-shadow: var(--ui-focus-shadow), var(--practice-shadow-panel);
 }
 
 .completionHalo {
@@ -2695,7 +2693,7 @@
   }
 
   .page :is(button, a, input, textarea):focus-visible {
-    outline: 3px solid Highlight;
+    outline: var(--ui-focus-outline);
     outline-offset: 2px;
     box-shadow: none;
   }

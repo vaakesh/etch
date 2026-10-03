@@ -330,7 +330,7 @@
 }
 
 .modeOption:focus-visible {
-  box-shadow: 0 0 0 3px rgb(118 98 207 / 18%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .modeOption:disabled {
@@ -404,9 +404,7 @@
 .input:focus-visible {
   background: rgb(255 255 255 / 90%);
   border-color: var(--login-purple);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 0 0 4px rgb(118 98 207 / 13%);
+  box-shadow: inset 0 1px 0 #fff, var(--ui-focus-shadow);
 }
 
 .input[aria-invalid="true"] {
@@ -414,7 +412,7 @@
 }
 
 .input[aria-invalid="true"]:focus-visible {
-  box-shadow: 0 0 0 4px rgb(196 79 121 / 12%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .input:disabled {
@@ -491,9 +489,7 @@
 }
 
 .submit:focus-visible {
-  box-shadow:
-    0 0 0 3px rgb(255 255 255 / 70%),
-    0 0 0 6px rgb(73 56 115 / 42%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .submit:active:not(:disabled) {
@@ -747,7 +743,7 @@
 }
 
 :global(html[data-theme="dark"]) .modeOption:focus-visible {
-  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .notice {
@@ -773,7 +769,7 @@
 :global(html[data-theme="dark"]) .input:focus-visible {
   background: var(--dark-surface-hover);
   border-color: var(--dark-focus);
-  box-shadow: 0 0 0 4px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .input[aria-invalid="true"] {
@@ -781,7 +777,7 @@
 }
 
 :global(html[data-theme="dark"]) .input[aria-invalid="true"]:focus-visible {
-  box-shadow: 0 0 0 4px var(--dark-danger);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .input:-webkit-autofill,
@@ -812,7 +808,5 @@
 }
 
 :global(html[data-theme="dark"]) .submit:focus-visible {
-  box-shadow:
-    0 0 0 3px var(--dark-background),
-    0 0 0 6px var(--dark-focus);
+  box-shadow: var(--ui-focus-shadow);
 }

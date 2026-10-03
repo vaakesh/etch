@@ -65,8 +65,8 @@
 .page button:focus-visible,
 .page a:focus-visible,
 .page [role="meter"]:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--home-action-deep) 48%, transparent);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .dashboard {
@@ -1653,7 +1653,7 @@
 :global(html[data-theme="dark"]) .page button:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .page [role="meter"]:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .newDeckButton,

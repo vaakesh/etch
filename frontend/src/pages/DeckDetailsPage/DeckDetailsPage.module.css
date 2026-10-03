@@ -39,8 +39,8 @@
 
 .page button:focus-visible,
 .page a:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 36%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .shell {
@@ -403,7 +403,7 @@
 }
 
 .practiceButton:focus-visible {
-  outline-color: color-mix(in srgb, var(--start-accent-deep) 52%, transparent);
+  outline-color: var(--ui-focus-color);
   transform: translateY(-1px);
 }
 

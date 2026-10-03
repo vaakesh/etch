@@ -40,8 +40,8 @@
 .page a:focus-visible,
 .page input:focus-visible,
 .page textarea:focus-visible {
-  outline: 3px solid rgb(77 152 146 / 28%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .editor {
@@ -276,7 +276,7 @@
   background: #fff;
   border-color: #79b8b2;
   box-shadow:
-    0 0 0 3px rgb(77 152 146 / 13%),
+    var(--ui-focus-shadow),
     inset 0 1px 2px rgb(80 67 48 / 4%);
 }
 
@@ -682,7 +682,7 @@
 
 .page button:focus-visible,
 .page a:focus-visible {
-  outline: 2px solid rgb(73 56 115 / 34%);
+  outline: var(--ui-focus-outline);
   outline-offset: 2px;
 }
 
@@ -1134,7 +1134,7 @@
   background: rgb(255 255 255 / 94%);
   border-color: rgb(118 98 207 / 68%);
   box-shadow:
-    0 0 0 2px rgb(118 98 207 / 10%),
+    var(--ui-focus-shadow),
     0 8px 18px rgb(73 56 115 / 7%),
     inset 0 1px 2px rgb(73 56 115 / 4%);
 }
@@ -1280,7 +1280,7 @@
 .privacyToggle:has(.privacyChoice:focus-visible) .privacyTrack {
   border-color: rgb(118 98 207 / 58%);
   box-shadow:
-    0 0 0 3px rgb(118 98 207 / 18%),
+    var(--ui-focus-shadow),
     inset 0 1px 2px rgb(73 56 115 / 7%);
 }
 
@@ -1626,7 +1626,7 @@
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .page input:focus-visible,
 :global(html[data-theme="dark"]) .page textarea:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .page .backLink {
@@ -1813,7 +1813,7 @@
   background: var(--dark-surface-raised);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-focus-ring),
+    var(--ui-focus-shadow),
     0 8px 18px var(--dark-shadow),
     inset 0 1px 2px var(--dark-shadow);
 }
@@ -1879,7 +1879,7 @@
   .privacyTrack {
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-focus-ring),
+    var(--ui-focus-shadow),
     inset 0 1px 2px var(--dark-shadow);
 }
 
@@ -1910,7 +1910,7 @@
   border-color: var(--dark-cta-hover);
   box-shadow:
     0 14px 30px var(--dark-shadow),
-    0 0 0 3px var(--dark-cta-soft);
+    var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .formFooter > button:disabled {

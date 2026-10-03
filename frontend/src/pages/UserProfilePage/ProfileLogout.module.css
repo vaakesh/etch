@@ -38,8 +38,8 @@
 }
 
 .logoutButton:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 36%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .logoutIcon {
@@ -202,13 +202,13 @@
 }
 
 .logoutDialogCancel:focus-visible {
-  outline: 3px solid rgb(115 88 186 / 34%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .logoutDialogConfirm:focus-visible {
-  outline: 3px solid rgb(180 54 82 / 38%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .logoutDialogCancel:disabled,
@@ -288,11 +288,11 @@
 }
 
 :global(html[data-theme="dark"]) .logoutDialogCancel:focus-visible {
-  outline-color: var(--dark-border-strong);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .logoutDialogConfirm:focus-visible {
-  outline-color: rgb(216 91 115 / 55%);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .logoutButton {
@@ -368,5 +368,5 @@
 }
 
 :global(html[data-theme="dark"]) .logoutButton:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }

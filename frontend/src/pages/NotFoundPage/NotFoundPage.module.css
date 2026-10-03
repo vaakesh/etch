@@ -260,8 +260,8 @@
 }
 
 .homeLink:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 36%);
-  outline-offset: 4px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 @keyframes panelEnter {
@@ -429,5 +429,5 @@
 }
 
 :global(html[data-theme="dark"]) .homeLink:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }

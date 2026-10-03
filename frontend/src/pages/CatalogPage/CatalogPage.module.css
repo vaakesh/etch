@@ -202,8 +202,8 @@
 .page input:focus-visible,
 .page a:focus-visible,
 .previewDialog button:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 34%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .catalog {
@@ -304,7 +304,7 @@
   border-color: rgb(118 98 207 / 55%);
   box-shadow:
     0 12px 28px rgb(73 56 115 / 13%),
-    0 0 0 3px rgb(118 98 207 / 11%);
+    var(--ui-focus-shadow);
 }
 
 .searchField input::-webkit-search-cancel-button {
@@ -515,8 +515,8 @@
 }
 
 .deckDetailsLink:focus-visible {
-  outline-color: color-mix(in srgb, var(--catalog-action-deep) 52%, transparent);
-  outline-offset: 4px;
+  outline-color: var(--ui-focus-color);
+  outline-offset: 2px;
 }
 
 .owner {
@@ -844,7 +844,7 @@
 }
 
 .startButton:focus-visible {
-  outline-color: color-mix(in srgb, var(--catalog-start-accent-deep) 52%, transparent);
+  outline-color: var(--ui-focus-color);
   transform: translateY(-1px);
 }
 
@@ -998,8 +998,8 @@
 }
 
 .previewOpenButton:focus-visible {
-  outline: 3px solid rgb(118 98 207 / 28%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .previewOpenButton:active {
@@ -1641,6 +1641,13 @@
   }
 }
 
+/* Avoid backdrop compositing artifacts while the catalog enters on mobile. */
+@media (max-width: 860px), (pointer: coarse) {
+  .stateMessage {
+    backdrop-filter: none;
+  }
+}
+
 @media (max-width: 1040px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1848,7 +1855,7 @@
 :global(html[data-theme="dark"]) .page input:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .previewDialog button:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .header h1::after {
@@ -1883,7 +1890,7 @@
   border-color: var(--dark-border-accent);
   box-shadow:
     0 16px 42px var(--dark-shadow),
-    0 0 0 3px var(--dark-focus-ring);
+    var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .clearSearch {
@@ -1952,7 +1959,7 @@
 }
 
 :global(html[data-theme="dark"]) .startButton:focus-visible {
-  outline-color: color-mix(in srgb, var(--catalog-start-accent-deep) 62%, white);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .saveError {

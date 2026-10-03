@@ -202,7 +202,7 @@
 }
 
 .previewToggle input:focus-visible + .previewToggleTrack {
-  box-shadow: 0 0 0 3px rgb(112 88 189 / 20%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .previewToggleState {
@@ -232,7 +232,7 @@
 }
 
 :global(html[data-theme="dark"]) .previewToggle input:focus-visible + .previewToggleTrack {
-  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .selectControl {
@@ -265,7 +265,7 @@
 
 .selectControl select:focus-visible {
   border-color: var(--settings-accent);
-  box-shadow: 0 0 0 3px rgb(112 88 189 / 15%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .selectChevron {
@@ -372,7 +372,7 @@
 }
 
 .themeOption input:focus-visible + span {
-  outline: 3px solid rgb(112 88 189 / 22%);
+  outline: var(--ui-focus-outline);
   outline-offset: 2px;
 }
 
@@ -416,7 +416,7 @@
 
 :global(html[data-theme="dark"]) .selectControl select:focus-visible {
   border-color: var(--dark-focus);
-  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .themeSwitch::before {
@@ -431,7 +431,7 @@
 :global(html[data-theme="dark"]) .themeOption input:focus-visible + span,
 :global(html[data-theme="dark"]) .resetButton:focus-visible,
 :global(html[data-theme="dark"]) .saveButton:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .saveButton {
@@ -504,7 +504,7 @@
 
 .resetButton:focus-visible,
 .saveButton:focus-visible {
-  outline: 3px solid rgb(112 88 189 / 22%);
+  outline: var(--ui-focus-outline);
   outline-offset: 2px;
 }
 

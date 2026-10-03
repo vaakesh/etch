@@ -188,8 +188,8 @@
 .cardEditorClose:focus-visible,
 .cardEditorCancel:focus-visible,
 .cardEditorSave:focus-visible {
-  outline: 3px solid rgb(95 72 151 / 25%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .cardEditorClose:disabled {
@@ -292,7 +292,7 @@
   background: #fff;
   border-color: var(--editor-accent);
   box-shadow:
-    0 0 0 3px rgb(95 72 151 / 15%),
+    var(--ui-focus-shadow),
     0 7px 22px rgb(73 56 115 / 7%);
 }
 
@@ -421,7 +421,7 @@
 
 .cardEditorSave:focus-visible {
   color: var(--editor-primary-ink);
-  outline-color: color-mix(in srgb, var(--editor-primary-deep) 52%, transparent);
+  outline-color: var(--ui-focus-color);
 }
 
 .cardEditorCancel:active:not(:disabled) {
@@ -653,7 +653,7 @@
 :global(html[data-theme="dark"]) .cardEditorField input:focus {
   background: var(--dark-surface-hover);
   border-color: var(--dark-cyan);
-  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .cardEditorField > small {

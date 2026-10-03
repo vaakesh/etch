@@ -5,6 +5,9 @@
 }
 
 :root {
+  --ui-focus-color: rgb(115 88 186 / 32%);
+  --ui-focus-outline: none;
+  --ui-focus-shadow: 0 0 0 0 transparent;
   --app-background: linear-gradient(105deg, #c3b8f5 0%, #9be8e0 48%, #f5c6e8 100%);
 }
 
@@ -22,6 +25,7 @@ body,
 }
 
 html[data-theme="dark"] {
+  --ui-focus-color: rgb(159 186 174 / 42%);
   --dark-background: #171a18;
   --dark-surface: #202421;
   --dark-surface-raised: #282d29;
@@ -146,5 +150,48 @@ html[data-theme="dark"] .page-loader--light {
 @media (prefers-reduced-motion: reduce) {
   .page-loader__spinner {
     animation: none;
+  }
+}
+
+/* Keep focus styling consistent across page modules and native dialog autofocus. */
+:focus {
+  outline: none !important;
+}
+
+html[data-keyboard-navigation="true"] {
+  --ui-focus-outline: 1px solid var(--ui-focus-color);
+  --ui-focus-shadow: 0 0 0 1px var(--ui-focus-color);
+}
+
+html[data-keyboard-navigation="true"] :focus-visible {
+  outline: var(--ui-focus-outline) !important;
+  outline-offset: 2px !important;
+}
+
+@media (forced-colors: active) {
+  html[data-keyboard-navigation="true"] {
+    --ui-focus-color: Highlight;
+  }
+}
+
+/* Mobile browsers zoom focused fields when their text is smaller than 16px. */
+@media (max-width: 860px), (pointer: coarse) {
+  input:not(
+    [type="checkbox"],
+    [type="radio"],
+    [type="range"],
+    [type="color"],
+    [type="file"],
+    [type="hidden"],
+    [type="button"],
+    [type="submit"],
+    [type="reset"],
+    [type="image"]
+  ),
+  textarea,
+  select,
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"] {
+    font-size: max(16px, 1rem) !important;
   }
 }

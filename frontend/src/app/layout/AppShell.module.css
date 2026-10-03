@@ -92,8 +92,8 @@
 }
 
 .brand:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 36%);
-  outline-offset: 4px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .brandName {
@@ -148,8 +148,8 @@
 
 .sidebarToggle:focus-visible,
 .navigationItem:focus-visible {
-  outline: 3px solid rgb(77 152 146 / 30%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .sidebarToggleIcon {
@@ -163,7 +163,7 @@
   position: relative;
   min-height: 0;
   margin-top: 18px;
-  padding-inline: 4px;
+  padding: 4px;
   overflow-y: auto;
   scrollbar-width: none;
   transition:
@@ -179,7 +179,7 @@
 .navigationThumb {
   position: absolute;
   z-index: 0;
-  top: 0;
+  top: 4px;
   right: 4px;
   left: 4px;
   height: 54px;
@@ -345,8 +345,8 @@ a.navigationItem {
 }
 
 .profileCard:focus-visible {
-  outline: 2px solid var(--profile-ink);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .profileAvatar {
@@ -475,7 +475,7 @@ a.navigationItem {
 
 .shell .sidebarToggle:focus-visible,
 .shell .navigationItem:focus-visible {
-  outline-color: rgb(73 56 115 / 36%);
+  outline-color: var(--ui-focus-color);
 }
 
 .shellLibrary .content {
@@ -560,7 +560,7 @@ a.navigationItem {
 :global(html[data-theme="dark"]) .shell .navigationItem:focus-visible,
 :global(html[data-theme="dark"]) .shell .brand:focus-visible,
 :global(html[data-theme="dark"]) .shell .profileCard:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .shell .content,
@@ -695,12 +695,13 @@ a.navigationItem {
     --navigation-step: 48px;
     min-width: 0;
     margin: 0 0 0 auto;
-    padding-inline: 0;
+    padding: 0;
     overflow: visible;
   }
 
   .navigationThumb {
     display: block;
+    top: 0;
     right: auto;
     left: 0;
     width: 44px;

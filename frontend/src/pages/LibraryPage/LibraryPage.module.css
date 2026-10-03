@@ -32,8 +32,8 @@
 
 .page button:focus-visible,
 .page a:focus-visible {
-  outline: 3px solid rgb(77 152 146 / 28%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .shell {
@@ -379,13 +379,13 @@ a.navigationItem:hover {
   border-color: var(--teal-dark);
   box-shadow:
     0 12px 25px rgb(48 106 100 / 28%),
-    0 0 0 3px rgb(77 152 146 / 13%);
+    var(--ui-focus-shadow);
   translate: 0 -2px;
 }
 
 .newDeckButton:not(:disabled):focus-visible {
-  outline: 2px solid rgb(47 111 105 / 45%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .newDeckButton:not(:disabled):active {
@@ -558,8 +558,8 @@ a.navigationItem:hover {
 }
 
 .cardsPanel:focus-visible {
-  outline: 3px solid rgb(77 152 146 / 28%);
-  outline-offset: 5px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .visuallyHidden {
@@ -1053,7 +1053,7 @@ a.navigationItem:hover {
   background: #373a39;
   border-color: #82c4c2;
   box-shadow:
-    0 0 0 3px rgb(130 196 194 / 16%),
+    var(--ui-focus-shadow),
     inset 0 1px 2px rgb(0 0 0 / 12%);
 }
 
@@ -1199,7 +1199,7 @@ a.navigationItem:hover {
 
 .deckCreatorPrivacyOption:has(input:focus-visible) > span {
   border-color: #82c4c2;
-  box-shadow: 0 0 0 3px rgb(130 196 194 / 16%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .deckCreatorPrivacyOption:has(input:checked) > span {
@@ -1429,7 +1429,7 @@ a.navigationItem:hover {
 
 .cardDeckOption:has(input:focus-visible) {
   border-color: #82c4c2;
-  box-shadow: 0 0 0 3px rgb(130 196 194 / 16%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .cardDeckOption:has(input:checked) {
@@ -1749,7 +1749,7 @@ a.navigationItem:hover {
 
 .favourite:focus-visible,
 .favouriteActive:focus-visible {
-  outline: 3px solid rgb(216 111 86 / 24%);
+  outline: var(--ui-focus-outline);
   outline-offset: 2px;
 }
 
@@ -1826,9 +1826,9 @@ a.navigationItem:hover {
 }
 
 .accuracy:focus-visible {
-  box-shadow: 0 0 0 4px rgb(77 152 146 / 10%);
-  outline: 2px solid rgb(77 152 146 / 34%);
-  outline-offset: 3px;
+  box-shadow: var(--ui-focus-shadow);
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
   transform: translateY(-1px);
 }
 
@@ -2939,8 +2939,8 @@ a.navigationItem:hover {
 .page textarea:focus-visible,
 .page a:focus-visible,
 .page [role="meter"]:focus-visible {
-  outline: 3px solid rgb(73 56 115 / 34%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .page .library {
@@ -3072,8 +3072,8 @@ a.navigationItem:hover {
 }
 
 .page .archiveAction:focus-visible {
-  outline: 3px solid var(--library-action-ring);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .page .newDeckButton {
@@ -3179,7 +3179,7 @@ a.navigationItem:hover {
 }
 
 .page .newDeckButton:focus-visible {
-  outline-color: var(--library-action-ring);
+  outline-color: var(--ui-focus-color);
 }
 
 @keyframes newDeckSheen {
@@ -3271,7 +3271,7 @@ a.navigationItem:hover {
 }
 
 .page .switchTab:focus-visible {
-  outline-color: var(--library-action-ring);
+  outline-color: var(--ui-focus-color);
 }
 
 .page .switchTab:active {
@@ -3338,7 +3338,7 @@ a.navigationItem:hover {
   border-color: rgb(118 98 207 / 52%);
   box-shadow:
     0 9px 22px rgb(73 56 115 / 12%),
-    0 0 0 3px rgb(118 98 207 / 10%);
+    var(--ui-focus-shadow);
 }
 
 .page .deckSearchField input::-webkit-search-cancel-button {
@@ -3411,7 +3411,7 @@ a.navigationItem:hover {
   border-color: rgb(118 98 207 / 55%);
   box-shadow:
     0 12px 28px rgb(73 56 115 / 13%),
-    0 0 0 3px rgb(118 98 207 / 11%);
+    var(--ui-focus-shadow);
 }
 
 .page .cardSearchField:focus-within .cardSearchIcon {
@@ -3578,8 +3578,8 @@ a.navigationItem:hover {
 }
 
 .page .cardsPanel:focus-visible {
-  outline: 3px solid var(--library-ink);
-  outline-offset: 7px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .page .decksGrid {
@@ -4024,8 +4024,8 @@ a.navigationItem:hover {
 }
 
 .page .deckDetailsLink:focus-visible {
-  outline: 3px solid var(--library-action-ring);
-  outline-offset: 4px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
 }
 
 .page[data-deck-title-style="boxed-arrow"] .deckDetailsLink svg {
@@ -4097,8 +4097,8 @@ a.navigationItem:hover {
 }
 
 .page .deckDescription[data-overflowing="true"]:focus-visible {
-  outline: 3px solid rgb(118 98 207 / 28%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
   border-radius: 5px;
 }
 
@@ -4234,8 +4234,8 @@ a.navigationItem:hover {
 
 .page .previewFront[data-overflowing="true"]:focus-visible,
 .page .previewBack[data-overflowing="true"]:focus-visible {
-  outline: 3px solid rgb(118 98 207 / 28%);
-  outline-offset: 3px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
   border-radius: 5px;
 }
 
@@ -4519,7 +4519,7 @@ a.navigationItem:hover {
 }
 
 .page .startButton:focus-visible {
-  outline-color: color-mix(in srgb, var(--start-accent-deep) 52%, transparent);
+  outline-color: var(--ui-focus-color);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -4735,8 +4735,8 @@ a.navigationItem:hover {
 
 .page .cardWord[data-overflowing="true"]:focus-visible,
 .page .cardTranslation[data-overflowing="true"]:focus-visible {
-  outline: 3px solid rgb(118 98 207 / 28%);
-  outline-offset: 4px;
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
   border-radius: 5px;
 }
 
@@ -5515,7 +5515,7 @@ a.navigationItem:hover {
 .page .cardEditorField input:focus {
   background: #fff;
   border-color: var(--library-brown-deep);
-  box-shadow: 0 0 0 3px rgb(118 98 207 / 16%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .page .cardEditorField > small {
@@ -5657,7 +5657,7 @@ a.navigationItem:hover {
 
 .page .deckCreatorPrivacyOption:has(input:focus-visible) > span {
   border-color: var(--library-brown-deep);
-  box-shadow: 0 0 0 3px rgb(118 98 207 / 16%);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 .page .deckCreatorPrivacyOption:has(input:checked) > span {
@@ -5934,7 +5934,7 @@ a.navigationItem:hover {
   color: var(--library-ink-deep);
   border-color: rgb(118 98 207 / 62%);
   box-shadow:
-    0 0 0 2px rgb(118 98 207 / 14%),
+    var(--ui-focus-shadow),
     0 7px 18px rgb(73 56 115 / 10%);
 }
 
@@ -5956,7 +5956,7 @@ a.navigationItem:hover {
 .page .cardDeckOption:has(input:checked):has(input:focus-visible) {
   border-color: rgb(118 98 207 / 68%);
   box-shadow:
-    0 0 0 2px rgb(118 98 207 / 16%),
+    var(--ui-focus-shadow),
     inset 0 1px 0 rgb(255 255 255 / 76%);
 }
 
@@ -6292,7 +6292,7 @@ a.navigationItem:hover {
   background: #fff;
   border-color: var(--library-brown-deep);
   box-shadow:
-    0 0 0 3px rgb(118 98 207 / 16%),
+    var(--ui-focus-shadow),
     inset 0 1px 2px rgb(73 56 115 / 4%);
 }
 
@@ -6999,7 +6999,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .page textarea:focus-visible,
 :global(html[data-theme="dark"]) .page a:focus-visible,
 :global(html[data-theme="dark"]) .page [role="meter"]:focus-visible {
-  outline-color: var(--dark-focus);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .page .libraryHeader h1::after {
@@ -7066,11 +7066,11 @@ a.navigationItem:hover {
 
 :global(html[data-theme="dark"]) .page .newDeckButton:focus-visible,
 :global(html[data-theme="dark"]) .page .switchTab:focus-visible {
-  outline-color: var(--library-action-ring);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .page .startButton:focus-visible {
-  outline-color: color-mix(in srgb, var(--start-accent-deep) 62%, white);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .page .librarySwitch {
@@ -7128,7 +7128,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 9px 22px var(--dark-shadow),
-    0 0 0 3px var(--dark-focus-ring);
+    var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .cardSearchField input {
@@ -7160,7 +7160,7 @@ a.navigationItem:hover {
   border-color: var(--dark-cyan);
   box-shadow:
     0 12px 28px var(--dark-shadow),
-    0 0 0 3px var(--dark-focus-ring);
+    var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .page .cardSearchField:focus-within .cardSearchIcon {
@@ -7206,7 +7206,7 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .cardsPanel:focus-visible {
-  outline-color: var(--dark-cyan);
+  outline-color: var(--ui-focus-color);
 }
 
 :global(html[data-theme="dark"]) .page .deckFilterLoading {
@@ -7789,7 +7789,7 @@ a.navigationItem:hover {
   background: var(--dark-surface-hover);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-cyan-soft),
+    var(--ui-focus-shadow),
     inset 0 1px 2px var(--dark-shadow);
 }
 
@@ -7813,7 +7813,7 @@ a.navigationItem:hover {
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:focus-visible) > span,
 :global(html[data-theme="dark"]) .page .deckCreatorPrivacyOption:has(input:focus-visible) > span {
   border-color: var(--dark-cyan);
-  box-shadow: 0 0 0 3px var(--dark-focus-ring);
+  box-shadow: var(--ui-focus-shadow);
 }
 
 :global(html[data-theme="dark"]) .deckCreatorPrivacyOption:has(input:checked) > span,
@@ -7922,7 +7922,7 @@ a.navigationItem:hover {
   color: var(--dark-text);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 2px var(--dark-focus-ring),
+    var(--ui-focus-shadow),
     0 7px 18px var(--dark-shadow);
 }
 
@@ -8071,7 +8071,7 @@ a.navigationItem:hover {
   background: var(--dark-surface-hover);
   border-color: var(--dark-cyan);
   box-shadow:
-    0 0 0 3px var(--dark-focus-ring),
+    var(--ui-focus-shadow),
     inset 0 1px 2px var(--dark-shadow);
 }
 
@@ -8152,7 +8152,7 @@ a.navigationItem:hover {
 }
 
 .page .deckLayoutSwitch button:focus-visible {
-  outline-color: var(--library-action-ring);
+  outline-color: var(--ui-focus-color);
 }
 
 .page .deckLayoutSwitch svg {
@@ -8306,7 +8306,7 @@ a.navigationItem:hover {
 }
 
 :global(html[data-theme="dark"]) .page .deckLayoutSwitch button:focus-visible {
-  outline-color: var(--library-action-ring);
+  outline-color: var(--ui-focus-color);
 }
 
 @media (max-width: 1100px) {
