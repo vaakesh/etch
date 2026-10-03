@@ -13,9 +13,6 @@ RUN uv sync --locked --no-dev --no-install-project
 
 FROM python:3.14-slim AS runtime
 
-ARG APP_UID
-ARG APP_GID
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_NO_DEV=1 \
@@ -23,8 +20,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/backend/.venv/bin:$PATH"
 
 WORKDIR /backend
-RUN groupadd --gid "$APP_GID" app \
-    && useradd --uid "$APP_UID" --gid app --create-home app
 
 COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=build /backend/.venv ./.venv
@@ -32,7 +27,6 @@ COPY pyproject.toml uv.lock alembic.ini ./
 COPY app ./app
 COPY alembic ./alembic
 
-USER app
 EXPOSE 8000
 
 CMD ["uv", "run", "--no-sync", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*", "--root-path", "/api"]

@@ -1,6 +1,3 @@
-export HOST_UID := $(shell id -u)
-export HOST_GID := $(shell id -g)
-
 up:
 	uv run --no-project python setup.py check dev
 	docker compose -f docker-compose-dev.yml up -d

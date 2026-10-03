@@ -73,8 +73,6 @@ starts the separate test stack, applies migrations, and runs backend tests with 
 
 ## other commands
 
-production commands automatically pass the current user's uid and gid to compose as api build arguments. the image creates `app` with those ids and its own home directory; the api and migrations run as `app`. on each server, run `make certs`, `make prod-build`, and `make prod-up` as the same non-root user so the api can read the private key with permissions `600`. rebuild the image if that user's uid or gid changes. direct production compose commands require `HOST_UID` and `HOST_GID` in the shell environment.
-
 ```sh
 make rebuild  # rebuild and start development containers
 make down     # stop development containers
