@@ -2,9 +2,7 @@ name: etch-prod
 
 services:
   api:
-    build:
-      context: backend
-      dockerfile: Dockerfile.prod
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
     env_file:
       - ./backend/.env
     volumes:
@@ -50,9 +48,7 @@ services:
     restart: unless-stopped
 
   caddy:
-    build:
-      context: frontend
-      dockerfile: Dockerfile.prod
+    image: ghcr.io/vaakesh/etch-frontend:${IMAGE_TAG:?IMAGE_TAG is required}
     environment:
       SITE_DOMAIN: ${site_domain_prod}
       ALLOWED_IP: ${allowed_ip_prod}
