@@ -1,0 +1,122 @@
+name: etch pipeline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: frontend checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    concurrency:
+      group: ${{ github.workflow }}-frontend-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: prepare frontend configuration
+        run: cp .env.example .env
+
+      - name: setup node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: check formatting
+        run: npm run format:check
+
+      - name: check types
+        run: npm run typecheck
+
+      - name: check lint
+        run: npm run lint
+
+      - name: run tests
+        run: npm run test
+
+      - name: build frontend
+        run: npm run build
+
+  backend:
+    name: backend checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    concurrency:
+      group: ${{ github.workflow }}-backend-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: setup uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.21"
+          python-version: "3.14"
+          enable-cache: false
+
+      - name: check ruff (app/common/utils.py)
+        run: uvx --from ruff==0.15.4 ruff check --no-cache --output-format=github app/common/utils.py
+
+      - name: prepare test configuration and JWT keys
+        id: prepare
+        run: |
+          uv run --no-project python ../setup.py certs
+          uv run --no-project python ../setup.py check test
+
+      - name: build backend test image
+        working-directory: .
+        run: docker compose -f docker-compose-test.yml build api
+
+      - name: start test services
+        working-directory: .
+        run: docker compose -f docker-compose-test.yml up -d --wait --wait-timeout 120 postgres redis
+
+      - name: apply migrations
+        working-directory: .
+        run: docker compose -f docker-compose-test.yml run --rm -T --no-deps api uv run --no-sync alembic upgrade head
+
+      - name: run tests
+        working-directory: .
+        run: docker compose -f docker-compose-test.yml run --rm -T --no-deps api uv run --no-sync pytest -o log_cli=false
+
+      - name: show test services on failure
+        if: ${{ failure() && steps.prepare.outcome == 'success' }}
+        working-directory: .
+        run: |
+          docker compose -f docker-compose-test.yml ps -a
+          docker compose -f docker-compose-test.yml logs --no-color --tail=200 postgres redis
+
+      - name: clean up test services
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        working-directory: .
+        run: docker compose -f docker-compose-test.yml down --volumes --remove-orphans
