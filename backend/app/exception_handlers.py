@@ -37,6 +37,7 @@ from app.decks.errors import (
     PermissionDeniedError as DeckPermissionDeniedError,
 )
 from app.errors import (
+    MetricsAccessDeniedError,
     RequestValueError,
 )
 from app.redis.errors import RateLimitError
@@ -77,6 +78,7 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
     (InvalidTokenTypeError, status.HTTP_401_UNAUTHORIZED, "INVALID_TOKEN_TYPE"),
     (RefreshTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "REFRESH_TOKEN_NOT_FOUND"),
     (AccessTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "ACCESS_TOKEN_NOT_FOUND"),
+    (MetricsAccessDeniedError, status.HTTP_401_UNAUTHORIZED, "METRICS_ACCESS_DENIED"),
 
     (UserNotFoundError, status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND"),
     (UserAlreadyExistsError, status.HTTP_409_CONFLICT, "USER_ALREADY_EXISTS"),

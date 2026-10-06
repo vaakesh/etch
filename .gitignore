@@ -1,4 +1,5 @@
 .env
+/prometheus/metrics_token
 __pycache__
 .venv
 backend/certs/

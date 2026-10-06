@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: etch
+    orgId: 1
+    folder: Etch
+    folderUid: etch
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
