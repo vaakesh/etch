@@ -179,3 +179,117 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: deploy production
+    needs: publish
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    concurrency:
+      group: etch-production-deploy
+      cancel-in-progress: false
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+
+    steps:
+      - name: prepare SSH authentication
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DEPLOY_HOST}"
+          : "${DEPLOY_USER:?Missing DEPLOY_USER}"
+          : "${DEPLOY_SSH_KEY:?Missing DEPLOY_SSH_KEY}"
+          : "${DEPLOY_KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS}"
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/etch-deploy-key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/etch-known-hosts"
+          ssh-keygen -y -P '' -f "$RUNNER_TEMP/etch-deploy-key" > /dev/null
+
+      - name: update production server
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          ssh -T -p 22 \
+            -i "$RUNNER_TEMP/etch-deploy-key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/etch-known-hosts" \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$GITHUB_SHA'" <<'DEPLOY'
+          set -Eeuo pipefail
+          umask 077
+          export IMAGE_TAG="$1"
+          export GIT_TERMINAL_PROMPT=0
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
+          cd /home/vaakesh/etch
+
+          # Also serialize SSH sessions if a runner disconnects or is cancelled.
+          exec 9> "$HOME/.etch-deploy.lock"
+          flock -w 600 9
+
+          if [[ "$(git branch --show-current)" != main ]]; then
+            echo 'Deployment requires the main branch on the server.' >&2
+            exit 1
+          fi
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo 'Tracked files on the server have local changes.' >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          if [[ "$(git rev-parse origin/main)" != "$IMAGE_TAG" ]]; then
+            echo "Skipping outdated deployment: $IMAGE_TAG is no longer the main branch tip."
+            exit 0
+          fi
+          git merge-base --is-ancestor HEAD "$IMAGE_TAG"
+          git merge --ff-only "$IMAGE_TAG"
+          [[ "$(git rev-parse HEAD)" == "$IMAGE_TAG" ]]
+
+          compose() {
+            docker compose -f docker-compose-prod.yml "$@"
+          }
+          show_failure() {
+            local status=$?
+            trap - ERR
+            echo "Deployment failed for $IMAGE_TAG." >&2
+            compose ps -a || true
+            compose logs --no-color --tail=100 api caddy || true
+            exit "$status"
+          }
+          trap show_failure ERR
+
+          compose config --quiet
+          compose pull api caddy
+          compose up -d --no-recreate --wait --wait-timeout 120 postgres redis
+
+          # Save a database backup before stopping the application or migrating.
+          backup_dir="$HOME/etch-backups"
+          mkdir -p "$backup_dir"
+          backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$IMAGE_TAG.dump"
+          compose exec -T postgres sh -c \
+            'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+            < /dev/null > "$backup_file.partial"
+          mv -- "$backup_file.partial" "$backup_file"
+          echo "Database backup saved: $backup_file"
+
+          compose stop caddy api
+          compose run --rm -T --no-deps api uv run --no-sync alembic upgrade head < /dev/null
+          compose up -d --no-build --no-deps --wait --wait-timeout 180 api caddy
+
+          # Persist the tag only after the new containers pass their healthchecks.
+          if grep -q '^IMAGE_TAG=' .env; then
+            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" .env
+          else
+            printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+          fi
+          compose ps
+          echo "Deployment completed: $IMAGE_TAG"
+          DEPLOY
