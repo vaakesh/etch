@@ -5,8 +5,10 @@ from app.deps import UoWFactory, get_uow_factory
 from fastapi import Depends
 
 from app.redis.deps import CacheServiceDeps
+from app.tracing import traced
 
 
+@traced("cards.deps.get_card_service")
 def get_card_service(
     cache_service: CacheServiceDeps,
     uow_factory: UoWFactory = Depends(get_uow_factory),

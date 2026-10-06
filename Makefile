@@ -1,13 +1,13 @@
 up:
 	uv run --no-project python setup.py check dev
-	docker compose -f docker-compose-dev.yml up -d
-	docker compose -f docker-compose-dev.yml run --rm -T api uv run --no-sync alembic upgrade head
+	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml up -d
+	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml run --rm -T api uv run --no-sync alembic upgrade head
 rebuild:
 	uv run --no-project python setup.py check dev
-	docker compose -f docker-compose-dev.yml up --build -d
-	docker compose -f docker-compose-dev.yml run --rm -T api uv run --no-sync alembic upgrade head
+	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml up --build -d
+	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml run --rm -T api uv run --no-sync alembic upgrade head
 down:
-	docker compose -f docker-compose-dev.yml down
+	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml down
 
 test:
 	uv run --no-project python setup.py check test

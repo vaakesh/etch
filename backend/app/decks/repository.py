@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
+from app.tracing import traced
 
 from app.cards.models import Card
 from app.common.query import apply_date_pagination, apply_search
@@ -95,6 +96,7 @@ class DeckRepository:
     ) -> None:
         self.session.add_all(recipients)
 
+    @traced("decks.repository.get_archive_recipient_for_update")
     async def get_archive_recipient_for_update(
         self, archive_deck_id: int, user_id: int,
     ) -> DeckArchiveRecipient | None:
@@ -108,6 +110,7 @@ class DeckRepository:
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    @traced("decks.repository.get_archives_for_recipient")
     async def get_archives_for_recipient(
         self, user_id: int, now: datetime,
     ) -> list[tuple[Deck, DeckArchiveRecipient]]:
@@ -126,6 +129,7 @@ class DeckRepository:
         )
         return list((await self.session.execute(stmt)).tuples().all())
 
+    @traced("decks.repository.get_with_archive_recipient")
     async def get_with_archive_recipient(
         self, deck_uuid: UUID, user_id: int,
     ) -> tuple[Deck, DeckArchiveRecipient | None] | None:
@@ -152,6 +156,7 @@ class DeckRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("decks.repository.lock_deck_graph")
     async def lock_deck_graph(
         self,
         deck_uuid: UUID,
@@ -234,6 +239,7 @@ class DeckRepository:
             for deck in decks
         ]
 
+    @traced("decks.repository.get_by_uuid")
     async def get_by_uuid(
             self, 
             deck_uuid: UUID,
@@ -262,6 +268,7 @@ class DeckRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("decks.repository.get_visible_by_uuid")
     async def get_visible_by_uuid(
         self,
         deck_uuid: UUID,
@@ -279,6 +286,7 @@ class DeckRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("decks.repository.get_owned_by_uuid")
     async def get_owned_by_uuid(
         self,
         deck_uuid: UUID,
@@ -347,6 +355,7 @@ class DeckRepository:
             query = query.where(UserDeck.user_id != exclude_user_id)
         return bool(await self.session.scalar(select(query)))
 
+    @traced("decks.repository.get_public_decks")
     async def get_public_decks(
         self,
         search_query: SearchQuery = None,
@@ -376,6 +385,7 @@ class DeckRepository:
         rows = result.scalars().all()
         return rows
 
+    @traced("decks.repository.get_public_by_owner_id")
     async def get_public_by_owner_id(
         self,
         owner_id: int,
@@ -464,6 +474,7 @@ class DeckRepository:
         rows = result.scalars().all()
         return rows
 
+    @traced("decks.repository.get_owned_by_owner_id")
     async def get_owned_by_owner_id(
         self,
         owner_id: int,
@@ -532,6 +543,7 @@ class DeckRepository:
         has_more = len(rows) > limit
         return rows[:limit], has_more
 
+    @traced("decks.repository.get_library_by_user_id")
     async def get_library_by_user_id(
         self,
         user_id: int,
@@ -639,6 +651,7 @@ class DeckCardRepository:
         await self.session.delete(deck_card)
 
     # read
+    @traced("decks.deck_card_repository.get_by_deck_id_and_card_id")
     async def get_by_deck_id_and_card_id(
         self,
         deck_id: int,
@@ -654,6 +667,7 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("decks.deck_card_repository.get_cards_by_deck_id")
     async def get_cards_by_deck_id(
         self,
         deck_id: int,
@@ -671,6 +685,7 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("decks.repository.get_cards_by_deck_ids")
     async def get_cards_by_deck_ids(
         self,
         deck_ids: list[int],
@@ -736,6 +751,7 @@ class DeckCardRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("decks.deck_card_repository.get_max_position")
     async def get_max_position(
             self,
             deck_id: int,
@@ -751,6 +767,7 @@ class DeckCardRepository:
         return max_position
 
     # write
+    @traced("decks.deck_card_repository.reorder_cards")
     async def reorder_cards(
             self,
             deck_id: int,
@@ -804,6 +821,7 @@ class DeckCardRepository:
         )
         await self.session.execute(stmt)
 
+    @traced("decks.deck_card_repository.update_deck_cards_positions_after_deleting")
     async def update_deck_cards_positions_after_deleting(
         self,
         deck_id: int,
@@ -855,6 +873,7 @@ class UserDeckRepository:
         self.session.add(user_deck)
 
     # read
+    @traced("decks.user_deck_repository.lock_for_transfer")
     async def lock_for_transfer(
         self,
         deck_id: int,
@@ -867,6 +886,7 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("decks.user_deck_repository.count_saved")
     async def count_saved(self, deck_id: int) -> int:
         stmt = select(func.count()).select_from(UserDeck).where(
             UserDeck.deck_id == deck_id,
@@ -874,6 +894,7 @@ class UserDeckRepository:
         )
         return int(await self.session.scalar(stmt) or 0)
 
+    @traced("decks.user_deck_repository.get_archive_recipient_user_ids")
     async def get_archive_recipient_user_ids(self, deck_id: int) -> list[int]:
         stmt = (
             select(UserDeck.user_id)
@@ -931,6 +952,7 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    @traced("decks.repository.get_by_user_id_and_deck_id")
     async def get_by_user_id_and_deck_id(
             self,
             user_id: int,
@@ -950,6 +972,7 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("decks.repository.get_user_decks_by_deck_ids")
     async def get_user_decks_by_deck_ids(
         self,
         deck_ids: list[int],
@@ -968,6 +991,7 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("decks.user_deck_repository.get_user_ids_by_deck_ids")
     async def get_user_ids_by_deck_ids(
         self,
         deck_ids: list[int],
@@ -996,6 +1020,7 @@ class UserDeckRepository:
         )
         return list((await self.session.execute(stmt)).tuples().all())
 
+    @traced("decks.user_deck_repository.get_saved_decks_by_user_id")
     async def get_saved_decks_by_user_id(
             self,
             user_id: int,
@@ -1037,6 +1062,7 @@ class UserDeckRepository:
         rows = result.all()
         return rows
 
+    @traced("decks.repository.get_favourite_decks_by_user_id")
     async def get_favourite_decks_by_user_id(
             self,
             user_id: int,

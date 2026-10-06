@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from app.logging_config import (
     RequestLogContext,
     bind_request_context,
-    format_http_status,
     format_log_value,
     format_query_string,
     mark_exception_as_logged,
@@ -63,59 +62,56 @@ class LoggerMiddleware(BaseHTTPMiddleware):
         )
         started_at = time.perf_counter()
         try:
-            self._log_started(request=request, context=context)
             response = await call_next(request)
         except Exception as exc:
             duration_ms = (time.perf_counter() - started_at) * 1000
-            self._log_failed(context=context, exc=exc, duration_ms=duration_ms)
+            self._log_failed(
+                request=request, context=context, exc=exc, duration_ms=duration_ms
+            )
             raise
         else:
             duration_ms = (time.perf_counter() - started_at) * 1000
             response.headers["X-Request-ID"] = context.request_id
             self._log_completed(
-                context=context, response=response, duration_ms=duration_ms
+                request=request, context=context, response=response,
+                duration_ms=duration_ms,
             )
             return response
         finally:
             reset_request_context(token=context_token)
 
-    def _log_started(self, request: Request, context: RequestLogContext) -> None:
-        client = (
-            f"{request.client.host}:{request.client.port}"
-            if request.client
-            else "-"
-        )
-        logger.info(
-            msg=(
-                "HTTP request started\n"
-                f"  method: {context.method}\n"
-                f"  path: {context.path}\n"
-                f"  query: {format_query_string(query_string=request.url.query)}\n"
-                f"  client: {format_log_value(value=client, max_length=200)}"
-            ),
-        )
-
     def _log_failed(
         self,
+        request: Request,
         context: RequestLogContext,
         exc: Exception,
         duration_ms: float,
     ) -> None:
         mark_exception_as_logged(exception=exc)
         logger.exception(
-            msg=(
-                "HTTP request failed\n"
-                f"  method: {context.method}\n"
-                f"  path: {context.path}\n"
-                "  status: 500 Internal Server Error\n"
-                f"  duration_ms: {duration_ms:.2f}\n"
-                f"  error_type: {type(exc).__name__}\n"
-                f"  error_message: {format_log_value(value=str(exc))}"
-            ),
+            "HTTP %s %s failed after %.2f ms",
+            context.method,
+            context.path,
+            duration_ms,
+            extra={
+                "event": "http.request.failed",
+                "http_method": context.method,
+                "http_path": context.path,
+                "http_query": format_query_string(request.url.query),
+                "client_address": request.client.host if request.client else "-",
+                "http_route": getattr(request.scope.get("route"), "path_format", None)
+                or "unmatched",
+                "http_status_code": 500,
+                "duration_ms": duration_ms,
+                "outcome": "server_error",
+                "error_type": type(exc).__name__,
+                "error_message": format_log_value(str(exc)),
+            },
         )
 
     def _log_completed(
         self,
+        request: Request,
         context: RequestLogContext,
         response: Response,
         duration_ms: float,
@@ -134,15 +130,24 @@ class LoggerMiddleware(BaseHTTPMiddleware):
             outcome = "success"
 
         logger.log(
-            level=log_level,
-            msg=(
-                "HTTP request completed\n"
-                f"  method: {context.method}\n"
-                f"  path: {context.path}\n"
-                f"  status: {format_http_status(status_code=response.status_code)}\n"
-                f"  outcome: {outcome}\n"
-                f"  duration_ms: {duration_ms:.2f}"
-            ),
+            log_level,
+            "HTTP %s %s → %d in %.2f ms",
+            context.method,
+            context.path,
+            response.status_code,
+            duration_ms,
+            extra={
+                "event": "http.request.completed",
+                "http_method": context.method,
+                "http_path": context.path,
+                "http_query": format_query_string(request.url.query),
+                "client_address": request.client.host if request.client else "-",
+                "http_route": getattr(request.scope.get("route"), "path_format", None)
+                or "unmatched",
+                "http_status_code": response.status_code,
+                "duration_ms": duration_ms,
+                "outcome": outcome,
+            },
         )
 
 
@@ -213,7 +218,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             http_requests_in_progress.dec()
 
 
-def setup_middlwares(app: FastAPI) -> None:
+def setup_middlewares(app: FastAPI) -> None:
     # the last middleware added runs first: logger -> prometheus -> router.
     app.add_middleware(middleware_class=PrometheusMiddleware)
     app.add_middleware(middleware_class=LoggerMiddleware)

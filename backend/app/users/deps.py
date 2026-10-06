@@ -5,6 +5,7 @@ from app.users.service import UserService
 from fastapi import Depends
 
 from app.redis.deps import CacheServiceDeps
+from app.tracing import traced
 
 
 def get_user_service(

@@ -13,6 +13,7 @@ from app.decks.models import UserDeck
 from app.decks.schemas import InternalDeck, InternalUserDeck
 from app.errors import RequestValueError
 from app.redis.errors import RateLimitError
+from app.tracing import traced, trace_span
 from app.redis.keys import (
     make_card_cache_key,
     make_card_uuid_cache_key,
@@ -109,6 +110,7 @@ class RedisRateLimiter:
     def __init__(self, redis: Redis):
         self.redis = redis
 
+    @traced("redis.rate_limiter.check")
     async def check(
         self,
         redis_key: str,
@@ -116,12 +118,13 @@ class RedisRateLimiter:
         window_seconds: int,
     ) -> bool | None:
         try:
-            value = await self.redis.eval(
-                RATE_LIMIT_SCRIPT,
-                1,
-                redis_key,
-                window_seconds,
-            )
+            with trace_span("redis.rate_limiter.eval"):
+                value = await self.redis.eval(
+                    RATE_LIMIT_SCRIPT,
+                    1,
+                    redis_key,
+                    window_seconds,
+                )
 
             return value <= requests
         except RedisError:
@@ -527,6 +530,7 @@ class RedisCacheService:
             key_factory=make_card_uuid_cache_key,
         )
 
+    @traced("redis.cache.invalidate_deck_ids_by_uuids")
     async def invalidate_deck_ids_by_uuids(
         self,
         deck_uuids: list[UUID],
@@ -537,6 +541,7 @@ class RedisCacheService:
         )
     
 
+    @traced("redis.cache.cache_users")
     async def cache_users(
         self,
         users: list[InternalUser],
@@ -572,6 +577,7 @@ class RedisCacheService:
             deserializer=InternalUser.model_validate_json,
         )
 
+    @traced("redis.cache.get_cached_users_by_uuids")
     async def get_cached_users_by_uuids(
         self,
         user_uuids: list[UUID],
@@ -583,6 +589,7 @@ class RedisCacheService:
             entity_deserializer=InternalUser.model_validate_json,
         )
 
+    @traced("redis.cache.invalidate_users")
     async def invalidate_users(
         self,
         user_ids: list[int],
@@ -593,6 +600,7 @@ class RedisCacheService:
         )
 
 
+    @traced("redis.cache.cache_users_settings")
     async def cache_users_settings(
         self,
         users_settings: list[InternalUserSettings],
@@ -608,6 +616,7 @@ class RedisCacheService:
             ex=USER_SETTINGS_TTL,
         )
 
+    @traced("redis.cache.get_cached_users_settings")
     async def get_cached_users_settings(
         self,
         user_ids: list[int],
@@ -618,6 +627,7 @@ class RedisCacheService:
             deserializer=InternalUserSettings.model_validate_json,
         )
 
+    @traced("redis.cache.invalidate_users_settings")
     async def invalidate_users_settings(
         self,
         user_ids: list[int],
@@ -628,6 +638,7 @@ class RedisCacheService:
         )
 
 
+    @traced("redis.cache.cache_user_decks")
     async def cache_user_decks(
         self,
         user_id: int,
@@ -645,6 +656,7 @@ class RedisCacheService:
             ex=USER_DECK_TTL,
         )
 
+    @traced("redis.cache.get_cached_user_decks")
     async def get_cached_user_decks(
         self,
         user_id: int,
@@ -658,6 +670,7 @@ class RedisCacheService:
         )
         return result
 
+    @traced("redis.cache.invalidate_user_decks")
     async def invalidate_user_decks(
         self,
         identities: list[UserDeckIdentity],
@@ -667,6 +680,7 @@ class RedisCacheService:
             key_factory=make_user_deck_cache_key,
         )
 
+    @traced("redis.cache.cache_library_cards_page")
     async def cache_library_cards_page(
         self,
         user_id: int,
@@ -701,6 +715,7 @@ class RedisCacheService:
             ex=LIBRARY_PAGE_TTL,
         )
 
+    @traced("redis.cache.get_cached_library_cards_page")
     async def get_cached_library_cards_page(
         self,
         user_id: int,
@@ -762,6 +777,7 @@ class RedisCacheService:
             generation=generation,
         )
 
+    @traced("redis.cache.cache_library_decks_page")
     async def cache_library_decks_page(
         self,
         user_id: int,
@@ -797,6 +813,7 @@ class RedisCacheService:
             ex=LIBRARY_PAGE_TTL,
         )
 
+    @traced("redis.cache.get_cached_library_decks_page")
     async def get_cached_library_decks_page(
         self,
         user_id: int,
@@ -862,6 +879,7 @@ class RedisCacheService:
         )
         return result
 
+    @traced("redis.cache.invalidate_cards")
     async def invalidate_cards(
         self,
         card_ids: list[int],
@@ -871,6 +889,7 @@ class RedisCacheService:
             key_factory=make_card_cache_key,
         )
 
+    @traced("redis.cache.invalidate_decks")
     async def invalidate_decks(
         self,
         deck_ids: list[int],
@@ -880,6 +899,7 @@ class RedisCacheService:
             key_factory=make_deck_cache_key,
         )
 
+    @traced("redis.cache.invalidate_deck_cards")
     async def invalidate_deck_cards(
         self,
         deck_ids: list[int],
@@ -904,6 +924,7 @@ class RedisCacheService:
             ]
         )
 
+    @traced("redis.cache.invalidate_library_card_pages")
     async def invalidate_library_card_pages(
         self,
         user_ids: list[int],
@@ -927,6 +948,7 @@ class RedisCacheService:
                 operation=f"INCR library cards generations for {len(user_ids)} users",
             )
 
+    @traced("redis.cache.invalidate_library_deck_pages")
     async def invalidate_library_deck_pages(
         self,
         user_ids: list[int],
@@ -950,6 +972,7 @@ class RedisCacheService:
                 operation=f"INCR library decks generations for {len(user_ids)} users",
             )
 
+    @traced("redis.cache.cache_deck_cards")
     async def cache_deck_cards(
         self,
         deck_cards: dict[int, list[int]],
@@ -973,6 +996,7 @@ class RedisCacheService:
             ex=DECK_CARDS_TTL,
         )
 
+    @traced("redis.cache.get_cached_deck_cards")
     async def get_cached_deck_cards(
         self,
         deck_ids: list[int],
@@ -984,6 +1008,7 @@ class RedisCacheService:
         )
         return result
 
+    @traced("redis.cache.cache_cards")
     async def cache_cards(
         self,
         cards: list[InternalCard],
@@ -1015,6 +1040,7 @@ class RedisCacheService:
             ttl=CARD_ID_BY_UUID_TTL,
         )
 
+    @traced("redis.cache.get_cached_cards")
     async def get_cached_cards(
         self,
         card_ids: list[int],
@@ -1037,6 +1063,7 @@ class RedisCacheService:
             entity_deserializer=InternalCard.model_validate_json,
         )
 
+    @traced("redis.cache.cache_decks")
     async def cache_decks(
         self,
         decks: list[InternalDeck],
@@ -1068,6 +1095,7 @@ class RedisCacheService:
             ttl=DECK_ID_BY_UUID_TTL,
         )
 
+    @traced("redis.cache.get_cached_decks")
     async def get_cached_decks(
         self,
         deck_ids: list[int],

@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from app.tracing import traced
 from uuid import UUID
 
 from app.cards.errors import (
@@ -94,6 +95,7 @@ class CardService:
                 for card in cards
             ]
 
+    @traced("cards.service.get_cards_by_user_id")
     async def get_cards_by_user_id(
         self,
         user_id: int,

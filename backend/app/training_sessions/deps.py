@@ -5,6 +5,7 @@ from app.training_sessions.service import TrainingSessionService
 from fastapi import Depends
 
 from app.redis.deps import CacheServiceDeps
+from app.tracing import traced
 
 
 def get_training_session_service(

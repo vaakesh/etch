@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from uuid import UUID
+from app.tracing import traced
 
 from sqlalchemy import update
 
@@ -133,6 +134,7 @@ class DeckService:
         return card
 
     # read
+    @traced("decks.service.get_visible_by_uuid")
     async def get_visible_by_uuid(
             self, 
             deck_uuid: UUID,
@@ -146,6 +148,7 @@ class DeckService:
             )
             return InternalDeck.model_validate(deck)
 
+    @traced("decks.service.get_archive_deck")
     async def get_archive_deck(
         self, deck_uuid: UUID, user_id: int,
     ) -> ArchivedDeckResponse:
@@ -165,6 +168,7 @@ class DeckService:
                 preserved_deck_uuid=recipient.preserved_deck_uuid_snapshot,
             )
 
+    @traced("decks.service.get_archive_cards")
     async def get_archive_cards(
         self,
         deck_uuid: UUID,
@@ -204,6 +208,7 @@ class DeckService:
             ]
             return (fetched_decks, missing_decks)
 
+    @traced("decks.service.get_public_decks")
     async def get_public_decks(
         self,
         search_query: SearchQuery = None,
@@ -223,6 +228,7 @@ class DeckService:
             )
             return [InternalDeck.from_entity(deck) for deck in decks]
 
+    @traced("decks.service.get_public_by_owner_uuid")
     async def get_public_by_owner_uuid(
         self,
         owner_uuid: UUID,
@@ -297,6 +303,7 @@ class DeckService:
                 has_more=has_more,
             )
 
+    @traced("decks.service.get_owned_decks")
     async def get_owned_decks(
         self,
         owner_id: int,
@@ -363,6 +370,7 @@ class DeckService:
                 has_more=has_more,
             )
 
+    @traced("decks.service.get_library_decks")
     async def get_library_decks(
         self,
         user_id: int,
@@ -399,6 +407,7 @@ class DeckService:
                 has_more=True if last_item is not None else False,
             )
 
+    @traced("decks.service.get_deck_cards")
     async def get_deck_cards(
         self,
         user_id: int | None,
@@ -421,6 +430,7 @@ class DeckService:
 
             return [InternalCard.model_validate(card) for card in cards]
 
+    @traced("decks.service.get_all_cards_by_deck_ids")
     async def get_all_cards_by_deck_ids(
         self,
         user_id: int,
@@ -444,6 +454,7 @@ class DeckService:
             return cards_by_deck
 
     # write
+    @traced("decks.service.create_deck")
     async def create_deck(
         self,
         payload: CreateDeckRequest,
@@ -512,6 +523,7 @@ class DeckService:
         result = await DeckArchiveWorkflow(uow).make_private(deck.uuid)
         return list(result.recipient_ids)
             
+    @traced("decks.service.update_deck")
     async def update_deck(
         self,
         user_id: int,
@@ -601,6 +613,7 @@ class DeckService:
         except IntegrityError as e:
             raise DeckAlreadyExistsError() from e
 
+    @traced("decks.service.delete_deck")
     async def delete_deck(
         self, 
         deck_uuid: UUID,
@@ -649,6 +662,7 @@ class DeckService:
             await asyncio.gather(*tasks)
             return None
 
+    @traced("decks.service.preserve_archived_deck")
     async def preserve_archived_deck(
         self, archive_deck_uuid: UUID, user_id: int,
     ):
@@ -682,6 +696,7 @@ class DeckService:
             )
         return result
 
+    @traced("decks.service.get_archives_for_user")
     async def get_archives_for_user(self, user_id: int):
         async with self.uow_factory() as uow:
             rows = await uow.deck_repo.get_archives_for_recipient(
@@ -697,6 +712,7 @@ class DeckService:
                 for deck, recipient in rows
             ]
 
+    @traced("decks.service.add_card_to_deck")
     async def add_card_to_deck(
         self,
         user_id: int,
@@ -769,6 +785,7 @@ class DeckService:
         except IntegrityError as e:
             raise DeckCardAlreadyExistsError() from e
 
+    @traced("decks.service.load_cards_to_deck")
     async def load_cards_to_deck(
         self,
         deck_uuid: UUID,
@@ -844,6 +861,7 @@ class DeckService:
                 ]
             )
 
+    @traced("decks.service.reorder_cards")
     async def reorder_cards(
             self,
             user_id: int,
@@ -899,6 +917,7 @@ class DeckService:
                 deck_ids=[deck.id],
             )
 
+    @traced("decks.service.remove_card_from_deck")
     async def remove_card_from_deck(
         self,
         user_id: int,
@@ -966,6 +985,7 @@ class UserDeckService:
 
     # read
     # todo: отдавать (fetched, missing)
+    @traced("decks.service.get_user_decks_by_deck_ids")
     async def get_user_decks_by_deck_ids(
         self,
         deck_ids: list[int],
@@ -981,6 +1001,7 @@ class UserDeckService:
                 for user_deck in user_decks
             ]
 
+    @traced("decks.user_deck_service.get_page_of_saved_decks_by_user_id")
     async def get_page_of_saved_decks_by_user_id(
             self,
             user_id: int,
@@ -1011,6 +1032,7 @@ class UserDeckService:
                 )
             return result
 
+    @traced("decks.service.get_my_favourite_decks")
     async def get_my_favourite_decks(
         self,
         user_id: int,
@@ -1046,6 +1068,7 @@ class UserDeckService:
             )
 
     # write
+    @traced("decks.user_deck_service.save_deck")
     async def save_deck(
             self,
             user_id: int,
@@ -1097,6 +1120,7 @@ class UserDeckService:
 
             return InternalUserDeck.model_validate(user_deck)
 
+    @traced("decks.user_deck_service.set_favourite_deck")
     async def set_favourite_deck(
             self,
             user_id: int,
@@ -1141,6 +1165,7 @@ class UserDeckService:
 
             return InternalUserDeck.model_validate(user_deck)
 
+    @traced("decks.user_deck_service.unsave_deck")
     async def unsave_deck(
         self,
         user_id: int,

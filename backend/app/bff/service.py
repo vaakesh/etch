@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+from app.tracing import traced
 from typing import Literal
 from uuid import UUID
 
@@ -76,6 +77,7 @@ class BffService:
 
     # helpers
 
+    @traced("bff.service.get_decks_library_deck_page")
     async def _get_decks_library_deck_page(
         self,
         user_id: int,
@@ -173,6 +175,7 @@ class BffService:
             has_more=cached_page.has_more,
         )
 
+    @traced("bff.service.get_user_decks_by_deck_ids")
     async def _get_user_decks_by_deck_ids(
         self,
         user_id: int,
@@ -202,6 +205,7 @@ class BffService:
                 ] = fetched_user_deck
         return user_decks
 
+    @traced("bff.service.get_cards_library_deck_page")
     async def _get_cards_library_deck_page(
         self,
         user_id: int,
@@ -392,6 +396,7 @@ class BffService:
                 return False
         return True
 
+    @traced("bff.service.fetch_and_cache_library_deck_page_decks")
     async def _fetch_and_cache_library_deck_page_decks(
         self,
         user_id: int,
@@ -450,6 +455,7 @@ class BffService:
             has_more=has_more,
         )
 
+    @traced("bff.service.fetch_and_cache_library_deck_page_cards_previews")
     async def _fetch_and_cache_library_deck_page_cards_previews(
         self,
         user_id: int,
@@ -487,6 +493,7 @@ class BffService:
 
         return fetched_by_deck
 
+    @traced("bff.service.fetch_and_cache_cards_library_cards_page")
     async def _fetch_and_cache_cards_library_cards_page(
         self,
         user_id: int,
@@ -552,6 +559,7 @@ class BffService:
 
     # read
 
+    @traced("bff.service.get_home_dashboard")
     async def get_home_dashboard(
             self,
             user_id: int,
@@ -602,6 +610,7 @@ class BffService:
         )
         return result
 
+    @traced("bff.service.get_catalog_page")
     async def get_catalog_page(
         self,
         user_id: int,
@@ -645,6 +654,7 @@ class BffService:
             for deck in decks
         ]
 
+    @traced("bff.service.get_decks_library_page")
     async def get_decks_library_page(
         self,
         user_id: int,
@@ -701,6 +711,7 @@ class BffService:
         )
         return result
 
+    @traced("bff.service.get_cards_library_page")
     async def get_cards_library_page(
             self,
             user_id: int,

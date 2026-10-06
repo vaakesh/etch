@@ -5,6 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.tracing import traced
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent # /etch
 
@@ -53,6 +54,7 @@ class Settings(BaseSettings):
     auth_jwt: AuthJWT
     
 @lru_cache
+@traced("config.get_settings")
 def get_settings() -> Settings:
     return Settings()
 
@@ -66,6 +68,7 @@ class AuthTokensConfig:
     refresh_pepper_bytes: bytes
 
 @lru_cache
+@traced("config.get_auth_tokens_config")
 def get_auth_tokens_config() -> AuthTokensConfig:
     settings = get_settings()
 
@@ -77,4 +80,3 @@ def get_auth_tokens_config() -> AuthTokensConfig:
         refresh_token_expire_days=settings.auth_jwt.refresh_token_expire_days,
         refresh_pepper_bytes=settings.refresh_pepper.encode("utf-8"),
     )
-

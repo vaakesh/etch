@@ -14,6 +14,7 @@ from app.common.utils import utcnow
 from app.decks.errors import DeckNotFoundError, PermissionDeniedError
 from app.decks.models import Deck, DeckArchiveRecipient, DeckCard, UserDeck
 from app.service import UnitOfWork
+from app.tracing import traced
 from app.training_sessions.models import TrainingSession, TrainingSessionStatus
 
 
@@ -89,6 +90,7 @@ class DeckContentCopier:
         )
         return await self.create_copy(source, deck_cards, cards, target, now=utcnow())
 
+    @traced("decks.content_copier.create_copy")
     async def create_copy(
         self,
         source: Deck,
@@ -250,6 +252,7 @@ class DeckTransferUserProgress:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
+    @traced("decks.progress.transfer")
     async def transfer(
         self,
         copied: DeckCopyResult,
@@ -465,6 +468,7 @@ class DeckArchiveWorkflow:
         self.copier = DeckContentCopier(uow)
         self.progress = DeckTransferUserProgress(uow)
 
+    @traced("decks.archiver.archive_deck")
     async def archive_deck(
         self,
         source_deck_uuid: UUID,
@@ -590,6 +594,7 @@ class DeckArchiveWorkflow:
         await self.uow.flush()
         return result
 
+    @traced("decks.archiver.preserve")
     async def preserve(
         self, archive_deck_uuid: UUID, *, user_id: int,
     ) -> DeckPreservationResult:

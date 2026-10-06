@@ -6,12 +6,14 @@ from redis.asyncio import Redis
 from functools import lru_cache
 
 from app.config import get_settings
+from app.tracing import traced
 from app.redis.service import (
     RedisCacheService,
     RedisRateLimiter,
 )
 
 @lru_cache
+@traced("redis.deps.get_redis")
 def get_redis() -> Redis:
     settings = get_settings()
 

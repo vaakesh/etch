@@ -1,4 +1,5 @@
 from uuid import UUID
+from app.tracing import traced
 
 from app.users.models import User, UserSettings
 from sqlalchemy import Select, and_, func, select, update
@@ -25,6 +26,7 @@ class UserSettingsRepository:
         await self.session.refresh(user_settings)
 
     # checked
+    @traced("users.settings_repository.update_user_settings")
     async def update_user_settings(
         self,
         user_id: PositiveInt,
@@ -57,6 +59,7 @@ class UserRepository:
         await self.session.delete(user)
 
     # checked
+    @traced("users.repository.update_user")
     async def update_user(
         self,
         user_id: PositiveInt,
@@ -77,6 +80,7 @@ class UserRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
+    @traced("users.repository.get_user_profile")
     async def get_user_profile(
         self,
         profile_username: Username,
@@ -110,6 +114,7 @@ class UserRepository:
         result = await self.session.execute(stmt)
         return result.one_or_none()
 
+    @traced("users.repository.get_by_id")
     async def get_by_id(
             self, 
             user_id: int,
@@ -126,6 +131,7 @@ class UserRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("users.repository.get_by_uuid")
     async def get_by_uuid(
             self, 
             user_uuid: UUID,
@@ -144,6 +150,7 @@ class UserRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("users.repository.get_by_username")
     async def get_by_username(
         self, username: str, *, for_update: bool = False
     ) -> User | None:

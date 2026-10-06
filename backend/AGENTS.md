@@ -2,5 +2,6 @@
 
 - Все Python-команды, тесты и инструменты backend запускать через uv из каталога backend: `uv run python`, `uv run pytest`, `uv run alembic` и т. п. Для отдельных инструментов использовать `uvx`, когда это уместно.
 - Не запускать Python, pytest и другие инструменты напрямую, в том числе через `.venv/bin/...`.
+- Перед добавлением, изменением или ревью трейсинга прочитать [tracing_rules.md](tracing_rules.md) и соблюдать эти правила.
 - Перед написанием или изменением интеграционных тестов прочитать [tests/integration/integration_rules.md](tests/integration/integration_rules.md) и соблюдать эти рекомендации.
 - Перед написанием или изменением интеграционных тестов, их фикстур и вспомогательных функций прочитать [tests/integration/logging_rules.md](tests/integration/logging_rules.md) и соблюдать описанные там правила логирования.

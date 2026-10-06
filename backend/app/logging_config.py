@@ -16,10 +16,14 @@ from sqlalchemy import event
 from sqlalchemy.engine import Connection, ExceptionContext
 from sqlalchemy.engine.interfaces import ExecutionContext
 from sqlalchemy.ext.asyncio import AsyncEngine
+from opentelemetry import trace
 
 LOG_FORMAT = (
     "%(asctime)s.%(msecs)03dZ | %(levelname)s | "
-    "%(name)s:%(lineno)d | req=%(request_id)s | %(message)s"
+    "%(name)s:%(lineno)d | "
+    "req=%(request_id)s | "
+    "trace=%(trace_id)s | span=%(span_id)s | "
+    "%(message)s"
 )
 DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
@@ -58,14 +62,6 @@ SENSITIVE_QUERY_FIELDS = frozenset({
     "token",
 })
 LOGGED_EXCEPTION_ATTRIBUTE = "_etch_already_logged"
-STANDARD_LOG_RECORD_FIELDS = frozenset({
-    *logging.makeLogRecord({}).__dict__,
-    "asctime",
-    "color_message",
-    "levelprefix",
-    "message",
-    "request_id",
-})
 
 
 @dataclass(slots=True, frozen=True)
@@ -98,6 +94,17 @@ class RequestContextFilter(logging.Filter):
 
         context = request_log_context.get()
         record.request_id = context.request_id if context else "-"
+        span_context = trace.get_current_span().get_span_context()
+        record.trace_id = (
+            format(span_context.trace_id, "032x")
+            if span_context.is_valid
+            else "-"
+        )
+        record.span_id = (
+            format(span_context.span_id, "016x")
+            if span_context.is_valid
+            else "-"
+        )
         return True
 
 
@@ -127,13 +134,6 @@ class ColoredFormatter(logging.Formatter):
         else:
             formatted_record.levelname = level_name
 
-        extra_fields = _format_extra_fields(record)
-        if extra_fields:
-            formatted_record.msg = (
-                f"{record.getMessage()}\n{extra_fields}"
-            )
-            formatted_record.args = None
-
         return super().format(formatted_record)
 
 
@@ -146,23 +146,6 @@ def _is_duplicate_uvicorn_exception(record: logging.LogRecord) -> bool:
         exception
         and getattr(exception, LOGGED_EXCEPTION_ATTRIBUTE, False)
     )
-
-
-def _format_extra_fields(record: logging.LogRecord) -> str:
-    fields: list[str] = []
-
-    for name in sorted(record.__dict__.keys() - STANDARD_LOG_RECORD_FIELDS):
-        value = pformat(
-            record.__dict__[name],
-            width=SQL_LINE_WIDTH,
-            compact=True,
-            sort_dicts=False,
-        )
-        fields.append(
-            f"  {name}: {value.replace(chr(10), chr(10) + '    ')}"
-        )
-
-    return "\n".join(fields)
 
 
 def _single_line(value: str) -> str:

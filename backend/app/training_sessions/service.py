@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID
+from app.tracing import traced
 import uuid
 
 from app.bff.schemas import DailyActivityResponse, UserProgressResponse
@@ -111,6 +112,7 @@ class TrainingSessionService:
             user_deck.last_studied_at = training_session.finished_at
 
     # read
+    @traced("training_sessions.service.get_by_uuid")
     async def get_by_uuid(
             self, 
             session_uuid: UUID,
@@ -126,6 +128,7 @@ class TrainingSessionService:
             
             return InternalTrainingSession.model_validate(training_session)
 
+    @traced("training_sessions.service.resume_practice_session")
     async def resume_practice_session(
             self,
             user_id: int,
@@ -166,6 +169,7 @@ class TrainingSessionService:
                 ) for item in training_session_next_cards]
             )
 
+    @traced("training_sessions.service.get_session_history")
     async def get_session_history(
         self,
         user_id: int,
@@ -202,6 +206,7 @@ class TrainingSessionService:
 
             return items
 
+    @traced("training_sessions.service.get_sessions_by_user_uuid")
     async def get_sessions_by_user_uuid(
         self,
         user_uuid: UUID,
@@ -274,6 +279,7 @@ class TrainingSessionService:
                 has_more
             )
 
+    @traced("training_sessions.service.get_user_activity")
     async def get_user_activity(
         self,
         user_id: int,
@@ -324,6 +330,7 @@ class TrainingSessionService:
             )
         ]
 
+    @traced("training_sessions.service.get_user_progress")
     async def get_user_progress(
         self,
         user_id: int,
@@ -334,6 +341,7 @@ class TrainingSessionService:
             )
 
     # write
+    @traced("training_sessions.service.start_training_session")
     async def start_training_session(
         self,
         user_id: int,
@@ -445,6 +453,7 @@ class TrainingSessionService:
 
             return response
 
+    @traced("training_sessions.service.record_activity")
     async def record_activity(
         self,
         user_id: int,
@@ -499,6 +508,7 @@ class TrainingSessionService:
                 tracker_uuid=training_session.activity_tracker_uuid,
             )
 
+    @traced("training_sessions.service.submit_answer")
     async def submit_answer(
             self,
             user_id: int,

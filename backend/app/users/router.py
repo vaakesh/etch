@@ -27,7 +27,7 @@ from app.users.schemas import (
     UpdateUserSettingsRequest,
 )
 from fastapi import APIRouter, Depends, Query, Response, status
-from opentelemetry import trace
+from app.tracing import traced, trace_span
 
 from app.redis.rate_limiters import (
     profile_rate_limit,
@@ -47,13 +47,9 @@ logger = logging.getLogger(__name__)
 async def get_me(
     current_user: CurrentUserWithSettings,
 ):
-    tracer = trace.get_tracer(__name__)
-    with tracer.start_as_current_span("get_me.build_response") as span:
-        span.set_attribute("app.endpoint", "/users/me")
-        response = PrivateUserResponse.from_user_with_settings(
-            user=current_user,
-        )
-        return response
+    return PrivateUserResponse.from_user_with_settings(
+        user=current_user,
+    )
 
 # checked
 @router.post(
@@ -62,14 +58,16 @@ async def get_me(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(registration_rate_limit)],
 )
+@traced("users.router.create_user")
 async def create_user(
     payload: CreateUserRequest,
     user_service: UserServiceDeps,
 ):
     new_user = await user_service.create_user(payload)
-    return PrivateUserResponse.from_user_with_settings(
-        user=new_user,
-    )
+    with trace_span("users.router.create_user.build_response"):
+        return PrivateUserResponse.from_user_with_settings(
+            user=new_user,
+        )
 
 # checked
 @router.patch(
@@ -78,6 +76,7 @@ async def create_user(
     response_model=PrivateUserResponse,
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.update_user")
 async def update_user(
     payload: UpdateUserRequest,
     current_user: CurrentUser,
@@ -93,6 +92,7 @@ async def update_user(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.delete_user")
 async def delete_user(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -111,6 +111,7 @@ async def delete_user(
     response_model=UserSettingsResponse,
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.update_settings")
 async def update_settings(
     current_user: CurrentUser,
     user_service: UserServiceDeps,
@@ -126,6 +127,7 @@ async def update_settings(
     dependencies=[Depends(public_users_rate_limit)],
     response_model=UserProfileResponse,
 )
+@traced("users.router.get_user_profile")
 async def get_user_profile(
     username: Username,
     current_user: OptionalCurrentUser,
@@ -140,6 +142,7 @@ async def get_user_profile(
     "/me/daily-activity",
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.get_user_daily_activity")
 async def get_user_daily_activity(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
@@ -157,6 +160,7 @@ async def get_user_daily_activity(
     response_model=CursorPage[DeckResponse],
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.get_my_decks")
 async def get_my_decks(
     current_user: CurrentUser,
     deck_service: DeckServiceDeps,
@@ -182,6 +186,7 @@ async def get_my_decks(
     response_model=CursorPage[TrainingSessionResponse],
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.get_my_training_sessions")
 async def get_my_training_sessions(
     current_user: CurrentUser,
     training_session_service: TrainingSessionServiceDeps,
@@ -208,6 +213,7 @@ async def get_my_training_sessions(
     response_model=list[DeckListItemResponse],
     dependencies=[Depends(users_rate_limit)],
 )
+@traced("users.router.get_my_saved_decks")
 async def get_my_saved_decks(
     current_user: CurrentUser,
     user_deck_service: UserDeckServiceDeps,
@@ -227,6 +233,7 @@ async def get_my_saved_decks(
     response_model=CursorPage[DeckResponse],
     dependencies=[Depends(public_users_rate_limit)],
 )
+@traced("users.router.get_public_decks_by_user")
 async def get_public_decks_by_user(
     user_uuid: UUID7,
     current_user: OptionalCurrentUser,

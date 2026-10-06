@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.tracing import traced
 
 from app.auth.models import UserSession
 from sqlalchemy import select, update
@@ -17,6 +18,7 @@ class AuthRepository:
     def add(self, user_session: UserSession) -> None:
         self.session.add(user_session)
 
+    @traced("auth.repository.flush")
     async def flush(self) -> None:
         await self.session.flush()
 
@@ -28,6 +30,7 @@ class AuthRepository:
 
     # read
 
+    @traced("auth.repository.get_user_id_by_refresh")
     async def get_user_id_by_refresh(self, refresh_token_hash: str) -> int | None:
         stmt = select(UserSession.user_id).where(
             UserSession.refresh_token_hash == refresh_token_hash
@@ -35,6 +38,7 @@ class AuthRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("auth.repository.get_user_session_by_refresh")
     async def get_user_session_by_refresh(
         self, refresh_token_hash: str, *, for_update: bool = False
     ) -> UserSession | None:
@@ -47,6 +51,7 @@ class AuthRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("auth.repository.get_all_user_sessions")
     async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
         sessions = (
             (
@@ -63,6 +68,7 @@ class AuthRepository:
 
     # write
 
+    @traced("auth.repository.revoke_active_session_by_refresh_token_hash")
     async def revoke_active_session_by_refresh_token_hash(
         self,
         refresh_token_hash: str,
@@ -81,6 +87,7 @@ class AuthRepository:
         result = await self.session.execute(stmt)
         return bool(result.rowcount)
 
+    @traced("auth.repository.revoke_all_active_sessions_by_user_id")
     async def revoke_all_active_sessions_by_user_id(
         self,
         user_id: int,

@@ -1,5 +1,6 @@
 
 from app.auth.repository import AuthRepository
+from app.tracing import traced
 from app.cards.repository import CardRepository
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
 from app.training_sessions.repository import (
@@ -37,6 +38,7 @@ class UnitOfWork:
         self.user_settings_repo = UserSettingsRepository(self.session)
         return self
 
+    @traced("uow.close")
     async def __aexit__(self, exc_type, exc, tb):
         try:
             if exc_type is not None and self.session is not None:
@@ -55,6 +57,7 @@ class UnitOfWork:
             self.training_session_item_repo = None
             self.user_settings_repo = None
 
+    @traced("uow.commit")
     async def commit(self):
         if self.session is None:
             raise RuntimeError("session is not initialized")
@@ -69,6 +72,7 @@ class UnitOfWork:
             raise RuntimeError("session is not initialized")
         await self.session.flush()
     
+    @traced("uow.rollback")
     async def rollback(self):
         if self.session is None:
             raise RuntimeError("session is not initialized")

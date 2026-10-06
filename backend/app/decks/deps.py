@@ -5,6 +5,7 @@ from app.deps import UoWFactory, get_uow_factory
 from fastapi import Depends
 
 from app.redis.deps import CacheServiceDeps
+from app.tracing import traced
 
 
 def get_deck_service(

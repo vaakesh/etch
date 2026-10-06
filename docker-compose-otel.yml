@@ -1,0 +1,65 @@
+services:
+  api:
+    environment:
+      OTEL_SERVICE_NAME: etch-api
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=development,service.version=0.1.0"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    stop_grace_period: 30s
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - type: bind
+        source: ./observability/otel-collector.yaml
+        target: /etc/otelcol/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 256m
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.1.0
+    command:
+      - "-target=all"
+      - "-config.file=/etc/tempo.yaml"
+    volumes:
+      - type: bind
+        source: ./observability/tempo.yaml
+        target: /etc/tempo.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - tempo_data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.0
+    command:
+      - "-config.file=/etc/loki/config.yaml"
+
+    volumes:
+      - type: bind
+        source: ./observability/loki.yaml
+        target: /etc/loki/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - loki_data:/loki
+
+    ports:
+      - "127.0.0.1:3100:3100"
+
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  tempo_data:
+  loki_data:

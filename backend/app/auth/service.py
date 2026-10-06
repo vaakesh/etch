@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import secrets
 from collections.abc import Callable
+from app.tracing import traced
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -32,6 +33,7 @@ class AuthTokensService:
 
     # read
 
+    @traced("auth.tokens.decode_access_token")
     def decode_access_token(self, token: str) -> dict[str, Any]:
         try:
             payload = jwt.decode(
@@ -54,6 +56,7 @@ class AuthTokensService:
 
     # write
 
+    @traced("auth.tokens.create_access_token")
     def create_access_token(self, user_uuid: UUID) -> str:
         now = utcnow()
         payload: dict[str, Any] = {
@@ -100,6 +103,7 @@ class AuthService:
 
     # helpers
 
+    @traced("auth.service.authenticate_user")
     async def _authenticate_user(
             self,
             username: str,
@@ -150,6 +154,7 @@ class AuthService:
 
     # read
 
+    @traced("auth.service.get_all_user_sessions")
     async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
         async with self.uow_factory() as uow:
             return await uow.auth_repo.get_all_user_sessions(user_id)
@@ -170,6 +175,7 @@ class AuthService:
         )
         return user_session
 
+    @traced("auth.service.login")
     async def login(
         self,
         username: str,
@@ -191,6 +197,7 @@ class AuthService:
 
             return TokenPair(tokens.access_token, tokens.refresh_token)
 
+    @traced("auth.service.login_by_bearer_token_without_refresh")
     async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
         async with self.uow_factory() as uow:
             user = await self._authenticate_user(
@@ -201,6 +208,7 @@ class AuthService:
             bearer_access_token = self.auth_tokens_service.create_access_token(user.uuid)
             return AccessTokenResponse(bearer_access_token)
 
+    @traced("auth.service.refresh")
     async def refresh(
         self,
         refresh_token: str,
@@ -222,6 +230,7 @@ class AuthService:
 
             return TokenPair(tokens.access_token, tokens.refresh_token)
 
+    @traced("auth.service.change_password")
     async def change_password(
         self,
         user_id: int,
@@ -254,6 +263,7 @@ class AuthService:
 
             await uow.commit()
 
+    @traced("auth.service.logout")
     async def logout(
         self,
         refresh_token: str | None = None,

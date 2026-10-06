@@ -3,6 +3,7 @@ from fastapi import Request
 from app.redis.deps import RedisRateLimiterDeps
 from app.redis.service import RateLimit, RateLimitIdentity, RateLimitPolicy
 from app.auth.deps import CurrentUser
+from app.tracing import traced
 
 def limit(
     policy: RateLimitPolicy,

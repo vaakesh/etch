@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from app.tracing import traced
 from uuid import UUID
 
 from app.cards.models import Card
@@ -33,6 +34,7 @@ class CardRepository:
         await self.session.delete(card)
 
     # read
+    @traced("cards.repository.get_by_uuid")
     async def get_by_uuid(
             self, 
             card_uuid: UUID,
@@ -78,6 +80,7 @@ class CardRepository:
         rows = result.scalar_one_or_none()
         return rows
 
+    @traced("cards.repository.get_by_ids")
     async def get_by_ids(
         self,
         card_ids: list[int],
@@ -92,6 +95,7 @@ class CardRepository:
         rows = result.scalars().all()
         return rows
 
+    @traced("cards.repository.get_all_by_user_id")
     async def get_all_by_user_id(
         self,
         user_id: int,

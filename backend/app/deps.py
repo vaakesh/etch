@@ -6,9 +6,11 @@ from app.config import Settings, get_settings
 from app.database import get_async_session_maker
 from app.errors import MetricsAccessDeniedError
 from app.service import UnitOfWork
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.tracing import traced
 
 UoWFactory = Callable[[], UnitOfWork]
 
@@ -22,7 +24,7 @@ def get_uow_factory(
 
 metrics_bearer = HTTPBearer(auto_error=False)
 
-
+@traced("metrics.check.access_token")
 async def require_metrics_access(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None,

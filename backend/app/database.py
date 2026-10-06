@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from app.config import get_settings
+from app.tracing import traced
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,6 +12,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 @lru_cache
+@traced("database.get_engine")
 def get_engine() -> AsyncEngine:
     settings = get_settings()
     return create_async_engine(

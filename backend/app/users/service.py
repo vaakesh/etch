@@ -7,6 +7,7 @@ from asyncpg import UniqueViolationError
 from app.auth.utils import hash_password
 from app.errors import RequestValueError
 from app.service import UnitOfWork
+from app.tracing import traced, trace_span
 from app.decks.archiver import DeckArchiveWorkflow
 from app.users.errors import (
     PermissionDeniedError,
@@ -51,6 +52,7 @@ class UserService:
 
     # read
 
+    @traced("users.service.get_user_profile")
     async def get_user_profile(
         self,
         viewer_id: int | None,
@@ -85,6 +87,7 @@ class UserService:
                 total_saves_count=total_saves_count,              
             )
 
+    @traced("users.service.get_by_uuid")
     async def get_by_uuid(
         self,
         user_uuid: UUID,
@@ -112,6 +115,7 @@ class UserService:
 
             return internal_user
 
+    @traced("users.service.get_by_uuid_with_settings")
     async def get_by_uuid_with_settings(
         self,
         user_uuid: UUID,
@@ -161,6 +165,7 @@ class UserService:
             )
 
     # checked
+    @traced("users.service.create_user")
     async def create_user(
             self,
             payload: CreateUserRequest,
@@ -182,10 +187,11 @@ class UserService:
                 )
                 uow.user_settings_repo.add(user_settings)
                 await uow.flush()
-                result = InternalUserWithSettings.from_parts(
-                    user=InternalUser.model_validate(obj=user), 
-                    settings=InternalUserSettings.model_validate(obj=user_settings),
-                )
+                with trace_span("users.service.create_user.build_result"):
+                    result = InternalUserWithSettings.from_parts(
+                        user=InternalUser.model_validate(obj=user),
+                        settings=InternalUserSettings.model_validate(obj=user_settings),
+                    )
                 await uow.commit()
                 return result
         except IntegrityError as e:
@@ -197,6 +203,7 @@ class UserService:
             raise
 
     # checked
+    @traced("users.service.update_user")
     async def update_user(
         self,
         current_user_id: int,
@@ -239,6 +246,7 @@ class UserService:
             raise
 
     # checked
+    @traced("users.service.update_user_settings")
     async def update_user_settings(
         self,
         current_user_id: int,
@@ -270,6 +278,7 @@ class UserService:
             
             return internal_user_settings
 
+    @traced("users.service.delete_user")
     async def delete_user(
             self,
             current_user_id: int,

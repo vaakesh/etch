@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
+from app.tracing import traced
 
 from app.bff.schemas import DailyActivityResponse, UserProgressResponse
 from app.cards.models import Card
@@ -123,6 +124,7 @@ class TrainingSessionItemRepository:
         self.session.add(training_session_item)
 
     # read
+    @traced("training_sessions.item_repository.lock_for_transfer")
     async def lock_for_transfer(
         self,
         session_ids: list[int],
@@ -138,6 +140,7 @@ class TrainingSessionItemRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("training_sessions.item_repository.get_item_by_sequence_number_and_session_id")
     async def get_item_by_sequence_number_and_session_id(
         self,
         training_session_id: int,
@@ -156,6 +159,7 @@ class TrainingSessionItemRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("training_sessions.item_repository.get_next_cards")
     async def get_next_cards(
             self,
             training_session_id: int,
@@ -172,6 +176,7 @@ class TrainingSessionItemRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("training_sessions.item_repository.get_session_history")
     async def get_session_history(
         self,
         user_id: int,
@@ -222,6 +227,7 @@ class TrainingSessionItemRepository:
         rows = result.all()
         return rows
 
+    @traced("training_sessions.item_repository.get_user_activity")
     async def get_user_activity(
         self,
         user_id: int,
@@ -253,6 +259,7 @@ class TrainingSessionItemRepository:
         rows = result.tuples().all()
         return dict(rows)
 
+    @traced("training_sessions.item_repository.get_user_progress")
     async def get_user_progress(
         self,
         user_id: int,
@@ -404,6 +411,7 @@ class TrainingSessionItemRepository:
         return UserProgressResponse.model_validate(row)
 
     # write
+    @traced("training_sessions.item_repository.create_snapshot")
     async def create_snapshot(
             self,
             training_session_id: PositiveInt,
@@ -500,6 +508,7 @@ class TrainingSessionRepository:
         await self.session.delete(training_session)
 
     # read
+    @traced("training_sessions.repository.lock_for_transfer")
     async def lock_for_transfer(
         self,
         deck_id: int,
@@ -512,6 +521,7 @@ class TrainingSessionRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @traced("training_sessions.repository.get_user_ids_by_deck_id")
     async def get_user_ids_by_deck_id(self, deck_id: int) -> list[int]:
         stmt = (
             select(TrainingSession.user_id)
@@ -534,6 +544,7 @@ class TrainingSessionRepository:
         )
         return list((await self.session.execute(stmt)).tuples().all())
 
+    @traced("training_sessions.repository.has_by_deck_id")
     async def has_by_deck_id(
         self,
         deck_id: int,
@@ -561,6 +572,7 @@ class TrainingSessionRepository:
         result = await self.session.execute(stmt)
         return sorted(set(result.scalars().all()))
 
+    @traced("training_sessions.repository.get_by_uuid")
     async def get_by_uuid(
             self, 
             session_uuid: UUID,
@@ -581,6 +593,7 @@ class TrainingSessionRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    @traced("training_sessions.repository.get_sessions_by_user_id")
     async def get_sessions_by_user_id(
         self,
         user_id: int,
