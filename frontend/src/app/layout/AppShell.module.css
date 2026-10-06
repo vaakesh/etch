@@ -909,3 +909,14 @@ a.navigationItem {
     transition-duration: 1ms !important;
   }
 }
+
+.shell:has([data-session-fullscreen="true"]) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  transition: none;
+}
+
+.shell:has([data-session-fullscreen="true"]) .sidebar,
+.shell:has([data-session-fullscreen="true"]) .sidebarToggle {
+  display: none;
+}

@@ -404,7 +404,9 @@
 .input:focus-visible {
   background: rgb(255 255 255 / 90%);
   border-color: var(--login-purple);
-  box-shadow: inset 0 1px 0 #fff, var(--ui-focus-shadow);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    var(--ui-focus-shadow);
 }
 
 .input[aria-invalid="true"] {

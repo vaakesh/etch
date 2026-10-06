@@ -43,6 +43,7 @@ import {
   type AppLocale,
 } from "../../i18n";
 import styles from "./PracticePage.module.css";
+import { usePracticeFullscreen } from "./usePracticeFullscreen";
 import { PRACTICE_MESSAGES, type PracticeMessages } from "./PracticePage.messages";
 import { CatalogDeckPreview } from "../CatalogPage/CatalogDeckPreview";
 
@@ -175,6 +176,24 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
       viewBox="0 0 24 24"
     >
       <path d={direction === "left" ? "m14.5 6-6 6 6 6" : "m9.5 6 6 6-6 6"} />
+    </svg>
+  );
+}
+
+function FullscreenIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d={active ? "M3 8h5V3m8 0v5h5M3 16h5v5m8 0v-5h5" : "M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"}
+      />
     </svg>
   );
 }
@@ -1580,6 +1599,7 @@ export function ActivePracticeSessionView({
   const { locale } = useLocale();
   const messages = useLocalizedMessages(PRACTICE_MESSAGES);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const { isFullscreen, sessionRef, toggleFullscreen } = usePracticeFullscreen();
   const [selectedSequenceNumber, setSelectedSequenceNumber] = useState(
     state.session.cards[0]?.sequenceNumber ?? 1,
   );
@@ -1634,7 +1654,25 @@ export function ActivePracticeSessionView({
   };
 
   return (
-    <main className={styles.sessionMain}>
+    <main
+      className={styles.sessionMain}
+      data-session-fullscreen={isFullscreen ? "true" : undefined}
+      ref={sessionRef}
+    >
+      <div className={styles.sessionToolbar}>
+        <SessionProgress session={state.session} />
+        <button
+          aria-label={isFullscreen ? messages.exitFullscreen : messages.enterFullscreen}
+          aria-pressed={isFullscreen}
+          className={styles.fullscreenButton}
+          onClick={toggleFullscreen}
+          title={isFullscreen ? messages.exitFullscreen : messages.enterFullscreen}
+          type="button"
+        >
+          <FullscreenIcon active={isFullscreen} />
+          <span>{isFullscreen ? messages.exitFullscreen : messages.enterFullscreen}</span>
+        </button>
+      </div>
       <div
         aria-hidden={activity.phase === "paused" ? true : undefined}
         className={
@@ -1645,8 +1683,6 @@ export function ActivePracticeSessionView({
         inert={activity.phase === "paused" ? true : undefined}
         ref={workspaceRef}
       >
-        <SessionProgress session={state.session} />
-
         <section aria-labelledby="practice-prompt" className={styles.cardStage}>
           <article className={cardClassName} key={selectedCard.sequenceNumber}>
             <div className={styles.cardTopline}>

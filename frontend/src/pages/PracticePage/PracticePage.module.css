@@ -2716,3 +2716,258 @@
     box-shadow: none;
   }
 }
+
+.sessionToolbar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  width: min(100%, 1078px);
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
+}
+
+.sessionToolbar .progressPanel {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+
+.fullscreenButton {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--practice-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  background: var(--practice-surface);
+  border: 1px solid var(--practice-panel-line);
+  border-radius: 14px;
+  transition:
+    color var(--practice-motion-fast),
+    background-color var(--practice-motion-fast);
+}
+
+.fullscreenButton svg {
+  width: 20px;
+  height: 20px;
+}
+
+.fullscreenButton:active {
+  color: var(--practice-primary);
+  background: var(--practice-primary-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fullscreenButton:hover {
+    color: var(--practice-primary);
+    background: var(--practice-surface-hover);
+  }
+}
+
+@media (max-width: 700px) {
+  .fullscreenButton {
+    width: 44px;
+    padding: 10px;
+  }
+
+  .fullscreenButton > span {
+    display: none;
+  }
+}
+
+:global(html):has([data-session-fullscreen="true"]),
+:global(body):has([data-session-fullscreen="true"]) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.page:has([data-session-fullscreen="true"]) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+.page:has([data-session-fullscreen="true"]) .ambient {
+  display: none;
+}
+
+.sessionMain[data-session-fullscreen="true"] {
+  position: fixed;
+  z-index: 10;
+  top: var(--session-viewport-top, 0px);
+  left: var(--session-viewport-left, 0px);
+  width: var(--session-viewport-width, 100vw);
+  height: var(--session-viewport-height, 100dvh);
+  min-height: 0;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: var(--app-background);
+  overscroll-behavior: none;
+}
+
+.sessionMain[data-session-fullscreen="true"] .progressPanel {
+  min-height: 44px;
+  grid-template-columns: auto minmax(16px, 1fr) auto;
+  grid-template-areas: none;
+  gap: 8px;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.sessionMain[data-session-fullscreen="true"] .progressCopy,
+.sessionMain[data-session-fullscreen="true"] .progressTrack,
+.sessionMain[data-session-fullscreen="true"] .scoreChips {
+  grid-area: auto;
+}
+
+.sessionMain[data-session-fullscreen="true"] .scoreChips > span {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+}
+
+.sessionMain[data-session-fullscreen="true"] .sessionActivityContent {
+  min-height: 0;
+}
+
+.sessionMain[data-session-fullscreen="true"] .cardStage {
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 0;
+}
+
+.sessionMain[data-session-fullscreen="true"] .practiceCard {
+  height: auto;
+  min-height: 0;
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerRegion {
+  height: auto;
+  padding: 14px 18px;
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerLabel,
+.sessionMain[data-session-fullscreen="true"] .submitError {
+  grid-column: 1 / -1;
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerLabel {
+  margin: 0;
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerMeta {
+  margin-top: 0;
+}
+
+.sessionMain[data-session-fullscreen="true"] .feedback {
+  min-height: 0;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.sessionMain[data-session-fullscreen="true"] .feedbackIcon {
+  width: 32px;
+  height: 32px;
+}
+
+.sessionMain[data-session-fullscreen="true"] .continueButton {
+  width: auto;
+  min-width: 88px;
+  min-height: 44px;
+  grid-column: auto;
+  padding-inline: 12px;
+}
+
+.sessionMain[data-session-fullscreen="true"] .feedbackAnswer {
+  max-height: min(140px, var(--session-viewport-height, 100dvh) * 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 700px) {
+  .sessionMain[data-session-fullscreen="true"] {
+    gap: 8px;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .cardTopline {
+    padding: 8px 12px;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .promptArea {
+    padding: 12px 16px;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .answerRegion {
+    padding: 12px;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .answerForm {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .answerLabel {
+    display: none;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .feedback {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .feedbackIcon {
+    display: none;
+  }
+
+  .sessionMain[data-session-fullscreen="true"] .pageNumber:not(.pageNumberCurrent),
+  .sessionMain[data-session-fullscreen="true"] .paginationEllipsis {
+    display: none;
+  }
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .pagination {
+  display: none;
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .cardTopline {
+  padding-block: 4px;
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .cardNumber {
+  height: 24px;
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .answerRegion {
+  padding: 8px 12px;
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .submitError {
+  max-height: 44px;
+  margin-top: 2px;
+  padding: 4px 8px;
+  overflow-y: auto;
+}

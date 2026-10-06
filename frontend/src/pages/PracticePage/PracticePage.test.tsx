@@ -568,6 +568,28 @@ describe("PracticePage", () => {
 });
 
 describe("active practice feedback", () => {
+  it.each([
+    ["ru-RU", "На весь экран"],
+    ["en-US", "Full screen"],
+  ] as const)("keeps the fullscreen control accessible while paused in %s", (locale, label) => {
+    const markup = renderToStaticMarkup(
+      <LocaleProvider initialLocale={locale}>
+        <MemoryRouter>
+          <ActivePracticeSessionView
+            activity={{ focusRevision: 0, phase: "paused", resume: vi.fn() }}
+            onComplete={vi.fn()}
+            onSubmit={vi.fn(async () => null)}
+            state={createReadyState()}
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(markup).toContain(`aria-label="${label}" aria-pressed="false"`);
+    expect(markup.indexOf(`aria-label="${label}"`)).toBeLessThan(markup.indexOf("inert"));
+    expect(markup).not.toContain('data-session-fullscreen="true"');
+  });
+
   it("covers only the practice workspace with an accessible pause control", () => {
     const resume = vi.fn();
 
