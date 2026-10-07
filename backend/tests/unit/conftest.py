@@ -1,41 +1,72 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, create_autospec
+from unittest.mock import create_autospec
 
 from fastapi import FastAPI
 import pytest
 
 from app.auth.deps import (
+    get_auth_service,
     get_current_user,
     get_current_user_with_settings,
-    get_optional_current_user
+    get_optional_current_user,
 )
-from app.users.deps import get_user_service
-from app.users.service import UserService
+from app.auth.service import AuthService
+from app.bff.deps import get_bff_service
+from app.cards.deps import get_card_service
+from app.cards.service import CardService
+from app.decks.deps import get_deck_service, get_user_deck_service
+from app.decks.service import DeckService, UserDeckService
+from app.redis.deps import get_redis_rate_limiter
+from app.redis.service import RedisRateLimiter
 from app.training_sessions.deps import get_training_session_service
 from app.training_sessions.service import TrainingSessionService
+from app.users.deps import get_user_service
+from app.users.service import UserService
 from tests.unit.factories import (
+    make_card,
+    make_deck,
+    make_deck_card,
+    make_token_pair,
     make_training_session,
     make_training_session_item,
     make_user,
+    make_user_deck,
+    make_user_session,
     make_user_settings,
 )
 
 
-from app.decks.deps import (
-    get_deck_service,
-    get_user_deck_service,
-)
-from app.decks.service import (
-    DeckService,
-    UserDeckService,
-)
-from app.redis.deps import get_redis_rate_limiter
-from app.redis.service import RedisRateLimiter
-from tests.unit.factories import (
-    make_deck,
-    make_deck_card,
-    make_user_deck,
-)
+@pytest.fixture
+def app(app: FastAPI, request):
+    def provide_fixture(fixture_name):
+        async def provide():
+            # Resolve mocks only when the route requests this dependency.
+            return request.getfixturevalue(fixture_name)
+
+        return provide
+
+    dependencies = {
+        get_current_user: "current_user",
+        get_optional_current_user: "optional_current_user",
+        get_current_user_with_settings: "current_user_with_settings",
+        get_redis_rate_limiter: "redis_rate_limiter",
+        get_auth_service: "auth_service",
+        get_bff_service: "bff_service",
+        get_card_service: "card_service",
+        get_deck_service: "deck_service",
+        get_user_deck_service: "user_deck_service",
+        get_training_session_service: "training_session_service",
+        get_user_service: "user_service",
+    }
+    app.dependency_overrides.update({
+        dependency: provide_fixture(fixture_name)
+        for dependency, fixture_name in dependencies.items()
+    })
+
+    try:
+        yield app
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -43,116 +74,35 @@ def current_user(request):
     overrides = getattr(request, "param", {})
     return make_user(**overrides)
 
+
 @pytest.fixture
-def optional_current_user(
-    request,
-    current_user,
-):
-    return getattr(
-        request,
-        "param",
-        current_user,
-    )
+def optional_current_user(request):
+    if hasattr(request, "param"):
+        return request.param
+    return request.getfixturevalue("current_user")
 
 
 @pytest.fixture
 def redis_rate_limiter():
-    rate_limiter = create_autospec(
-        RedisRateLimiter,
-        instance=True,
-    )
+    rate_limiter = create_autospec(RedisRateLimiter, instance=True)
     rate_limiter.check.return_value = True
     return rate_limiter
 
-
-@pytest.fixture(autouse=True)
-def override_redis_rate_limiter(
-    app: FastAPI,
-    redis_rate_limiter,
-):
-    async def provide_redis_rate_limiter():
-        return redis_rate_limiter
-
-    app.dependency_overrides[get_redis_rate_limiter] = provide_redis_rate_limiter
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_redis_rate_limiter,
-        None,
-    )
 
 @pytest.fixture
 def user_settings(request):
     overrides = getattr(request, "param", {})
     return make_user_settings(**overrides)
 
+
 @pytest.fixture
 def current_user_with_settings(current_user, user_settings):
-    data = {**vars(current_user), "settings": user_settings}
-    return SimpleNamespace(**data)
+    return SimpleNamespace(**{**vars(current_user), "settings": user_settings})
 
-@pytest.fixture(autouse=True)
-def override_current_users(
-    app: FastAPI,
-    current_user,
-    optional_current_user,
-    current_user_with_settings,
-):
-    async def provide_current_user():
-        return current_user
-
-    async def provide_optional_current_user():
-        return optional_current_user
-
-    async def provide_current_user_with_settings():
-        return current_user_with_settings
-
-    app.dependency_overrides[get_current_user] = provide_current_user
-    app.dependency_overrides[
-        get_optional_current_user
-    ] = provide_optional_current_user
-    app.dependency_overrides[
-        get_current_user_with_settings
-    ] = provide_current_user_with_settings
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_current_user,
-        None,
-    )
-    app.dependency_overrides.pop(
-        get_optional_current_user,
-        None,
-    )
-    app.dependency_overrides.pop(
-        get_current_user_with_settings,
-        None,
-    )
 
 @pytest.fixture
 def user_service():
-    return create_autospec(
-        UserService,
-        instance=True,
-    )
-
-@pytest.fixture(autouse=True)
-def override_user_service(
-    app: FastAPI,
-    user_service: AsyncMock,
-):
-    app.dependency_overrides[get_user_service] = (
-        lambda: user_service
-    )
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_user_service,
-        None,
-    )
+    return create_autospec(UserService, instance=True)
 
 
 @pytest.fixture
@@ -160,33 +110,16 @@ def training_session(request):
     overrides = getattr(request, "param", {})
     return make_training_session(**overrides)
 
+
 @pytest.fixture
 def training_session_item(request):
     overrides = getattr(request, "param", {})
     return make_training_session_item(**overrides)
 
+
 @pytest.fixture
 def training_session_service():
-    return create_autospec(
-        TrainingSessionService,
-        instance=True,
-    )
-
-@pytest.fixture(autouse=True)
-def override_training_session_service(
-    app: FastAPI,
-    training_session_service,
-):
-    app.dependency_overrides[
-        get_training_session_service
-    ] = lambda: training_session_service
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_training_session_service,
-        None,
-    )
+    return create_autospec(TrainingSessionService, instance=True)
 
 
 @pytest.fixture
@@ -209,51 +142,12 @@ def user_deck(request):
 
 @pytest.fixture
 def deck_service():
-    return create_autospec(
-        DeckService,
-        instance=True,
-    )
+    return create_autospec(DeckService, instance=True)
 
 
 @pytest.fixture
 def user_deck_service():
-    return create_autospec(
-        UserDeckService,
-        instance=True,
-    )
-
-
-@pytest.fixture(autouse=True)
-def override_deck_services(
-    app: FastAPI,
-    deck_service,
-    user_deck_service,
-):
-    app.dependency_overrides[get_deck_service] = (
-        lambda: deck_service
-    )
-    app.dependency_overrides[get_user_deck_service] = (
-        lambda: user_deck_service
-    )
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_deck_service,
-        None,
-    )
-    app.dependency_overrides.pop(
-        get_user_deck_service,
-        None,
-    )
-
-
-
-import pytest
-
-from app.cards.deps import get_card_service
-from app.cards.service import CardService
-from tests.unit.factories import make_card
+    return create_autospec(UserDeckService, instance=True)
 
 
 @pytest.fixture
@@ -264,37 +158,7 @@ def card(request):
 
 @pytest.fixture
 def card_service():
-    return create_autospec(
-        CardService,
-        instance=True,
-    )
-
-
-@pytest.fixture(autouse=True)
-def override_card_service(
-    app: FastAPI,
-    card_service,
-):
-    app.dependency_overrides[get_card_service] = (
-        lambda: card_service
-    )
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_card_service,
-        None,
-    )
-
-
-import pytest
-
-from app.auth.deps import get_auth_service
-from app.auth.service import AuthService
-from tests.unit.factories import (
-    make_token_pair,
-    make_user_session,
-)
+    return create_autospec(CardService, instance=True)
 
 
 @pytest.fixture
@@ -311,24 +175,4 @@ def token_pair(request):
 
 @pytest.fixture
 def auth_service():
-    return create_autospec(
-        AuthService,
-        instance=True,
-    )
-
-
-@pytest.fixture(autouse=True)
-def override_auth_service(
-    app: FastAPI,
-    auth_service,
-):
-    app.dependency_overrides[get_auth_service] = (
-        lambda: auth_service
-    )
-
-    yield
-
-    app.dependency_overrides.pop(
-        get_auth_service,
-        None,
-    )
+    return create_autospec(AuthService, instance=True)

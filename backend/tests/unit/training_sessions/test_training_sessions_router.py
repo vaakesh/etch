@@ -117,6 +117,7 @@ class TestGetTrainingSession:
     async def test_returns_completed_session_for_anonymous_viewer(
         self,
         client: AsyncClient,
+        optional_current_user,
         training_session_service: AsyncMock,
     ):
         training_session = make_training_session(

@@ -5,6 +5,7 @@ import pytest
 
 from app.decks.archiver import ArchiveChanges, DeckArchiveBatchResult, DeckArchiveWorkflow
 from app.decks.models import Deck
+from app.decks.repository import DeckRepository, UserDeckRepository
 from app.users.errors import PermissionDeniedError, UserNotFoundError
 from app.users.models import User
 
@@ -14,6 +15,8 @@ USER_UUID = UUID("0198ad01-b200-7000-8000-000000000109")
 
 @pytest.fixture
 def delete_context(monkeypatch, users_domain_service, users_uow, users_cache):
+    users_uow.deck_repo = create_autospec(DeckRepository, instance=True)
+    users_uow.user_deck_repo = create_autospec(UserDeckRepository, instance=True)
     users_uow.user_repo.get_by_id.return_value = User(id=9, uuid=USER_UUID)
     users_uow.deck_repo.get_all_by_user_id.return_value = [
         Deck(id=1, user_id=9, state="active", is_public=True),

@@ -2640,6 +2640,7 @@ class TestGetPublicDecksByUser:
     async def test_returns_public_decks_for_anonymous_viewer(
         self,
         client: AsyncClient,
+        optional_current_user,
         deck,
         deck_service: AsyncMock,
     ):
