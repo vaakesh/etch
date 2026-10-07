@@ -250,7 +250,10 @@ jobs:
             exit 0
           fi
           git merge-base --is-ancestor HEAD "$IMAGE_TAG"
+          # Tracked bind-mounted configs must be readable by container users.
+          umask 022
           git merge --ff-only "$IMAGE_TAG"
+          umask 077
           [[ "$(git rev-parse HEAD)" == "$IMAGE_TAG" ]]
 
           command -v make > /dev/null

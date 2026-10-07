@@ -31,7 +31,18 @@ compose config --quiet
 test -d backend/certs
 test -f prometheus/metrics_token
 test -f observability/otel-collector-prod.yaml
+
+# Repair public bind-mounted config permissions from earlier checkouts.
+chmod 644 \
+  observability/otel-collector-prod.yaml \
+  observability/loki.yaml \
+  observability/tempo.yaml \
+  prometheus/prometheus.yml \
+  redis/redis.conf
+chmod -R a+rX grafana/provisioning grafana/dashboards
+
 compose pull
+compose run --rm -T --no-deps otel-collector validate --config=/etc/otelcol/config.yaml < /dev/null
 
 compose up -d --no-deps --no-recreate --wait --wait-timeout 120 postgres redis
 compose stop caddy api celery-beat celery-worker
