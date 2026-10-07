@@ -45,6 +45,8 @@ from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
     TrainingSessionAlreadyExistsError,
     TrainingSessionAlreadyFinishedError,
+    TrainingSessionDeckArchivedError,
+    TrainingSessionDeckUnavailableError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFinishedYet,
     TrainingSessionNotFoundError,
@@ -129,6 +131,16 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
         "TRAINING_SESSION_ALREADY_FINISHED",
     ),
     (TrainingSessionNotFinishedYet, status.HTTP_409_CONFLICT, "TRAINING_SESSION_NOT_FINISHED"),
+    (
+        TrainingSessionDeckArchivedError,
+        status.HTTP_409_CONFLICT,
+        "TRAINING_SESSION_DECK_ARCHIVED",
+    ),
+    (
+        TrainingSessionDeckUnavailableError,
+        status.HTTP_410_GONE,
+        "TRAINING_SESSION_DECK_UNAVAILABLE",
+    ),
     (
         TrainingSessionPermissionDeniedError,
         status.HTTP_403_FORBIDDEN,

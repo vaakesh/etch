@@ -11,13 +11,15 @@ from app.bff.schemas import DailyActivityResponse, UserProgressResponse
 from app.common.types import PositiveInt, SessionSize
 from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
-from app.decks.models import UserDeck
+from app.decks.models import Deck, UserDeck
 from app.errors import RequestValueError
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
     PermissionDeniedError,
     TrainingSessionAlreadyFinishedError,
+    TrainingSessionDeckArchivedError,
+    TrainingSessionDeckUnavailableError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFinishedYet,
     TrainingSessionNotFoundError,
@@ -67,6 +69,25 @@ class TrainingSessionService:
             )
 
         return training_session
+
+    async def _require_available_session_deck(
+        self,
+        uow: UnitOfWork,
+        training_session: TrainingSession,
+    ) -> Deck:
+        if training_session.deck_id is None:
+            raise TrainingSessionDeckUnavailableError()
+
+        deck = await uow.deck_repo.get_by_id(deck_id=training_session.deck_id)
+        if deck is None:
+            raise TrainingSessionDeckUnavailableError()
+
+        if deck.state == "archived":
+            if deck.expires_at is None or deck.expires_at <= utcnow():
+                raise TrainingSessionDeckUnavailableError()
+            raise TrainingSessionDeckArchivedError()
+
+        return deck
 
     def _accrue_activity(
         self,
@@ -137,6 +158,7 @@ class TrainingSessionService:
         async with self.uow_factory() as uow:
             training_session = await uow.training_session_repo.get_by_uuid(
                 training_session_uuid,
+                for_update=True,
             )
 
             if training_session is None or training_session.user_id != user_id:
@@ -144,6 +166,11 @@ class TrainingSessionService:
 
             if training_session.finished_at is not None:
                 raise TrainingSessionAlreadyFinishedError()
+
+            deck = await self._require_available_session_deck(
+                uow=uow,
+                training_session=training_session,
+            )
 
             training_session_next_cards = (
                 await uow.training_session_item_repo.get_next_cards(
@@ -153,7 +180,7 @@ class TrainingSessionService:
 
             return PracticeSessionResponse(
                 training_session_uuid=training_session.uuid,
-                deck_uuid=training_session.deck_uuid,
+                deck_uuid=deck.uuid,
                 prompt_side=training_session.prompt_side,
                 answer_side=training_session.answer_side,
                 total_count=training_session.requested_count,
@@ -474,6 +501,11 @@ class TrainingSessionService:
                     tracker_uuid=None,
                 )
 
+            await self._require_available_session_deck(
+                uow=uow,
+                training_session=training_session,
+            )
+
             event = payload.event
             now = utcnow()
             if now < training_session.started_at:
@@ -527,6 +559,14 @@ class TrainingSessionService:
             if training_session is None or training_session.user_id != user_id:
                 raise TrainingSessionNotFoundError()
 
+            if training_session.status != TrainingSessionStatus.IN_PROGRESS:
+                raise TrainingSessionAlreadyFinishedError()
+
+            await self._require_available_session_deck(
+                uow=uow,
+                training_session=training_session,
+            )
+
             item = (
                 await uow.training_session_item_repo
                 .get_item_by_sequence_number_and_session_id(
@@ -555,9 +595,6 @@ class TrainingSessionService:
                 )
                 return response
 
-            if training_session.finished_at is not None:
-                raise TrainingSessionAlreadyFinishedError()
-
             now = utcnow()
             if now < training_session.started_at:
                 raise RequestValueError("Answer must not precede started_at", failed_field="answered_at")
@@ -569,7 +606,7 @@ class TrainingSessionService:
                 training_session=training_session,
                 now=now,
             )
-        
+
             if (
                 user_answer.action == "answer" 
                 and 

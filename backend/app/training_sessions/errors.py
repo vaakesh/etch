@@ -14,6 +14,20 @@ class TrainingSessionAlreadyFinishedError(Exception):
     def __init__(self, message: str = "Training session already finished"):
             super().__init__(message)
 
+class TrainingSessionDeckArchivedError(Exception):
+    def __init__(
+        self,
+        message: str = "Save the archived deck before continuing this session",
+    ):
+        super().__init__(message)
+
+class TrainingSessionDeckUnavailableError(Exception):
+    def __init__(
+        self,
+        message: str = "The session deck was deleted or its archive expired",
+    ):
+        super().__init__(message)
+
 class TrainingSessionAlreadyExistsError(Exception):
     def __init__(self, message: str = "Training session already exists"):
         super().__init__(message)

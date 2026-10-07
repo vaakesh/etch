@@ -8,6 +8,10 @@ from app.decks.errors import DeckNotFoundError, DeckSizeLimitExceededError
 from app.errors import RequestValueError
 from app.exception_handlers import ERROR_RESPONSES, register_exception_handlers
 from app.redis.errors import RateLimitError
+from app.training_sessions.errors import (
+    TrainingSessionDeckArchivedError,
+    TrainingSessionDeckUnavailableError,
+)
 
 
 EXTRA_ARGS: dict[type[Exception], tuple] = {
@@ -64,6 +68,37 @@ class TestErrorCodeTable:
 
 
 class TestErrorResponseShape:
+    @pytest.mark.parametrize(
+        ("error", "expected_status", "expected_payload"),
+        [
+            pytest.param(
+                TrainingSessionDeckArchivedError(),
+                409,
+                {
+                    "code": "TRAINING_SESSION_DECK_ARCHIVED",
+                    "message": "Save the archived deck before continuing this session",
+                },
+                id="archived_deck",
+            ),
+            pytest.param(
+                TrainingSessionDeckUnavailableError(),
+                410,
+                {
+                    "code": "TRAINING_SESSION_DECK_UNAVAILABLE",
+                    "message": "The session deck was deleted or its archive expired",
+                },
+                id="unavailable_deck",
+            ),
+        ],
+    )
+    async def test_returns_session_deck_error_contract(
+        self, error, expected_status, expected_payload,
+    ):
+        status_code, payload = await request_error(error)
+
+        assert status_code == expected_status
+        assert payload == expected_payload
+
     @pytest.mark.parametrize(
         ("exception_class", "expected_status", "expected_code"),
         ERROR_RESPONSES,
