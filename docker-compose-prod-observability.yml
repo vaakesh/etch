@@ -1,6 +1,7 @@
 services:
   api:
     environment:
+      PROMETHEUS_DISABLE_CREATED_SERIES: "true"
       OTEL_SERVICE_NAME: etch-api
       OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
@@ -69,6 +70,36 @@ services:
     ports:
       - "127.0.0.1:3100:3100"
     stop_grace_period: 30s
+    restart: unless-stopped
+
+  # Read host CPU, memory and disks; expose metrics only inside the Compose network.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --web.disable-exporter-metrics
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.loadavg
+      - --collector.filesystem
+      - --collector.diskstats
+      - --collector.stat
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker|var/lib/containers)($$|/)
+    pid: host
+    volumes:
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
+          create_host_path: false
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   prometheus:

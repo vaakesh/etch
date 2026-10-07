@@ -70,6 +70,7 @@ pending = {
     "loki": "http://loki:3100/ready",
     "tempo": "http://tempo:3200/ready",
     "prometheus": "http://prometheus:9090/-/ready",
+    "node-exporter": "http://node-exporter:9100/metrics",
     "grafana": "http://grafana:3000/api/health",
 }
 deadline = time.monotonic() + 120
