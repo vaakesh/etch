@@ -5,6 +5,8 @@ services:
     image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
     env_file:
       - ./backend/.env
+    environment:
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     volumes:
       - type: bind
         source: ./backend/certs
@@ -30,6 +32,87 @@ services:
       timeout: 10s
       start_period: 20s
       retries: 3
+    restart: unless-stopped
+
+  celery-worker:
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ./backend/.env
+    environment:
+      db_host: postgres
+      db_port: "5432"
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
+    command:
+      - uv
+      - run
+      - --no-sync
+      - celery
+      - -A
+      - app.celery.celery_app:celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --loglevel=INFO
+    volumes:
+      - type: bind
+        source: ./backend/certs
+        target: /backend/certs
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  celery-beat:
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    env_file:
+      - ./backend/.env
+    environment:
+      db_host: postgres
+      db_port: "5432"
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
+    command:
+      - uv
+      - run
+      - --no-sync
+      - celery
+      - -A
+      - app.celery.celery_app:celery_app
+      - beat
+      - --loglevel=INFO
+      - --schedule=/var/lib/celery/celerybeat-schedule
+    volumes:
+      - type: bind
+        source: ./backend/certs
+        target: /backend/certs
+        read_only: true
+        bind:
+          create_host_path: false
+      - celery_beat_data:/var/lib/celery
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${rabbitmq_user:?rabbitmq_user is required}
+      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password:?rabbitmq_password is required}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   postgres:
@@ -129,3 +212,5 @@ volumes:
   pgdata18:
   redis_data:
   redisinsight:
+  rabbitmq_data:
+  celery_beat_data:

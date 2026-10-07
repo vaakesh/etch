@@ -2,6 +2,7 @@
 from app.auth.repository import AuthRepository
 from app.tracing import traced
 from app.cards.repository import CardRepository
+from app.outbox.repository import OutboxRepository
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
 from app.training_sessions.repository import (
     TrainingSessionItemRepository,
@@ -24,6 +25,7 @@ class UnitOfWork:
         self.user_deck_repo: UserDeckRepository | None = None
         self.training_session_item_repo: TrainingSessionItemRepository | None = None
         self.user_settings_repo: UserSettingsRepository | None = None
+        self.outbox_repo: OutboxRepository | None = None
 
     async def __aenter__(self):
         self.session = self._async_session_maker()
@@ -36,6 +38,7 @@ class UnitOfWork:
         self.user_deck_repo = UserDeckRepository(self.session)
         self.training_session_item_repo = TrainingSessionItemRepository(self.session)
         self.user_settings_repo = UserSettingsRepository(self.session)
+        self.outbox_repo = OutboxRepository(self.session)
         return self
 
     @traced("uow.close")
@@ -56,6 +59,7 @@ class UnitOfWork:
             self.user_deck_repo = None
             self.training_session_item_repo = None
             self.user_settings_repo = None
+            self.outbox_repo = None
 
     @traced("uow.commit")
     async def commit(self):

@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from app.common.types import (
     Counter,
@@ -24,6 +25,12 @@ class DeckLoad:
     user: bool = False
     card_links: bool = False
     cards: bool = False # cards include card_links
+
+@dataclass
+class ArchiveCleanupBatch:
+    decks: list[tuple[int, UUID]] = field(default_factory=list)
+    cards: list[tuple[int, UUID]] = field(default_factory=list)
+    user_deck_keys: list[tuple[int, int]] = field(default_factory=list)
 
 class DeckTimestamps(BaseModel):
     created_at: PastDatetime

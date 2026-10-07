@@ -60,6 +60,19 @@ services:
     stop_grace_period: 30s
     restart: unless-stopped
 
+  celery-worker:
+    environment:
+      OTEL_SERVICE_NAME: etch-worker
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=development,service.version=0.1.0"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+
+  celery-beat:
+    environment:
+      OTEL_SERVICE_NAME: etch-beat
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=development,service.version=0.1.0"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    stop_grace_period: 30s
+
 volumes:
   tempo_data:
   loki_data:

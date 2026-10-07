@@ -227,12 +227,12 @@ class CacheInvalidator:
 
 class RedisCacheService:
     """
-    Best-effort Redis cache.
-    Redis failures must not affect application correctness.
+    Best-effort cache by default; background delivery can opt into Redis errors.
     Invalid cache entries are treated as misses and removed when possible.
     """
-    def __init__(self, redis: Redis):
+    def __init__(self, redis: Redis, *, raise_errors: bool = False):
         self.redis = redis
+        self.raise_errors = raise_errors
 
     # helpers
 
@@ -404,10 +404,13 @@ class RedisCacheService:
         operation: str,
     ) -> None:
         logger.warning(
-            "Redis cache operation failed; continuing without cache",
+            "Redis cache operation failed",
             extra={"cache_operation": operation},
             exc_info=True,
         )
+        if self.raise_errors:
+            # This helper is called only inside RedisError exception handlers.
+            raise
 
     def _deserialize_cached_value[T](
         self,

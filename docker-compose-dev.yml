@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
+    environment:
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     ports:
       - "127.0.0.1:${api_port}:8000"
     volumes:
@@ -35,6 +37,86 @@ services:
       start_period: 20s
       retries: 3
     restart: on-failure:10
+
+  celery-worker:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      db_host: postgres
+      db_port: "5432"
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
+    command:
+      - uv
+      - run
+      - --no-sync
+      - celery
+      - -A
+      - app.celery.celery_app:celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --loglevel=INFO
+    volumes:
+      - ./backend/app:/backend/app:ro
+      - ./backend/certs:/backend/certs:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      db_host: postgres
+      db_port: "5432"
+      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
+    command:
+      - uv
+      - run
+      - --no-sync
+      - celery
+      - -A
+      - app.celery.celery_app:celery_app
+      - beat
+      - --loglevel=INFO
+      - --schedule=/var/lib/celery/celerybeat-schedule
+    volumes:
+      - ./backend/app:/backend/app:ro
+      - ./backend/certs:/backend/certs:ro
+      - celery_beat_data:/var/lib/celery
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${rabbitmq_user}
+      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.15.0
@@ -167,3 +249,5 @@ volumes:
   pgdata18:
   redis_data:
   redisinsight:
+  rabbitmq_data:
+  celery_beat_data:

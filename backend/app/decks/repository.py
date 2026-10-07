@@ -8,12 +8,14 @@ from app.common.query import apply_date_pagination, apply_search
 from app.common.types import SearchQuery
 from app.common.utils import utcnow
 from app.users.models import User
-from sqlalchemy import Integer, Select, and_, cast, exists, func, or_, select, update
+from sqlalchemy import Integer, Select, and_, cast, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.decks.query import apply_library_pagination
-from app.decks.schemas import DeckLoad, LibraryCursor
+from app.decks.schemas import ArchiveCleanupBatch, DeckLoad, LibraryCursor
+from app.redis.schemas import UserDeckIdentity
+from app.training_sessions.models import TrainingSession
 
 from .models import Deck, DeckArchiveRecipient, DeckCard, UserDeck
 
@@ -267,6 +269,90 @@ class DeckRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+
+    async def delete_expired_archived_decks(
+        self,
+        now: datetime,
+        limit: int,
+    ) -> ArchiveCleanupBatch:
+        decks = (await self.session.execute(
+            select(Deck.id, Deck.uuid)
+            .where(
+                Deck.state == "archived",
+                Deck.expires_at <= now,
+            )
+            .order_by(Deck.expires_at, Deck.id)
+            .limit(limit)
+            .with_for_update(of=Deck, skip_locked=True)
+        )).tuples().all()
+        if not decks:
+            return ArchiveCleanupBatch()
+
+        deck_ids = [deck_id for deck_id, _ in decks]
+
+        candidate_card_ids = (
+            await self.session.execute(
+                select(Card.id)
+                .where(
+                    Card.user_id.is_(None),
+                    Card.id.in_(
+                        select(DeckCard.card_id)
+                        .where(DeckCard.deck_id.in_(deck_ids))
+                    ),
+                )
+                .order_by(Card.id)
+                .with_for_update(of=Card)
+            )
+        ).scalars().all()
+
+        # блокируем сессии, чтобы они не меняли/блокировали UserDeck
+        await self.session.execute(
+            select(TrainingSession.id)
+            .where(TrainingSession.deck_id.in_(deck_ids))
+            .order_by(TrainingSession.id)
+            .with_for_update(of=TrainingSession)
+        )
+
+        user_deck_keys = (
+            await self.session.execute(
+                select(UserDeck.user_id, UserDeck.deck_id)
+                .where(UserDeck.deck_id.in_(deck_ids))
+            )
+        ).tuples().all()
+
+        # cascade:
+        # delete deck_cards, user_decks, deck_archive_recipients
+        # training_sessions.deck_id = NULL
+        await self.session.execute(
+            delete(Deck)
+            .where(Deck.id.in_(deck_ids))
+            .execution_options(synchronize_session=False)
+        )
+
+        deleted_cards: list[tuple[int, UUID]] = []
+
+        if candidate_card_ids:
+            deleted_cards = (
+                await self.session.execute(
+                    delete(Card)
+                    .where(
+                        Card.id.in_(candidate_card_ids),
+                        Card.user_id.is_(None),
+                        ~exists().where(DeckCard.card_id == Card.id),
+                    )
+                    .returning(Card.id, Card.uuid)
+                    .execution_options(synchronize_session=False)
+                )
+            ).tuples().all()
+
+        return ArchiveCleanupBatch(
+            decks=list(decks),
+            cards=deleted_cards,
+            user_deck_keys=list(user_deck_keys),
+        )
+
+        
 
     @traced("decks.repository.get_visible_by_uuid")
     async def get_visible_by_uuid(

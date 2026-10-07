@@ -44,6 +44,18 @@ class TestInvalidateEntries:
         assert result is None
         redis_client.delete.assert_awaited_once_with(key)
 
+    async def test_propagates_original_redis_error_in_strict_mode(
+        self, redis_client, method, argument, identity, key,
+    ):
+        cache = RedisCacheService(redis=redis_client, raise_errors=True)
+        failure = ConnectionError("Redis unavailable")
+        redis_client.delete.side_effect = failure
+
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache, method)(**{argument: [identity]})
+
+        assert error.value is failure
+
 
 @pytest.mark.parametrize(("method", "kind"), [
     ("invalidate_library_card_pages", "cards"),
@@ -85,6 +97,18 @@ class TestInvalidateLibraryPages:
         result = await getattr(cache_service, method)(user_ids=[42])
 
         assert result is None
+
+    async def test_propagates_generation_invalidation_error_in_strict_mode(
+        self, redis_client, redis_pipeline, method, kind,
+    ):
+        cache = RedisCacheService(redis=redis_client, raise_errors=True)
+        failure = ConnectionError("Redis unavailable")
+        redis_pipeline.execute.side_effect = failure
+
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache, method)(user_ids=[42])
+
+        assert error.value is failure
 
 
 @pytest.fixture

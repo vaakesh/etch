@@ -25,6 +25,7 @@ from app.database import get_engine
 
 def setup_otel_logging(
     resource: Resource,
+    logger_name: str = "app",
 ) -> tuple[LoggerProvider, LoggingHandler]:
     provider = LoggerProvider(
         resource=resource,
@@ -48,10 +49,10 @@ def setup_otel_logging(
     )
     handler.addFilter(RequestContextFilter())
 
-    app_logger = logging.getLogger("app")
-    app_logger.setLevel(logging.INFO)
-    app_logger.propagate = True
-    app_logger.addHandler(handler)
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    logger.propagate = True
+    logger.addHandler(handler)
 
     return provider, handler
 
@@ -59,8 +60,9 @@ def setup_otel_logging(
 def shutdown_otel_logging(
     provider: LoggerProvider,
     handler: LoggingHandler,
+    logger_name: str = "app",
 ) -> None:
-    logging.getLogger("app").removeHandler(handler)
+    logging.getLogger(logger_name).removeHandler(handler)
 
     try:
         provider.shutdown()
