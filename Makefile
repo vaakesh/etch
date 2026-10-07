@@ -15,7 +15,7 @@ test:
 	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync alembic upgrade head
 	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync pytest -o log_cli=false --show-capture=no
 
-.PHONY: up rebuild down config test check certs prod-check prod-up prod-build prod-down
+.PHONY: up rebuild down config test check certs prod-check prod-deploy prod-up prod-logs prod-ps prod-down
 
 check:
 	uv run --no-project python setup.py check dev
@@ -23,16 +23,21 @@ check:
 certs:
 	uv run --no-project python setup.py certs
 
+PROD_COMPOSE := docker compose -f docker-compose-prod.yml -f docker-compose-prod-observability.yml
+
 prod-check:
-	uv run --no-project python setup.py check prod
+	$(PROD_COMPOSE) config --quiet
 
-prod-up:
-	uv run --no-project python setup.py check prod
-	docker compose -f docker-compose-prod.yml up -d --remove-orphans
+prod-deploy: prod-check
+	bash scripts/deploy-prod.sh
 
-prod-build:
-	docker compose -f docker-compose-prod.yml build --no-cache --pull
-	docker compose -f docker-compose-prod.yml run --rm -T api uv run --no-sync alembic upgrade head
+prod-up: prod-deploy
+
+prod-logs:
+	$(PROD_COMPOSE) logs -f --tail=100
+
+prod-ps:
+	$(PROD_COMPOSE) ps -a
 
 prod-down:
-	docker compose -f docker-compose-prod.yml down
+	$(PROD_COMPOSE) down

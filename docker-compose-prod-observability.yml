@@ -1,0 +1,155 @@
+services:
+  api:
+    environment:
+      OTEL_SERVICE_NAME: etch-api
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    stop_grace_period: 30s
+
+  celery-worker:
+    environment:
+      OTEL_SERVICE_NAME: etch-worker
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
+
+  celery-beat:
+    environment:
+      OTEL_SERVICE_NAME: etch-beat
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    stop_grace_period: 30s
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - type: bind
+        source: ./observability/otel-collector-prod.yaml
+        target: /etc/otelcol/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 256m
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.1.0
+    command:
+      - "-target=all"
+      - "-config.file=/etc/tempo.yaml"
+    volumes:
+      - type: bind
+        source: ./observability/tempo.yaml
+        target: /etc/tempo.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - tempo_data:/var/tempo
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.0
+    command:
+      - "-config.file=/etc/loki/config.yaml"
+    volumes:
+      - type: bind
+        source: ./observability/loki.yaml
+        target: /etc/loki/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - type: bind
+        source: ./prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./prometheus/metrics_token
+        target: /run/secrets/metrics_token
+        read_only: true
+        bind:
+          create_host_path: false
+      - prometheus_data:/prometheus
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "127.0.0.1:${grafana_port}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${grafana_admin_user:?grafana_admin_user is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${grafana_admin_password:?grafana_admin_password is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - type: bind
+        source: ./grafana/provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./grafana/dashboards
+        target: /etc/grafana/dashboards
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    ports:
+      - "127.0.0.1:${cloudbeaver_port}:8978"
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "127.0.0.1:${redisinsight_port}:5540"
+    volumes:
+      - redisinsight:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tempo_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:
+  cloudbeaver_data:
+  redisinsight:

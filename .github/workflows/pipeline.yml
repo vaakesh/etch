@@ -253,43 +253,6 @@ jobs:
           git merge --ff-only "$IMAGE_TAG"
           [[ "$(git rev-parse HEAD)" == "$IMAGE_TAG" ]]
 
-          compose() {
-            docker compose -f docker-compose-prod.yml "$@"
-          }
-          show_failure() {
-            local status=$?
-            trap - ERR
-            echo "Deployment failed for $IMAGE_TAG." >&2
-            compose ps -a || true
-            compose logs --no-color --tail=100 api caddy || true
-            exit "$status"
-          }
-          trap show_failure ERR
-
-          compose config --quiet
-          compose pull api caddy
-          compose up -d --no-recreate --wait --wait-timeout 120 postgres redis
-
-          # Save a database backup before stopping the application or migrating.
-          backup_dir="$HOME/etch-backups"
-          mkdir -p "$backup_dir"
-          backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$IMAGE_TAG.dump"
-          compose exec -T postgres sh -c \
-            'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
-            < /dev/null > "$backup_file.partial"
-          mv -- "$backup_file.partial" "$backup_file"
-          echo "Database backup saved: $backup_file"
-
-          compose stop caddy api
-          compose run --rm -T --no-deps api uv run --no-sync alembic upgrade head < /dev/null
-          compose up -d --no-build --no-deps --wait --wait-timeout 180 api caddy
-
-          # Persist the tag only after the new containers pass their healthchecks.
-          if grep -q '^IMAGE_TAG=' .env; then
-            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" .env
-          else
-            printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
-          fi
-          compose ps
-          echo "Deployment completed: $IMAGE_TAG"
+          command -v make > /dev/null
+          make prod-deploy
           DEPLOY

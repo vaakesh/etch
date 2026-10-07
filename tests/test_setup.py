@@ -75,6 +75,7 @@ class SetupTests(unittest.TestCase):
             "backend/alembic",
             "frontend/src",
             "redis",
+            "prometheus",
         ):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
         for filename in (
@@ -88,6 +89,7 @@ class SetupTests(unittest.TestCase):
             "frontend/package.json",
             "frontend/package-lock.json",
             "redis/users.acl",
+            "prometheus/metrics_token",
         ):
             (self.root / filename).write_text("fixture", encoding="utf-8")
         environment = dict.fromkeys(setup.REQUIRED_API_ENV, "secret-must-not-appear")
@@ -117,6 +119,7 @@ class SetupTests(unittest.TestCase):
             "backend/.env.example": b"redis_password=mock-backend-secret\n",
             "frontend/.env.example": b"VITE_API_URL=/api\nVITE_PROXY_TARGET=http://api:8000\n",
             "redis/users.acl.example": b"user admin on >mock-acl-secret +@all\n",
+            "prometheus/metrics_token.example": b"mock-metrics-secret\n",
         }
         for filename, contents in templates.items():
             path = self.root / filename
@@ -130,7 +133,11 @@ class SetupTests(unittest.TestCase):
         for example, contents in templates.items():
             target = self.root / example.removesuffix(".example")
             self.assertEqual(target.read_bytes(), contents)
-            expected_mode = 0o644 if target.suffix == ".acl" else 0o600
+            expected_mode = (
+                0o644
+                if target.suffix == ".acl" or target.name == "metrics_token"
+                else 0o600
+            )
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), expected_mode)
             self.assertIn(
                 f"{example} → {target.relative_to(self.root)}", self.output.getvalue()
@@ -138,6 +145,7 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn("mock-root-secret", self.output.getvalue())
         self.assertNotIn("mock-backend-secret", self.output.getvalue())
         self.assertNotIn("mock-acl-secret", self.output.getvalue())
+        self.assertNotIn("mock-metrics-secret", self.output.getvalue())
 
     def test_existing_configs_are_preserved_when_templates_change(self):
         templates = self.install_config_templates()
@@ -159,10 +167,11 @@ class SetupTests(unittest.TestCase):
         (self.root / ".env").write_bytes(b"developer configuration")
         setup.ensure_config_files()
         self.assertEqual((self.root / ".env").read_bytes(), b"developer configuration")
-        self.assertEqual(self.output.getvalue().count("automatically copied"), 3)
+        self.assertEqual(self.output.getvalue().count("automatically copied"), 4)
         self.assertTrue((self.root / "backend/.env").is_file())
         self.assertTrue((self.root / "frontend/.env").is_file())
         self.assertTrue((self.root / "redis/users.acl").is_file())
+        self.assertTrue((self.root / "prometheus/metrics_token").is_file())
 
     def test_config_directory_is_not_replaced_by_file(self):
         self.install_config_templates()
@@ -292,6 +301,27 @@ class SetupTests(unittest.TestCase):
         self.assertIn("dev checks passed", self.output.getvalue())
         self.assertNotIn("secret-must-not-appear", self.output.getvalue())
 
+    def test_check_without_profile_copies_missing_token_before_bind_mount_validation(self):
+        config = self.project_config()
+        token = self.root / "prometheus/metrics_token"
+        token.unlink()
+        template = self.root / "prometheus/metrics_token.example"
+        template.write_bytes(b"mock-metrics-secret\n")
+        config["services"]["prometheus"] = {
+            "volumes": [{"type": "bind", "source": str(token)}]
+        }
+        self.install_keys()
+        with (
+            self.docker_runner(config),
+            patch.object(setup, "require_tool"),
+            patch.object(setup.sys, "argv", ["setup.py", "check"]),
+        ):
+            self.assertEqual(setup.main(), 0)
+        self.assertEqual(token.read_bytes(), template.read_bytes())
+        self.assertEqual(stat.S_IMODE(token.stat().st_mode), 0o644)
+        self.assertIn("dev checks passed", self.output.getvalue())
+        self.assertNotIn("mock-metrics-secret", self.output.getvalue())
+
     def test_prod_check_accepts_manually_configured_key_ownership_and_permissions(self):
         config = self.project_config("prod")
         self.install_keys()
@@ -335,6 +365,28 @@ class SetupTests(unittest.TestCase):
             with self.assertRaisesRegex(setup.SetupError, "refresh_pepper"):
                 setup.check_project("dev")
         self.assertFalse(self.directory.exists())
+
+    def test_missing_or_blank_metrics_token_stops_before_generating_keys(self):
+        for profile in ("dev", "test", "prod"):
+            for token in (None, "", "   "):
+                with self.subTest(profile=profile, token=token):
+                    config = self.project_config(profile)
+                    if profile == "test":
+                        (self.root / "backend/.env.test").write_text(
+                            "fixture", encoding="utf-8"
+                        )
+                    environment = config["services"]["api"]["environment"]
+                    if token is None:
+                        environment.pop("metrics_token")
+                    else:
+                        environment["metrics_token"] = token
+                    with (
+                        self.docker_runner(config),
+                        patch.object(setup, "require_tool"),
+                    ):
+                        with self.assertRaisesRegex(setup.SetupError, "metrics_token"):
+                            setup.check_project(profile)
+                    self.assertFalse(self.directory.exists())
 
     def test_invalid_port_stops_before_generating_keys(self):
         config = self.project_config()

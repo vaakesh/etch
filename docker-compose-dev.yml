@@ -200,17 +200,6 @@ services:
       start_period: 20s
       retries: 3
     
-  cloudbeaver:
-    image: dbeaver/cloudbeaver:latest
-    restart: unless-stopped
-    ports:
-      - "${cloudbeaver_port}:8978"
-    volumes:
-      - cloudbeaver_data:/opt/cloudbeaver/workspace
-    depends_on:
-      postgres:
-        condition: service_healthy
-    
   redis:
     image: redis:8.10.0-alpine
     restart: unless-stopped
@@ -232,22 +221,10 @@ services:
       timeout: 5s
       retries: 5
     
-  redisinsight:
-    image: redis/redisinsight:latest
-    ports:
-      - "${redisinsight_port}:5540"
-    volumes:
-      - redisinsight:/data
-    depends_on:
-      redis:
-        condition: service_healthy
-
 volumes:
   prometheus_data:
   grafana_data:
-  cloudbeaver_data:
   pgdata18:
   redis_data:
-  redisinsight:
   rabbitmq_data:
   celery_beat_data:

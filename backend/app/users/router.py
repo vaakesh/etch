@@ -94,15 +94,14 @@ async def update_user(
 )
 @traced("users.router.delete_user")
 async def delete_user(
+    response: Response,
     current_user: CurrentUser,
     user_service: UserServiceDeps,
-):
+) -> None:
     await user_service.delete_user(
         current_user_id=current_user.id,
     )
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_tokens_cookie(response=response)
-    return response
 
 # checked
 @router.patch(

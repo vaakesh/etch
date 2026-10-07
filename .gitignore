@@ -4,7 +4,7 @@ __pycache__
 .venv
 backend/certs/
 backend/scripts
-.githubtoken
+.githubtoken*
 .agents
 skills-lock.json
 users.acl

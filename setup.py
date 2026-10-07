@@ -27,6 +27,7 @@ REQUIRED_API_ENV = (
     "redis_user",
     "redis_password",
     "refresh_pepper",
+    "metrics_token",
     "auth_jwt__private_key_path",
     "auth_jwt__public_key_path",
 )
@@ -193,6 +194,7 @@ def ensure_config_files() -> None:
         ("backend/.env", "backend/.env.example"),
         ("frontend/.env", "frontend/.env.example"),
         ("redis/users.acl", "redis/users.acl.example"),
+        ("prometheus/metrics_token", "prometheus/metrics_token.example"),
     ):
         destination = ROOT / target
         if destination.exists() or destination.is_symlink():
@@ -202,8 +204,12 @@ def ensure_config_files() -> None:
         require_path(source)
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
-            # Redis reads the bind-mounted ACL as its own container user.
-            mode = 0o644 if target.endswith(".acl") else 0o600
+            # Redis and Prometheus read bind-mounted files as container users.
+            mode = (
+                0o644
+                if target.endswith(".acl") or target == "prometheus/metrics_token"
+                else 0o600
+            )
             write_new(destination, source.read_bytes(), mode)
         except FileExistsError:
             # Another setup process may have already created the configuration.
@@ -275,7 +281,9 @@ def check_project(profile: str) -> None:
         key.lower(): value
         for key, value in config["services"]["api"].get("environment", {}).items()
     }
-    missing = [key for key in REQUIRED_API_ENV if not api_env.get(key)]
+    missing = [
+        key for key in REQUIRED_API_ENV if not str(api_env.get(key) or "").strip()
+    ]
     if missing:
         raise SetupError("missing required api settings: " + ", ".join(missing) + ".")
     for key in ("db_port", "redis_port"):
