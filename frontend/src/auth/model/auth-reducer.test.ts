@@ -14,7 +14,29 @@ const authorizedState = {
     },
   },
   error: null,
+  sessionExpired: false,
 };
+
+describe("auth reducer session end", () => {
+  it("marks the session as expired only when the action says so", () => {
+    expect(authReducer(authorizedState, { type: "unauthorized", expired: true })).toEqual({
+      status: "unauthorized",
+      user: null,
+      error: null,
+      sessionExpired: true,
+    });
+    expect(authReducer(authorizedState, { type: "unauthorized" }).sessionExpired).toBe(false);
+  });
+
+  it("clears the expiry mark when a new session check or session starts", () => {
+    const expiredState = authReducer(authorizedState, { type: "unauthorized", expired: true });
+
+    expect(authReducer(expiredState, { type: "loading" }).sessionExpired).toBe(false);
+    expect(
+      authReducer(expiredState, { type: "authorized", user: authorizedState.user }).sessionExpired,
+    ).toBe(false);
+  });
+});
 
 describe("auth reducer settings", () => {
   it("updates settings without replacing the authenticated identity", () => {

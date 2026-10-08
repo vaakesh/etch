@@ -20,3 +20,9 @@ README.md
 BACKEND_CONTRACTS.md
 Dockerfile*
 .dockerignore
+
+# Playwright runtime artifacts
+playwright-report
+test-results
+playwright/.auth
+e2e/.auth

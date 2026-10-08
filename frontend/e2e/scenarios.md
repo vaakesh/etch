@@ -1,0 +1,94 @@
+# Реестр Playwright
+
+Правила: [playwright_rules.md](../playwright_rules.md). Это первый этап подготовки среды, не полное покрытие приложения. Результаты запусков указываются в отчёте задачи; `implemented` означает наличие сценария.
+
+| ID       | Priority | Mode        | Route                | Preconditions                                               | Action                                     | Observable result                                                                                  | Projects / tags                                   | Spec                        | Status / gap                                                    |
+| -------- | -------- | ----------- | -------------------- | ----------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------- | --------------------------------------------------------------- |
+| AUTH-001 | P0       | mocked      | /login               | Guest, ru-RU, light                                         | Открыть вход и переключить регистрацию     | Заголовок, email, нет overflow                                                                     | Все mocked / @smoke @responsive                   | mocked/auth.spec.ts         | implemented                                                     |
+| AUTH-002 | P0       | mocked      | /settings            | Guest                                                       | Прямой вход                                | Redirect на /login и форма входа                                                                   | Все mocked кроме tablet / @smoke                  | mocked/auth.spec.ts         | implemented                                                     |
+| HOME-001 | P0       | mocked      | /                    | Current user, пустой BFF home                               | Открыть и reload                           | Protected home и пустое состояние                                                                  | Все mocked / @smoke @responsive                   | mocked/home.spec.ts         | implemented                                                     |
+| AUTH-003 | P0       | mocked      | /login               | Guest; login и пустой BFF home разрешены                    | Ввести данные, отправить, reload           | POST /auth/login с username/password; главная; сессия переживает reload                            | Все mocked / @smoke @responsive                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-004 | P0       | mocked      | /login               | Guest; сервер знает другой пароль                           | Отправить неверный пароль, исправить       | 404 INVALID_LOGIN_CREDENTIALS → ошибка, aria-invalid, поля сохранены; повтор ведёт на главную      | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-005 | P0       | mocked      | /login               | Guest; login не замокан                                     | Отправить без пароля                       | Нативная валидация required; запроса нет; остаётся /login                                          | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-006 | P0       | mocked      | /login               | Guest; login-запрос обрывается на транспорте                | Отправить, затем повторить                 | Сообщение о связи без пометки полей; поля сохранены; повтор успешен                                | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-007 | P0       | mocked      | /login               | Guest; login отвечает 422 VALIDATION_ERROR                  | Отправить                                  | Сообщение о формате, aria-invalid, форма снова доступна                                            | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-008 | P1       | mocked      | /login               | Guest; login отвечает 429 RATE_LIMIT_EXCEEDED               | Отправить                                  | Общая ошибка входа, поля не помечены; отдельного текста о лимите в UI нет                          | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-009 | P0       | mocked      | /login               | Guest; login отвечает 500 INTERNAL_SERVER_ERROR             | Отправить                                  | Общая ошибка входа, поля не помечены, username сохранён                                            | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-010 | P0       | mocked      | /login               | Guest; ответ login удерживается                             | Отправить и наблюдать ожидание             | «Входим…», поля и переключатель режима disabled; после ответа главная; POST один                   | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-011 | P0       | mocked      | /settings            | Guest; BFF home не замокан                                  | Deep link → вход                           | После входа открыт /settings, а не главная                                                         | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-012 | P0       | mocked      | /login               | Current user                                                | Открыть /login                             | Redirect на главную                                                                                | mocked-chromium                                   | mocked/login.spec.ts        | implemented                                                     |
+| AUTH-013 | P0       | mocked      | /login?mode=register | Guest; регистрация разрешена                                | Заполнить и отправить                      | POST /users/create с username/email/password, затем POST /auth/login; главная                      | Все mocked / @smoke @responsive                   | mocked/registration.spec.ts | implemented                                                     |
+| AUTH-014 | P0       | mocked      | /login?mode=register | Guest; 409 USERNAME_ALREADY_EXISTS; login не замокан        | Отправить                                  | Сообщение о конфликте, режим регистрации, поля сохранены, входа нет                                | mocked-chromium                                   | mocked/registration.spec.ts | implemented                                                     |
+| AUTH-015 | P0       | mocked      | /login?mode=register | Guest; аккаунт создаётся, автоматический login отвечает 500 | Отправить, затем войти                     | Режим входа с подсказкой, email скрыт, username/password сохранены; вход без повторной регистрации | mocked-chromium                                   | mocked/registration.spec.ts | implemented                                                     |
+| AUTH-016 | P0       | mocked      | /login?mode=register | Guest; регистрация не замокана                              | Отправить без email                        | Нативная валидация required; запроса нет                                                           | mocked-chromium                                   | mocked/registration.spec.ts | implemented                                                     |
+| AUTH-017 | P0       | mocked      | /users/:username     | Current user, свой пустой профиль                           | «Выйти» → подтвердить                      | POST /auth/logout; форма входа; прямой protected URL снова ведёт на вход                           | Все mocked / @smoke @responsive                   | mocked/logout.spec.ts       | implemented                                                     |
+| AUTH-018 | P1       | mocked      | /users/:username     | Current user; logout не замокан                             | Закрыть диалог «Остаться» и Escape, reload | Диалог закрыт, фокус на «Остаться» и возврат на кнопку; запроса нет; профиль открыт                | mocked-chromium                                   | mocked/logout.spec.ts       | implemented                                                     |
+| AUTH-019 | P1       | mocked      | /users/:username     | Current user; logout отвечает 500                           | Подтвердить выход                          | Локальная сессия завершена, форма входа без ошибки                                                 | mocked-chromium                                   | mocked/logout.spec.ts       | implemented                                                     |
+| AUTH-020 | P1       | mocked      | /users/:username     | Current user; ответ logout удерживается                     | Подтвердить выход                          | Форма входа показана до ответа сервера; POST один                                                  | mocked-chromium                                   | mocked/logout.spec.ts       | implemented                                                     |
+| AUTH-021 | P1       | mocked      | /users/:username     | Current user                                                | Подтвердить выход                          | На форме входа нет «Сессия истекла»                                                                | mocked-chromium                                   | mocked/logout.spec.ts       | implemented                                                     |
+| AUTH-022 | P0       | mocked      | /users/:username     | Current user; сессия отклонена сервером, /bff/home → 401    | Перейти на главную по навигации            | Форма входа с «Сессия истекла. Войдите снова.»                                                     | mocked-chromium                                   | mocked/logout.spec.ts       | implemented; а после reload страницы уведомления нет — см. ниже |
+| ENV-001  | P0       | integration | /login               | Test Compose, API/PostgreSQL/Redis ready, новый context     | GET /api/ready и открыть UI                | Реальный 401 /users/me и форма входа                                                               | integration-chromium, integration-webkit / @smoke | integration/stand.spec.ts   | implemented; не проверяет authenticated cookies и persistence   |
+| INT-001  | P0       | integration | /login               | Test Compose; аккаунт создан через API                      | Войти, reload, выйти, открыть /settings    | Главная после входа и reload; /users/me 200 → после выхода 401; protected URL ведёт на вход        | integration-chromium                              | integration/auth.spec.ts    | implemented; WebKit не проверен: Secure cookies по HTTP         |
+| INT-002  | P0       | integration | /login?mode=register | Test Compose; свободные username/email                      | Зарегистрироваться в UI, reload            | Главная нового пользователя; /users/me с username, email и настройками по умолчанию                | integration-chromium                              | integration/auth.spec.ts    | implemented                                                     |
+| VIS-001  | P1       | visual      | /login               | Guest, ru-RU, light, фиксированные шрифты/время             | Открыть форму                              | Desktop/mobile screenshot                                                                          | visual-desktop, visual-mobile                     | visual/login.spec.ts        | implemented; baseline проверять в закреплённом окружении        |
+
+Следующие задачи: auth lifecycle (refresh, вкладки) и CRUD/practice сценарии из правил, seed/cleanup для мутирующих integration INT-001…010, расширение visual и CI gates. Они пока planned. ENV-001 не заменяет INT-001 и не требует создания пользователя.
+
+## Точка продолжения — 2026-10-07
+
+Подготовка среды завершена. Зависимости и браузеры установлены, правила перенесены в `frontend/playwright_rules.md`, обязательное чтение закреплено в `frontend/AGENTS.md`.
+
+Проверено:
+
+- `npm run test:e2e:mocked -- --repeat-each=3 --retries=0 --max-failures=1`: 51/51 запусков, шесть browser/device projects.
+- `npm run test:e2e:visual -- --retries=0`: 2/2 сравнения; первые desktop/mobile baselines просмотрены.
+- `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run typecheck:e2e`, `npm run build`: успешно.
+- `npm run test`: 468 тестов, 58 файлов; E2E исключены из Vitest.
+- Discovery mocked и integration проверен отдельно: 17 и 2 случая соответственно.
+- Test Compose API/frontend образы собраны; PostgreSQL и Redis запущены; существующие миграции применены. API/frontend сервисы на тот момент не запускались.
+
+2026-10-08: ENV-001 выполнен на настоящем test Compose (`integration-chromium`, `integration-webkit`): 2/2. Стенд запускается из корня командой `make test-e2e`, удаляется `make test-down`.
+
+Этот этап (mocked login и logout) выполнен 2026-10-08, см. следующий раздел.
+
+Среда проверена на локальном Node 22.21.0; Docker frontend использует Node 24. Изменения backend в working tree относятся к отдельной работе и не входят в эту задачу.
+
+## Точка продолжения — 2026-10-08, mocked вход, регистрация и выход
+
+Реализованы AUTH-003…022. В harness добавлены:
+
+- `diagnostics.expectRequestFailure({ method, pathname, reason })` — точечное разрешение намеренного сетевого сбоя (`route.abort`);
+- fixture `auth` (`mocks/auth.ts`, `AuthMock`) — модель cookie-сессии одного context: `GET /users/me` и `POST /auth/refresh` следуют текущему пользователю; `allowLogin`, `allowRegistration`, `allowLogout`, `signOut` включаются сценарием явно; refresh при действующей сессии считается неожиданным запросом;
+- `api.gate()` — удерживаемый ответ для pending-состояний, остатки открываются в teardown;
+- `helpers/auth-form.ts`, `helpers/actions.ts`, `mocks/home.ts`, `mocks/profile.ts`.
+
+Особенность формы входа: поля `readOnly` до первого фокуса (защита от autofill), поэтому значения вводятся через `enterField` — активировать поле, затем печатать.
+
+Проверено (Node 22.21.0, Playwright 1.63.0):
+
+- `npm run test:e2e:mocked -- --repeat-each=3 --retries=0`: все запуски успешны, шесть projects.
+- `npm run test:e2e:visual -- --retries=0`: 2/2.
+
+Найденный и исправленный дефект (AUTH-021): после добровольного выхода и для гостя на protected deep link форма входа показывала «Сессия истекла. Войдите снова.». Теперь `AuthState.sessionExpired` выставляется, только когда сервер отклонил сессию, которую эта вкладка видела авторизованной; `RouteGuard` добавляет `notice` только в этом случае. Покрытие: AUTH-021 (выход), AUTH-011 (гость), AUTH-022 (истечение). Ограничение: после полного reload вкладка не помнит прежнюю сессию, поэтому истёкшая за это время сессия выглядит как гостевой вход без уведомления.
+
+Пробелы группы Auth, остаются planned: 401 обычного запроса → refresh → повтор и окончательный 401; refresh network/5xx; bootstrap pending/error/retry; две вкладки одного context (BroadcastChannel); смена пользователя без данных предыдущего; очистка пользовательских caches при logout; чужой профиль без кнопки выхода; Back/Forward после входа и выхода.
+
+## Точка продолжения — 2026-10-08, первые integration-цепочки
+
+Реализованы INT-001 и INT-002 (`integration/auth.spec.ts`), только `integration-chromium`.
+
+Лимиты: auto-fixture `cleanRedis` (`integration-support/redis.ts`) очищает Redis test-стенда перед каждым тестом и после него, поэтому лимиты регистрации (5 в час на IP) и входа (10 в минуту на IP) не переносятся между тестами и прогонами. Очистка идёт через `docker compose -f docker-compose-test.yml exec api …`: учётные данные Redis остаются в контейнере, скрипт отказывается работать, если БД не `etch_test_integration`. Backend seed не используется.
+
+Fixture `accounts` (`fixtures/integration-test.ts`): `await accounts.create()` регистрирует уникальный аккаунт через `POST /api/users/create` как предусловие, `accounts.reserve()` выдаёт данные для регистрации через UI; в teardown каждый аккаунт удаляется отдельной API-сессией через `DELETE /api/users/me`, проблема cleanup видна как soft-ошибка и вложение. Каждый тест получает своего пользователя, общих аккаунтов между тестами нет.
+
+Проверено на test Compose (`http://localhost:55173`): `npm run test:e2e:integration -- --retries=0 --repeat-each=4` — 16/16, то есть 8 регистраций подряд при лимите 5 в час.
+
+Ограничения:
+
+- Очистка работает только для стенда, поднятого локально из `docker-compose-test.yml` репозитория; при запуске тестов из контейнера или на удалённом стенде её нужно заменить. Чистится весь Redis стенда, включая кэши: сценарии «данные пришли из кэша между тестами» так не проверить. Внутри одного теста лимиты действуют как в production.
+- WebKit для authenticated-цепочек не проверялся: cookies выставляются с `Secure`, стенд работает по HTTP. Тесты не помечены `@smoke`, чтобы не попасть в `integration-webkit`.
+- Удаление аккаунта каскадно убирает его данные; сценариям с публичными колодами и архивом понадобится отдельный cleanup.
+
+CI (2026-10-09): Playwright в pipeline не подключён намеренно, чтобы не удлинять деплой; набор запускается локально через `make test-e2e`.
+
+Следующий ограниченный этап: Guard/shell (bootstrap error/retry, 404 для guest и authenticated, навигация desktop/touch) и auth lifecycle (refresh), затем P0 библиотеки.

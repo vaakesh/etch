@@ -18,6 +18,7 @@ function setAuthStatus(status: AuthStatus): void {
     status,
     user: null,
     error: status === "error" ? new Error("Session check failed") : null,
+    sessionExpired: false,
     isAuthenticated: status === "authorized",
     initialize,
     login: vi.fn(async () => undefined),

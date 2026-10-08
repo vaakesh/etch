@@ -22,6 +22,8 @@ export interface AuthState {
   status: AuthStatus;
   user: User | null;
   error: Error | null;
+  /** The session ended without the user asking for it (rejected by the server), not by logout. */
+  sessionExpired: boolean;
 }
 
 export interface AuthContextValue extends AuthState {

@@ -52,6 +52,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const loginMutationRef = useRef<Promise<void> | null>(null);
   const logoutPendingRef = useRef(false);
   const latestSessionEventRef = useRef(getCurrentAuthSessionSequence());
+  // True while this tab has seen an authorized session that has not ended yet: only then a
+  // rejected session is an expiry, not a guest bootstrap. Logout never reports an expiry.
+  const hadSessionRef = useRef(false);
+
+  useEffect(() => {
+    if (state.status === "authorized") {
+      hadSessionRef.current = true;
+    } else if (state.status === "unauthorized") {
+      hadSessionRef.current = false;
+    }
+  }, [state.status]);
 
   const isCurrentOperation = useCallback(
     (operation: number) => mountedRef.current && operation === operationRef.current,
@@ -110,7 +121,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
           clearSessionCache();
-          dispatch({ type: "unauthorized" });
+          dispatch({ type: "unauthorized", expired: hadSessionRef.current });
         } else {
           dispatch({ type: "error", error: toError(error) });
         }
@@ -237,7 +248,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (isAuthSessionRejected(error)) {
           apiClient.invalidateSession();
           clearSessionCache();
-          dispatch({ type: "unauthorized" });
+          dispatch({ type: "unauthorized", expired: hadSessionRef.current });
         } else {
           dispatch({ type: "error", error: toError(error) });
         }
@@ -308,7 +319,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (mountedRef.current) {
         dispatch(
           isAuthSessionRejected(error)
-            ? { type: "unauthorized" }
+            ? { type: "unauthorized", expired: hadSessionRef.current }
             : { type: "error", error: toError(error) },
         );
       }

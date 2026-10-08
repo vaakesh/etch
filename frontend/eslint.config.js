@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "node_modules"],
+    ignores: ["dist", "node_modules", "playwright-report", "test-results", "playwright/.auth"],
   },
   {
     files: ["**/*.{ts,tsx}"],
@@ -21,6 +21,10 @@ export default tseslint.config(
       ecmaVersion: 2023,
       globals: globals.browser,
     },
+  },
+  {
+    files: ["playwright.config.ts", "e2e/**/*.ts"],
+    languageOptions: { globals: globals.node },
   },
   prettier,
 );

@@ -3,3 +3,9 @@ node_modules
 package-lock.json
 AGENTS.md
 public/*.svg
+
+# Playwright runtime artifacts
+playwright-report
+test-results
+playwright/.auth
+e2e/.auth

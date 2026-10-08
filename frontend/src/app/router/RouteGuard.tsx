@@ -34,7 +34,7 @@ const MESSAGES = defineMessages(
 
 export function RouteGuard({ access, children }: RouteGuardProps) {
   const messages = useLocalizedMessages(MESSAGES);
-  const { initialize, status } = useAuth();
+  const { initialize, sessionExpired, status } = useAuth();
   const location = useLocation();
   const [isSessionRevalidated, setIsSessionRevalidated] = useState(access !== "protected");
 
@@ -108,7 +108,11 @@ export function RouteGuard({ access, children }: RouteGuardProps) {
   return (
     <Navigate
       replace
-      state={{ from: requestedPath, notice: SESSION_EXPIRED_NOTICE }}
+      state={
+        sessionExpired
+          ? { from: requestedPath, notice: SESSION_EXPIRED_NOTICE }
+          : { from: requestedPath }
+      }
       to={LOGIN_PATH}
     />
   );
