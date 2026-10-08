@@ -2,18 +2,11 @@ name: etch-prod
 
 services:
   api:
-    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     env_file:
       - ./backend/.env
-    environment:
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     volumes:
-      - type: bind
-        source: ./backend/certs
-        target: /backend/certs
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./backend/certs:/backend/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,13 +28,9 @@ services:
     restart: unless-stopped
 
   celery-worker:
-    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     env_file:
       - ./backend/.env
-    environment:
-      db_host: postgres
-      db_port: "5432"
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     command:
       - uv
       - run
@@ -54,12 +43,7 @@ services:
       - --concurrency=1
       - --loglevel=INFO
     volumes:
-      - type: bind
-        source: ./backend/certs
-        target: /backend/certs
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./backend/certs:/backend/certs:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -69,13 +53,9 @@ services:
     restart: unless-stopped
 
   celery-beat:
-    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     env_file:
       - ./backend/.env
-    environment:
-      db_host: postgres
-      db_port: "5432"
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     command:
       - uv
       - run
@@ -87,12 +67,7 @@ services:
       - --loglevel=INFO
       - --schedule=/var/lib/celery/celerybeat-schedule
     volumes:
-      - type: bind
-        source: ./backend/certs
-        target: /backend/certs
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./backend/certs:/backend/certs:ro
       - celery_beat_data:/var/lib/celery
     depends_on:
       rabbitmq:
@@ -103,8 +78,8 @@ services:
     image: rabbitmq:4-management
     hostname: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${rabbitmq_user:?rabbitmq_user is required}
-      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password:?rabbitmq_password is required}
+      RABBITMQ_DEFAULT_USER: ${rabbitmq_user}
+      RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -131,7 +106,7 @@ services:
     restart: unless-stopped
 
   caddy:
-    image: ghcr.io/vaakesh/etch-frontend:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/vaakesh/etch-frontend:${IMAGE_TAG}
     environment:
       SITE_DOMAIN: ${site_domain_prod}
       ALLOWED_IP: ${allowed_ip_prod}
@@ -142,12 +117,7 @@ services:
     volumes:
       - caddy_config:/config
       - caddy_data:/data
-      - type: bind
-        source: ./frontend/Caddyfile
-        target: /etc/caddy/Caddyfile
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./frontend/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       api:
         condition: service_healthy
@@ -163,18 +133,8 @@ services:
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     volumes:
       - redis_data:/data
-      - type: bind
-        source: ./redis/redis.conf
-        target: /usr/local/etc/redis/redis.conf
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./redis/users.acl
-        target: /usr/local/etc/redis/users.acl
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/users.acl:/usr/local/etc/redis/users.acl:ro
     healthcheck:
       # NOAUTH also confirms Redis is ready when anonymous access is disabled.
       test: ["CMD-SHELL", "redis-cli ping | grep -qE '^(PONG|NOAUTH)'"]

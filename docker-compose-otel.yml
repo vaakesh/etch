@@ -11,12 +11,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.162.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
-      - type: bind
-        source: ./observability/otel-collector.yaml
-        target: /etc/otelcol/config.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
     mem_limit: 256m
     stop_grace_period: 30s
     restart: unless-stopped
@@ -27,15 +22,10 @@ services:
       - "-target=all"
       - "-config.file=/etc/tempo.yaml"
     volumes:
-      - type: bind
-        source: ./observability/tempo.yaml
-        target: /etc/tempo.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:${tempo_port}:3200"
     stop_grace_period: 60s
     restart: unless-stopped
 
@@ -45,17 +35,12 @@ services:
       - "-config.file=/etc/loki/config.yaml"
 
     volumes:
-      - type: bind
-        source: ./observability/loki.yaml
-        target: /etc/loki/config.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./observability/loki.yaml:/etc/loki/config.yaml:ro
 
       - loki_data:/loki
 
     ports:
-      - "127.0.0.1:3100:3100"
+      - "127.0.0.1:${loki_port}:3100"
 
     stop_grace_period: 30s
     restart: unless-stopped

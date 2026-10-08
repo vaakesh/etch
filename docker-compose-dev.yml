@@ -8,7 +8,6 @@ services:
       - ./backend/.env
     environment:
       PROMETHEUS_DISABLE_CREATED_SERIES: "true"
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     ports:
       - "127.0.0.1:${api_port}:8000"
     volumes:
@@ -45,10 +44,6 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
-    environment:
-      db_host: postgres
-      db_port: "5432"
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     command:
       - uv
       - run
@@ -77,10 +72,6 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./backend/.env
-    environment:
-      db_host: postgres
-      db_port: "5432"
-      celery_broker_url: "amqp://${rabbitmq_user:?rabbitmq_user is required}:${rabbitmq_password:?rabbitmq_password is required}@rabbitmq:5672//"
     command:
       - uv
       - run
@@ -107,8 +98,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${rabbitmq_user}
       RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
     ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:${rabbitmq_port}:5672"
+      - "127.0.0.1:${rabbitmq_management_port}:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -137,12 +128,7 @@ services:
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker|var/lib/containers)($$|/)
     pid: host
     volumes:
-      - type: bind
-        source: /
-        target: /host
-        read_only: true
-        bind:
-          create_host_path: false
+      - /:/host:ro
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -153,12 +139,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - type: bind
-        source: ./prometheus/metrics_token
-        target: /run/secrets/metrics_token
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./prometheus/metrics_token:/run/secrets/metrics_token:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml

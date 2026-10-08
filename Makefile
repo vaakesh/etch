@@ -1,43 +1,56 @@
-up:
-	uv run --no-project python setup.py check dev
-	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml up -d
-	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml run --rm -T api uv run --no-sync alembic upgrade head
-rebuild:
-	uv run --no-project python setup.py check dev
-	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml up --build -d
-	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml run --rm -T api uv run --no-sync alembic upgrade head
-down:
-	docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml down
+DEV_COMPOSE := docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml
+TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
-test:
+.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy
+
+dev-up:
+	uv run --no-project python setup.py check dev
+	$(DEV_COMPOSE) up -d
+	$(DEV_COMPOSE) run --rm -T api uv run --no-sync alembic upgrade head
+
+dev-rebuild:
+	uv run --no-project python setup.py check dev
+	$(DEV_COMPOSE) up --build -d
+	$(DEV_COMPOSE) run --rm -T api uv run --no-sync alembic upgrade head
+
+dev-down:
+	$(DEV_COMPOSE) down
+
+test-frontend:
+	npm --prefix frontend run format:check
+	npm --prefix frontend run typecheck
+	npm --prefix frontend run lint
+	npm --prefix frontend run test
+	npm --prefix frontend run build
+
+test-e2e:
+	npm --prefix frontend run typecheck:e2e
+	npm --prefix frontend run test:e2e:mocked
+	npm --prefix frontend run test:e2e:visual
+	$(MAKE) test-prepare
+	$(TEST_COMPOSE) up -d --build --wait --wait-timeout 180 api frontend
+	PLAYWRIGHT_INTEGRATION_BASE_URL=http://localhost:$$($(TEST_COMPOSE) port frontend 5173 | cut -d: -f2) \
+		npm --prefix frontend run test:e2e:integration
+
+test-api: test-prepare
+	$(TEST_COMPOSE) run --rm -T --no-deps api uv run --no-sync pytest -o log_cli=false --show-capture=no
+
+test-all:
+	$(MAKE) test-frontend
+	$(MAKE) test-e2e
+	$(MAKE) test-api
+
+test-prepare: test-down
 	uv run --no-project python setup.py check test
-	docker compose -f docker-compose-test.yml up --build -d
-	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync alembic upgrade head
-	docker compose -f docker-compose-test.yml run --rm -T api uv run --no-sync pytest -o log_cli=false --show-capture=no
+	$(TEST_COMPOSE) build api
+	$(TEST_COMPOSE) up -d --wait --wait-timeout 120 postgres redis
+	$(TEST_COMPOSE) run --rm -T --no-deps api uv run --no-sync alembic upgrade head
 
-.PHONY: up rebuild down config test check certs prod-check prod-deploy prod-up prod-logs prod-ps prod-down
-
-check:
-	uv run --no-project python setup.py check dev
+test-down:
+	$(TEST_COMPOSE) down --volumes --remove-orphans
 
 certs:
 	uv run --no-project python setup.py certs
 
-PROD_COMPOSE := docker compose -f docker-compose-prod.yml -f docker-compose-prod-observability.yml
-
-prod-check:
-	$(PROD_COMPOSE) config --quiet
-
-prod-deploy: prod-check
+prod-deploy:
 	bash scripts/deploy-prod.sh
-
-prod-up: prod-deploy
-
-prod-logs:
-	$(PROD_COMPOSE) logs -f --tail=100
-
-prod-ps:
-	$(PROD_COMPOSE) ps -a
-
-prod-down:
-	$(PROD_COMPOSE) down

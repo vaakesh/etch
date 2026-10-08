@@ -93,18 +93,6 @@ services:
       timeout: 5s
       retries: 5
 
-  cloudbeaver:
-    image: dbeaver/cloudbeaver:latest
-    restart: unless-stopped
-    ports:
-      - "8979:8978"
-    volumes:
-      - cloudbeaver_data:/opt/cloudbeaver/workspace
-    depends_on:
-      postgres:
-        condition: service_healthy
-
 volumes:
-  cloudbeaver_data:
   pgdata18:
   redis_data:
