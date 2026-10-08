@@ -5,6 +5,7 @@ import pytest
 
 @pytest.fixture
 def client(client, override_cookie_token_config):
+    client.headers["user-agent"] = "pytest-agent"
     return client
 
 

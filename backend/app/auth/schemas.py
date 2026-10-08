@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from app.common.types import Password, Username
-from pydantic import BaseModel, ConfigDict, PastDatetime
+from pydantic import BaseModel, ConfigDict
 
 
 @dataclass(slots=True, frozen=True)
@@ -25,6 +26,12 @@ class VerifiedUser:
     hashed_password: str
 
 
+@dataclass(slots=True, frozen=True)
+class ClientInfo:
+    ip: str | None
+    user_agent: str | None
+
+
 @dataclass(slots=True)
 class AccessTokenResponse:
     access_token: str
@@ -33,9 +40,11 @@ class AccessTokenResponse:
 
 class AuthSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+    uuid: UUID
     user_agent: str | None
     ip: str | None
-    revoked_at: PastDatetime | None
+    created_at: datetime
+    expires_at: datetime
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -13,9 +13,11 @@ from app.auth.errors import (
     InvalidLoginCredentials,
     InvalidRefreshTokenError,
 )
-from app.auth.schemas import AccessTokenResponse
+from app.auth.schemas import AccessTokenResponse, ClientInfo
 from app.users.errors import UserNotFoundError
 from tests.unit.factories import make_token_pair, make_user_session
+
+TEST_CLIENT = ClientInfo(ip="127.0.0.1", user_agent="pytest-agent")
 
 
 class TestLoginForBearerToken:
@@ -157,6 +159,7 @@ class TestLogin:
         auth_service.login.assert_awaited_once_with(
             username="test-user",
             password="password123",
+            client=TEST_CLIENT,
         )
 
     async def test_returns_404_without_cookies_for_invalid_credentials(
@@ -178,6 +181,7 @@ class TestLogin:
         auth_service.login.assert_awaited_once_with(
             username="test-user",
             password="wrong-password",
+            client=TEST_CLIENT,
         )
 
 
@@ -207,6 +211,7 @@ class TestLoginRequestValidation:
         auth_service.login.assert_awaited_once_with(
             username="TeSt-UsEr",
             password="Password123",
+            client=TEST_CLIENT,
         )
 
     @pytest.mark.parametrize(
@@ -242,6 +247,7 @@ class TestLoginRequestValidation:
         auth_service.login.assert_awaited_once_with(
             username=username,
             password=password,
+            client=TEST_CLIENT,
         )
 
     @pytest.mark.parametrize(
@@ -507,7 +513,10 @@ class TestRefresh:
         assert refresh_token["secure"] is True
         assert refresh_token["httponly"] is True
         assert refresh_token["samesite"] == "lax"
-        auth_service.refresh.assert_awaited_once_with("old-refresh-token")
+        auth_service.refresh.assert_awaited_once_with(
+            "old-refresh-token",
+            client=TEST_CLIENT,
+        )
 
     async def test_returns_401_when_refresh_cookie_missing(
         self,
@@ -552,7 +561,10 @@ class TestRefresh:
         assert cookies["access_token"]["max-age"] == "0"
         assert cookies["refresh_token"].value == ""
         assert cookies["refresh_token"]["max-age"] == "0"
-        auth_service.refresh.assert_awaited_once_with("invalid-refresh-token")
+        auth_service.refresh.assert_awaited_once_with(
+            "invalid-refresh-token",
+            client=TEST_CLIENT,
+        )
 
     async def test_returns_404_without_cookies_when_user_not_found(
         self,
@@ -571,7 +583,10 @@ class TestRefresh:
             "message": "User not found",
         }
         assert response.headers.get_list("set-cookie") == []
-        auth_service.refresh.assert_awaited_once_with("active-refresh-token")
+        auth_service.refresh.assert_awaited_once_with(
+            "active-refresh-token",
+            client=TEST_CLIENT,
+        )
 
 
 class TestChangePassword:
@@ -972,65 +987,159 @@ class TestGetSessions:
             "message": "Not authorized",
         }
         assert response.headers.get_list("set-cookie") == []
-        auth_service.get_all_user_sessions.assert_not_awaited()
+        auth_service.get_active_user_sessions.assert_not_awaited()
 
-    async def test_returns_user_sessions(
+    async def test_returns_page_of_active_sessions(
         self,
         client: AsyncClient,
         current_user,
         auth_service: AsyncMock,
     ):
         first_session = make_user_session(
-            uuid=UUID("0198ad01-b200-7000-8000-000000000600"),
-            refresh_token_hash="a" * 64,
-        )
-        second_session = make_user_session(
             id=602,
             uuid=UUID("0198ad01-b200-7000-8000-000000000602"),
             refresh_token_hash="b" * 64,
+            created_at=datetime(2026, 8, 16, 12, 0, tzinfo=UTC),
+            expires_at=datetime(2026, 8, 23, 12, 0, tzinfo=UTC),
+        )
+        second_session = make_user_session(
+            uuid=UUID("0198ad01-b200-7000-8000-000000000600"),
+            refresh_token_hash="a" * 64,
             user_agent=None,
             ip=None,
-            revoked_at=datetime(2026, 8, 16, 12, 0, tzinfo=UTC),
-            replaced_by_session_id=601,
         )
-        auth_service.get_all_user_sessions.return_value = [
-            first_session,
-            second_session,
-        ]
+        auth_service.get_active_user_sessions.return_value = (
+            [first_session, second_session],
+            "next-cursor",
+            True,
+        )
 
         response = await client.get("/auth/sessions")
 
-        expected = [
-            {
-                "user_agent": "pytest",
-                "ip": "127.0.0.1",
-                "revoked_at": None,
-            },
-            {
-                "user_agent": None,
-                "ip": None,
-                "revoked_at": "2026-08-16T12:00:00Z",
-            },
-        ]
+        expected = {
+            "items": [
+                {
+                    "uuid": "0198ad01-b200-7000-8000-000000000602",
+                    "user_agent": "pytest",
+                    "ip": "127.0.0.1",
+                    "created_at": "2026-08-16T12:00:00Z",
+                    "expires_at": "2026-08-23T12:00:00Z",
+                },
+                {
+                    "uuid": "0198ad01-b200-7000-8000-000000000600",
+                    "user_agent": None,
+                    "ip": None,
+                    "created_at": "2026-08-15T12:00:00Z",
+                    "expires_at": "2026-08-20T12:00:00Z",
+                },
+            ],
+            "next_cursor": "next-cursor",
+            "has_more": True,
+        }
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
-        auth_service.get_all_user_sessions.assert_awaited_once_with(current_user.id)
+        auth_service.get_active_user_sessions.assert_awaited_once_with(
+            user_id=current_user.id,
+            cursor=None,
+            limit=20,
+        )
 
-
-    async def test_returns_empty_session_list(
+    async def test_returns_empty_page_when_user_has_no_active_sessions(
         self,
         client: AsyncClient,
         current_user,
         auth_service: AsyncMock,
     ):
-        auth_service.get_all_user_sessions.return_value = []
+        auth_service.get_active_user_sessions.return_value = ([], None, False)
 
         response = await client.get("/auth/sessions")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == []
-        auth_service.get_all_user_sessions.assert_awaited_once_with(current_user.id)
+        assert response.json() == {
+            "items": [],
+            "next_cursor": None,
+            "has_more": False,
+        }
+        auth_service.get_active_user_sessions.assert_awaited_once_with(
+            user_id=current_user.id,
+            cursor=None,
+            limit=20,
+        )
+
+    @pytest.mark.parametrize(
+        ("limit", "cursor"),
+        [
+            pytest.param(1, "some-cursor", id="minimum_limit"),
+            pytest.param(100, "some-cursor", id="maximum_limit"),
+        ],
+    )
+    async def test_passes_limit_and_cursor_to_service(
+        self,
+        client: AsyncClient,
+        current_user,
+        auth_service: AsyncMock,
+        limit,
+        cursor,
+    ):
+        auth_service.get_active_user_sessions.return_value = ([], None, False)
+
+        response = await client.get(
+            "/auth/sessions",
+            params={"limit": limit, "cursor": cursor},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        auth_service.get_active_user_sessions.assert_awaited_once_with(
+            user_id=current_user.id,
+            cursor=cursor,
+            limit=limit,
+        )
+
+    @pytest.mark.parametrize(
+        ("limit", "expected_detail"),
+        [
+            pytest.param(
+                0,
+                {
+                    "type": "greater_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": "0",
+                    "ctx": {"ge": 1},
+                },
+                id="below_minimum",
+            ),
+            pytest.param(
+                101,
+                {
+                    "type": "less_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be less than or equal to 100",
+                    "input": "101",
+                    "ctx": {"le": 100},
+                },
+                id="above_maximum",
+            ),
+        ],
+    )
+    async def test_rejects_invalid_limit(
+        self,
+        client: AsyncClient,
+        current_user,
+        auth_service: AsyncMock,
+        limit,
+        expected_detail,
+    ):
+        response = await client.get("/auth/sessions", params={"limit": limit})
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert response.json() == {
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [expected_detail],
+        }
+        auth_service.get_active_user_sessions.assert_not_awaited()
 
 
 class TestAuthRateLimits:
@@ -1103,4 +1212,4 @@ class TestAuthRateLimits:
             requests=60,
             window_seconds=60,
         )
-        auth_service.get_all_user_sessions.assert_not_awaited()
+        auth_service.get_active_user_sessions.assert_not_awaited()

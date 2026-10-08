@@ -2,6 +2,7 @@ from datetime import datetime
 from app.tracing import traced
 
 from app.auth.models import UserSession
+from app.common.query import apply_date_pagination
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,20 +52,35 @@ class AuthRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    @traced("auth.repository.get_all_user_sessions")
-    async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
-        sessions = (
-            (
-                await self.session.execute(
-                    select(UserSession).where(
-                        UserSession.user_id == user_id,
-                    )
-                )
-            )
-            .scalars()
-            .all()
+    @traced("auth.repository.get_active_user_sessions")
+    async def get_active_user_sessions(
+        self,
+        user_id: int,
+        now: datetime,
+        cursor_created_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 20,
+    ) -> tuple[list[UserSession], bool]:
+        stmt = select(UserSession).where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.replaced_by_session_id.is_(None),
+            UserSession.expires_at > now,
         )
-        return sessions
+
+        stmt = apply_date_pagination(
+            stmt,
+            date_column=UserSession.created_at,
+            id_column=UserSession.id,
+            cursor_at=cursor_created_at,
+            cursor_id=cursor_id,
+            limit=limit,
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.scalars().all()
+        has_more = len(rows) > limit
+        return rows[:limit], has_more
 
     # write
 

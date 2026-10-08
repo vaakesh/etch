@@ -20,6 +20,7 @@ from app.auth.errors import (
 from app.auth.models import UserSession
 from app.auth.schemas import (
     AccessTokenResponse,
+    ClientInfo,
     IssuedTokens,
     TokenPair,
     VerifiedUser,
@@ -29,7 +30,7 @@ from app.config import AuthTokensConfig
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
-from app.common.utils import utcnow
+from app.common.utils import decode_cursor, encode_cursor, utcnow
 
 
 class AuthTokensService:
@@ -183,10 +184,33 @@ class AuthService:
 
     # read
 
-    @traced("auth.service.get_all_user_sessions")
-    async def get_all_user_sessions(self, user_id: int) -> list[UserSession]:
+    @traced("auth.service.get_active_user_sessions")
+    async def get_active_user_sessions(
+        self,
+        user_id: int,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> tuple[list[UserSession], str | None, bool]:
         async with self.uow_factory() as uow:
-            return await uow.auth_repo.get_all_user_sessions(user_id)
+            cursor_created_at, cursor_id = (
+                decode_cursor(cursor) if cursor is not None else (None, None)
+            )
+            sessions, has_more = await uow.auth_repo.get_active_user_sessions(
+                user_id=user_id,
+                now=utcnow(),
+                cursor_created_at=cursor_created_at,
+                cursor_id=cursor_id,
+                limit=limit,
+            )
+
+            next_cursor = None
+            if sessions and has_more:
+                next_cursor = encode_cursor(
+                    time_condition=sessions[-1].created_at,
+                    entity_id=sessions[-1].id,
+                )
+
+            return sessions, next_cursor, has_more
 
     # write
 
@@ -194,10 +218,13 @@ class AuthService:
             self,
             user: User,
             refresh_token_hash,
+            client: ClientInfo | None = None,
     ) -> UserSession:
         user_session = UserSession(
             user_id=user.id,
             refresh_token_hash=refresh_token_hash,
+            ip=client.ip if client is not None else None,
+            user_agent=client.user_agent if client is not None else None,
             expires_at=utcnow() + timedelta(
                 days=self.auth_tokens_service.config.refresh_token_expire_days
             ),
@@ -209,6 +236,7 @@ class AuthService:
         self,
         username: str,
         password: str,
+        client: ClientInfo | None = None,
     ) -> TokenPair:
         verified = await self._authenticate_user(
             username=username,
@@ -221,7 +249,7 @@ class AuthService:
 
             tokens = self.auth_tokens_service.issue_tokens(user_uuid=user.uuid)
             user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash,
+                user, tokens.refresh_token_hash, client,
             )
             uow.auth_repo.add(user_session=user_session)
             await uow.commit()
@@ -238,6 +266,7 @@ class AuthService:
     async def refresh(
         self,
         refresh_token: str,
+        client: ClientInfo | None = None,
     ) -> TokenPair:
         async with self.uow_factory() as uow:
             refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
@@ -245,7 +274,7 @@ class AuthService:
             user_session = await self._validate_refresh_session(refresh_token_hash, uow)
             tokens = self.auth_tokens_service.issue_tokens(user.uuid)
             new_user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash,
+                user, tokens.refresh_token_hash, client,
             )
             uow.auth_repo.add(new_user_session)
             await uow.auth_repo.flush()

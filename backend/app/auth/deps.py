@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi.security import OAuth2PasswordBearer
 
 from app.auth.errors import AccessTokenNotFoundError
+from app.auth.schemas import ClientInfo
 from app.auth.service import AuthService, AuthTokensService
 from app.config import get_auth_tokens_config
 from app.deps import UoWFactory, get_uow_factory
@@ -93,9 +94,27 @@ async def get_optional_current_user(
         user_uuid=user_uuid,
     )
 
+MAX_CLIENT_IP_LENGTH = 64
+MAX_USER_AGENT_LENGTH = 512
+
+async def get_client_info(request: Request) -> ClientInfo:
+    # Behind the reverse proxy uvicorn already put the forwarded address here.
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    return ClientInfo(
+        ip=ip[:MAX_CLIENT_IP_LENGTH] if ip else None,
+        user_agent=user_agent[:MAX_USER_AGENT_LENGTH] if user_agent else None,
+    )
+
 type AuthServiceDeps = Annotated[
     AuthService,
     Depends(get_auth_service),
+]
+
+type ClientInfoDeps = Annotated[
+    ClientInfo,
+    Depends(get_client_info),
 ]
 
 type CurrentUser = Annotated[

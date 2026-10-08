@@ -7,8 +7,9 @@ import pytest
 
 from app.auth.errors import InvalidLoginCredentials, InvalidRefreshTokenError
 from app.auth.repository import AuthRepository
-from app.auth.schemas import AccessTokenResponse, IssuedTokens, TokenPair
+from app.auth.schemas import AccessTokenResponse, ClientInfo, IssuedTokens, TokenPair
 from app.auth.service import AuthService, AuthTokensService
+from app.errors import RequestValueError
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.repository import UserRepository
@@ -458,25 +459,73 @@ class TestLogout:
         ctx.uow.commit.assert_not_awaited()
 
 
-class TestGetAllUserSessions:
-    async def test_returns_user_sessions(self, auth_context):
+class TestGetActiveUserSessions:
+    async def test_returns_last_page_without_next_cursor(self, auth_context):
         ctx = auth_context
-        ctx.uow.auth_repo.get_all_user_sessions.return_value = [ctx.session]
+        ctx.uow.auth_repo.get_active_user_sessions.return_value = ([ctx.session], False)
 
-        result = await ctx.service.get_all_user_sessions(42)
+        result = await ctx.service.get_active_user_sessions(42)
 
-        assert result == [ctx.session]
-        ctx.uow.auth_repo.get_all_user_sessions.assert_awaited_once_with(42)
+        assert result == ([ctx.session], None, False)
+        ctx.uow.auth_repo.get_active_user_sessions.assert_awaited_once_with(
+            user_id=42,
+            now=NOW,
+            cursor_created_at=None,
+            cursor_id=None,
+            limit=20,
+        )
         ctx.uow.commit.assert_not_awaited()
 
-    async def test_returns_empty_list_when_user_has_no_sessions(self, auth_context):
+    async def test_returns_next_cursor_from_last_session_when_more_exist(
+        self, auth_context,
+    ):
         ctx = auth_context
-        ctx.uow.auth_repo.get_all_user_sessions.return_value = []
+        newer_session = make_user_session(
+            id=602,
+            created_at=datetime(2026, 8, 16, 11, 0, tzinfo=UTC),
+        )
+        ctx.uow.auth_repo.get_active_user_sessions.return_value = (
+            [newer_session, ctx.session], True,
+        )
 
-        result = await ctx.service.get_all_user_sessions(42)
+        sessions, next_cursor, has_more = await ctx.service.get_active_user_sessions(
+            42, limit=2,
+        )
 
-        assert result == []
-        ctx.uow.auth_repo.get_all_user_sessions.assert_awaited_once_with(42)
+        assert sessions == [newer_session, ctx.session]
+        assert has_more is True
+        # {"time_condition":"2026-08-15T12:00:00+00:00","id":600}
+        assert next_cursor == (
+            "eyJ0aW1lX2NvbmRpdGlvbiI6IjIwMjYtMDgtMTVUMTI6MDA6MDArMDA6MDAiLCJpZCI6NjAwfQ=="
+        )
+
+    async def test_passes_decoded_cursor_to_repository(self, auth_context):
+        ctx = auth_context
+        ctx.uow.auth_repo.get_active_user_sessions.return_value = ([], False)
+        # {"time_condition":"2026-08-15T12:00:00+00:00","id":600}
+        cursor = (
+            "eyJ0aW1lX2NvbmRpdGlvbiI6IjIwMjYtMDgtMTVUMTI6MDA6MDArMDA6MDAiLCJpZCI6NjAwfQ=="
+        )
+
+        result = await ctx.service.get_active_user_sessions(42, cursor=cursor, limit=5)
+
+        assert result == ([], None, False)
+        ctx.uow.auth_repo.get_active_user_sessions.assert_awaited_once_with(
+            user_id=42,
+            now=NOW,
+            cursor_created_at=datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+            cursor_id=600,
+            limit=5,
+        )
+
+    async def test_rejects_malformed_cursor_without_reading_sessions(self, auth_context):
+        ctx = auth_context
+
+        with pytest.raises(RequestValueError) as exc_info:
+            await ctx.service.get_active_user_sessions(42, cursor="not-a-cursor")
+
+        assert exc_info.value.failed_field == "cursor"
+        ctx.uow.auth_repo.get_active_user_sessions.assert_not_awaited()
 
 
 class TestBuildUserSession:
@@ -491,4 +540,41 @@ class TestBuildUserSession:
         assert result.expires_at == datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
         assert result.revoked_at is None
         assert result.replaced_by_session_id is None
+        assert result.ip is None
+        assert result.user_agent is None
         ctx.factory.assert_not_called()
+
+    async def test_stores_client_ip_and_user_agent(self, auth_context):
+        ctx = auth_context
+        client = ClientInfo(ip="203.0.113.7", user_agent="Mozilla/5.0")
+
+        result = await ctx.service.build_user_session(ctx.user, "c" * 64, client)
+
+        assert result.ip == "203.0.113.7"
+        assert result.user_agent == "Mozilla/5.0"
+
+
+class TestSessionClientInfo:
+    async def test_login_stores_client_in_new_session(self, auth_context):
+        ctx = auth_context
+        client = ClientInfo(ip="203.0.113.7", user_agent="Mozilla/5.0")
+
+        await ctx.service.login("test-user", "password123", client=client)
+
+        session = ctx.uow.auth_repo.add.call_args.kwargs["user_session"]
+        assert session.ip == "203.0.113.7"
+        assert session.user_agent == "Mozilla/5.0"
+
+    async def test_refresh_stores_current_client_in_replacement_session(
+        self, auth_context,
+    ):
+        ctx = auth_context
+        client = ClientInfo(ip="198.51.100.9", user_agent="Mozilla/5.0 (new)")
+
+        await ctx.service.refresh("old-refresh-token", client=client)
+
+        new_session = ctx.uow.auth_repo.add.call_args.args[0]
+        assert new_session.ip == "198.51.100.9"
+        assert new_session.user_agent == "Mozilla/5.0 (new)"
+        assert ctx.session.ip == "127.0.0.1"
+        assert ctx.session.user_agent == "pytest"
