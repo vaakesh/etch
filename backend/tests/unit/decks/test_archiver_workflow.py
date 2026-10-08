@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 from uuid import UUID
 
 import pytest
@@ -34,7 +34,6 @@ def workflow_context():
     uow.user_deck_repo.get_archive_recipient_user_ids = AsyncMock(return_value=[])
     uow.training_session_repo.get_user_ids_by_deck_id = AsyncMock(return_value=[])
     uow.user_deck_repo.get_archive_recipient_pairs = AsyncMock(return_value=[])
-    uow.training_session_repo.get_archive_recipient_pairs = AsyncMock(return_value=[])
     uow.deck_repo.lock_owned_public_deck_graphs = AsyncMock(return_value=[])
     uow.user_deck_repo.count_saved = AsyncMock(return_value=0)
     uow.deck_repo.get_archive_recipient_for_update = AsyncMock(return_value=None)
@@ -88,7 +87,7 @@ class TestArchiveDeck:
 
 
 class TestArchiveOwnerPublicDecks:
-    async def test_copies_only_public_decks_with_other_users_progress_in_one_batch(
+    async def test_copies_only_public_decks_with_other_user_deck_recipients_in_one_batch(
         self, workflow_context,
     ):
         workflow, uow, first, first_archive = workflow_context
@@ -109,9 +108,6 @@ class TestArchiveOwnerPublicDecks:
         uow.user_deck_repo.get_archive_recipient_pairs.return_value = [
             (1, 7), (1, 9), (3, 8),
         ]
-        uow.training_session_repo.get_archive_recipient_pairs.return_value = [
-            (1, 8), (4, 9),
-        ]
         first_copy = DeckCopyResult(
             deck=first_archive, card_id_map={},
             changes=ArchiveChanges(), source_deck=first,
@@ -129,22 +125,25 @@ class TestArchiveOwnerPublicDecks:
         copied_graphs = workflow.copier.create_archives_batch.call_args.args[0]
         assert [graph[0].id for graph in copied_graphs] == [1, 3]
         assert result.recipient_ids == (7, 8)
-        assert [item.recipient_ids for item in result.archives] == [(7, 8), (8,)]
+        assert [item.recipient_ids for item in result.archives] == [(7,), (8,)]
         recipients = uow.deck_repo.add_archive_recipients.call_args.args[0]
         assert [(row.archive_deck_id, row.user_id) for row in recipients] == [
-            (2, 7), (2, 8), (5, 8),
+            (2, 7), (5, 8),
         ]
-        assert workflow.progress.transfer.await_count == 2
+        assert workflow.progress.transfer.await_args_list == [
+            call(first_copy, user_ids=(7,)),
+            call(second_copy, user_ids=(8,)),
+        ]
         workflow.copier.create_archive.assert_not_awaited()
 
-    async def test_skips_all_copies_without_other_users_progress(
+    async def test_skips_all_copies_when_only_owner_has_user_decks(
         self, workflow_context,
     ):
         workflow, uow, source, archive = workflow_context
         uow.deck_repo.lock_owned_public_deck_graphs.return_value = [
             (source, [], []),
         ]
-        uow.training_session_repo.get_archive_recipient_pairs.return_value = [
+        uow.user_deck_repo.get_archive_recipient_pairs.return_value = [
             (1, 9),
         ]
 

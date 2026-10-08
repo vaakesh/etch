@@ -531,19 +531,6 @@ class TrainingSessionRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
-    async def get_archive_recipient_pairs(
-        self, deck_ids: list[int],
-    ) -> list[tuple[int, int]]:
-        if not deck_ids:
-            return []
-        stmt = (
-            select(TrainingSession.deck_id, TrainingSession.user_id)
-            .where(TrainingSession.deck_id.in_(deck_ids))
-            .distinct()
-            .order_by(TrainingSession.deck_id, TrainingSession.user_id)
-        )
-        return list((await self.session.execute(stmt)).tuples().all())
-
     @traced("training_sessions.repository.has_by_deck_id")
     async def has_by_deck_id(
         self,

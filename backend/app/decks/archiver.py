@@ -157,10 +157,13 @@ class DeckContentCopier:
         self,
         graphs: list[tuple[Deck, list[DeckCard], list[Card]]],
         *,
-        reason: "ArchiveReason",
+        reason: ArchiveReason,
         retention: timedelta,
         now: datetime,
-    ) -> list["DeckCopyResult"]:
+    ) -> list[DeckCopyResult]:
+        """
+        создание копий колод со связями и карточками
+        """
         if retention <= timedelta(0):
             raise ValueError("Archive retention must be positive")
         if not graphs:
@@ -407,7 +410,7 @@ class ArchiveChanges:
     user_ids: set[int] = field(default_factory=set)
     user_deck_keys: set[tuple[int, int]] = field(default_factory=set)
 
-    def include(self, other: "ArchiveChanges") -> None:
+    def include(self, other: ArchiveChanges) -> None:
         self.deck_ids.update(other.deck_ids)
         self.deck_uuids.update(other.deck_uuids)
         self.card_ids.update(other.card_ids)
@@ -528,18 +531,15 @@ class DeckArchiveWorkflow:
             return DeckArchiveBatchResult([], (), ArchiveChanges())
 
         deck_ids = [source.id for source, _, _ in graphs]
-        recipients_by_deck = {deck_id: set() for deck_id in deck_ids}
+        recipients_by_deck = {deck_id: set() for deck_id in deck_ids} # deck_id: set(user_ids)
+        # берем пользователей по user_deck
         for deck_id, user_id in (
             await self.uow.user_deck_repo.get_archive_recipient_pairs(deck_ids)
         ):
-            if user_id != owner_id:
-                recipients_by_deck[deck_id].add(user_id)
-        for deck_id, user_id in (
-            await self.uow.training_session_repo.get_archive_recipient_pairs(deck_ids)
-        ):
-            if user_id != owner_id:
+            if user_id != owner_id: # исключаем владельца, аккаунт все равно удаляется
                 recipients_by_deck[deck_id].add(user_id)
 
+        # список колоды, у которых есть получатели архивной копии
         eligible = [
             graph for graph in graphs if recipients_by_deck[graph[0].id]
         ]

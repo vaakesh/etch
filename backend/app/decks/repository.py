@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 from app.tracing import traced
@@ -196,9 +197,14 @@ class DeckRepository:
 
         return deck, list(deck_cards), list(cards)
 
+    # checked
     async def lock_owned_public_deck_graphs(
         self, owner_id: int,
     ) -> list[tuple[Deck, list[DeckCard], list[Card]]]:
+        """
+        локает все публичные колоды пользователя, их связи и карточки\n
+        возвращает список для каждой колоды
+        """
         decks = list((await self.session.execute(
             select(Deck)
             .where(
@@ -1002,9 +1008,15 @@ class UserDeckRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
+    # checked
     async def get_archive_recipient_pairs(
         self, deck_ids: list[int],
     ) -> list[tuple[int, int]]:
+        """
+        получает всех пользователей колод по deck_ids\n
+        пользователь - сохранил или прошел колоду полностью хоть раз\n
+        возвращает список пар (deck_id, user_id)
+        """
         if not deck_ids:
             return []
         stmt = (
@@ -1022,25 +1034,6 @@ class UserDeckRepository:
             .order_by(UserDeck.deck_id, UserDeck.user_id)
         )
         return list((await self.session.execute(stmt)).tuples().all())
-
-
-    # checked
-    async def get_user_ids_who_saved_deck(
-        self,
-        deck_id: int,
-    ) -> Sequence[int]:
-        stmt = (
-            select(User.id)
-            .join(
-                UserDeck, UserDeck.user_id == User.id,
-            )
-            .where(
-                UserDeck.deck_id == deck_id,
-                UserDeck.is_saved.is_(True),
-            )
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
 
     @traced("decks.repository.get_by_user_id_and_deck_id")
     async def get_by_user_id_and_deck_id(
