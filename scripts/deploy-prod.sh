@@ -27,6 +27,30 @@ on_error() {
 }
 trap on_error ERR
 
+previous_tag="$(sed -n 's/^IMAGE_TAG=//p' .env 2>/dev/null | tail -n 1 || true)"
+backup_dir="$HOME/etch-backups"
+
+# Free disk after a successful deployment: keep this and the previous release for rollback.
+cleanup_old_releases() {
+  local image
+  while IFS= read -r image; do
+    case "$image" in
+      *":$IMAGE_TAG" | *":${previous_tag:-$IMAGE_TAG}" | *":<none>") continue ;;
+    esac
+    # Images still used by a container are refused and stay in place.
+    docker image rm "$image" || true
+  done < <(
+    docker image ls --format '{{.Repository}}:{{.Tag}}' \
+      --filter reference=ghcr.io/vaakesh/etch-backend \
+      --filter reference=ghcr.io/vaakesh/etch-frontend
+  )
+  docker image prune -f
+  docker builder prune -f
+
+  # Backup names start with a UTC timestamp, so the newest ten sort first.
+  find "$backup_dir" -maxdepth 1 -type f -name '*.dump' | sort -r | tail -n +11 | xargs -r rm -f --
+}
+
 compose config --quiet
 test -d backend/certs
 test -f prometheus/metrics_token
@@ -47,7 +71,6 @@ compose run --rm -T --no-deps otel-collector validate --config=/etc/otelcol/conf
 compose up -d --no-deps --no-recreate --wait --wait-timeout 120 postgres redis
 compose stop caddy api celery-beat celery-worker
 
-backup_dir="$HOME/etch-backups"
 mkdir -p "$backup_dir"
 backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$IMAGE_TAG.dump"
 compose exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' < /dev/null > "$backup_file.partial"
@@ -126,5 +149,6 @@ if grep -q '^IMAGE_TAG=' .env; then
 else
   printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
 fi
+cleanup_old_releases || echo "Cleanup failed; the deployment itself succeeded." >&2
 compose ps
 echo "Deployment completed: $IMAGE_TAG"

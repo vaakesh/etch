@@ -1,3 +1,10 @@
+# Same log cap as docker-compose-prod.yml; YAML anchors are not shared between files.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   api:
     environment:
@@ -27,6 +34,7 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.162.0
+    logging: *default-logging
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./observability/otel-collector-prod.yaml:/etc/otelcol/config.yaml:ro
@@ -36,6 +44,8 @@ services:
 
   tempo:
     image: grafana/tempo:3.1.0
+    logging: *default-logging
+    mem_limit: 384m
     command:
       - "-target=all"
       - "-config.file=/etc/tempo.yaml"
@@ -47,6 +57,7 @@ services:
 
   loki:
     image: grafana/loki:3.7.0
+    logging: *default-logging
     command:
       - "-config.file=/etc/loki/config.yaml"
     volumes:
@@ -60,6 +71,7 @@ services:
   # Read host CPU, memory and disks; expose metrics only inside the Compose network.
   node-exporter:
     image: prom/node-exporter:v1.12.1
+    logging: *default-logging
     command:
       - --path.rootfs=/host
       - --path.procfs=/host/proc
@@ -83,6 +95,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.15.0
+    logging: *default-logging
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -96,6 +109,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    logging: *default-logging
+    mem_limit: 512m
     ports:
       - "127.0.0.1:${grafana_port}:3000"
     environment:
@@ -116,6 +131,8 @@ services:
 
   cloudbeaver:
     image: dbeaver/cloudbeaver:latest
+    logging: *default-logging
+    mem_limit: 512m
     ports:
       - "127.0.0.1:${cloudbeaver_port}:8978"
     volumes:
@@ -127,6 +144,8 @@ services:
 
   redisinsight:
     image: redis/redisinsight:latest
+    logging: *default-logging
+    mem_limit: 256m
     ports:
       - "127.0.0.1:${redisinsight_port}:5540"
     volumes:
