@@ -27,6 +27,7 @@ from app.auth.schemas import (
 )
 from app.auth.utils import hash_password_async, verify_password_async
 from app.config import AuthTokensConfig
+from app.redis.invalidation import CacheInvalidator, scopes
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
@@ -102,10 +103,12 @@ class AuthService:
     def __init__(
             self, 
             uow_factory: Callable[[], UnitOfWork], 
-            auth_tokens_service: AuthTokensService
+            auth_tokens_service: AuthTokensService,
+            cache_invalidator: CacheInvalidator,
         ):
         self.uow_factory = uow_factory
         self.auth_tokens_service = auth_tokens_service
+        self.cache_invalidator = cache_invalidator
 
     # helpers
 
@@ -323,6 +326,11 @@ class AuthService:
             )
 
             await uow.commit()
+
+            # Cached users embed hashed_password and updated_at.
+            await self.cache_invalidator.invalidate(
+                scopes.users(user_id),
+            )
 
     @traced("auth.service.logout")
     async def logout(

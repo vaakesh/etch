@@ -10,6 +10,7 @@ from app.decks.models import Deck
 from app.decks.schemas import DeckResponse, InternalDeck, UpdateDeckRequest
 from app.decks.service import DeckService
 from app.redis.service import RedisCacheService
+from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from app.users.models import User
 from tests.unit.factories import make_deck
 
@@ -32,8 +33,10 @@ def service_context(deck):
     uow.__aexit__ = AsyncMock(return_value=False)
     uow.commit = AsyncMock()
     uow.deck_repo.get_owned_by_uuid = AsyncMock(return_value=deck)
+    uow.user_deck_repo.get_library_user_ids_by_deck_ids = AsyncMock(return_value=[42])
     cache = create_autospec(RedisCacheService, instance=True)
-    return DeckService(lambda: uow, cache), uow
+    invalidator = create_autospec(CacheInvalidator, instance=True)
+    return DeckService(lambda: uow, cache, invalidator), uow
 
 
 class TestUpdateDeckVersion:
@@ -51,7 +54,13 @@ class TestUpdateDeckVersion:
         assert result.version == 2
         assert result.updated_at == now
         uow.commit.assert_awaited_once()
-        service.cache_service.invalidate_decks.assert_awaited_once_with(deck_ids=[200])
+        service.cache_invalidator.invalidate.assert_awaited_once()
+        assert {
+            op for group in service.cache_invalidator.invalidate.await_args.args for op in group
+        } == {
+            DelKey("deck:200"),
+            BumpGeneration("library:42:decks:generation"),
+        }
 
     @pytest.mark.parametrize('payload', [
         {}, {'title': '  Test deck  '}, {'description': 'Test deck description'}, {'is_public': True},
@@ -65,7 +74,7 @@ class TestUpdateDeckVersion:
         assert result.version == 1
         assert result.updated_at == previous_date
         uow.commit.assert_awaited_once()
-        service.cache_service.invalidate_decks.assert_not_awaited()
+        service.cache_invalidator.invalidate.assert_not_awaited()
 
 
 class TestReorderDeckVersion:
@@ -84,8 +93,10 @@ class TestReorderDeckVersion:
         assert deck.version == 1
         assert deck.updated_at == previous_date
         uow.commit.assert_awaited_once()
-        service.cache_service.invalidate_decks.assert_awaited_once_with(deck_ids=[200])
-        service.cache_service.invalidate_deck_cards.assert_awaited_once_with(deck_ids=[200])
+        service.cache_invalidator.invalidate.assert_awaited_once()
+        assert {
+            op for group in service.cache_invalidator.invalidate.await_args.args for op in group
+        } == {DelKey("deck:200:card-ids")}
 
 
 class TestDeckIdentifiers:

@@ -95,6 +95,17 @@ class CardRepository:
         rows = result.scalars().all()
         return rows
 
+    async def get_identities_by_user_id(
+        self,
+        user_id: int,
+    ) -> list[tuple[int, UUID]]:
+        stmt = (
+            select(Card.id, Card.uuid)
+            .where(Card.user_id == user_id)
+            .order_by(Card.id)
+        )
+        return list((await self.session.execute(stmt)).tuples().all())
+
     @traced("cards.repository.get_all_by_user_id")
     async def get_all_by_user_id(
         self,

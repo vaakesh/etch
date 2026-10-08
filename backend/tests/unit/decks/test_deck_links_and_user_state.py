@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 from uuid import UUID
 
 import pytest
@@ -13,6 +13,7 @@ from app.decks.schemas import (
 )
 from app.decks.errors import CannotFavouriteUnsavedDeckError
 from app.decks.service import UserDeckService
+from app.redis.invalidation import CacheInvalidator
 from app.errors import RequestValueError
 from tests.unit.factories import make_deck, make_deck_card, make_user_deck
 
@@ -25,8 +26,8 @@ def favourite_context():
     uow.commit = AsyncMock()
     uow.deck_repo.get_by_uuid = AsyncMock(return_value=make_deck(user_id=7))
     uow.user_deck_repo.get_by_user_id_and_deck_id = AsyncMock()
-    cache = AsyncMock()
-    return UserDeckService(lambda: uow, cache), uow, cache
+    invalidator = create_autospec(CacheInvalidator, instance=True)
+    return UserDeckService(lambda: uow, AsyncMock(), invalidator), uow, invalidator
 
 
 class TestSetFavouriteDeck:
@@ -45,8 +46,7 @@ class TestSetFavouriteDeck:
         assert result.is_favourite is value
         assert result.is_saved is True
         uow.commit.assert_not_awaited()
-        cache.invalidate_user_decks.assert_not_awaited()
-        cache.invalidate_library_deck_pages.assert_not_awaited()
+        cache.invalidate.assert_not_awaited()
 
     @pytest.mark.parametrize("state_exists", [True, False])
     async def test_rejects_unsaved_foreign_deck(self, favourite_context, state_exists):
@@ -62,8 +62,7 @@ class TestSetFavouriteDeck:
             )
 
         uow.commit.assert_not_awaited()
-        cache.invalidate_user_decks.assert_not_awaited()
-        cache.invalidate_library_deck_pages.assert_not_awaited()
+        cache.invalidate.assert_not_awaited()
 
 
 class TestDeckCardIdentifiers:

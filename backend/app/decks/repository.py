@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.decks.query import apply_library_pagination
 from app.decks.schemas import ArchiveCleanupBatch, DeckLoad, LibraryCursor
+from app.decks.utils import make_user_deck_identity
 from app.redis.schemas import UserDeckIdentity
 from app.training_sessions.models import TrainingSession
 
@@ -349,7 +350,10 @@ class DeckRepository:
         return ArchiveCleanupBatch(
             decks=list(decks),
             cards=deleted_cards,
-            user_deck_keys=list(user_deck_keys),
+            user_deck_keys=[
+                make_user_deck_identity(user_id=user_id, deck_id=deck_id)
+                for user_id, deck_id in user_deck_keys
+            ],
         )
 
         
@@ -538,7 +542,7 @@ class DeckRepository:
         self,
         user_id: int,
         public_only: bool = True,
-    ) -> list[Deck]:
+    ) -> Sequence[Deck]:
         stmt = (
             select(Deck)
             .options(
@@ -1094,9 +1098,32 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def get_library_user_ids_by_deck_ids(
+        self,
+        deck_ids: list[int],
+    ) -> list[int]:
+        """Владельцы и сохранившие колоды, включая смену видимости."""
+        if not deck_ids:
+            return []
+        owner_ids = select(Deck.user_id.label("user_id")).where(
+            Deck.id.in_(deck_ids),
+            Deck.user_id.is_not(None),
+        )
+        saved_ids = (
+            select(UserDeck.user_id)
+            .join(Deck, Deck.id == UserDeck.deck_id)
+            .where(
+                Deck.id.in_(deck_ids),
+                Deck.user_id.is_not(None),
+                UserDeck.is_saved.is_(True),
+            )
+        )
+        stmt = owner_ids.union(saved_ids).order_by("user_id")
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get_user_deck_keys_by_deck_ids(
         self, deck_ids: list[int],
-    ) -> list[tuple[int, int]]:
+    ) -> list[UserDeckIdentity]:
         if not deck_ids:
             return []
         stmt = (
@@ -1104,7 +1131,24 @@ class UserDeckRepository:
             .where(UserDeck.deck_id.in_(deck_ids))
             .order_by(UserDeck.deck_id, UserDeck.user_id)
         )
-        return list((await self.session.execute(stmt)).tuples().all())
+        return [
+            make_user_deck_identity(user_id=user_id, deck_id=deck_id)
+            for user_id, deck_id in (await self.session.execute(stmt)).tuples().all()
+        ]
+
+    async def get_user_deck_keys_by_user_id(
+        self,
+        user_id: int,
+    ) -> list[UserDeckIdentity]:
+        stmt = (
+            select(UserDeck.user_id, UserDeck.deck_id)
+            .where(UserDeck.user_id == user_id)
+            .order_by(UserDeck.deck_id)
+        )
+        return [
+            make_user_deck_identity(user_id=user_id, deck_id=deck_id)
+            for user_id, deck_id in (await self.session.execute(stmt)).tuples().all()
+        ]
 
     @traced("decks.user_deck_repository.get_saved_decks_by_user_id")
     async def get_saved_decks_by_user_id(

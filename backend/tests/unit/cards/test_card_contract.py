@@ -11,6 +11,7 @@ from app.cards.service import CardService
 from app.decks.schemas import ReorderCards
 from app.errors import RequestValueError
 from app.redis.service import RedisCacheService
+from app.redis.invalidation import CacheInvalidator
 from tests.unit.factories import make_card
 
 CARD_UUID = UUID("0198ad01-b200-7000-8000-000000000100")
@@ -138,7 +139,10 @@ class TestUpdateCard:
         uow.card_repo.get_by_uuid.return_value = card
         uow.commit = AsyncMock()
         cache = create_autospec(RedisCacheService, instance=True)
-        service = CardService(uow_factory=lambda: uow, cache_service=cache)
+        invalidator = create_autospec(CacheInvalidator, instance=True)
+        service = CardService(
+            uow_factory=lambda: uow, cache_service=cache, cache_invalidator=invalidator,
+        )
 
         result = await service.update_card(CARD_UUID, card.user_id, UpdateCardRequest(**payload))
 
@@ -155,5 +159,4 @@ class TestUpdateCard:
         }
         uow.commit.assert_not_awaited()
         uow.card_repo.refresh.assert_not_awaited()
-        cache.invalidate_cards.assert_not_awaited()
-        cache.invalidate_library_card_pages.assert_not_awaited()
+        invalidator.invalidate.assert_not_awaited()

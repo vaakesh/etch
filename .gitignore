@@ -10,6 +10,7 @@ skills-lock.json
 users.acl
 bob.py
 .codex
+.claude
 .ruff_cache
 .pytest_cache
 .mypy_cache

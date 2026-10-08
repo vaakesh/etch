@@ -64,10 +64,9 @@ async def create_user(
     user_service: UserServiceDeps,
 ):
     new_user = await user_service.create_user(payload)
-    with trace_span("users.router.create_user.build_response"):
-        return PrivateUserResponse.from_user_with_settings(
-            user=new_user,
-        )
+    return PrivateUserResponse.from_user_with_settings(
+        user=new_user,
+    )
 
 # checked
 @router.patch(

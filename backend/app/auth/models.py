@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from app.database import Base
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -103,5 +103,10 @@ class UserSession(Base):
         CheckConstraint(
             "replaced_by_session_id IS NULL OR revoked_at IS NOT NULL",
             name="ck_user_sessions_replacement_requires_revocation",
+        ),
+        Index(
+            "ix_user_sessions_replaced_by_session_id",
+            "replaced_by_session_id",
+            postgresql_where=text("replaced_by_session_id IS NOT NULL"),
         ),
     )

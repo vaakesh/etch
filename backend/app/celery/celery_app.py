@@ -18,8 +18,8 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     beat_schedule={
-        "publish-pending-expired-archive-invalidations": {
-            "task": "maintenance.publish_pending_expired_archive_invalidations",
+        "publish-pending-cache-invalidations": {
+            "task": "maintenance.publish_pending_cache_invalidations",
             "schedule": 30.0,
             "kwargs": {"batch_size": 100},
         },
@@ -29,6 +29,15 @@ celery_app.conf.update(
             "kwargs": {
                 "batch_size": 100,
                 "max_batches": 20,
+            },
+        },
+        "cleanup-stale-user-sessions-hourly": {
+            "task": "maintenance.cleanup_stale_user_sessions",
+            "schedule": crontab(minute=30),
+            "kwargs": {
+                "batch_size": 1000,
+                "max_batches": 20,
+                "retention_days": 7,
             },
         },
     },

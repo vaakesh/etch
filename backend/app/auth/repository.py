@@ -3,7 +3,7 @@ from app.tracing import traced
 
 from app.auth.models import UserSession
 from app.common.query import apply_date_pagination
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -120,3 +120,25 @@ class AuthRepository:
             .values(revoked_at=revoked_at)
         )
         await self.session.execute(stmt)
+
+    @traced("auth.repository.delete_stale_sessions")
+    async def delete_stale_sessions(self, cutoff: datetime, limit: int) -> int:
+        stale_ids = (
+            select(UserSession.id)
+            .where(
+                or_(
+                    UserSession.expires_at < cutoff,
+                    UserSession.revoked_at < cutoff,
+                )
+            )
+            .order_by(UserSession.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        stmt = (
+            delete(UserSession)
+            .where(UserSession.id.in_(stale_ids))
+            .execution_options(synchronize_session=False)
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount

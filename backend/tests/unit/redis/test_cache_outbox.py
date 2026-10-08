@@ -1,77 +1,70 @@
-from unittest.mock import call
+from unittest.mock import call, create_autospec
 
 import pytest
-from pydantic import ValidationError
 from redis.exceptions import ConnectionError
 
-from app.redis.outbox import (
-    ExpiredArchivedDecksCacheInvalidationHandler,
-    ExpiredArchivedDecksCacheInvalidationPayload,
-)
-from app.redis.service import RedisCacheService
-from tests.unit.redis.cases import CARD_UUID, DECK_UUID
+from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import CacheInvalidationHandler
+from tests.unit.redis.cases import CARD_UUID
 
 
-class TestExpiredArchivedDecksCacheInvalidationPayload:
-    def test_serializes_uuid_and_compound_keys_as_json_values(self):
-        payload = ExpiredArchivedDecksCacheInvalidationPayload(
-            deck_ids=[200], deck_uuids=[DECK_UUID],
-            card_ids=[100], card_uuids=[CARD_UUID], user_deck_keys=[(42, 200)],
-        )
-
-        data = payload.model_dump(mode="json")
-
-        assert data == {
-            "deck_ids": [200], "deck_uuids": [str(DECK_UUID)],
-            "card_ids": [100], "card_uuids": [str(CARD_UUID)],
-            "user_deck_keys": [[42, 200]],
-        }
-
-    @pytest.mark.parametrize("payload", [
-        {"deck_ids": [0]}, {"card_ids": [-1]}, {"deck_uuids": ["invalid"]},
-        {"user_deck_keys": [[0, 200]]}, {"unknown_field": []},
-    ])
-    def test_rejects_invalid_payload(self, payload):
-        with pytest.raises(ValidationError):
-            ExpiredArchivedDecksCacheInvalidationPayload.model_validate(payload)
-
-
-class TestExpiredArchivedDecksCacheInvalidationHandler:
-    def test_rejects_cache_that_swallows_delivery_errors(self, cache_service):
+class TestCacheInvalidationHandler:
+    def test_rejects_invalidator_that_swallows_delivery_errors(self, redis_client):
         with pytest.raises(ValueError, match="raise_errors=True"):
-            ExpiredArchivedDecksCacheInvalidationHandler(cache_service)
+            CacheInvalidationHandler(CacheInvalidator(redis_client))
 
-    async def test_deletes_all_cache_keys_from_persisted_payload(self, redis_client):
-        handler = ExpiredArchivedDecksCacheInvalidationHandler(
-            RedisCacheService(redis_client, raise_errors=True),
+    async def test_passes_loaded_scopes_as_separate_arguments_to_invalidator(self):
+        invalidator = create_autospec(CacheInvalidator, instance=True)
+        invalidator.raise_errors = True
+        handler = CacheInvalidationHandler(invalidator)
+
+        await handler({"scopes": [
+            {"name": "cards", "args": [100]},
+            {"name": "library_card_pages", "args": [42]},
+        ]})
+
+        invalidator.invalidate.assert_awaited_once_with(
+            scopes.cards(100), scopes.library_card_pages(42),
         )
 
-        await handler({
-            "deck_ids": [200], "deck_uuids": [str(DECK_UUID)],
-            "card_ids": [100], "card_uuids": [str(CARD_UUID)],
-            "user_deck_keys": [[42, 200]],
-        })
+    async def test_delivers_scopes_from_jsonb_payload(self, redis_client, redis_pipeline):
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
 
-        assert redis_client.delete.await_args_list == [
-            call("deck:200"), call(f"deck:id-by-uuid:{DECK_UUID}"),
-            call("deck:200:card-ids"), call("deck:user-deck:42:200"),
-            call("card:100"), call(f"card:id-by-uuid:{CARD_UUID}"),
+        await handler({"scopes": [
+            {"name": "cards_removed", "args": [{"id": 100, "uuid": str(CARD_UUID)}]},
+            {"name": "user_decks", "args": [[42, 200]]},
+            {"name": "library_card_pages", "args": [42]},
+        ]})
+
+        assert redis_pipeline.method_calls == [
+            call.unlink("card:100", f"card:id-by-uuid:{CARD_UUID}", "deck:user-deck:42:200"),
+            call.incr("library:42:cards:generation"),
+            call.execute(),
         ]
 
-    async def test_replays_complete_event_after_partial_redis_failure(self, redis_client):
-        handler = ExpiredArchivedDecksCacheInvalidationHandler(
-            RedisCacheService(redis_client, raise_errors=True),
-        )
-        redis_client.delete.side_effect = [1, ConnectionError("Redis unavailable")]
-        payload = {"deck_ids": [200], "deck_uuids": [str(DECK_UUID)]}
+    async def test_propagates_redis_failure(self, redis_client, redis_pipeline):
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+        redis_pipeline.execute.side_effect = ConnectionError("Redis unavailable")
 
         with pytest.raises(ConnectionError):
-            await handler(payload)
-        redis_client.delete.side_effect = None
-        await handler(payload)
+            await handler({"scopes": [{"name": "library", "args": [42]}]})
 
-        assert redis_client.delete.await_args_list == [
-            call("deck:200"), call(f"deck:id-by-uuid:{DECK_UUID}"),
-            call("deck:200"), call(f"deck:id-by-uuid:{DECK_UUID}"),
-            call("deck:200:card-ids"),
-        ]
+        redis_pipeline.execute.assert_awaited_once_with()
+
+    async def test_rejects_unknown_scope_before_redis(self, redis_client):
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+
+        with pytest.raises(ValueError, match="Unknown cache scope"):
+            await handler({"scopes": [
+                {"name": "cards", "args": [100]},
+                {"name": "unknown", "args": []},
+            ]})
+
+        redis_client.pipeline.assert_not_called()
+
+    async def test_empty_payload_does_not_contact_redis(self, redis_client):
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+
+        await handler({"scopes": []})
+
+        redis_client.pipeline.assert_not_called()

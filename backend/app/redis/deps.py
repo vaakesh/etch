@@ -7,6 +7,7 @@ from functools import lru_cache
 
 from app.config import get_settings
 from app.tracing import traced
+from app.redis.invalidation import CacheInvalidator
 from app.redis.service import (
     RedisCacheService,
     RedisRateLimiter,
@@ -31,6 +32,11 @@ def get_redis_service(
 ):
     return RedisCacheService(redis=redis)
 
+def get_cache_invalidator(
+    redis: Redis = Depends(get_redis),
+) -> CacheInvalidator:
+    return CacheInvalidator(redis=redis)
+
 def get_redis_rate_limiter(
     redis: Redis = Depends(get_redis),
 ):
@@ -46,4 +52,9 @@ type RedisRateLimiterDeps = Annotated[
 type CacheServiceDeps = Annotated[
     RedisCacheService,
     Depends(get_redis_service),
+]
+
+type CacheInvalidatorDeps = Annotated[
+    CacheInvalidator,
+    Depends(get_cache_invalidator),
 ]

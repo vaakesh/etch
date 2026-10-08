@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Callable
 from uuid import UUID
 from app.tracing import traced
@@ -18,6 +17,7 @@ from app.common.limits import MAX_DECK_SIZE
 from app.common.types import SearchQuery, Username
 from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.redis.service import RedisCacheService
+from app.redis.invalidation import CacheInvalidator, scopes
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from sqlalchemy.exc import IntegrityError
@@ -39,7 +39,12 @@ from .errors import (
     PermissionDeniedError,
 )
 from app.decks.cursor import library_cursor_codec
-from app.decks.archiver import ArchiveExpiredError, DeckArchiveWorkflow
+from app.decks.archiver import (
+    ArchiveChanges,
+    ArchiveExpiredError,
+    DeckArchiveResult,
+    DeckArchiveWorkflow,
+)
 from .models import Deck, DeckArchiveRecipient, DeckCard, UserDeck
 from .schemas import (
     ArchivedDeckResponse,
@@ -61,9 +66,11 @@ class DeckService:
         self, 
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
+        cache_invalidator: CacheInvalidator,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+        self.cache_invalidator = cache_invalidator
 
     # helpers
 
@@ -480,8 +487,8 @@ class DeckService:
                 uow.user_deck_repo.add(user_deck)
                 await uow.commit()
 
-                await self.cache_service.invalidate_library_deck_pages(
-                    user_ids=[user_id],
+                await self.cache_invalidator.invalidate(
+                    scopes.library_deck_pages(user_id),
                 )
 
                 return InternalDeck(
@@ -516,12 +523,11 @@ class DeckService:
         self,
         uow: UnitOfWork,
         deck: Deck,
-    ) -> list[int]:
+    ) -> DeckArchiveResult | None:
         if deck.is_public is False:
-            return []
+            return None
 
-        result = await DeckArchiveWorkflow(uow).make_private(deck.uuid)
-        return list(result.recipient_ids)
+        return await DeckArchiveWorkflow(uow).make_private(deck.uuid)
             
     @traced("decks.service.update_deck")
     async def update_deck(
@@ -531,10 +537,6 @@ class DeckService:
         payload: UpdateDeckRequest,
     ) -> InternalDeck:
         try:
-            affected_user_ids: list[int] = []
-            invalidate_deck = False
-            invalidate_affected_user_caches = False
-
             async with self.uow_factory() as uow:
                 deck = await self._require_owned_deck(
                     uow=uow,
@@ -551,60 +553,42 @@ class DeckService:
                     if getattr(deck, field) != value
                 }
 
+                visibility_changed = is_public is not None and is_public != deck.is_public
+                changed = bool(update_data) or visibility_changed
+                deck_id = deck.id
+                affected_user_ids = (
+                    set(await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id]))
+                    if changed else set()
+                )
+                changes = ArchiveChanges()
+
                 if update_data:
                     for field, value in update_data.items():
                         setattr(deck, field, value)
                     deck.mark_content_changed()
-                    invalidate_deck = True
 
                 if is_public is True:
-                    changed = await self._make_deck_public(
+                    await self._make_deck_public(
                         deck=deck,
                     )
-                    if changed:
-                        invalidate_deck = True
 
                 elif is_public is False:
-                    invalidate_deck = invalidate_deck or deck.is_public
-                    affected_user_ids = await self._make_deck_private(
+                    archived = await self._make_deck_private(
                         uow=uow,
                         deck=deck,
                     )
-                    if affected_user_ids:
-                        invalidate_affected_user_caches = True
+                    if archived is not None:
+                        changes = archived.changes
+                affected_user_ids.add(user_id)
 
                 await uow.commit()
 
-                tasks = []
-                if invalidate_deck:
-                    tasks.append(
-                        self.cache_service.invalidate_decks(
-                            deck_ids=[deck.id],
-                        )
+                if changed:
+                    await self.cache_invalidator.invalidate(
+                        scopes.decks(*sorted({deck_id} | changes.deck_ids)),
+                        scopes.user_decks(*sorted(changes.user_deck_keys)),
+                        scopes.library_deck_pages(*sorted(affected_user_ids)),
                     )
-
-                if invalidate_affected_user_caches:
-                    tasks.extend(
-                        [
-                            self.cache_service.invalidate_user_decks(
-                                identities=[
-                                    make_user_deck_identity(
-                                        user_id=affected_user_id,
-                                        deck_id=deck.id,
-                                    ) for affected_user_id in affected_user_ids
-                                ]
-                            ),
-                            self.cache_service.invalidate_library_deck_pages(
-                                user_ids=affected_user_ids,
-                            ),
-                            self.cache_service.invalidate_library_card_pages(
-                                user_ids=affected_user_ids,
-                            )
-                        ]
-                    )
-
-                if tasks:
-                    await asyncio.gather(*tasks)
 
                 return InternalDeck.from_entity(
                     deck=deck,
@@ -627,39 +611,24 @@ class DeckService:
                 for_update=True,
             )
 
-            result = await DeckArchiveWorkflow(uow).delete_deck(deck.uuid)
-            affected_user_ids = set(result.recipient_ids)
+            deck_id, removed_uuid = deck.id, deck.uuid
+            existing_keys = set(
+                await uow.user_deck_repo.get_user_deck_keys_by_deck_ids([deck_id])
+            )
+            affected_user_ids = {user_id} | set(
+                await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
+            )
+            result = await DeckArchiveWorkflow(uow).delete_deck(removed_uuid)
+            changes = result.changes
             await uow.commit()
 
-            affected_user_ids.add(user_id)
-            tasks = []
-
-            tasks.extend([
-                self.cache_service.invalidate_decks(
-                    deck_ids=[deck.id],
-                ),
-                self.cache_service.invalidate_library_deck_pages(
-                    user_ids=affected_user_ids,
-                ),
-                self.cache_service.invalidate_library_card_pages(
-                    user_ids=affected_user_ids,
-                ),
-                self.cache_service.invalidate_deck_cards(
-                    deck_ids=[deck.id],
-                ),
-                self.cache_service.invalidate_deck_ids_by_uuids(
-                    deck_uuids=[deck.uuid],
-                ),
-                self.cache_service.invalidate_user_decks(
-                    identities=[
-                        make_user_deck_identity(
-                            user_id=user_id,
-                            deck_id=deck.id,
-                        ) for user_id in affected_user_ids
-                    ]
-                ),
-            ])
-            await asyncio.gather(*tasks)
+            await self.cache_invalidator.invalidate(
+                scopes.deck_with_cards(deck_id),
+                scopes.decks(*sorted(changes.deck_ids - {deck_id})),
+                scopes.deck_ids_by_uuids(removed_uuid),
+                scopes.user_decks(*sorted(existing_keys | changes.user_deck_keys)),
+                scopes.library_deck_pages(*sorted(affected_user_ids)),
+            )
             return None
 
     @traced("decks.service.preserve_archived_deck")
@@ -674,25 +643,11 @@ class DeckService:
 
         if not result.already_preserved:
             changes = result.changes
-            await asyncio.gather(
-                self.cache_service.invalidate_decks(
-                    deck_ids=list(changes.deck_ids),
-                ),
-                self.cache_service.invalidate_deck_cards(
-                    deck_ids=list(changes.deck_ids),
-                ),
-                self.cache_service.invalidate_cards(
-                    card_ids=list(changes.card_ids),
-                ),
-                self.cache_service.invalidate_library_deck_pages(
-                    user_ids=[user_id],
-                ),
-                self.cache_service.invalidate_library_card_pages(
-                    user_ids=[user_id],
-                ),
-                self.cache_service.invalidate_user_decks(
-                    identities=list(changes.user_deck_keys),
-                ),
+            await self.cache_invalidator.invalidate(
+                scopes.decks(*sorted(changes.deck_ids)),
+                scopes.user_decks(*sorted(changes.user_deck_keys)),
+                scopes.library_deck_pages(user_id),
+                scopes.library_card_pages(user_id),
             )
         return result
 
@@ -771,14 +726,15 @@ class DeckService:
 
                 uow.deck_card_repo.add(deck_card)
 
+                deck_id = deck.id
+                affected_user_ids = {user_id} | set(
+                    await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
+                )
                 await uow.commit()
 
-                await self.cache_service.invalidate_decks(
-                    deck_ids=[deck.id],
-                )
-
-                await self.cache_service.invalidate_deck_cards(
-                    deck_ids=[deck.id],
+                await self.cache_invalidator.invalidate(
+                    scopes.deck_with_cards(deck_id),
+                    scopes.library_deck_pages(*sorted(affected_user_ids)),
                 )
 
                 return InternalDeckCard.model_validate(obj=deck_card)
@@ -840,14 +796,16 @@ class DeckService:
             deck.words_count += len(card_entities)
             deck.mark_content_changed()
 
+            deck_id = deck.id
+            affected_user_ids = {user_id} | set(
+                await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
+            )
             await uow.commit()
 
-            await self.cache_service.invalidate_decks(
-                deck_ids=[deck.id],
-            )
-
-            await self.cache_service.invalidate_deck_cards(
-                deck_ids=[deck.id],
+            await self.cache_invalidator.invalidate(
+                scopes.deck_with_cards(deck_id),
+                scopes.library_deck_pages(*sorted(affected_user_ids)),
+                scopes.library_card_pages(user_id) if card_entities else (),
             )
 
             return LoadCardsResponse(
@@ -907,15 +865,13 @@ class DeckService:
                 add_to_position=add_to_position,
             )
             deck_card.position = to_position
+            deck_id = deck.id
             await uow.commit()
 
-            await self.cache_service.invalidate_decks(
-                deck_ids=[deck.id],
-            )
-
-            await self.cache_service.invalidate_deck_cards(
-                deck_ids=[deck.id],
-            )
+            if from_position != to_position:
+                await self.cache_invalidator.invalidate(
+                    scopes.deck_cards(deck_id),
+                )
 
     @traced("decks.service.remove_card_from_deck")
     async def remove_card_from_deck(
@@ -961,14 +917,15 @@ class DeckService:
                 deck_id=deck.id,
                 deleted_position=deck_card.position,
             )
+            deck_id = deck.id
+            affected_user_ids = {user_id} | set(
+                await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
+            )
             await uow.commit()
 
-            await self.cache_service.invalidate_decks(
-                deck_ids=[deck.id],
-            )
-
-            await self.cache_service.invalidate_deck_cards(
-                deck_ids=[deck.id],
+            await self.cache_invalidator.invalidate(
+                scopes.deck_with_cards(deck_id),
+                scopes.library_deck_pages(*sorted(affected_user_ids)),
             )
 
             return None
@@ -979,9 +936,11 @@ class UserDeckService:
         self, 
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
+        cache_invalidator: CacheInvalidator,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+        self.cache_invalidator = cache_invalidator
 
     # read
     # todo: отдавать (fetched, missing)
@@ -1100,23 +1059,21 @@ class UserDeckService:
                     is_saved=False,
                 )
                 uow.user_deck_repo.add(user_deck)
-            if user_deck.is_saved is False:
+            changed = user_deck.is_saved is False
+            if changed:
                 user_deck.is_saved = True
                 deck.saves_count += 1
 
+            identity = make_user_deck_identity(
+                user_id=user_deck.user_id, deck_id=user_deck.deck_id,
+            )
             await uow.commit()
 
-            await self.cache_service.invalidate_user_decks(
-                identities=[(user_deck.user_id, user_deck.deck_id)],
-            )
-
-            await self.cache_service.invalidate_library_deck_pages(
-                user_ids=[user_id],
-            )
-
-            await self.cache_service.invalidate_library_card_pages(
-                user_ids=[user_id],
-            )
+            if changed:
+                await self.cache_invalidator.invalidate(
+                    scopes.user_decks(identity),
+                    scopes.library_deck_pages(user_id),
+                )
 
             return InternalUserDeck.model_validate(user_deck)
 
@@ -1153,14 +1110,14 @@ class UserDeckService:
 
             user_deck.is_favourite = value
 
+            identity = make_user_deck_identity(
+                user_id=user_deck.user_id, deck_id=user_deck.deck_id,
+            )
             await uow.commit()
 
-            await self.cache_service.invalidate_user_decks(
-                identities=[(user_deck.user_id, user_deck.deck_id)],
-            )
-
-            await self.cache_service.invalidate_library_deck_pages(
-                user_ids=[user_id],
+            await self.cache_invalidator.invalidate(
+                scopes.user_decks(identity),
+                scopes.library_deck_pages(user_id),
             )
 
             return InternalUserDeck.model_validate(user_deck)
@@ -1192,23 +1149,21 @@ class UserDeckService:
             )
             if user_deck is None:
                 raise DeckIsNotSavedError()
-            if user_deck.is_saved is True:
+            changed = user_deck.is_saved is True
+            if changed:
                 user_deck.is_saved = False
                 user_deck.is_favourite = False
                 deck.saves_count -= 1
 
+            identity = make_user_deck_identity(
+                user_id=user_deck.user_id, deck_id=user_deck.deck_id,
+            )
             await uow.commit()
 
-            await asyncio.gather(
-                self.cache_service.invalidate_user_decks(
-                    identities=[(user_deck.user_id, user_deck.deck_id)],
-                ),
-                self.cache_service.invalidate_library_deck_pages(
-                    user_ids=[user_id],
-                ),
-                self.cache_service.invalidate_library_card_pages(
-                    user_ids=[user_id],
-                ),
-            )
+            if changed:
+                await self.cache_invalidator.invalidate(
+                    scopes.user_decks(identity),
+                    scopes.library_deck_pages(user_id),
+                )
 
             return InternalUserDeck.model_validate(user_deck)

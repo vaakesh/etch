@@ -12,6 +12,7 @@ from app.auth.schemas import ClientInfo
 from app.auth.service import AuthService, AuthTokensService
 from app.config import get_auth_tokens_config
 from app.deps import UoWFactory, get_uow_factory
+from app.redis.deps import CacheInvalidatorDeps
 from app.users.deps import UserServiceDeps, get_user_service
 from app.users.models import User
 from app.users.service import UserService
@@ -25,12 +26,14 @@ def get_auth_tokens_service() -> AuthTokensService:
     return AuthTokensService(get_auth_tokens_config())
 
 def get_auth_service(
+        cache_invalidator: CacheInvalidatorDeps,
         auth_tokens_service: AuthTokensService = Depends(get_auth_tokens_service),
         uow_factory: UoWFactory = Depends(get_uow_factory)
 ) -> AuthService:
     return AuthService(
-        uow_factory=uow_factory, 
-        auth_tokens_service=auth_tokens_service
+        uow_factory=uow_factory,
+        auth_tokens_service=auth_tokens_service,
+        cache_invalidator=cache_invalidator,
     )
 
 # auto_error = False, чтобы не выкидывалась ошибка, если bearer токен не найден

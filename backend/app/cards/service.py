@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Callable
 from app.tracing import traced
 from uuid import UUID
@@ -13,6 +12,7 @@ from app.cards.schemas import CreateCardRequest, InternalCard, UpdateCardRequest
 from app.common.types import SearchQuery
 from app.common.utils import decode_cursor, encode_cursor
 from app.redis.service import RedisCacheService
+from app.redis.invalidation import CacheInvalidator, scopes
 from app.service import UnitOfWork
 from sqlalchemy.exc import IntegrityError
 
@@ -22,9 +22,11 @@ class CardService:
         self, 
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
+        cache_invalidator: CacheInvalidator,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+        self.cache_invalidator = cache_invalidator
 
     # helpers
     async def _get_by_uuid(
@@ -145,8 +147,8 @@ class CardService:
 
                 await uow.commit()
 
-                await self.cache_service.invalidate_library_card_pages(
-                    user_ids=[user_id],
+                await self.cache_invalidator.invalidate(
+                    scopes.library_card_pages(user_id),
                 )
 
                 return InternalCard.model_validate(card)
@@ -183,17 +185,14 @@ class CardService:
                 for field, value in update_data.items():
                     setattr(card, field, value)
 
+                card_id = card.id
                 await uow.commit()
-                await uow.card_repo.refresh(card)
 
-                await asyncio.gather(
-                    self.cache_service.invalidate_cards(
-                        card_ids=[card.id],
-                    ),
-                    self.cache_service.invalidate_library_card_pages(
-                        user_ids=[user_id],
-                    )
+                await self.cache_invalidator.invalidate(
+                    scopes.cards(card_id),
+                    scopes.library_card_pages(user_id),
                 )
+                await uow.card_repo.refresh(card)
 
                 return InternalCard.model_validate(card)
 
@@ -212,6 +211,10 @@ class CardService:
                 user_id=user_id,
             )
 
+            card_id, removed_uuid = card.id, card.uuid
+            affected_user_ids = await uow.user_deck_repo.get_library_user_ids_by_deck_ids(
+                deck_ids=deck_ids,
+            )
             await uow.card_repo.delete(card)
             await uow.flush()
             await uow.deck_card_repo.normalize_positions(
@@ -222,24 +225,12 @@ class CardService:
             )
             await uow.commit()
 
-            await self.cache_service.invalidate_cards(
-                card_ids=[card.id],
-            )
-
-            await self.cache_service.invalidate_card_ids_by_uuids(
-                card_uuids=[card.uuid],
-            )
-
-            await self.cache_service.invalidate_library_card_pages(
-                user_ids=[user_id],
-            )
-
-            await self.cache_service.invalidate_deck_cards(
-                deck_ids=deck_ids,
-            )
-
-            await self.cache_service.invalidate_decks(
-                deck_ids=deck_ids,
+            await self.cache_invalidator.invalidate(
+                scopes.cards(card_id),
+                scopes.card_ids_by_uuids(removed_uuid),
+                scopes.library_card_pages(user_id),
+                scopes.deck_with_cards(*deck_ids),
+                scopes.library_deck_pages(*affected_user_ids),
             )
 
             return None

@@ -20,6 +20,7 @@ from app.users.schemas import CreateUserRequest, InternalUser, InternalUserSetti
 from sqlalchemy.exc import IntegrityError
 
 from app.redis.service import RedisCacheService
+from app.redis.invalidation import CacheInvalidator, scopes
 from app.common.types import Username
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,11 @@ class UserService:
         self, 
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
+        cache_invalidator: CacheInvalidator,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
+        self.cache_invalidator = cache_invalidator
 
     # helpers
     async def _get_by_uuid(
@@ -187,11 +190,10 @@ class UserService:
                 )
                 uow.user_settings_repo.add(user_settings)
                 await uow.flush()
-                with trace_span("users.service.create_user.build_result"):
-                    result = InternalUserWithSettings.from_parts(
-                        user=InternalUser.model_validate(obj=user),
-                        settings=InternalUserSettings.model_validate(obj=user_settings),
-                    )
+                result = InternalUserWithSettings.from_parts(
+                    user=InternalUser.model_validate(obj=user),
+                    settings=InternalUserSettings.model_validate(obj=user_settings),
+                )
                 await uow.commit()
                 return result
         except IntegrityError as e:
@@ -229,10 +231,20 @@ class UserService:
                     obj=user,
                 )
 
+                # Cached decks embed owner_username, including decks saved by others.
+                affected_deck_ids = []
+                if "username" in update_data:
+                    affected_decks = await uow.deck_repo.get_all_by_user_id(
+                        user_id=current_user_id,
+                        public_only=False,
+                    )
+                    affected_deck_ids = [deck.id for deck in affected_decks]
+
                 await uow.commit()
 
-                await self.cache_service.invalidate_users(
-                    user_ids=[internal_user_with_settings.id],
+                await self.cache_invalidator.invalidate(
+                    scopes.users(internal_user_with_settings.id),
+                    scopes.decks(*affected_deck_ids),
                 )
 
                 return internal_user_with_settings
@@ -272,11 +284,16 @@ class UserService:
 
             await uow.commit()
 
-            await self.cache_service.invalidate_users_settings(
-                user_ids=[user_settings.user_id],
+            await self.cache_invalidator.invalidate(
+                scopes.users_settings(internal_user_settings.user_id),
             )
             
             return internal_user_settings
+
+    async def _archive_decks_after_user_deletion(
+        self,
+    ):
+        ...
 
     @traced("users.service.delete_user")
     async def delete_user(
@@ -294,61 +311,60 @@ class UserService:
             if user.id != current_user_id:
                 raise PermissionDeniedError()
 
-            user_uuid = user.uuid
             user_id = user.id
+            removed_user_ops = tuple(scopes.users_removed(user))
 
-            affected_decks = await uow.deck_repo.get_all_by_user_id(
+            owned_decks = await uow.deck_repo.get_all_by_user_id(
                 user_id=user_id,
                 public_only=False,
             )
+            owned_deck_ids = {deck.id for deck in owned_decks}
+            owned_deck_uuids = [deck.uuid for deck in owned_decks]
+            owned_card_identities = await uow.card_repo.get_identities_by_user_id(
+                user_id=user_id,
+            )
+            owned_card_ids = [card_id for card_id, _ in owned_card_identities]
+            owned_card_uuids = [card_uuid for _, card_uuid in owned_card_identities]
+            linked_deck_ids = await uow.deck_card_repo.get_all_deck_ids_by_card_ids(
+                card_ids=owned_card_ids,
+            )
+            affected_deck_ids = owned_deck_ids | set(linked_deck_ids)
 
             existing_user_deck_keys = set(
                 await uow.user_deck_repo.get_user_deck_keys_by_deck_ids(
-                    deck_ids=[deck.id for deck in affected_decks]
+                    deck_ids=sorted(affected_deck_ids),
                 )
+            )
+            removed_user_deck_keys = set(
+                await uow.user_deck_repo.get_user_deck_keys_by_user_id(
+                    user_id=user_id,
+                )
+            )
+            affected_user_ids = sorted(
+                set(await uow.user_deck_repo.get_library_user_ids_by_deck_ids(
+                    deck_ids=sorted(affected_deck_ids),
+                )) - {user_id}
             )
 
             archived = await DeckArchiveWorkflow(uow).archive_owner_public_decks(
                 owner_id=user_id,
             )
-            affected_user_ids = sorted(
-                {user_id for user_id, _ in existing_user_deck_keys}
-                | set(archived.recipient_ids)
-                | {user_id}
-            )
 
             await uow.user_repo.delete(user)
             await uow.commit()
 
-            # invalidation
-            await self.cache_service.invalidate_user_decks(
-                identities=list(
-                    existing_user_deck_keys | archived.changes.user_deck_keys
-                ),
-            )
-            await self.cache_service.invalidate_user_ids_by_uuids(
-                user_uuids=[user_uuid],
-            )
-            await self.cache_service.invalidate_users(
-                user_ids=[user_id],
-            )
-            await self.cache_service.invalidate_users_settings(
-                user_ids=[user_id],
-            )
-            await self.cache_service.invalidate_library_deck_pages(
-                user_ids=affected_user_ids,
-            )
-            await self.cache_service.invalidate_library_card_pages(
-                user_ids=affected_user_ids,
-            )
-            await self.cache_service.invalidate_decks(
-                deck_ids=list(
-                    {deck.id for deck in affected_decks} | archived.changes.deck_ids
-                ),
-            )
-            await self.cache_service.invalidate_deck_cards(
-                deck_ids=[deck.id for deck in affected_decks],
-            )
-            await self.cache_service.invalidate_cards(
-                card_ids=list(archived.changes.card_ids),
+            await self.cache_invalidator.invalidate(
+                removed_user_ops,
+                scopes.user_decks(*sorted(
+                    existing_user_deck_keys
+                    | removed_user_deck_keys
+                    | archived.changes.user_deck_keys
+                )),
+                scopes.library_deck_pages(*affected_user_ids),
+                scopes.deck_with_cards(*sorted(
+                    affected_deck_ids | archived.changes.deck_ids
+                )),
+                scopes.deck_ids_by_uuids(*owned_deck_uuids),
+                scopes.cards(*owned_card_ids),
+                scopes.card_ids_by_uuids(*owned_card_uuids),
             )

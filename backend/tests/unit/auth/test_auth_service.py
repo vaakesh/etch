@@ -10,6 +10,7 @@ from app.auth.repository import AuthRepository
 from app.auth.schemas import AccessTokenResponse, ClientInfo, IssuedTokens, TokenPair
 from app.auth.service import AuthService, AuthTokensService
 from app.errors import RequestValueError
+from app.redis.invalidation import CacheInvalidator, DelKey
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.repository import UserRepository
@@ -51,9 +52,12 @@ def auth_context(monkeypatch):
     monkeypatch.setattr("app.auth.service.hash_password_async", hash_password)
     monkeypatch.setattr("app.auth.service.utcnow", lambda: NOW)
     factory = Mock(return_value=uow)
-    service = AuthService(uow_factory=factory, auth_tokens_service=tokens)
+    invalidator = create_autospec(CacheInvalidator, instance=True)
+    service = AuthService(
+        uow_factory=factory, auth_tokens_service=tokens, cache_invalidator=invalidator,
+    )
     return SimpleNamespace(
-        service=service, uow=uow, factory=factory, tokens=tokens,
+        service=service, uow=uow, factory=factory, tokens=tokens, invalidator=invalidator,
         user=user, session=session, verify=verify, hash_password=hash_password,
     )
 
@@ -334,6 +338,29 @@ class TestChangePassword:
             user_id=42, revoked_at=NOW,
         )
         ctx.uow.commit.assert_awaited_once_with()
+
+    async def test_invalidates_cached_user_after_commit(self, auth_context):
+        ctx = auth_context
+
+        async def commit():
+            ctx.invalidator.invalidate.assert_not_awaited()
+
+        ctx.uow.commit.side_effect = commit
+
+        await ctx.service.change_password(42, "old-password", "new-password")
+
+        ctx.invalidator.invalidate.assert_awaited_once()
+        ops = {op for group in ctx.invalidator.invalidate.await_args.args for op in group}
+        assert ops == {DelKey("user:42")}
+
+    async def test_does_not_invalidate_when_commit_fails(self, auth_context):
+        ctx = auth_context
+        ctx.uow.commit.side_effect = RuntimeError("commit failed")
+
+        with pytest.raises(RuntimeError, match="commit failed"):
+            await ctx.service.change_password(42, "old-password", "new-password")
+
+        ctx.invalidator.invalidate.assert_not_awaited()
 
     @pytest.mark.parametrize("scenario", ["user-missing", "wrong-password"])
     async def test_rejects_credentials_without_changing_hash_or_revoking_sessions(

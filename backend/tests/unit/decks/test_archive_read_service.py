@@ -45,7 +45,11 @@ def archive_read_context(monkeypatch):
         return_value=(deck, recipient),
     )
     uow.deck_card_repo.get_cards_by_deck_id = AsyncMock(return_value=[])
-    service = DeckService(uow_factory=lambda: uow, cache_service=MagicMock())
+    service = DeckService(
+        uow_factory=lambda: uow,
+        cache_service=MagicMock(),
+        cache_invalidator=AsyncMock(),
+    )
     return service, uow, deck, recipient
 
 

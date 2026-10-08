@@ -13,6 +13,7 @@ from app.cards.models import Card
 from app.common.utils import utcnow
 from app.decks.errors import DeckNotFoundError, PermissionDeniedError
 from app.decks.models import Deck, DeckArchiveRecipient, DeckCard, UserDeck
+from app.decks.utils import make_user_deck_identity
 from app.service import UnitOfWork
 from app.tracing import traced
 from app.training_sessions.models import TrainingSession, TrainingSessionStatus
@@ -374,7 +375,7 @@ class DeckTransferUserProgress:
             deck_uuids={source.uuid, target.uuid},
             user_ids=affected_user_ids,
             user_deck_keys={
-                (user_id, deck_id)
+                make_user_deck_identity(user_id=user_id, deck_id=deck_id)
                 for user_id in affected_user_ids
                 for deck_id in (source.id, target.id)
             },

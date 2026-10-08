@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 
 from app.decks.repository import DeckRepository
-from app.redis.service import RedisCacheService
+from app.redis.invalidation import CacheInvalidator
 from app.training_sessions.errors import (
     TrainingSessionAlreadyFinishedError,
     TrainingSessionDeckArchivedError,
@@ -55,8 +55,10 @@ def context(monkeypatch):
     uow.training_session_repo.get_by_uuid.return_value = session
     uow.training_session_item_repo.get_next_cards.return_value = [item]
     uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.return_value = item
-    cache = create_autospec(RedisCacheService, instance=True)
-    service = TrainingSessionService(uow_factory=lambda: uow, cache_service=cache)
+    invalidator = create_autospec(CacheInvalidator, instance=True)
+    service = TrainingSessionService(
+        uow_factory=lambda: uow, cache_invalidator=invalidator,
+    )
     return SimpleNamespace(
         service=service, uow=uow, session=session, item=item, deck=deck,
     )

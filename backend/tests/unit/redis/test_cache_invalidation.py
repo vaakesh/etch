@@ -1,185 +1,193 @@
-from unittest.mock import call, create_autospec
+from unittest.mock import call
 
 import pytest
 from redis.exceptions import ConnectionError
 
-from app.decks.repository import DeckCardRepository, UserDeckRepository
-from app.redis.service import CacheInvalidator, RedisCacheService
+from app.decks.utils import make_user_deck_identity
+from app.redis.invalidation import CacheInvalidator, DelKey, scopes
 from tests.unit.redis.cases import CARD_UUID, DECK_UUID, USER_UUID
 
 
-@pytest.mark.parametrize(("method", "argument", "identity", "key"), [
-    ("invalidate_users", "user_ids", 42, "user:42"),
-    ("invalidate_users_settings", "user_ids", 42, "user:42:settings"),
-    ("invalidate_cards", "card_ids", 100, "card:100"),
-    ("invalidate_decks", "deck_ids", 200, "deck:200"),
-    ("invalidate_deck_cards", "deck_ids", 200, "deck:200:card-ids"),
-    ("invalidate_user_decks", "identities", (42, 200), "deck:user-deck:42:200"),
-    ("invalidate_user_ids_by_uuids", "user_uuids", USER_UUID, f"user:id-by-uuid:{USER_UUID}"),
-    ("invalidate_card_ids_by_uuids", "card_uuids", CARD_UUID, f"card:id-by-uuid:{CARD_UUID}"),
-    ("invalidate_deck_ids_by_uuids", "deck_uuids", DECK_UUID, f"deck:id-by-uuid:{DECK_UUID}"),
+@pytest.mark.parametrize(("scope_fn", "identity", "key"), [
+    (scopes.users, 42, "user:42"),
+    (scopes.users_settings, 42, "user:42:settings"),
+    (scopes.cards, 100, "card:100"),
+    (scopes.decks, 200, "deck:200"),
+    (scopes.deck_cards, 200, "deck:200:card-ids"),
+    (scopes.user_decks, make_user_deck_identity(42, 200), "deck:user-deck:42:200"),
+    (scopes.user_ids_by_uuids, USER_UUID, f"user:id-by-uuid:{USER_UUID}"),
+    (scopes.card_ids_by_uuids, CARD_UUID, f"card:id-by-uuid:{CARD_UUID}"),
+    (scopes.deck_ids_by_uuids, DECK_UUID, f"deck:id-by-uuid:{DECK_UUID}"),
 ])
 class TestInvalidateEntries:
-    async def test_deletes_requested_cache_key(
-        self, cache_service, redis_client, method, argument, identity, key,
+    async def test_unlinks_requested_cache_key(
+        self, redis_client, redis_pipeline, scope_fn, identity, key,
     ):
-        await getattr(cache_service, method)(**{argument: [identity]})
+        invalidator = CacheInvalidator(redis_client)
 
-        redis_client.delete.assert_awaited_once_with(key)
+        await invalidator.invalidate(scope_fn(identity))
 
-    async def test_does_not_contact_redis_for_empty_input(
-        self, cache_service, redis_client, method, argument, identity, key,
+        redis_client.pipeline.assert_called_once_with(transaction=False)
+        redis_pipeline.unlink.assert_called_once_with(key)
+        redis_pipeline.execute.assert_awaited_once_with()
+
+    async def test_does_not_contact_redis_for_empty_scope(
+        self, redis_client, scope_fn, identity, key,
     ):
-        await getattr(cache_service, method)(**{argument: []})
+        invalidator = CacheInvalidator(redis_client)
 
-        assert redis_client.mock_calls == []
+        await invalidator.invalidate(scope_fn())
 
-    async def test_does_not_fail_when_redis_delete_fails(
-        self, cache_service, redis_client, method, argument, identity, key,
+        redis_client.pipeline.assert_not_called()
+
+    async def test_does_not_fail_when_redis_invalidation_fails(
+        self, redis_client, redis_pipeline, scope_fn, identity, key,
     ):
-        redis_client.delete.side_effect = ConnectionError("Redis unavailable")
+        invalidator = CacheInvalidator(redis_client)
+        redis_pipeline.execute.side_effect = ConnectionError("Redis unavailable")
 
-        result = await getattr(cache_service, method)(**{argument: [identity]})
+        result = await invalidator.invalidate(scope_fn(identity))
 
         assert result is None
-        redis_client.delete.assert_awaited_once_with(key)
+        redis_pipeline.unlink.assert_called_once_with(key)
+        redis_pipeline.execute.assert_awaited_once_with()
 
     async def test_propagates_original_redis_error_in_strict_mode(
-        self, redis_client, method, argument, identity, key,
+        self, redis_client, redis_pipeline, scope_fn, identity, key,
     ):
-        cache = RedisCacheService(redis=redis_client, raise_errors=True)
+        invalidator = CacheInvalidator(redis_client, raise_errors=True)
         failure = ConnectionError("Redis unavailable")
-        redis_client.delete.side_effect = failure
+        redis_pipeline.execute.side_effect = failure
 
         with pytest.raises(ConnectionError) as error:
-            await getattr(cache, method)(**{argument: [identity]})
+            await invalidator.invalidate(scope_fn(identity))
 
         assert error.value is failure
 
 
-@pytest.mark.parametrize(("method", "kind"), [
-    ("invalidate_library_card_pages", "cards"),
-    ("invalidate_library_deck_pages", "decks"),
+@pytest.mark.parametrize(("scope_fn", "kind"), [
+    (scopes.library_card_pages, "cards"),
+    (scopes.library_deck_pages, "decks"),
 ])
 class TestInvalidateLibraryPages:
-    async def test_advances_each_users_generation_with_expiration(
-        self, cache_service, redis_client, redis_pipeline, method, kind,
+    async def test_advances_each_users_generation_without_expiration(
+        self, redis_client, redis_pipeline, scope_fn, kind,
     ):
-        await getattr(cache_service, method)(user_ids=[42, 43])
+        invalidator = CacheInvalidator(redis_client)
+
+        await invalidator.invalidate(scope_fn(42, 43))
 
         redis_client.pipeline.assert_called_once_with(transaction=False)
         assert redis_pipeline.method_calls == [
             call.incr(f"library:42:{kind}:generation"),
-            call.expire(f"library:42:{kind}:generation", 900),
             call.incr(f"library:43:{kind}:generation"),
-            call.expire(f"library:43:{kind}:generation", 900),
             call.execute(),
         ]
         redis_pipeline.execute.assert_awaited_once_with()
-        redis_client.delete.assert_not_awaited()
+        redis_pipeline.unlink.assert_not_called()
+        # Истёкший счётчик начался бы заново и совпал с ещё живой страницей.
+        redis_pipeline.expire.assert_not_called()
 
-    async def test_does_not_contact_redis_for_empty_input(
-        self, cache_service, redis_client, method, kind,
+    async def test_does_not_contact_redis_for_empty_scope(
+        self, redis_client, scope_fn, kind,
     ):
-        await getattr(cache_service, method)(user_ids=[])
+        invalidator = CacheInvalidator(redis_client)
 
-        assert redis_client.mock_calls == []
+        await invalidator.invalidate(scope_fn())
+
+        redis_client.pipeline.assert_not_called()
 
     @pytest.mark.parametrize("failure_stage", ["pipeline", "incr", "expire", "execute"])
     async def test_does_not_fail_when_generation_invalidation_fails(
-        self, cache_service, redis_client, redis_pipeline, method, kind, failure_stage,
+        self, redis_client, redis_pipeline, scope_fn, kind, failure_stage,
     ):
+        invalidator = CacheInvalidator(redis_client)
         target = redis_client.pipeline if failure_stage == "pipeline" else getattr(
             redis_pipeline, failure_stage,
         )
         target.side_effect = ConnectionError("Redis unavailable")
 
-        result = await getattr(cache_service, method)(user_ids=[42])
+        result = await invalidator.invalidate(scope_fn(42))
 
         assert result is None
 
     async def test_propagates_generation_invalidation_error_in_strict_mode(
-        self, redis_client, redis_pipeline, method, kind,
+        self, redis_client, redis_pipeline, scope_fn, kind,
     ):
-        cache = RedisCacheService(redis=redis_client, raise_errors=True)
+        invalidator = CacheInvalidator(redis_client, raise_errors=True)
         failure = ConnectionError("Redis unavailable")
         redis_pipeline.execute.side_effect = failure
 
         with pytest.raises(ConnectionError) as error:
-            await getattr(cache, method)(user_ids=[42])
+            await invalidator.invalidate(scope_fn(42))
 
         assert error.value is failure
 
 
-@pytest.fixture
-def invalidator_context():
-    cache = create_autospec(RedisCacheService, instance=True)
-    deck_cards = create_autospec(DeckCardRepository, instance=True)
-    user_decks = create_autospec(UserDeckRepository, instance=True)
-    deck_cards.get_all_deck_ids_by_card_ids.return_value = []
-    user_decks.get_user_ids_by_deck_ids.return_value = []
-    return CacheInvalidator(cache, deck_cards, user_decks), cache, deck_cards, user_decks
-
-
 class TestCacheInvalidatorInvalidate:
-    async def test_invalidates_cards_related_decks_and_all_affected_users(
-        self, invalidator_context,
+    async def test_executes_explicit_scopes_and_deduplicates_overlapping_operations(
+        self, redis_client, redis_pipeline,
     ):
-        invalidator, cache, deck_cards, user_decks = invalidator_context
-        deck_cards.get_all_deck_ids_by_card_ids.return_value = [200, 201]
-        user_decks.get_user_ids_by_deck_ids.return_value = [42, 43]
+        invalidator = CacheInvalidator(redis_client)
 
         await invalidator.invalidate(
-            affected_cards=[100, 100], affected_decks=[200], affected_users=[42],
+            scopes.cards(100, 100),
+            scopes.deck_with_cards(200, 201),
+            scopes.decks(200),
+            scopes.library(42, 43),
+            scopes.library_deck_pages(42),
+            scopes.user_decks(
+                make_user_deck_identity(42, 200),
+                make_user_deck_identity(43, 201),
+            ),
         )
 
-        deck_cards.get_all_deck_ids_by_card_ids.assert_awaited_once_with(card_ids={100})
-        user_decks.get_user_ids_by_deck_ids.assert_awaited_once_with(deck_ids={200, 201})
-        cache.invalidate_cards.assert_awaited_once_with(card_ids=[100])
-        assert set(cache.invalidate_decks.await_args.kwargs["deck_ids"]) == {200, 201}
-        assert set(cache.invalidate_deck_cards.await_args.kwargs["deck_ids"]) == {200, 201}
-        assert set(cache.invalidate_library_deck_pages.await_args.kwargs["user_ids"]) == {42, 43}
-        assert set(cache.invalidate_library_card_pages.await_args.kwargs["user_ids"]) == {42, 43}
-        assert set(cache.invalidate_user_decks.await_args.kwargs["identities"]) == {
-            (42, 200), (42, 201), (43, 200), (43, 201),
-        }
+        assert redis_pipeline.method_calls == [
+            call.unlink(
+                "card:100", "deck:200", "deck:201",
+                "deck:200:card-ids", "deck:201:card-ids",
+                "deck:user-deck:42:200", "deck:user-deck:43:201",
+            ),
+            call.incr("library:42:decks:generation"),
+            call.incr("library:43:decks:generation"),
+            call.incr("library:42:cards:generation"),
+            call.incr("library:43:cards:generation"),
+            call.execute(),
+        ]
 
-    async def test_resolves_users_for_explicit_decks_without_querying_cards(
-        self, invalidator_context,
+    async def test_accepts_materialized_operations_alongside_scopes(
+        self, redis_client, redis_pipeline,
     ):
-        invalidator, cache, deck_cards, user_decks = invalidator_context
-        user_decks.get_user_ids_by_deck_ids.return_value = [42]
+        invalidator = CacheInvalidator(redis_client)
 
-        await invalidator.invalidate(affected_decks=[200])
+        await invalidator.invalidate([DelKey("card:100")], scopes.cards(100, 101))
 
-        deck_cards.get_all_deck_ids_by_card_ids.assert_not_awaited()
-        user_decks.get_user_ids_by_deck_ids.assert_awaited_once_with(deck_ids={200})
-        cache.invalidate_decks.assert_awaited_once_with(deck_ids=[200])
-        cache.invalidate_user_decks.assert_awaited_once_with(identities=[(42, 200)])
+        redis_pipeline.unlink.assert_called_once_with("card:100", "card:101")
+        redis_pipeline.execute.assert_awaited_once_with()
 
-    async def test_invalidates_explicit_users_pages_without_resolving_decks(
-        self, invalidator_context,
+    async def test_does_not_contact_redis_without_groups(self, redis_client):
+        invalidator = CacheInvalidator(redis_client)
+
+        await invalidator.invalidate()
+
+        redis_client.pipeline.assert_not_called()
+
+    @pytest.mark.parametrize(("card_count", "expected_batch_sizes"), [
+        (1, [1]),
+        (500, [500]),
+        (501, [500, 1]),
+        (1000, [500, 500]),
+        (1001, [500, 500, 1]),
+    ])
+    async def test_unlinks_keys_in_batches_of_at_most_500(
+        self, redis_client, redis_pipeline, card_count, expected_batch_sizes,
     ):
-        invalidator, cache, deck_cards, user_decks = invalidator_context
+        invalidator = CacheInvalidator(redis_client)
 
-        await invalidator.invalidate(affected_users=[42])
+        await invalidator.invalidate(scopes.cards(*range(1, card_count + 1)))
 
-        deck_cards.get_all_deck_ids_by_card_ids.assert_not_awaited()
-        user_decks.get_user_ids_by_deck_ids.assert_not_awaited()
-        cache.invalidate_library_deck_pages.assert_awaited_once_with(user_ids=[42])
-        cache.invalidate_library_card_pages.assert_awaited_once_with(user_ids=[42])
-        cache.invalidate_user_decks.assert_not_awaited()
-
-    @pytest.mark.parametrize("kwargs", [{}, {
-        "affected_cards": [], "affected_decks": [], "affected_users": [],
-    }])
-    async def test_does_not_resolve_dependencies_without_affected_entities(
-        self, invalidator_context, kwargs,
-    ):
-        invalidator, cache, deck_cards, user_decks = invalidator_context
-
-        await invalidator.invalidate(**kwargs)
-
-        deck_cards.get_all_deck_ids_by_card_ids.assert_not_awaited()
-        user_decks.get_user_ids_by_deck_ids.assert_not_awaited()
-        cache.invalidate_user_decks.assert_not_awaited()
+        calls = redis_pipeline.unlink.call_args_list
+        assert [len(item.args) for item in calls] == expected_batch_sizes
+        assert calls[0].args[0] == "card:1"
+        assert calls[-1].args[-1] == f"card:{card_count}"
+        redis_pipeline.execute.assert_awaited_once_with()

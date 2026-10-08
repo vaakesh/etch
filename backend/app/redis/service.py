@@ -30,6 +30,18 @@ from app.redis.keys import (
     make_user_uuid_cache_key,
 )
 from app.redis.schemas import CacheLookupResult, LibraryPageCacheLookup, UserDeckIdentity
+from app.redis.ttl import (
+    CARD_ID_BY_UUID_TTL,
+    CARD_TTL,
+    DECK_CARDS_TTL,
+    DECK_ID_BY_UUID_TTL,
+    DECK_TTL,
+    LIBRARY_PAGE_TTL,
+    USER_DECK_TTL,
+    USER_ID_BY_UUID,
+    USER_SETTINGS_TTL,
+    USER_TTL,
+)
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
@@ -37,19 +49,6 @@ from app.users.schemas import InternalUser, InternalUserSettings, UserProfileRes
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
 from app.cards.repository import CardRepository
 from app.decks.utils import make_user_deck_identity
-
-USER_TTL = 60 * 60 * 3
-USER_ID_BY_UUID = 60 * 60 * 24 * 7
-CARD_ID_BY_UUID_TTL = 60 * 60 * 24 * 7
-DECK_ID_BY_UUID_TTL = 60 * 60 * 24 * 7
-USER_SETTINGS_TTL = 60 * 60
-USER_PROFILE_TTL = 60 * 10
-LIBRARY_PAGE_TTL = 60 * 5
-GENERATION_TTL = LIBRARY_PAGE_TTL * 3
-DECK_CARDS_TTL = 60 * 60
-CARD_TTL = 60 * 30
-DECK_TTL = 60 * 30
-USER_DECK_TTL = 60 * 10
 
 logger = logging.getLogger(__name__)
 
@@ -133,97 +132,6 @@ class RedisRateLimiter:
                 extra={"cache_operation": "check rate limit"},
                 exc_info=True,
             )
-        
-        
-@dataclass
-class InvalidationContext:
-    cards: set[int] = field(default_factory=set)
-    decks: set[int] = field(default_factory=set)
-    users: set[int] = field(default_factory=set)
-
-class CacheInvalidator:
-    def __init__(
-        self,
-        cache_service: RedisCacheService,
-        deck_card_repository: DeckCardRepository,
-        user_deck_repository: UserDeckRepository,
-    ):
-        self.cache_service = cache_service
-        self.deck_card_repository = deck_card_repository
-        self.user_deck_repository = user_deck_repository
-
-    async def invalidate(
-        self,
-        affected_cards: list[int] | None = None,
-        affected_decks: list[int] | None = None,
-        affected_users: list[int] | None = None,
-    ) -> None:
-        context = InvalidationContext(
-            cards=set(affected_cards or []),
-            decks=set(affected_decks or []),
-            users=set(affected_users or []),
-        )
-        await self._resolve_dependencies(
-            context=context,
-        )
-        await self._invalidate_cache(
-            context=context,
-        )
-
-    async def _resolve_dependencies(
-        self,
-        context: InvalidationContext,
-    ) -> None:
-        if context.cards:
-            deck_ids = await self.deck_card_repository.get_all_deck_ids_by_card_ids(
-                card_ids=context.cards,
-            )
-            context.decks.update(deck_ids)
-
-        if context.decks:
-            user_ids = await self.user_deck_repository.get_user_ids_by_deck_ids(
-                deck_ids=context.decks,
-            )
-            context.users.update(user_ids)
-
-    async def _invalidate_cache(
-        self,
-        context: InvalidationContext,
-    ) -> None:
-        cards = list(context.cards)
-        decks = list(context.decks)
-        users = list(context.users)
-
-        await self.cache_service.invalidate_cards(
-            card_ids=cards,
-        )
-
-        await self.cache_service.invalidate_decks(
-            deck_ids=decks,
-        )
-        await self.cache_service.invalidate_deck_cards(
-            deck_ids=decks,
-        )
-
-        await self.cache_service.invalidate_library_deck_pages(
-            user_ids=users,
-        )
-        await self.cache_service.invalidate_library_card_pages(
-            user_ids=users,
-        )
-
-        if users and decks:
-            await self.cache_service.invalidate_user_decks(
-                identities=[
-                    make_user_deck_identity(
-                        user_id=user_id,
-                        deck_id=deck_id,
-                    )
-                    for user_id in users
-                    for deck_id in decks
-                ]
-            )
-
 
 class RedisCacheService:
     """
@@ -515,35 +423,6 @@ class RedisCacheService:
             missing=missing,
         )
 
-    async def invalidate_user_ids_by_uuids(
-        self,
-        user_uuids: list[UUID],
-    ) -> None:
-        await self._invalidate_many(
-            identities=user_uuids,
-            key_factory=make_user_uuid_cache_key,
-        )
-
-    async def invalidate_card_ids_by_uuids(
-        self,
-        card_uuids: list[UUID],
-    ) -> None:
-        await self._invalidate_many(
-            identities=card_uuids,
-            key_factory=make_card_uuid_cache_key,
-        )
-
-    @traced("redis.cache.invalidate_deck_ids_by_uuids")
-    async def invalidate_deck_ids_by_uuids(
-        self,
-        deck_uuids: list[UUID],
-    ) -> None:
-        await self._invalidate_many(
-            identities=deck_uuids,
-            key_factory=make_deck_uuid_cache_key,
-        )
-    
-
     @traced("redis.cache.cache_users")
     async def cache_users(
         self,
@@ -592,17 +471,6 @@ class RedisCacheService:
             entity_deserializer=InternalUser.model_validate_json,
         )
 
-    @traced("redis.cache.invalidate_users")
-    async def invalidate_users(
-        self,
-        user_ids: list[int],
-    ) -> None:
-        await self._invalidate_many(
-            identities=user_ids,
-            key_factory=make_user_cache_key,
-        )
-
-
     @traced("redis.cache.cache_users_settings")
     async def cache_users_settings(
         self,
@@ -630,17 +498,6 @@ class RedisCacheService:
             deserializer=InternalUserSettings.model_validate_json,
         )
 
-    @traced("redis.cache.invalidate_users_settings")
-    async def invalidate_users_settings(
-        self,
-        user_ids: list[int],
-    ) -> None:
-        await self._invalidate_many(
-            identities=user_ids,
-            key_factory=make_user_settings_cache_key,
-        )
-
-
     @traced("redis.cache.cache_user_decks")
     async def cache_user_decks(
         self,
@@ -649,7 +506,9 @@ class RedisCacheService:
     ) -> None:
         entries = {
             make_user_deck_cache_key(
-                identity=(user_deck.user_id, user_deck.deck_id)
+                identity=make_user_deck_identity(
+                    user_id=user_deck.user_id, deck_id=user_deck.deck_id,
+                ),
             ): InternalUserDeck.model_validate(user_deck).model_dump_json()
             for user_deck in user_decks
         }
@@ -665,23 +524,16 @@ class RedisCacheService:
         user_id: int,
         deck_ids: list[int],
     ) -> CacheLookupResult[UserDeckIdentity, InternalUserDeck]:
-        identities: list[UserDeckIdentity] = [(user_id, deck_id) for deck_id in deck_ids]
+        identities: list[UserDeckIdentity] = [
+            make_user_deck_identity(user_id=user_id, deck_id=deck_id)
+            for deck_id in deck_ids
+        ]
         result = await self._get_many(
             identities=identities,
             key_factory=make_user_deck_cache_key,
             deserializer=InternalUserDeck.model_validate_json
         )
         return result
-
-    @traced("redis.cache.invalidate_user_decks")
-    async def invalidate_user_decks(
-        self,
-        identities: list[UserDeckIdentity],
-    ) -> None:
-        await self._invalidate_many(
-            identities=identities,
-            key_factory=make_user_deck_cache_key,
-        )
 
     @traced("redis.cache.cache_library_cards_page")
     async def cache_library_cards_page(
@@ -881,99 +733,6 @@ class RedisCacheService:
             generation=generation,
         )
         return result
-
-    @traced("redis.cache.invalidate_cards")
-    async def invalidate_cards(
-        self,
-        card_ids: list[int],
-    ) -> None:
-        await self._invalidate_many(
-            identities=card_ids,
-            key_factory=make_card_cache_key,
-        )
-
-    @traced("redis.cache.invalidate_decks")
-    async def invalidate_decks(
-        self,
-        deck_ids: list[int],
-    ) -> None:
-        await self._invalidate_many(
-            identities=deck_ids,
-            key_factory=make_deck_cache_key,
-        )
-
-    @traced("redis.cache.invalidate_deck_cards")
-    async def invalidate_deck_cards(
-        self,
-        deck_ids: list[int],
-    ) -> None:
-        await self._invalidate_many(
-            identities=deck_ids,
-            key_factory=make_deck_cards_cache_key,
-        )
-
-    async def _invalidate_many[K](
-        self,
-        identities: list[K],
-        key_factory: Callable[[K], str],
-    ) -> None:
-        if not identities:
-            return
-
-        await self._safe_delete_many(
-            keys=[
-                key_factory(identity)
-                for identity in identities
-            ]
-        )
-
-    @traced("redis.cache.invalidate_library_card_pages")
-    async def invalidate_library_card_pages(
-        self,
-        user_ids: list[int],
-    ) -> None:
-        if not user_ids:
-            return
-
-        try:
-            pipe = self.redis.pipeline(transaction=False)
-
-            for user_id in user_ids:
-                key = make_library_cards_page_generation_cache_key(
-                    user_id=user_id,
-                )
-                pipe.incr(key)
-                pipe.expire(key, GENERATION_TTL)
-            await pipe.execute()
-
-        except RedisError:
-            self._log_redis_error(
-                operation=f"INCR library cards generations for {len(user_ids)} users",
-            )
-
-    @traced("redis.cache.invalidate_library_deck_pages")
-    async def invalidate_library_deck_pages(
-        self,
-        user_ids: list[int],
-    ) -> None:
-        if not user_ids:
-            return
-
-        try:
-            pipe = self.redis.pipeline(transaction=False)
-
-            for user_id in user_ids:
-                key = make_library_deck_page_generation_cache_key(
-                    user_id=user_id,
-                )
-                pipe.incr(key)
-                pipe.expire(key, GENERATION_TTL)
-            await pipe.execute()
-
-        except RedisError:
-            self._log_redis_error(
-                operation=f"INCR library decks generations for {len(user_ids)} users",
-            )
 
     @traced("redis.cache.cache_deck_cards")
     async def cache_deck_cards(

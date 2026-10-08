@@ -31,6 +31,7 @@ from app.decks.schemas import (
 from app.decks.service import DeckService, UserDeckService
 from app.deps import UoWFactory
 from app.redis.schemas import UserDeckIdentity
+from app.redis.invalidation import CacheInvalidator
 from app.redis.service import (
     RedisCacheService,
 )
@@ -51,28 +52,33 @@ class BffService:
         self, 
         uow_factory: UoWFactory,
         cache_service: RedisCacheService,
+        cache_invalidator: CacheInvalidator,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_service = cache_service
         self.user_service = UserService(
             uow_factory=uow_factory,
             cache_service=cache_service,
+            cache_invalidator=cache_invalidator,
         )
         self.deck_service = DeckService(
             uow_factory=uow_factory,
             cache_service=cache_service,
+            cache_invalidator=cache_invalidator,
         )
         self.user_deck_service = UserDeckService(
             uow_factory=uow_factory,
             cache_service=cache_service,
+            cache_invalidator=cache_invalidator,
         )
         self.card_service = CardService(
             uow_factory=uow_factory,
             cache_service=cache_service,
+            cache_invalidator=cache_invalidator,
         )
         self.training_session_service = TrainingSessionService(
             uow_factory=self.uow_factory,
-            cache_service=cache_service,
+            cache_invalidator=cache_invalidator,
         )
 
     # helpers
