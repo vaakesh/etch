@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from asyncpg.exceptions import CheckViolationError, UniqueViolationError
@@ -14,8 +14,8 @@ from tests.unit.users.cases import USER_UUID, USER_WITH_SETTINGS_DATA
 class TestCreateUser:
     @pytest.fixture
     def password_hasher(self, monkeypatch):
-        hasher = Mock(return_value="hashed-password")
-        monkeypatch.setattr("app.users.service.hash_password", hasher)
+        hasher = AsyncMock(return_value="hashed-password")
+        monkeypatch.setattr("app.users.service.hash_password_async", hasher)
         return hasher
 
     @pytest.fixture

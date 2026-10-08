@@ -1,3 +1,6 @@
+import asyncio
+import threading
+import time
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -14,8 +17,11 @@ from app.decks.utils import (
     make_user_deck_identity,
 )
 from app.auth.utils import (
+    PASSWORD_HASH_CONCURRENCY,
     hash_password,
+    hash_password_async,
     verify_password,
+    verify_password_async,
 )
 from argon2.exceptions import InvalidHashError
 
@@ -177,3 +183,46 @@ class TestPassword:
     def test_verify_password_raises_for_invalid_hash(self):
         with pytest.raises(InvalidHashError):
             verify_password("password", "not-a-valid-argon2-hash")
+
+
+class TestPasswordAsync:
+    async def test_hashes_and_verifies_password(self):
+        password_hash = await hash_password_async("secure-password")
+
+        assert await verify_password_async("secure-password", password_hash) is True
+        assert await verify_password_async("wrong-password", password_hash) is False
+
+    async def test_runs_outside_event_loop_thread(self, monkeypatch):
+        thread_ids = []
+
+        def record_thread(password):
+            thread_ids.append(threading.get_ident())
+            return "hash"
+
+        monkeypatch.setattr("app.auth.utils.hash_password", record_thread)
+
+        assert await hash_password_async("password") == "hash"
+        assert thread_ids != [threading.get_ident()]
+
+    async def test_limits_concurrent_hashes(self, monkeypatch):
+        lock = threading.Lock()
+        running = 0
+        peak = 0
+
+        def slow_hash(password):
+            nonlocal running, peak
+            with lock:
+                running += 1
+                peak = max(peak, running)
+            time.sleep(0.02)
+            with lock:
+                running -= 1
+            return "hash"
+
+        monkeypatch.setattr("app.auth.utils.hash_password", slow_hash)
+
+        await asyncio.gather(
+            *(hash_password_async("password") for _ in range(PASSWORD_HASH_CONCURRENCY * 3))
+        )
+
+        assert peak == PASSWORD_HASH_CONCURRENCY

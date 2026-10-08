@@ -18,6 +18,13 @@ class TokenPair:
     refresh_token: str
 
 
+@dataclass(slots=True, frozen=True)
+class VerifiedUser:
+    id: int
+    uuid: UUID
+    hashed_password: str
+
+
 @dataclass(slots=True)
 class AccessTokenResponse:
     access_token: str

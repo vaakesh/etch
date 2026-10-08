@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import Mock, call, create_autospec
+from unittest.mock import AsyncMock, Mock, call, create_autospec
 from uuid import UUID
 
 import pytest
@@ -44,10 +44,10 @@ def auth_context(monkeypatch):
     )
     tokens.create_access_token.return_value = "bearer-access-token"
     tokens.hash_refresh_token.return_value = "a" * 64
-    verify = Mock(return_value=True)
-    hash_password = Mock(return_value="new-password-hash")
-    monkeypatch.setattr("app.auth.service.verify_password", verify)
-    monkeypatch.setattr("app.auth.service.hash_password", hash_password)
+    verify = AsyncMock(return_value=True)
+    hash_password = AsyncMock(return_value="new-password-hash")
+    monkeypatch.setattr("app.auth.service.verify_password_async", verify)
+    monkeypatch.setattr("app.auth.service.hash_password_async", hash_password)
     monkeypatch.setattr("app.auth.service.utcnow", lambda: NOW)
     factory = Mock(return_value=uow)
     service = AuthService(uow_factory=factory, auth_tokens_service=tokens)
@@ -63,16 +63,23 @@ class TestLogin:
     ):
         ctx = auth_context
         calls = Mock()
-        calls.attach_mock(ctx.uow.user_repo.get_by_username, "lock_user")
+        calls.attach_mock(ctx.uow.user_repo.get_by_username, "read_user")
         calls.attach_mock(ctx.verify, "verify_password")
+        calls.attach_mock(ctx.uow.user_repo.get_by_id, "lock_user")
         calls.attach_mock(ctx.uow.auth_repo.add, "add_session")
+        closed_transactions_at_verify = []
+
+        async def verify(*args, **kwargs):
+            closed_transactions_at_verify.append(ctx.uow.__aexit__.await_count)
+            return True
+
+        ctx.verify.side_effect = verify
 
         result = await ctx.service.login("test-user", "password123")
 
         assert result == TokenPair("new-access-token", "new-refresh-token")
-        ctx.uow.user_repo.get_by_username.assert_awaited_once_with(
-            username="test-user", for_update=True,
-        )
+        assert closed_transactions_at_verify == [1]
+        ctx.uow.user_repo.get_by_username.assert_awaited_once_with(username="test-user")
         ctx.verify.assert_called_once_with("password123", "hashed-test-password")
         ctx.tokens.issue_tokens.assert_called_once_with(user_uuid=ctx.user.uuid)
         ctx.uow.auth_repo.add.assert_called_once()
@@ -83,8 +90,9 @@ class TestLogin:
         assert session.revoked_at is None
         assert session.replaced_by_session_id is None
         assert calls.mock_calls == [
-            call.lock_user(username="test-user", for_update=True),
+            call.read_user(username="test-user"),
             call.verify_password("password123", "hashed-test-password"),
+            call.lock_user(user_id=42, for_update=True),
             call.add_session(user_session=session),
         ]
         ctx.uow.commit.assert_awaited_once_with()
@@ -102,6 +110,31 @@ class TestLogin:
         with pytest.raises(InvalidLoginCredentials, match="Invalid username or password"):
             await ctx.service.login("test-user", "wrong-password")
 
+        ctx.uow.user_repo.get_by_id.assert_not_awaited()
+        ctx.tokens.issue_tokens.assert_not_called()
+        ctx.uow.auth_repo.add.assert_not_called()
+        ctx.uow.commit.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "locked_user",
+        [
+            pytest.param(None, id="user-deleted-during-verification"),
+            pytest.param(
+                make_user(hashed_password="changed-password-hash"),
+                id="password-changed-during-verification",
+            ),
+        ],
+    )
+    async def test_rejects_login_when_user_changed_during_verification(
+        self, auth_context, locked_user,
+    ):
+        ctx = auth_context
+        ctx.uow.user_repo.get_by_id.return_value = locked_user
+
+        with pytest.raises(InvalidLoginCredentials, match="Invalid username or password"):
+            await ctx.service.login("test-user", "password123")
+
+        ctx.uow.user_repo.get_by_id.assert_awaited_once_with(user_id=42, for_update=True)
         ctx.tokens.issue_tokens.assert_not_called()
         ctx.uow.auth_repo.add.assert_not_called()
         ctx.uow.commit.assert_not_awaited()
@@ -113,7 +146,7 @@ class TestLogin:
         with pytest.raises(RuntimeError, match="commit failed"):
             await ctx.service.login("test-user", "password123")
 
-        ctx.uow.__aexit__.assert_awaited_once()
+        assert ctx.uow.__aexit__.await_count == 2
 
 
 class TestLoginByBearerTokenWithoutRefresh:
@@ -125,9 +158,9 @@ class TestLoginByBearerTokenWithoutRefresh:
         )
 
         assert result == AccessTokenResponse("bearer-access-token", "Bearer")
-        ctx.uow.user_repo.get_by_username.assert_awaited_once_with(
-            username="test-user", for_update=False,
-        )
+        ctx.uow.user_repo.get_by_username.assert_awaited_once_with(username="test-user")
+        ctx.uow.user_repo.get_by_id.assert_not_awaited()
+        ctx.factory.assert_called_once_with()
         ctx.verify.assert_called_once_with("password123", "hashed-test-password")
         ctx.tokens.create_access_token.assert_called_once_with(ctx.user.uuid)
         ctx.tokens.issue_tokens.assert_not_called()
@@ -271,10 +304,26 @@ class TestRefresh:
 class TestChangePassword:
     async def test_changes_hash_and_revokes_all_active_sessions(self, auth_context):
         ctx = auth_context
+        closed_transactions_at_hashing = []
+
+        async def verify(*args, **kwargs):
+            closed_transactions_at_hashing.append(ctx.uow.__aexit__.await_count)
+            return True
+
+        async def hash_new_password(*args, **kwargs):
+            closed_transactions_at_hashing.append(ctx.uow.__aexit__.await_count)
+            return "new-password-hash"
+
+        ctx.verify.side_effect = verify
+        ctx.hash_password.side_effect = hash_new_password
 
         await ctx.service.change_password(42, "old-password", "new-password")
 
-        ctx.uow.user_repo.get_by_id.assert_awaited_once_with(user_id=42, for_update=True)
+        assert closed_transactions_at_hashing == [1, 1]
+        assert ctx.uow.user_repo.get_by_id.await_args_list == [
+            call(user_id=42),
+            call(user_id=42, for_update=True),
+        ]
         ctx.verify.assert_called_once_with(
             password="old-password", password_hash="hashed-test-password",
         )
@@ -300,6 +349,32 @@ class TestChangePassword:
 
         assert ctx.user.hashed_password == "hashed-test-password"
         ctx.hash_password.assert_not_called()
+        ctx.uow.user_repo.get_by_id.assert_awaited_once_with(user_id=42)
+        ctx.uow.auth_repo.revoke_all_active_sessions_by_user_id.assert_not_awaited()
+        ctx.uow.commit.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "locked_user",
+        [
+            pytest.param(None, id="user-deleted-during-hashing"),
+            pytest.param(
+                make_user(hashed_password="changed-password-hash"),
+                id="password-changed-during-hashing",
+            ),
+        ],
+    )
+    async def test_rejects_change_when_user_changed_during_hashing(
+        self, auth_context, locked_user,
+    ):
+        ctx = auth_context
+        ctx.uow.user_repo.get_by_id.side_effect = [ctx.user, locked_user]
+
+        with pytest.raises(InvalidLoginCredentials):
+            await ctx.service.change_password(42, "old-password", "new-password")
+
+        assert ctx.user.hashed_password == "hashed-test-password"
+        if locked_user is not None:
+            assert locked_user.hashed_password == "changed-password-hash"
         ctx.uow.auth_repo.revoke_all_active_sessions_by_user_id.assert_not_awaited()
         ctx.uow.commit.assert_not_awaited()
 

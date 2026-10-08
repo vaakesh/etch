@@ -18,8 +18,13 @@ from app.auth.errors import (
     InvalidTokenTypeError,
 )
 from app.auth.models import UserSession
-from app.auth.schemas import AccessTokenResponse, IssuedTokens, TokenPair
-from app.auth.utils import hash_password, verify_password
+from app.auth.schemas import (
+    AccessTokenResponse,
+    IssuedTokens,
+    TokenPair,
+    VerifiedUser,
+)
+from app.auth.utils import hash_password_async, verify_password_async
 from app.config import AuthTokensConfig
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
@@ -103,22 +108,46 @@ class AuthService:
 
     # helpers
 
+    @staticmethod
+    def _to_verified_user(user: User | None) -> VerifiedUser | None:
+        if user is None:
+            return None
+
+        return VerifiedUser(
+            id=user.id,
+            uuid=user.uuid,
+            hashed_password=user.hashed_password,
+        )
+
     @traced("auth.service.authenticate_user")
     async def _authenticate_user(
             self,
             username: str,
             password: str,
-            uow: UnitOfWork,
-            *,
-            for_update: bool = False,
-    ) -> User:
-        user = await uow.user_repo.get_by_username(
-            username=username,
-            for_update=for_update,
-        )
-        if user is None or not verify_password(password, user.hashed_password):
+    ) -> VerifiedUser:
+        # Argon2 runs after this transaction is closed: no lock, no connection.
+        async with self.uow_factory() as uow:
+            verified = self._to_verified_user(
+                await uow.user_repo.get_by_username(username=username)
+            )
+
+        if verified is None or not await verify_password_async(
+            password, verified.hashed_password,
+        ):
             raise InvalidLoginCredentials("Invalid username or password")
-        
+
+        return verified
+
+    async def _lock_user_with_same_password(
+            self,
+            verified: VerifiedUser,
+            uow: UnitOfWork,
+    ) -> User | None:
+        # The password could change or the user could be deleted while Argon2 ran.
+        user = await uow.user_repo.get_by_id(user_id=verified.id, for_update=True)
+        if user is None or user.hashed_password != verified.hashed_password:
+            return None
+
         return user
 
     async def _get_user_by_refresh_token_hash(
@@ -181,13 +210,15 @@ class AuthService:
         username: str,
         password: str,
     ) -> TokenPair:
+        verified = await self._authenticate_user(
+            username=username,
+            password=password,
+        )
         async with self.uow_factory() as uow:
-            user = await self._authenticate_user(
-                username=username,
-                password=password,
-                uow=uow,
-                for_update=True,
-            )
+            user = await self._lock_user_with_same_password(verified, uow)
+            if user is None:
+                raise InvalidLoginCredentials("Invalid username or password")
+
             tokens = self.auth_tokens_service.issue_tokens(user_uuid=user.uuid)
             user_session = await self.build_user_session(
                 user, tokens.refresh_token_hash,
@@ -199,14 +230,9 @@ class AuthService:
 
     @traced("auth.service.login_by_bearer_token_without_refresh")
     async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
-        async with self.uow_factory() as uow:
-            user = await self._authenticate_user(
-                username,
-                password,
-                uow,
-            )
-            bearer_access_token = self.auth_tokens_service.create_access_token(user.uuid)
-            return AccessTokenResponse(bearer_access_token)
+        verified = await self._authenticate_user(username, password)
+        bearer_access_token = self.auth_tokens_service.create_access_token(verified.uuid)
+        return AccessTokenResponse(bearer_access_token)
 
     @traced("auth.service.refresh")
     async def refresh(
@@ -238,23 +264,29 @@ class AuthService:
         new_password: str,
     ) -> None:
         async with self.uow_factory() as uow:
-            user = await uow.user_repo.get_by_id(
-                user_id=user_id,
-                for_update=True,
+            verified = self._to_verified_user(
+                await uow.user_repo.get_by_id(user_id=user_id)
             )
 
+        if verified is None:
+            raise InvalidLoginCredentials()
+
+        if not await verify_password_async(
+            password=current_password,
+            password_hash=verified.hashed_password,
+        ):
+            raise InvalidLoginCredentials()
+
+        new_password_hash = await hash_password_async(
+            password=new_password,
+        )
+
+        async with self.uow_factory() as uow:
+            user = await self._lock_user_with_same_password(verified, uow)
             if user is None:
                 raise InvalidLoginCredentials()
 
-            if not verify_password(
-                password=current_password,
-                password_hash=user.hashed_password,
-            ):
-                raise InvalidLoginCredentials()
-
-            user.hashed_password = hash_password(
-                password=new_password,
-            )
+            user.hashed_password = new_password_hash
 
             await uow.auth_repo.revoke_all_active_sessions_by_user_id(
                 user_id=user_id,

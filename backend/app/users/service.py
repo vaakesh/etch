@@ -4,7 +4,7 @@ from uuid import UUID
 
 from asyncpg import UniqueViolationError
 
-from app.auth.utils import hash_password
+from app.auth.utils import hash_password_async
 from app.errors import RequestValueError
 from app.service import UnitOfWork
 from app.tracing import traced, trace_span
@@ -175,7 +175,7 @@ class UserService:
                 user_data = payload.model_dump(exclude={"password"})
                 user = User(
                     **user_data,
-                    hashed_password=hash_password(payload.password),
+                    hashed_password=await hash_password_async(payload.password),
                 )
                 uow.user_repo.add(user)
                 await uow.flush()
