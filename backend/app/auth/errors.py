@@ -25,3 +25,8 @@ class AccessTokenNotFoundError(InvalidTokenError):
 class InvalidLoginCredentials(Exception):
     def __init__(self, message: str = "Invalid username or password"):
         super().__init__(message)
+
+
+class CaptchaError(Exception):
+    def __init__(self, message: str = "Captcha verification failed"):
+        super().__init__(message)

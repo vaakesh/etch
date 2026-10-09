@@ -8,10 +8,11 @@
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth.cookies import clear_tokens_cookie, get_refresh_cookie, set_tokens_cookie
-from app.auth.deps import AuthServiceDeps, ClientInfoDeps, CurrentUser
+from app.auth.deps import AuthServiceDeps, CaptchaServiceDeps, ClientInfoDeps, CurrentUser, require_captcha
 from app.auth.schemas import (
     AccessTokenResponse,
     AuthSessionResponse,
+    ChallengeResponse,
     ChangePasswordRequest,
     LoginRequest,
 )
@@ -22,12 +23,27 @@ from app.redis.rate_limiters import (
     auth_sessions_rate_limit,
     login_rate_limit,
     password_change_rate_limit,
+    challenge_rate_limit,
 )
 from fastapi import APIRouter, Depends, Request, Response, status
 
 router = APIRouter(prefix="/auth")
 
-@router.post("/token", dependencies=[Depends(login_rate_limit)])
+@router.get(
+    "/challenge",
+    status_code=status.HTTP_200_OK,
+    response_model=ChallengeResponse,
+    dependencies=[Depends(challenge_rate_limit)]
+)
+async def get_challenge(
+    captcha_service: CaptchaServiceDeps,
+):
+    return captcha_service.create_challenge()
+
+@router.post(
+    "/token", 
+    dependencies=[Depends(login_rate_limit), Depends(require_captcha)],
+)
 async def login_for_bearer_token(
     auth_service: AuthServiceDeps,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -41,7 +57,7 @@ async def login_for_bearer_token(
 @router.post(
     "/login",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(login_rate_limit)],
+    dependencies=[Depends(login_rate_limit), Depends(require_captcha)],
 )
 async def login(
     form_data: LoginRequest,

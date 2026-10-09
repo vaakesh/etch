@@ -172,6 +172,13 @@ test.describe("гость на форме входа", () => {
       message: "Не удалось войти. Попробуйте ещё раз.",
       invalidFields: false,
     },
+    {
+      id: "AUTH-023",
+      title: "403 CAPTCHA_INVALID → сообщение о проверке от ботов",
+      response: AUTH_ERRORS.captchaInvalid,
+      message: "Не удалось пройти проверку от ботов. Попробуйте ещё раз.",
+      invalidFields: false,
+    },
   ];
 
   for (const { id, title, response, message, invalidFields } of serverErrors) {

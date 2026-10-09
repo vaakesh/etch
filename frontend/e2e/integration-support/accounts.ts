@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
+import { captchaHeaders } from "./captcha";
 
 export interface TestAccount {
   username: string;
@@ -22,7 +23,10 @@ export function newAccountCredentials(workerIndex: number): TestAccount {
 
 /** Precondition only: the account is created by the public registration endpoint. */
 export async function registerAccount(api: APIRequestContext, account: TestAccount): Promise<void> {
-  const response = await api.post("/api/users/create", { data: account });
+  const response = await api.post("/api/users/create", {
+    data: account,
+    headers: await captchaHeaders(api),
+  });
   expect(response.status(), `Register ${account.username}: ${await response.text()}`).toBe(201);
 }
 
@@ -36,6 +40,7 @@ export async function deleteAccount(
 ): Promise<string | null> {
   const login = await api.post("/api/auth/login", {
     data: { username: account.username, password: account.password },
+    headers: await captchaHeaders(api),
   });
   if (login.status() === 404) return null;
   if (login.status() !== 204) {

@@ -4,6 +4,7 @@ import logging
 from app.auth.cookies import clear_tokens_cookie
 from app.auth.errors import (
     AccessTokenNotFoundError,
+    CaptchaError,
     InvalidLoginCredentials,
     InvalidRefreshTokenError,
     InvalidTokenError,
@@ -81,6 +82,7 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
     (RefreshTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "REFRESH_TOKEN_NOT_FOUND"),
     (AccessTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "ACCESS_TOKEN_NOT_FOUND"),
     (MetricsAccessDeniedError, status.HTTP_401_UNAUTHORIZED, "METRICS_ACCESS_DENIED"),
+    (CaptchaError, status.HTTP_403_FORBIDDEN, "CAPTCHA_INVALID"),
 
     (UserNotFoundError, status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND"),
     (UserAlreadyExistsError, status.HTTP_409_CONFLICT, "USER_ALREADY_EXISTS"),

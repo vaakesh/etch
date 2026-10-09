@@ -12,6 +12,7 @@ export const API_ERROR_CODES = {
   invalidRefreshToken: "INVALID_REFRESH_TOKEN",
   refreshTokenNotFound: "REFRESH_TOKEN_NOT_FOUND",
   accessTokenNotFound: "ACCESS_TOKEN_NOT_FOUND",
+  captchaInvalid: "CAPTCHA_INVALID",
 
   userNotFound: "USER_NOT_FOUND",
   userAlreadyExists: "USER_ALREADY_EXISTS",

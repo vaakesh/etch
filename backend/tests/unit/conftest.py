@@ -6,11 +6,12 @@ import pytest
 
 from app.auth.deps import (
     get_auth_service,
+    get_captcha_service,
     get_current_user,
     get_current_user_with_settings,
     get_optional_current_user,
 )
-from app.auth.service import AuthService
+from app.auth.service import AuthService, CaptchaService
 from app.bff.deps import get_bff_service
 from app.cards.deps import get_card_service
 from app.cards.service import CardService
@@ -51,6 +52,7 @@ def app(app: FastAPI, request):
         get_current_user_with_settings: "current_user_with_settings",
         get_redis_rate_limiter: "redis_rate_limiter",
         get_auth_service: "auth_service",
+        get_captcha_service: "captcha_service",
         get_bff_service: "bff_service",
         get_card_service: "card_service",
         get_deck_service: "deck_service",
@@ -176,3 +178,8 @@ def token_pair(request):
 @pytest.fixture
 def auth_service():
     return create_autospec(AuthService, instance=True)
+
+
+@pytest.fixture
+def captcha_service():
+    return create_autospec(CaptchaService, instance=True)

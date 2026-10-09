@@ -3,6 +3,7 @@ from contextlib import AsyncExitStack
 from itertools import count
 import logging
 
+from altcha import Challenge, Payload, solve_challenge
 from httpx import ASGITransport, AsyncClient
 import pytest_asyncio
 import pytest
@@ -156,6 +157,16 @@ async def client(app: FastAPI):
         base_url="https://test",
     ) as client:
         yield client
+
+async def solve_captcha(client: AsyncClient) -> dict[str, str]:
+    # Solutions are single-use: every protected request needs its own headers.
+    response = await client.get("/auth/challenge")
+    assert response.status_code == status.HTTP_200_OK
+    challenge = Challenge.from_dict(response.json())
+    solution = solve_challenge(challenge)
+    assert solution is not None
+    return {"X-Altcha": Payload(challenge, solution).to_base64()}
+
 
 type ClientFactory = Callable[[], Awaitable[AsyncClient]]
 

@@ -1,14 +1,17 @@
 import { AUTH_ENDPOINTS, USER_ENDPOINTS, apiFetch } from "../../api";
 import type { LoginCredentials, RegistrationCredentials, User } from "../model/auth-types";
 import { parseCurrentUser } from "./auth-contract";
+import { CAPTCHA_HEADER, solveCaptcha } from "./captcha-api";
 
 export async function registerRequest(
   credentials: RegistrationCredentials,
   signal?: AbortSignal,
 ): Promise<User> {
+  const captcha = await solveCaptcha(signal);
   const response = await apiFetch<unknown, RegistrationCredentials>(USER_ENDPOINTS.create, {
     method: "POST",
     body: credentials,
+    headers: { [CAPTCHA_HEADER]: captcha },
     auth: false,
     retryOnUnauthorized: false,
     signal,
@@ -20,9 +23,11 @@ export async function loginRequest(
   credentials: LoginCredentials,
   signal?: AbortSignal,
 ): Promise<void> {
+  const captcha = await solveCaptcha(signal);
   await apiFetch<void, LoginCredentials>(AUTH_ENDPOINTS.login, {
     method: "POST",
     body: credentials,
+    headers: { [CAPTCHA_HEADER]: captcha },
     auth: false,
     retryOnUnauthorized: false,
     signal,

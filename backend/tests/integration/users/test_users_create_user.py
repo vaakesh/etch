@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.utils import verify_password
 from app.users.models import User, UserSettings
-from tests.integration.conftest import ClientFactory
+from tests.integration.conftest import ClientFactory, solve_captcha
 from tests.integration.users.conftest import (
     AuthClientFactory,
     UserFactory,
@@ -49,7 +49,11 @@ class TestUserCreate:
             password="Test-password-123",
         )
 
-        response = await client.post("/users/create", json=payload)
+        response = await client.post(
+            "/users/create",
+            json=payload,
+            headers=await solve_captcha(client),
+        )
 
         assert response.status_code == 201
         data = response.json()
@@ -149,7 +153,11 @@ class TestUserCreate:
         assert len(users_before) == 1
         assert len(settings_before) == 1
 
-        response = await client.post("/users/create", json=payload)
+        response = await client.post(
+            "/users/create",
+            json=payload,
+            headers=await solve_captcha(client),
+        )
 
         assert response.status_code == 409
         assert response.json() == {
@@ -175,7 +183,11 @@ class TestUserCreate:
     ):
         payload = user_payload_factory(email="not-an-email")
 
-        response = await client.post("/users/create", json=payload)
+        response = await client.post(
+            "/users/create",
+            json=payload,
+            headers=await solve_captcha(client),
+        )
 
         assert response.status_code == 422
         assert response.json() == {
@@ -241,14 +253,25 @@ class TestUserCreate:
             password="Second-password-456",
         )
 
+        first_captcha = await solve_captcha(first_client)
+        second_captcha = await solve_captcha(second_client)
+
         # Оба запроса запускаются без ожидания ответа первого.
         # TaskGroup дожидается завершения задач и при исключении в одной из них.
         async with asyncio.TaskGroup() as group:
             first_request = group.create_task(
-                first_client.post("/users/create", json=first_payload)
+                first_client.post(
+                    "/users/create",
+                    json=first_payload,
+                    headers=first_captcha,
+                )
             )
             second_request = group.create_task(
-                second_client.post("/users/create", json=second_payload)
+                second_client.post(
+                    "/users/create",
+                    json=second_payload,
+                    headers=second_captcha,
+                )
             )
 
         # Победитель не предопределён: связываем каждый ответ с его payload.

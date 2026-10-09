@@ -9,14 +9,15 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.auth.errors import AccessTokenNotFoundError
 from app.auth.schemas import ClientInfo
-from app.auth.service import AuthService, AuthTokensService
-from app.config import get_auth_tokens_config
+from app.auth.service import AuthService, AuthTokensService, CaptchaService
+from app.config import Settings, get_auth_tokens_config, get_settings
 from app.deps import UoWFactory, get_uow_factory
-from app.redis.deps import CacheInvalidatorDeps
+from app.redis.deps import CacheInvalidatorDeps, get_redis
 from app.users.deps import UserServiceDeps, get_user_service
 from app.users.models import User
 from app.users.service import UserService
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
+from redis.asyncio import Redis
 
 from app.users.schemas import InternalUser, InternalUserWithSettings
 
@@ -110,10 +111,30 @@ async def get_client_info(request: Request) -> ClientInfo:
         user_agent=user_agent[:MAX_USER_AGENT_LENGTH] if user_agent else None,
     )
 
+def get_captcha_service(
+        redis: Redis = Depends(get_redis),
+        settings: Settings = Depends(get_settings),
+) -> CaptchaService:
+    return CaptchaService(
+        redis=redis,
+        settings=settings,
+    )
+
 type AuthServiceDeps = Annotated[
     AuthService,
     Depends(get_auth_service),
 ]
+
+type CaptchaServiceDeps = Annotated[
+    CaptchaService,
+    Depends(get_captcha_service),
+]
+
+async def require_captcha(
+    captcha_service: CaptchaServiceDeps,
+    x_altcha: Annotated[str | None, Header()] = None,
+) -> None:
+    await captcha_service.verify(x_altcha)
 
 type ClientInfoDeps = Annotated[
     ClientInfo,

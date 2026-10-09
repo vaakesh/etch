@@ -55,3 +55,17 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: Password
     new_password: Password
+
+class ChallengeParametersResponse(BaseModel):
+    algorithm: str
+    cost: int
+    keyLength: int
+    keyPrefix: str
+    nonce: str
+    salt: str
+    expiresAt: int
+
+
+class ChallengeResponse(BaseModel):
+    parameters: ChallengeParametersResponse
+    signature: str

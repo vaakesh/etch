@@ -3,7 +3,7 @@ import logging
 from pydantic import UUID7
 
 from app.auth.cookies import clear_tokens_cookie
-from app.auth.deps import CurrentUser, CurrentUserWithSettings, OptionalCurrentUser
+from app.auth.deps import CurrentUser, CurrentUserWithSettings, OptionalCurrentUser, require_captcha
 from app.cards.deps import CardServiceDeps
 from app.cards.schemas import CardResponse
 from app.common.schemas import CursorPage
@@ -56,7 +56,10 @@ async def get_me(
     "/create",
     response_model=PrivateUserResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(registration_rate_limit)],
+    dependencies=[
+        Depends(registration_rate_limit),
+        Depends(require_captcha),
+    ],
 )
 @traced("users.router.create_user")
 async def create_user(

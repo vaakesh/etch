@@ -1,4 +1,5 @@
 export const AUTH_ENDPOINTS = {
+  challenge: "/auth/challenge",
   login: "/auth/login",
   logout: "/auth/logout",
   refresh: "/auth/refresh",

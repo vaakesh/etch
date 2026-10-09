@@ -6,7 +6,7 @@ from typing import Protocol, TypedDict, Unpack
 from httpx import AsyncClient
 import pytest
 import pytest_asyncio
-from tests.integration.conftest import ClientFactory
+from tests.integration.conftest import ClientFactory, solve_captcha
 
 # Для двух отдельных сеансов ОДНОГО пользователя:
 # account = await user_factory()
@@ -97,8 +97,9 @@ def user_factory(
         payload = user_payload_factory(**overrides)
         registration_client = await client_factory()
         response = await registration_client.post(
-            "/users/create", 
+            "/users/create",
             json=payload,
+            headers=await solve_captcha(registration_client),
         )
         assert response.status_code == 201
         data = response.json()
@@ -137,7 +138,8 @@ def auth_client_factory(
             json={
                 "username": user.username,
                 "password": user.password,
-            }
+            },
+            headers=await solve_captcha(client),
         )
         assert response.status_code == 204
         return client

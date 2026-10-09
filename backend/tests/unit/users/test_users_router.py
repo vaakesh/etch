@@ -8,7 +8,7 @@ from fastapi import status
 from httpx import AsyncClient
 
 from app.auth.deps import get_current_user, get_current_user_with_settings
-from app.auth.errors import AccessTokenNotFoundError, InvalidTokenError
+from app.auth.errors import AccessTokenNotFoundError, CaptchaError, InvalidTokenError
 from app.common.schemas import CursorPage
 from app.decks.schemas import (
     DeckListItemResponse,
@@ -1726,6 +1726,74 @@ class TestCreateUser:
         assert response.json() == expected
 
         user_service.create_user.assert_awaited_once_with(CreateUserRequest(**payload))
+
+    async def test_verifies_captcha_header_before_creating_user(
+        self,
+        client: AsyncClient,
+        user_service: AsyncMock,
+        captcha_service: AsyncMock,
+    ):
+        payload = {
+            "username": "new-user",
+            "email": "new@example.com",
+            "password": "password123",
+        }
+        user_service.create_user.side_effect = UsernameAlreadyExistsError()
+
+        response = await client.post(
+            "/users/create",
+            json=payload,
+            headers={"X-Altcha": "solved-captcha"},
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        captcha_service.verify.assert_awaited_once_with("solved-captcha")
+        user_service.create_user.assert_awaited_once_with(CreateUserRequest(**payload))
+
+    async def test_returns_403_without_creating_user_when_captcha_is_rejected(
+        self,
+        client: AsyncClient,
+        user_service: AsyncMock,
+        captcha_service: AsyncMock,
+    ):
+        payload = {
+            "username": "new-user",
+            "email": "new@example.com",
+            "password": "password123",
+        }
+        captcha_service.verify.side_effect = CaptchaError()
+
+        response = await client.post("/users/create", json=payload)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {
+            "code": "CAPTCHA_INVALID",
+            "message": "Captcha verification failed",
+        }
+        captcha_service.verify.assert_awaited_once_with(None)
+        user_service.create_user.assert_not_awaited()
+
+    async def test_does_not_verify_captcha_when_ip_limit_is_exceeded(
+        self,
+        client: AsyncClient,
+        captcha_service: AsyncMock,
+        redis_rate_limiter: AsyncMock,
+    ):
+        payload = {
+            "username": "new-user",
+            "email": "new@example.com",
+            "password": "password123",
+        }
+        redis_rate_limiter.check.return_value = False
+
+        response = await client.post(
+            "/users/create",
+            json=payload,
+            headers={"X-Altcha": "solved-captcha"},
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        captcha_service.verify.assert_not_awaited()
 
     async def test_normalizes_payload(
         self,

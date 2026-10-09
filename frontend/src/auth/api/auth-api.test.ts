@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
 
+const { solveCaptcha } = vi.hoisted(() => ({ solveCaptcha: vi.fn() }));
+
 vi.mock("../../api", () => ({
   AUTH_ENDPOINTS: {
     login: "/auth/login",
@@ -12,11 +14,15 @@ vi.mock("../../api", () => ({
   apiFetch,
 }));
 
+vi.mock("./captcha-api", () => ({ CAPTCHA_HEADER: "X-Altcha", solveCaptcha }));
+
 import { getCurrentUser, loginRequest, refreshSessionRequest, registerRequest } from "./auth-api";
 
 describe("auth API", () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    solveCaptcha.mockReset();
+    solveCaptcha.mockResolvedValue("solved-captcha");
   });
 
   it("loads the authenticated user from /users/me", async () => {
@@ -52,6 +58,35 @@ describe("auth API", () => {
       retryOnUnauthorized: false,
     });
     expect(options.body).toEqual({ username: "alice", password: "password" });
+    expect(options.headers).toEqual({ "X-Altcha": "solved-captcha" });
+  });
+
+  it("solves a separate captcha for login and for registration", async () => {
+    const signal = new AbortController().signal;
+    apiFetch.mockResolvedValue({
+      uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
+      username: "alice",
+      email: "alice@example.com",
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
+    });
+
+    await registerRequest(
+      { username: "alice", email: "alice@example.com", password: "password" },
+      signal,
+    );
+    await loginRequest({ username: "alice", password: "password" }, signal);
+
+    expect(solveCaptcha).toHaveBeenCalledTimes(2);
+    expect(solveCaptcha).toHaveBeenCalledWith(signal);
+  });
+
+  it("does not send credentials when the captcha cannot be solved", async () => {
+    solveCaptcha.mockRejectedValue(new Error("captcha failed"));
+
+    await expect(loginRequest({ username: "alice", password: "password" })).rejects.toThrow(
+      "captcha failed",
+    );
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it("creates a user through the public registration endpoint", async () => {
@@ -81,6 +116,7 @@ describe("auth API", () => {
         email: "alice@example.com",
         password: "password",
       },
+      headers: { "X-Altcha": "solved-captcha" },
       auth: false,
       retryOnUnauthorized: false,
       signal: undefined,

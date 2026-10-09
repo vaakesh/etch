@@ -53,8 +53,13 @@ PROFILE_RATE_LIMIT_POLICY = RateLimitPolicy(
 )
 AUTH_LOGIN_RATE_LIMIT_POLICY = RateLimitPolicy(
     route="auth:login",
-    requests=10,
-    window_seconds=60,
+    requests=20,
+    window_seconds=10 * 60,
+)
+AUTH_CHALLENGE_RATE_LIMIT_POLICY = RateLimitPolicy(
+    route="auth:challenge",
+    requests=30,
+    window_seconds=10 * 60,
 )
 AUTH_ACTIONS_RATE_LIMIT_POLICY = RateLimitPolicy(
     route="auth:actions",
@@ -144,6 +149,7 @@ profile_rate_limit = limit(
 )
 
 login_rate_limit = limit(AUTH_LOGIN_RATE_LIMIT_POLICY, by_identity="ip")
+challenge_rate_limit = limit(AUTH_CHALLENGE_RATE_LIMIT_POLICY, by_identity="ip")
 auth_actions_rate_limit = limit(AUTH_ACTIONS_RATE_LIMIT_POLICY, by_identity="ip")
 auth_sessions_rate_limit = limit(AUTH_SESSIONS_RATE_LIMIT_POLICY, by_identity="user")
 

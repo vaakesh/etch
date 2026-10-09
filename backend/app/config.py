@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     redis_port: int
     metrics_token: str
     celery_broker_url: str
+    altcha_hmac_key: str
+    altcha_cost: int = 5000
+    altcha_min_counter: int = 500
+    altcha_max_counter: int = 1000
 
     def database_url(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"

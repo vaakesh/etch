@@ -64,9 +64,11 @@ Consumer API содержит `status`, `user`, `error`, `isAuthenticated`, `log
 Фактический поток:
 
 * запуск: `GET /users/me`;
-* login: `POST /auth/login`, затем `GET /users/me`;
+* login: `GET /auth/challenge`, решение капчи, `POST /auth/login` с заголовком `X-Altcha`, затем `GET /users/me`;
 * logout: локальное завершение сессии, затем `POST /auth/logout`;
 * обычный auth-enabled запрос после `401`: refresh и не более одного повтора исходного запроса.
+
+Вход и регистрация (`POST /users/create`) защищены proof-of-work капчей ALTCHA. `loginRequest` и `registerRequest` сами получают и решают задачу через `solveCaptcha` из `src/auth/api/captcha-api.ts`; решение одноразовое, поэтому на каждый запрос берётся новая задача. Страницы и hooks капчу напрямую не вызывают.
 
 Автоматический refresh не выполняется, если запрос передан с `auth: false` или `retryOnUnauthorized: false`.
 

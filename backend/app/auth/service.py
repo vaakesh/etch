@@ -3,8 +3,12 @@
 
 import hashlib
 import hmac
+import logging
 import secrets
 from collections.abc import Callable
+
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from app.tracing import traced
 from datetime import timedelta
 from typing import Any
@@ -12,6 +16,7 @@ from uuid import UUID
 
 import jwt
 from app.auth.errors import (
+    CaptchaError,
     InvalidLoginCredentials,
     InvalidRefreshTokenError,
     InvalidTokenError,
@@ -26,13 +31,17 @@ from app.auth.schemas import (
     VerifiedUser,
 )
 from app.auth.utils import hash_password_async, verify_password_async
-from app.config import AuthTokensConfig
+from app.config import AuthTokensConfig, Settings
 from app.redis.invalidation import CacheInvalidator, scopes
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
 from app.common.utils import decode_cursor, encode_cursor, utcnow
+from altcha import Challenge, create_challenge, verify_solution, Payload
 
+from app.redis.ttl import CHALLENGE_TTL_SECONDS
+
+logger = logging.getLogger(__name__)
 
 class AuthTokensService:
     def __init__(self, config: AuthTokensConfig) -> None:
@@ -352,3 +361,58 @@ class AuthService:
             )
             if is_updated:
                 await uow.commit()
+
+class CaptchaService:
+    def __init__(
+        self,
+        redis: Redis,
+        settings: Settings,
+    ):
+        self.redis = redis
+        self.settings = settings
+
+    def create_challenge(
+        self,
+    ) -> dict:
+        counter_range = self.settings.altcha_max_counter - self.settings.altcha_min_counter
+        challenge: Challenge = create_challenge(
+            algorithm="PBKDF2/SHA-256",
+            cost=self.settings.altcha_cost,
+            counter=self.settings.altcha_min_counter + secrets.randbelow(counter_range + 1),
+            expires_at=utcnow() + timedelta(seconds=CHALLENGE_TTL_SECONDS),
+            hmac_secret=self.settings.altcha_hmac_key,
+        )
+        return challenge.to_dict()
+
+    async def verify(
+        self,
+        payload: str | None,
+    ) -> None:
+        if not payload:
+            raise CaptchaError()
+
+        result = verify_solution(
+            payload=payload,
+            hmac_secret=self.settings.altcha_hmac_key,
+        )
+        if not result.verified:
+            raise CaptchaError()
+
+        signature = Payload.from_base64(payload).challenge.signature
+        try:
+            is_first_use = await self.redis.set(
+                f"altcha:used:{signature}",
+                value=1,
+                nx=True,
+                ex=CHALLENGE_TTL_SECONDS,
+            )
+        except RedisError:
+            # The signature, expiry and solution are already verified above.
+            logger.warning(
+                "Redis is unavailable; captcha replay check skipped",
+                exc_info=True,
+            )
+            return
+
+        if not is_first_use:
+            raise CaptchaError()

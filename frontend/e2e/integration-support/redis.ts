@@ -20,8 +20,8 @@ redis.Redis(
 `;
 
 /**
- * Empties Redis of the test stand: rate-limit counters (registration 5/hour, login 10/minute per
- * IP) and caches. Works only for the stand started from the repository's docker-compose-test.yml.
+ * Empties Redis of the test stand: rate-limit counters (registration 5/hour, login 20 per 10
+ * minutes per IP) and caches. Works only for the stand started from the repository's docker-compose-test.yml.
  */
 export async function flushTestRedis(): Promise<void> {
   try {

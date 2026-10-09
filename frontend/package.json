@@ -24,6 +24,7 @@
     "test:e2e:install": "playwright install chromium firefox webkit"
   },
   "dependencies": {
+    "altcha-lib": "^2.6.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router": "^7.18.1",

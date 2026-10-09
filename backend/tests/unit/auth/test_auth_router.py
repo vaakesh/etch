@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from app.auth.deps import get_current_user
 from app.auth.errors import (
     AccessTokenNotFoundError,
+    CaptchaError,
     InvalidLoginCredentials,
     InvalidRefreshTokenError,
 )
@@ -1144,14 +1145,18 @@ class TestGetSessions:
 
 class TestAuthRateLimits:
     @pytest.mark.parametrize(
-        ("path", "request_kwargs", "service_method", "redis_key", "requests"),
+        (
+            "path", "request_kwargs", "service_method",
+            "redis_key", "requests", "window_seconds",
+        ),
         [
             pytest.param(
                 "/auth/token",
                 {"data": {"username": "test-user", "password": "password123"}},
                 "login_by_bearer_token_without_refresh",
                 "rate_limit:ip:127.0.0.1:auth:login",
-                10,
+                20,
+                600,
                 id="bearer-login",
             ),
             pytest.param(
@@ -1159,24 +1164,25 @@ class TestAuthRateLimits:
                 {"json": {"username": "test-user", "password": "password123"}},
                 "login",
                 "rate_limit:ip:127.0.0.1:auth:login",
-                10,
+                20,
+                600,
                 id="cookie-login",
             ),
             pytest.param(
                 "/auth/logout", {}, "logout",
-                "rate_limit:ip:127.0.0.1:auth:actions", 60,
+                "rate_limit:ip:127.0.0.1:auth:actions", 60, 60,
                 id="logout",
             ),
             pytest.param(
                 "/auth/refresh", {}, "refresh",
-                "rate_limit:ip:127.0.0.1:auth:actions", 60,
+                "rate_limit:ip:127.0.0.1:auth:actions", 60, 60,
                 id="refresh",
             ),
         ],
     )
     async def test_rejects_request_without_calling_service_when_ip_limit_is_exceeded(
         self, client, auth_service, redis_rate_limiter,
-        path, request_kwargs, service_method, redis_key, requests,
+        path, request_kwargs, service_method, redis_key, requests, window_seconds,
     ):
         redis_rate_limiter.check.return_value = False
         client.cookies.set("refresh_token", "active-refresh-token")
@@ -1190,7 +1196,7 @@ class TestAuthRateLimits:
         }
         assert response.headers.get_list("set-cookie") == []
         redis_rate_limiter.check.assert_awaited_once_with(
-            redis_key=redis_key, requests=requests, window_seconds=60,
+            redis_key=redis_key, requests=requests, window_seconds=window_seconds,
         )
         getattr(auth_service, service_method).assert_not_awaited()
 
@@ -1213,3 +1219,157 @@ class TestAuthRateLimits:
             window_seconds=60,
         )
         auth_service.get_active_user_sessions.assert_not_awaited()
+
+
+class TestGetChallenge:
+    async def test_returns_challenge(
+        self,
+        client: AsyncClient,
+        captcha_service: AsyncMock,
+    ):
+        captcha_service.create_challenge.return_value = {
+            "parameters": {
+                "algorithm": "PBKDF2/SHA-256",
+                "cost": 5000,
+                "keyLength": 32,
+                "keyPrefix": "e28f62f3ee4bccd0e7508459c68e16af",
+                "nonce": "5c895aac1340ea08ce99affbf59a4a36",
+                "salt": "a0381aec04947f4f086cb106d302f3a8",
+                "expiresAt": 1791564713,
+            },
+            "signature": "9881d31b17fc7088c273f0557b4ea685",
+        }
+
+        response = await client.get("/auth/challenge")
+
+        expected = {
+            "parameters": {
+                "algorithm": "PBKDF2/SHA-256",
+                "cost": 5000,
+                "keyLength": 32,
+                "keyPrefix": "e28f62f3ee4bccd0e7508459c68e16af",
+                "nonce": "5c895aac1340ea08ce99affbf59a4a36",
+                "salt": "a0381aec04947f4f086cb106d302f3a8",
+                "expiresAt": 1791564713,
+            },
+            "signature": "9881d31b17fc7088c273f0557b4ea685",
+        }
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == expected
+        captcha_service.create_challenge.assert_called_once_with()
+
+    async def test_returns_429_without_creating_challenge_when_ip_limit_is_exceeded(
+        self,
+        client: AsyncClient,
+        captcha_service: AsyncMock,
+        redis_rate_limiter: AsyncMock,
+    ):
+        redis_rate_limiter.check.return_value = False
+
+        response = await client.get("/auth/challenge")
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.json() == {
+            "code": "RATE_LIMIT_EXCEEDED",
+            "message": "Too many requests. Please try again later.",
+        }
+        redis_rate_limiter.check.assert_awaited_once_with(
+            redis_key="rate_limit:ip:127.0.0.1:auth:challenge",
+            requests=30,
+            window_seconds=600,
+        )
+        captcha_service.create_challenge.assert_not_called()
+
+
+CAPTCHA_PROTECTED_LOGINS = [
+    pytest.param(
+        "/auth/token",
+        {"data": {"username": "test-user", "password": "password123"}},
+        "login_by_bearer_token_without_refresh",
+        id="bearer-login",
+    ),
+    pytest.param(
+        "/auth/login",
+        {"json": {"username": "test-user", "password": "password123"}},
+        "login",
+        id="cookie-login",
+    ),
+]
+
+
+class TestLoginCaptcha:
+    @pytest.mark.parametrize(
+        ("path", "request_kwargs", "service_method"),
+        CAPTCHA_PROTECTED_LOGINS,
+    )
+    async def test_verifies_captcha_header_before_login(
+        self,
+        client: AsyncClient,
+        auth_service: AsyncMock,
+        captcha_service: AsyncMock,
+        path: str,
+        request_kwargs: dict,
+        service_method: str,
+    ):
+        getattr(auth_service, service_method).side_effect = InvalidLoginCredentials()
+
+        response = await client.post(
+            path,
+            headers={"X-Altcha": "solved-captcha"},
+            **request_kwargs,
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        captcha_service.verify.assert_awaited_once_with("solved-captcha")
+        getattr(auth_service, service_method).assert_awaited_once()
+
+    @pytest.mark.parametrize(
+        ("path", "request_kwargs", "service_method"),
+        CAPTCHA_PROTECTED_LOGINS,
+    )
+    async def test_returns_403_without_login_when_captcha_is_rejected(
+        self,
+        client: AsyncClient,
+        auth_service: AsyncMock,
+        captcha_service: AsyncMock,
+        path: str,
+        request_kwargs: dict,
+        service_method: str,
+    ):
+        captcha_service.verify.side_effect = CaptchaError()
+
+        response = await client.post(path, **request_kwargs)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {
+            "code": "CAPTCHA_INVALID",
+            "message": "Captcha verification failed",
+        }
+        assert response.headers.get_list("set-cookie") == []
+        captcha_service.verify.assert_awaited_once_with(None)
+        getattr(auth_service, service_method).assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("path", "request_kwargs", "service_method"),
+        CAPTCHA_PROTECTED_LOGINS,
+    )
+    async def test_does_not_verify_captcha_when_ip_limit_is_exceeded(
+        self,
+        client: AsyncClient,
+        captcha_service: AsyncMock,
+        redis_rate_limiter: AsyncMock,
+        path: str,
+        request_kwargs: dict,
+        service_method: str,
+    ):
+        redis_rate_limiter.check.return_value = False
+
+        response = await client.post(
+            path,
+            headers={"X-Altcha": "solved-captcha"},
+            **request_kwargs,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        captcha_service.verify.assert_not_awaited()
