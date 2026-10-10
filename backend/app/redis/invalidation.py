@@ -278,9 +278,8 @@ def load_scopes(payload: Mapping[str, Any]) -> list[Scope]:
 
 
 class CacheInvalidator:
-    def __init__(self, redis: Redis, *, raise_errors: bool = False):
+    def __init__(self, redis: Redis):
         self.redis = redis
-        self.raise_errors = raise_errors
 
     @traced("redis.cache.invalidate")
     async def invalidate(
@@ -316,10 +315,8 @@ class CacheInvalidator:
             await pipe.execute()
 
         except RedisError:
-            logger.warning(
+            logger.error(
                 "Redis cache invalidation failed",
                 extra={"cache_operation": f"INVALIDATE {len(ops)} ops"},
-                exc_info=True,
             )
-            if self.raise_errors:
-                raise
+            raise

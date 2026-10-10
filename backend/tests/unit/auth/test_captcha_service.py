@@ -124,7 +124,7 @@ class TestVerify:
         with pytest.raises(CaptchaError):
             await captcha_service.verify(payload)
 
-    async def test_accepts_solved_challenge_when_redis_is_unavailable(
+    async def test_propagates_redis_error_when_replay_check_is_unavailable(
         self,
         captcha_service: CaptchaService,
         redis: AsyncMock,
@@ -132,11 +132,13 @@ class TestVerify:
         solution: Solution,
     ):
         payload = Payload(challenge, solution).to_base64()
-        redis.set.side_effect = RedisError("redis is down")
+        failure = RedisError("redis is down")
+        redis.set.side_effect = failure
 
-        result = await captcha_service.verify(payload)
+        with pytest.raises(RedisError) as error:
+            await captcha_service.verify(payload)
 
-        assert result is None
+        assert error.value is failure
         redis.set.assert_awaited_once()
 
     @pytest.mark.parametrize(

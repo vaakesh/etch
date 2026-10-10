@@ -149,7 +149,7 @@ class TestCacheInvalidatorInvalidateScopes:
     async def test_executes_unpacked_loaded_scopes_and_deduplicates_operations(
         self, redis_client, redis_pipeline,
     ):
-        invalidator = CacheInvalidator(redis_client, raise_errors=True)
+        invalidator = CacheInvalidator(redis_client)
         loaded = load_scopes({"scopes": [
             {"name": "cards", "args": [100]},
             {"name": "library_card_pages", "args": [42, 42]},
@@ -164,7 +164,7 @@ class TestCacheInvalidatorInvalidateScopes:
         ]
 
     async def test_replays_same_loaded_scopes_after_redis_failure(self, redis_client, redis_pipeline):
-        invalidator = CacheInvalidator(redis_client, raise_errors=True)
+        invalidator = CacheInvalidator(redis_client)
         loaded = load_scopes({"scopes": [
             {"name": "cards", "args": [100]},
             {"name": "library_card_pages", "args": [42]},
@@ -186,7 +186,7 @@ class TestCacheInvalidatorInvalidateScopes:
         {"scopes": [{"name": "cards", "args": []}]},
     ])
     async def test_empty_loaded_scopes_do_not_contact_redis(self, redis_client, payload):
-        invalidator = CacheInvalidator(redis_client, raise_errors=True)
+        invalidator = CacheInvalidator(redis_client)
 
         await invalidator.invalidate(*load_scopes(payload))
 

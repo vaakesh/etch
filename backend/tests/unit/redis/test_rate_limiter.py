@@ -1,4 +1,3 @@
-import logging
 from types import SimpleNamespace
 from unittest.mock import create_autospec
 
@@ -43,21 +42,19 @@ class TestRedisRateLimiterCheck:
         redis_client.set.assert_not_awaited()
 
     @pytest.mark.parametrize("error_type", [RedisError, ConnectionError, TimeoutError])
-    async def test_returns_unavailable_result_and_logs_redis_error(
-        self, redis_client, error_type, caplog,
+    async def test_propagates_redis_error_instead_of_allowing_request(
+        self, redis_client, error_type,
     ):
-        redis_client.eval.side_effect = error_type("Redis unavailable")
+        failure = error_type("Redis unavailable")
+        redis_client.eval.side_effect = failure
         rate_limiter = RedisRateLimiter(redis=redis_client)
 
-        with caplog.at_level(logging.WARNING, logger="app.redis.service"):
-            result = await rate_limiter.check(
+        with pytest.raises(error_type) as error:
+            await rate_limiter.check(
                 redis_key="rate_limit:user:42:cards", requests=5, window_seconds=60,
             )
 
-        assert result is None
-        assert len(caplog.records) == 1
-        assert caplog.records[0].cache_operation == "check rate limit"
-        assert caplog.records[0].exc_info[0] is error_type
+        assert error.value is failure
 
     async def test_propagates_unexpected_error(self, redis_client):
         redis_client.eval.side_effect = RuntimeError("Unexpected failure")
@@ -70,15 +67,14 @@ class TestRedisRateLimiterCheck:
 
 
 class TestRateLimitCall:
-    @pytest.mark.parametrize("allowed", [True, None], ids=["allowed", "redis_unavailable"])
     @pytest.mark.parametrize(("identity", "key", "expected_key"), [
         ("user", 42, "rate_limit:user:42:cards"),
         ("ip", "203.0.113.10", "rate_limit:ip:203.0.113.10:cards"),
     ])
     async def test_allows_request_when_limit_is_not_rejected(
-        self, limiter, policy, allowed, identity, key, expected_key,
+        self, limiter, policy, identity, key, expected_key,
     ):
-        limiter.check.return_value = allowed
+        limiter.check.return_value = True
         rate_limit = RateLimit(policy, limiter, by_identity=identity, identity_key=key)
 
         result = await rate_limit()
@@ -87,6 +83,16 @@ class TestRateLimitCall:
         limiter.check.assert_awaited_once_with(
             redis_key=expected_key, requests=5, window_seconds=60,
         )
+
+    async def test_propagates_redis_error_from_limiter(self, limiter, policy):
+        failure = ConnectionError("Redis unavailable")
+        limiter.check.side_effect = failure
+        rate_limit = RateLimit(policy, limiter, by_identity="user", identity_key=42)
+
+        with pytest.raises(ConnectionError) as error:
+            await rate_limit()
+
+        assert error.value is failure
 
     async def test_raises_rate_limit_error_when_request_is_rejected(self, limiter, policy):
         limiter.check.return_value = False
@@ -188,24 +194,24 @@ class TestRateLimitResponse:
         assert card_service.mock_calls == []
         assert deck_service.mock_calls == []
 
-    async def test_returns_normal_response_when_redis_is_unavailable(
-        self, client, redis_rate_limiter,
+    async def test_returns_503_before_calling_business_services_when_redis_is_unavailable(
+        self, client, redis_rate_limiter, user_service, card_service, deck_service,
     ):
-        redis_rate_limiter.check.return_value = None
+        redis_rate_limiter.check.side_effect = ConnectionError("Redis unavailable")
 
-        response = await client.get("/users/me")
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == {
-            "uuid": "0198ad01-b200-7000-8000-000000000042",
-            "username": "test-user",
-            "email": "test@example.com",
-            "created_at": "2026-08-15T12:00:00Z",
-            "updated_at": "2026-08-15T13:00:00Z",
-            "settings": {
-                "locale": "ru-RU", "theme": "system", "show_previews_for_long": True,
-            },
-        }
-        redis_rate_limiter.check.assert_awaited_once_with(
-            redis_key="rate_limit:user:42:profile", requests=60, window_seconds=60,
+        response = await client.post(
+            "/cards/", json={"front_text": "привет", "back_text": "hello"},
         )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json() == {
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "Service is temporarily unavailable",
+        }
+        assert response.headers["Retry-After"] == "5"
+        redis_rate_limiter.check.assert_awaited_once_with(
+            redis_key="rate_limit:user:42:cards", requests=120, window_seconds=60,
+        )
+        assert user_service.mock_calls == []
+        assert card_service.mock_calls == []
+        assert deck_service.mock_calls == []

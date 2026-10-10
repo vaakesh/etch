@@ -8,7 +8,6 @@ import secrets
 from collections.abc import Callable
 
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
 from app.tracing import traced
 from datetime import timedelta
 from typing import Any
@@ -399,20 +398,12 @@ class CaptchaService:
             raise CaptchaError()
 
         signature = Payload.from_base64(payload).challenge.signature
-        try:
-            is_first_use = await self.redis.set(
-                f"altcha:used:{signature}",
-                value=1,
-                nx=True,
-                ex=CHALLENGE_TTL_SECONDS,
-            )
-        except RedisError:
-            # The signature, expiry and solution are already verified above.
-            logger.warning(
-                "Redis is unavailable; captcha replay check skipped",
-                exc_info=True,
-            )
-            return
+        is_first_use = await self.redis.set(
+            f"altcha:used:{signature}",
+            value=1,
+            nx=True,
+            ex=CHALLENGE_TTL_SECONDS,
+        )
 
         if not is_first_use:
             raise CaptchaError()

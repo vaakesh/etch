@@ -53,7 +53,7 @@ async def _cleanup_expired_archives(
         get_async_session_maker()
     )
     redis = get_redis()
-    invalidator = CacheInvalidator(redis=redis, raise_errors=True)
+    invalidator = CacheInvalidator(redis=redis)
     publisher = OutboxPublisher(
         uow_factory,
         {
@@ -156,7 +156,7 @@ async def _publish_pending_cache_invalidations(batch_size: int) -> dict[str, int
     engine = get_engine()
     uow_factory = get_uow_factory(get_async_session_maker())
     redis = get_redis()
-    invalidator = CacheInvalidator(redis=redis, raise_errors=True)
+    invalidator = CacheInvalidator(redis=redis)
     publisher = OutboxPublisher(
         uow_factory,
         {

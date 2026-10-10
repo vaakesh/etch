@@ -3,6 +3,9 @@ from collections import Counter
 import pytest
 from fastapi import FastAPI, status
 from httpx import ASGITransport, AsyncClient
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.decks.errors import DeckNotFoundError, DeckSizeLimitExceededError
 from app.errors import RequestValueError
@@ -139,6 +142,25 @@ class TestErrorResponseShape:
         assert status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert payload["code"] == "VALIDATION_ERROR"
         assert payload["details"][0]["loc"] == ["body", "answer"]
+
+    @pytest.mark.parametrize(
+        "error_type",
+        [RedisError, RedisConnectionError, RedisTimeoutError],
+        ids=["redis_error", "connection_error", "timeout_error"],
+    )
+    async def test_redis_error_is_reported_as_service_unavailable(self, error_type):
+        app = build_app(error_type("redis://admin:secret@redis:6379 is down"))
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/boom")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json() == {
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "Service is temporarily unavailable",
+        }
+        assert response.headers["Retry-After"] == "5"
 
     async def test_unhandled_error_does_not_leak_internals(self):
         status_code, payload = await request_error(RuntimeError("secret table name"))

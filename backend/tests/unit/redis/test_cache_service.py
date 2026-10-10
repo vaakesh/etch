@@ -1,4 +1,3 @@
-import logging
 from unittest.mock import Mock, call
 
 import orjson
@@ -46,20 +45,19 @@ class TestCacheEntities:
         assert redis_client.mock_calls == []
 
     @pytest.mark.parametrize("failure_stage", ["pipeline", "set", "execute"])
-    async def test_does_not_fail_when_redis_write_fails(
-        self, cache_service, redis_client, redis_pipeline, case, failure_stage, caplog,
+    async def test_propagates_redis_error_when_write_fails(
+        self, cache_service, redis_client, redis_pipeline, case, failure_stage,
     ):
         target = redis_client.pipeline if failure_stage == "pipeline" else getattr(
             redis_pipeline, failure_stage,
         )
-        target.side_effect = ConnectionError("Redis unavailable")
+        failure = ConnectionError("Redis unavailable")
+        target.side_effect = failure
 
-        with caplog.at_level(logging.WARNING, logger="app.redis.service"):
-            result = await getattr(cache_service, case.cache_method)(**cache_kwargs(case))
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache_service, case.cache_method)(**cache_kwargs(case))
 
-        assert result is None
-        assert caplog.records
-        assert all(record.exc_info for record in caplog.records)
+        assert error.value is failure
 
 
 @pytest.mark.parametrize("case", CACHE_CASES, ids=lambda case: case.name)
@@ -103,27 +101,29 @@ class TestGetCachedEntities:
         assert result.missing == [case.identity]
         redis_client.delete.assert_awaited_once_with(case.key)
 
-    async def test_returns_miss_when_corrupted_value_cannot_be_deleted(
+    async def test_propagates_redis_error_when_corrupted_value_cannot_be_deleted(
         self, cache_service, redis_client, case,
     ):
         redis_client.mget.return_value = ["not-json"]
-        redis_client.delete.side_effect = TimeoutError("Redis unavailable")
+        failure = TimeoutError("Redis unavailable")
+        redis_client.delete.side_effect = failure
 
-        result = await getattr(cache_service, case.get_method)(**get_kwargs(case))
+        with pytest.raises(TimeoutError) as error:
+            await getattr(cache_service, case.get_method)(**get_kwargs(case))
 
-        assert result.cached == {}
-        assert result.missing == [case.identity]
+        assert error.value is failure
         redis_client.delete.assert_awaited_once_with(case.key)
 
-    async def test_returns_all_requested_identities_as_missing_on_redis_error(
+    async def test_propagates_redis_error_when_read_fails(
         self, cache_service, redis_client, case,
     ):
-        redis_client.mget.side_effect = RedisError("Redis unavailable")
+        failure = RedisError("Redis unavailable")
+        redis_client.mget.side_effect = failure
 
-        result = await getattr(cache_service, case.get_method)(**get_kwargs(case))
+        with pytest.raises(RedisError) as error:
+            await getattr(cache_service, case.get_method)(**get_kwargs(case))
 
-        assert result.cached == {}
-        assert result.missing == [case.identity]
+        assert error.value is failure
         redis_client.delete.assert_not_awaited()
 
     async def test_does_not_contact_redis_for_empty_input(
@@ -202,18 +202,18 @@ class TestGetCachedEntitiesByUuids:
         ]
 
     @pytest.mark.parametrize("failure_stage", ["index", "entity"])
-    async def test_returns_miss_when_redis_read_fails(
+    async def test_propagates_redis_error_when_read_fails(
         self, cache_service, redis_client, case, failure_stage,
     ):
-        error = ConnectionError("Redis unavailable")
-        redis_client.mget.side_effect = [error] if failure_stage == "index" else [
-            [str(case.identity)], error,
+        failure = ConnectionError("Redis unavailable")
+        redis_client.mget.side_effect = [failure] if failure_stage == "index" else [
+            [str(case.identity)], failure,
         ]
 
-        result = await getattr(cache_service, case.uuid_get_method)([case.uuid])
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache_service, case.uuid_get_method)([case.uuid])
 
-        assert result.cached == {}
-        assert result.missing == [case.uuid]
+        assert error.value is failure
 
     async def test_reads_same_entity_once_for_duplicate_uuid_indices(
         self, cache_service, redis_client, case,

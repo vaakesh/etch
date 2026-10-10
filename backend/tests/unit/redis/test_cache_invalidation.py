@@ -40,22 +40,10 @@ class TestInvalidateEntries:
 
         redis_client.pipeline.assert_not_called()
 
-    async def test_does_not_fail_when_redis_invalidation_fails(
+    async def test_propagates_original_redis_error(
         self, redis_client, redis_pipeline, scope_fn, identity, key,
     ):
         invalidator = CacheInvalidator(redis_client)
-        redis_pipeline.execute.side_effect = ConnectionError("Redis unavailable")
-
-        result = await invalidator.invalidate(scope_fn(identity))
-
-        assert result is None
-        redis_pipeline.unlink.assert_called_once_with(key)
-        redis_pipeline.execute.assert_awaited_once_with()
-
-    async def test_propagates_original_redis_error_in_strict_mode(
-        self, redis_client, redis_pipeline, scope_fn, identity, key,
-    ):
-        invalidator = CacheInvalidator(redis_client, raise_errors=True)
         failure = ConnectionError("Redis unavailable")
         redis_pipeline.execute.side_effect = failure
 
@@ -63,6 +51,8 @@ class TestInvalidateEntries:
             await invalidator.invalidate(scope_fn(identity))
 
         assert error.value is failure
+        redis_pipeline.unlink.assert_called_once_with(key)
+        redis_pipeline.execute.assert_awaited_once_with()
 
 
 @pytest.mark.parametrize(("scope_fn", "kind"), [
@@ -97,26 +87,16 @@ class TestInvalidateLibraryPages:
 
         redis_client.pipeline.assert_not_called()
 
-    @pytest.mark.parametrize("failure_stage", ["pipeline", "incr", "expire", "execute"])
-    async def test_does_not_fail_when_generation_invalidation_fails(
+    @pytest.mark.parametrize("failure_stage", ["pipeline", "incr", "execute"])
+    async def test_propagates_original_generation_invalidation_error(
         self, redis_client, redis_pipeline, scope_fn, kind, failure_stage,
     ):
         invalidator = CacheInvalidator(redis_client)
         target = redis_client.pipeline if failure_stage == "pipeline" else getattr(
             redis_pipeline, failure_stage,
         )
-        target.side_effect = ConnectionError("Redis unavailable")
-
-        result = await invalidator.invalidate(scope_fn(42))
-
-        assert result is None
-
-    async def test_propagates_generation_invalidation_error_in_strict_mode(
-        self, redis_client, redis_pipeline, scope_fn, kind,
-    ):
-        invalidator = CacheInvalidator(redis_client, raise_errors=True)
         failure = ConnectionError("Redis unavailable")
-        redis_pipeline.execute.side_effect = failure
+        target.side_effect = failure
 
         with pytest.raises(ConnectionError) as error:
             await invalidator.invalidate(scope_fn(42))

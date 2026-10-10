@@ -87,18 +87,20 @@ class TestCacheLibraryPages:
 
         assert redis_client.set.await_args.kwargs["name"] == page_case.filtered_page_key
 
-    async def test_does_not_fail_when_page_write_fails(
+    async def test_propagates_redis_error_when_page_write_fails(
         self, cache_service, redis_client, page_case,
     ):
-        redis_client.set.side_effect = ConnectionError("Redis unavailable")
+        failure = ConnectionError("Redis unavailable")
+        redis_client.set.side_effect = failure
         kwargs = {
             "user_id": 42, page_case.ids_argument: [100],
             "expected_generation": 3, "next_cursor": None, "has_more": False,
         }
 
-        result = await getattr(cache_service, page_case.cache_method)(**kwargs)
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache_service, page_case.cache_method)(**kwargs)
 
-        assert result is None
+        assert error.value is failure
         redis_client.set.assert_awaited_once()
 
 
@@ -173,40 +175,52 @@ class TestGetCachedLibraryPages:
         assert result.generation is None
         redis_client.get.assert_awaited_once_with(page_case.generation_key)
 
-    async def test_disables_page_caching_when_generation_read_fails(
+    async def test_propagates_redis_error_when_generation_read_fails(
         self, cache_service, redis_client, page_case,
     ):
-        redis_client.get.side_effect = ConnectionError("Redis unavailable")
+        failure = ConnectionError("Redis unavailable")
+        redis_client.get.side_effect = failure
 
-        result = await getattr(cache_service, page_case.get_method)(user_id=42)
+        with pytest.raises(ConnectionError) as error:
+            await getattr(cache_service, page_case.get_method)(user_id=42)
 
-        assert result.page is None
-        assert result.generation is None
+        assert error.value is failure
         redis_client.get.assert_awaited_once_with(page_case.generation_key)
 
-    async def test_returns_miss_when_page_read_fails(
+    async def test_propagates_redis_error_when_page_read_fails(
         self, cache_service, redis_client, page_case,
     ):
-        redis_client.get.side_effect = ["3", TimeoutError("Redis unavailable")]
+        failure = TimeoutError("Redis unavailable")
+        redis_client.get.side_effect = ["3", failure]
 
-        result = await getattr(cache_service, page_case.get_method)(user_id=42)
+        with pytest.raises(TimeoutError) as error:
+            await getattr(cache_service, page_case.get_method)(user_id=42)
 
-        assert result.page is None
-        assert result.generation == 3
+        assert error.value is failure
 
     @pytest.mark.parametrize("value", [
         "not-json", "[]", '{"items":["not-an-id"],"next_cursor":null,"has_more":false}',
     ])
-    @pytest.mark.parametrize("delete_fails", [False, True])
-    async def test_returns_miss_for_corrupted_page_even_when_cleanup_fails(
-        self, cache_service, redis_client, page_case, value, delete_fails,
+    async def test_returns_miss_for_corrupted_page_and_removes_it(
+        self, cache_service, redis_client, page_case, value,
     ):
         redis_client.get.side_effect = ["3", value]
-        if delete_fails:
-            redis_client.delete.side_effect = TimeoutError("Redis unavailable")
 
         result = await getattr(cache_service, page_case.get_method)(user_id=42)
 
         assert result.page is None
         assert result.generation == 3
+        redis_client.delete.assert_awaited_once_with(page_case.page_key)
+
+    async def test_propagates_redis_error_when_corrupted_page_cannot_be_deleted(
+        self, cache_service, redis_client, page_case,
+    ):
+        redis_client.get.side_effect = ["3", "not-json"]
+        failure = TimeoutError("Redis unavailable")
+        redis_client.delete.side_effect = failure
+
+        with pytest.raises(TimeoutError) as error:
+            await getattr(cache_service, page_case.get_method)(user_id=42)
+
+        assert error.value is failure
         redis_client.delete.assert_awaited_once_with(page_case.page_key)

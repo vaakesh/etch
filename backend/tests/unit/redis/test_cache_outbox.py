@@ -9,13 +9,8 @@ from tests.unit.redis.cases import CARD_UUID
 
 
 class TestCacheInvalidationHandler:
-    def test_rejects_invalidator_that_swallows_delivery_errors(self, redis_client):
-        with pytest.raises(ValueError, match="raise_errors=True"):
-            CacheInvalidationHandler(CacheInvalidator(redis_client))
-
     async def test_passes_loaded_scopes_as_separate_arguments_to_invalidator(self):
         invalidator = create_autospec(CacheInvalidator, instance=True)
-        invalidator.raise_errors = True
         handler = CacheInvalidationHandler(invalidator)
 
         await handler({"scopes": [
@@ -28,7 +23,7 @@ class TestCacheInvalidationHandler:
         )
 
     async def test_delivers_scopes_from_jsonb_payload(self, redis_client, redis_pipeline):
-        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
 
         await handler({"scopes": [
             {"name": "cards_removed", "args": [{"id": 100, "uuid": str(CARD_UUID)}]},
@@ -43,7 +38,7 @@ class TestCacheInvalidationHandler:
         ]
 
     async def test_propagates_redis_failure(self, redis_client, redis_pipeline):
-        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
         redis_pipeline.execute.side_effect = ConnectionError("Redis unavailable")
 
         with pytest.raises(ConnectionError):
@@ -52,7 +47,7 @@ class TestCacheInvalidationHandler:
         redis_pipeline.execute.assert_awaited_once_with()
 
     async def test_rejects_unknown_scope_before_redis(self, redis_client):
-        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
 
         with pytest.raises(ValueError, match="Unknown cache scope"):
             await handler({"scopes": [
@@ -63,7 +58,7 @@ class TestCacheInvalidationHandler:
         redis_client.pipeline.assert_not_called()
 
     async def test_empty_payload_does_not_contact_redis(self, redis_client):
-        handler = CacheInvalidationHandler(CacheInvalidator(redis_client, raise_errors=True))
+        handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
 
         await handler({"scopes": []})
 

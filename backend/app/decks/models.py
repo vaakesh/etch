@@ -378,6 +378,7 @@ class UserDeck(Base):
             "last_studied_at IS NULL OR last_studied_at >= added_at",
             name="ck_user_decks_study_dates_order",
         ),
+        Index("ix_user_decks_deck_id", "deck_id"),
     )
 
 

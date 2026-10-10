@@ -43,7 +43,6 @@ from app.redis.ttl import (
     USER_TTL,
 )
 from redis.asyncio import Redis
-from redis.exceptions import RedisError
 
 from app.users.schemas import InternalUser, InternalUserSettings, UserProfileResponse
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
@@ -92,7 +91,7 @@ class RateLimit:
             requests=self.policy.requests,
             window_seconds=self.policy.window_seconds,
         )
-        if can is not None and not can:
+        if not can:
             raise RateLimitError()
 
 RATE_LIMIT_SCRIPT = """
@@ -115,32 +114,24 @@ class RedisRateLimiter:
         redis_key: str,
         requests: int,
         window_seconds: int,
-    ) -> bool | None:
-        try:
-            with trace_span("redis.rate_limiter.eval"):
-                value = await self.redis.eval(
-                    RATE_LIMIT_SCRIPT,
-                    1,
-                    redis_key,
-                    window_seconds,
-                )
-
-            return value <= requests
-        except RedisError:
-            logger.warning(
-                "Redis cache operation failed; continuing without cache",
-                extra={"cache_operation": "check rate limit"},
-                exc_info=True,
+    ) -> bool:
+        with trace_span("redis.rate_limiter.eval"):
+            value = await self.redis.eval(
+                RATE_LIMIT_SCRIPT,
+                1,
+                redis_key,
+                window_seconds,
             )
+
+        return value <= requests
 
 class RedisCacheService:
     """
-    Best-effort cache by default; background delivery can opt into Redis errors.
+    Redis is a required dependency: Redis errors propagate to the caller.
     Invalid cache entries are treated as misses and removed when possible.
     """
-    def __init__(self, redis: Redis, *, raise_errors: bool = False):
+    def __init__(self, redis: Redis):
         self.redis = redis
-        self.raise_errors = raise_errors
 
     # helpers
 
@@ -151,37 +142,26 @@ class RedisCacheService:
         ) -> int:
         return base + random.randint(0, spread)
 
-    async def _safe_set(
+    async def _redis_set(
         self,
         *,
         key: str,
         value: bytes | str,
         ex: int,
     ) -> None:
-        try:
-            await self.redis.set(
-                name=key,
-                value=value,
-                ex=self.with_jitter(base=ex),
-            )
-        except RedisError:
-            self._log_redis_error(
-                operation=f"SET {key}",
-            )
+        await self.redis.set(
+            name=key,
+            value=value,
+            ex=self.with_jitter(base=ex),
+        )
 
-    async def _safe_get(
+    async def _redis_get(
         self,
         key: str,
     ) -> str | None:
-        try:
-            return await self.redis.get(key)
-        except RedisError:
-            self._log_redis_error(
-                operation=f"GET {key}",
-            )
-            return
+        return await self.redis.get(key)
 
-    async def _safe_set_many(
+    async def _redis_set_many(
         self,
         entries: dict[str, bytes | str],
         ex: int,
@@ -189,62 +169,40 @@ class RedisCacheService:
         if not entries:
             return
 
-        try:
-            pipe = self.redis.pipeline(transaction=False)
+        pipe = self.redis.pipeline(transaction=False)
 
-            for key, value in entries.items():
-                pipe.set(
-                    name=key,
-                    value=value,
-                    ex=self.with_jitter(base=ex),
-                )
-
-            await pipe.execute()
-
-        except RedisError:
-            self._log_redis_error(
-                operation=f"SET MANY {len(entries)} keys"
+        for key, value in entries.items():
+            pipe.set(
+                name=key,
+                value=value,
+                ex=self.with_jitter(base=ex),
             )
 
-    async def _safe_mget(
+        await pipe.execute()
+
+    async def _redis_mget(
         self,
         keys: list[str],
-    ) -> list[str | None] | None:
+    ) -> list[str | None]:
         if not keys:
             return []
 
-        try:
-            return await self.redis.mget(keys=keys)
-        except RedisError:
-            self._log_redis_error(
-                operation=f"MGET {len(keys)}",
-            )
-            return
+        return await self.redis.mget(keys=keys)
 
-    async def _safe_delete(
+    async def _redis_delete(
         self,
         key: str,
     ) -> None:
-        try:
-            await self.redis.delete(key)
-        except RedisError:
-            self._log_redis_error(
-                operation=f"DELETE {key}"
-            )
+        await self.redis.delete(key)
 
-    async def _safe_delete_many(
+    async def _redis_delete_many(
         self,
         keys: list[str],
     ) -> None:
         if not keys:
             return
 
-        try:
-            await self.redis.delete(*keys)
-        except RedisError:
-            self._log_redis_error(
-                operation=f"DELETE {len(keys)} keys",
-            )
+        await self.redis.delete(*keys)
 
     async def _get_page_generation(
         self,
@@ -253,15 +211,11 @@ class RedisCacheService:
     ) -> int | None:
         """
         returns valid generation starting from 0
-        or returns None if error has occured
+        or returns None if the stored generation is invalid
         """
         key = key_generation_factory(user_id)
 
-        try:
-            generation = await self.redis.get(key)
-        except RedisError:
-            self._log_redis_error(operation=f"GET {key}")
-            return None
+        generation = await self.redis.get(key)
 
         if generation is None:
             return 0
@@ -287,7 +241,7 @@ class RedisCacheService:
     ) -> int | None:
         """
         returns valid generation starting from 0
-        or returns None if error has occured
+        or returns None if the stored generation is invalid
         """
         return await self._get_page_generation(
             user_id=user_id,
@@ -300,25 +254,12 @@ class RedisCacheService:
     ) -> int | None:
         """
         returns valid generation starting from 0
-        or returns None if error has occured
+        or returns None if the stored generation is invalid
         """
         return await self._get_page_generation(
             user_id=user_id,
             key_generation_factory=make_library_deck_page_generation_cache_key,
         )
-
-    def _log_redis_error(
-        self,
-        operation: str,
-    ) -> None:
-        logger.warning(
-            "Redis cache operation failed",
-            extra={"cache_operation": operation},
-            exc_info=True,
-        )
-        if self.raise_errors:
-            # This helper is called only inside RedisError exception handlers.
-            raise
 
     def _deserialize_cached_value[T](
         self,
@@ -377,7 +318,7 @@ class RedisCacheService:
             for entity_uuid, entity_id
             in zip(entity_uuids, entity_ids, strict=True)
         }
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=entries,
             ex=ttl,
         )
@@ -437,7 +378,7 @@ class RedisCacheService:
             ): user.model_dump_json()
             for user in users
         }
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=entries,
             ex=USER_TTL,
         )
@@ -482,7 +423,7 @@ class RedisCacheService:
             ): user_settings.model_dump_json()
             for user_settings in users_settings
         }
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=entries,
             ex=USER_SETTINGS_TTL,
         )
@@ -513,7 +454,7 @@ class RedisCacheService:
             for user_deck in user_decks
         }
 
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=entries,
             ex=USER_DECK_TTL,
         )
@@ -564,7 +505,7 @@ class RedisCacheService:
             has_more=has_more,
         )
 
-        await self._safe_set(
+        await self._redis_set(
             key=key,
             value=cached_page.model_dump_json(),
             ex=LIBRARY_PAGE_TTL,
@@ -581,13 +522,13 @@ class RedisCacheService:
         """
         returns cached page and generation \n
         if page is None - no cache \n
-        if generation is None - error has occured
+        if generation is None - stored generation is invalid
         """
         generation = await self._get_library_cards_page_generation(
             user_id=user_id,
         )
 
-        # error
+        # invalid generation
         if generation is None:
             return LibraryPageCacheLookup(
                 page=None,
@@ -602,7 +543,7 @@ class RedisCacheService:
             limit=limit,
         )
 
-        value = await self._safe_get(
+        value = await self._redis_get(
             key=key,
         )
 
@@ -621,7 +562,7 @@ class RedisCacheService:
 
         # error in deserializing
         if cached is None:
-            await self._safe_delete(key=key)
+            await self._redis_delete(key=key)
             return LibraryPageCacheLookup(
                 page=None,
                 generation=generation,
@@ -662,7 +603,7 @@ class RedisCacheService:
             next_cursor=next_cursor,
             has_more=has_more,
         )
-        await self._safe_set(
+        await self._redis_set(
             key=key,
             value=cached_page.model_dump_json(),
             ex=LIBRARY_PAGE_TTL,
@@ -680,13 +621,13 @@ class RedisCacheService:
         """
         returns cached page and generation \n
         if page is None - no cache \n
-        if generation is None - error has occured
+        if generation is None - stored generation is invalid
         """
         generation = await self._get_library_deck_page_generation(
             user_id=user_id,
         )
 
-        # error
+        # invalid generation
         if generation is None:
             return LibraryPageCacheLookup(
                 page=None,
@@ -702,7 +643,7 @@ class RedisCacheService:
             limit=limit,
         )
 
-        value = await self._safe_get(
+        value = await self._redis_get(
             key=key,
         )
 
@@ -720,7 +661,7 @@ class RedisCacheService:
         )
 
         if cached is None:
-            await self._safe_delete(
+            await self._redis_delete(
                 key=key,
             )
             return LibraryPageCacheLookup(
@@ -753,7 +694,7 @@ class RedisCacheService:
                 orjson.dumps(card_ids)
             )
 
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
             ex=DECK_CARDS_TTL,
         )
@@ -790,7 +731,7 @@ class RedisCacheService:
             for card in cards
         ]
 
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
             ex=CARD_TTL,
         )
@@ -845,7 +786,7 @@ class RedisCacheService:
             for deck in decks
         ]
 
-        await self._safe_set_many(
+        await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
             ex=DECK_TTL,
         )
@@ -896,15 +837,9 @@ class RedisCacheService:
             key_factory(identity)
             for identity in identities
         ]
-        values = await self._safe_mget(
+        values = await self._redis_mget(
             keys=keys,
         )
-
-        if values is None:
-            return CacheLookupResult(
-                cached={},
-                missing=identities,
-            )
 
         cached: dict[K, T] = {}
         missing: list[K] = []
@@ -928,7 +863,7 @@ class RedisCacheService:
 
             cached[identity] = item
 
-        await self._safe_delete_many(
+        await self._redis_delete_many(
             keys=corrupted_keys,
         )
 

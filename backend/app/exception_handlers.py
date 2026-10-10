@@ -67,6 +67,7 @@ from app.users.errors import (
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 
 type ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
@@ -194,6 +195,29 @@ async def unhandled_exception_handler(
     )
 
 logger = logging.getLogger(__name__)
+
+REDIS_RETRY_AFTER_SECONDS = 5
+
+
+async def redis_unavailable_handler(
+    request: Request,
+    exc: RedisError,
+):
+    logger.error(
+        "Redis is unavailable",
+        extra={"event": "redis.unavailable", "error_type": type(exc).__name__},
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "Service is temporarily unavailable",
+        },
+        headers={"Retry-After": str(REDIS_RETRY_AFTER_SECONDS)},
+    )
+
+
 async def request_validation_handler(
     request: Request,
     exc: RequestValidationError,
@@ -240,4 +264,5 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
     app.add_exception_handler(RequestValueError, request_value_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
+    app.add_exception_handler(RedisError, redis_unavailable_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

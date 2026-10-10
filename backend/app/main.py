@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     )
 
     try:
+        await redis.ping()
         logging.getLogger("app.startup").info(
             "OTLP logging is ready",
             extra={"event": "telemetry.ready"},
