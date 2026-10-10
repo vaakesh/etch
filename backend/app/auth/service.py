@@ -32,6 +32,7 @@ from app.auth.schemas import (
 from app.auth.utils import hash_password_async, verify_password_async
 from app.config import AuthTokensConfig, Settings
 from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.models import User
@@ -333,12 +334,17 @@ class AuthService:
                 revoked_at=utcnow(),
             )
 
-            await uow.commit()
-
             # Cached users embed hashed_password and updated_at.
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.users(user_id),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
 
     @traced("auth.service.logout")
     async def logout(

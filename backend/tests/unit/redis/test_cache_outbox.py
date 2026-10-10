@@ -4,8 +4,32 @@ import pytest
 from redis.exceptions import ConnectionError
 
 from app.redis.invalidation import CacheInvalidator, scopes
-from app.redis.outbox import CacheInvalidationHandler
+from app.redis.outbox import CacheInvalidationHandler, cache_invalidation_message
 from tests.unit.redis.cases import CARD_UUID
+
+
+class TestCacheInvalidationMessage:
+    def test_builds_pending_cache_event_from_scopes(self):
+        message = cache_invalidation_message(
+            scopes.cards(100), scopes.library_card_pages(42),
+        )
+
+        assert message.event_type == "cache.invalidation.v1"
+        assert message.payload == {"scopes": [
+            {"name": "cards", "args": [100]},
+            {"name": "library_card_pages", "args": [42]},
+        ]}
+        assert message.id is None
+        assert message.published_at is None
+
+    def test_omits_scopes_without_arguments(self):
+        message = cache_invalidation_message(
+            scopes.decks(), scopes.library_deck_pages(42),
+        )
+
+        assert message.payload == {"scopes": [
+            {"name": "library_deck_pages", "args": [42]},
+        ]}
 
 
 class TestCacheInvalidationHandler:

@@ -1,6 +1,7 @@
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.utils import utcnow
@@ -15,7 +16,7 @@ class OutboxRepository:
         self.session.add(message)
 
     async def get_pending(
-        self, *, event_types: Sequence[str], limit: int,
+        self, *, event_types: Sequence[str], created_before: datetime, limit: int,
     ) -> list[OutboxMessage]:
         if not event_types:
             return []
@@ -24,6 +25,8 @@ class OutboxRepository:
             .where(
                 OutboxMessage.published.is_(False),
                 OutboxMessage.event_type.in_(event_types),
+                # Свежие события ещё доставляет запрос, который их создал.
+                OutboxMessage.created_at < created_before,
             )
             .order_by(OutboxMessage.id)
             .limit(limit)
@@ -42,3 +45,21 @@ class OutboxRepository:
             .execution_options(synchronize_session=False)
         )
         return result.scalar_one_or_none() is not None
+
+    async def delete_published(self, *, cutoff: datetime, limit: int) -> int:
+        batch = (
+            select(OutboxMessage.id)
+            .where(
+                OutboxMessage.published.is_(True),
+                OutboxMessage.published_at < cutoff,
+            )
+            .order_by(OutboxMessage.id)
+            .limit(limit)
+        )
+        result = await self.session.execute(
+            delete(OutboxMessage)
+            .where(OutboxMessage.id.in_(batch))
+            .returning(OutboxMessage.id)
+            .execution_options(synchronize_session=False)
+        )
+        return len(result.all())

@@ -13,6 +13,11 @@ from app.users.errors import PermissionDeniedError, UserNotFoundError
 from app.users.models import User
 
 
+from tests.unit.outbox_helpers import (
+    assert_invalidation_delivered_from_outbox,
+    first_commit_precedes_invalidation,
+)
+
 USER_UUID = UUID("0198ad01-b200-7000-8000-000000000109")
 PUBLIC_DECK_UUID = UUID("0198ad01-b200-7000-8000-000000000201")
 PRIVATE_DECK_UUID = UUID("0198ad01-b200-7000-8000-000000000202")
@@ -60,7 +65,7 @@ class TestDeleteUser:
         service, uow, archiver, cache, invalidator = delete_context
         user = uow.user_repo.get_by_id.return_value
         uow.user_repo.delete.side_effect = lambda obj: archiver.archive_owner_public_decks.assert_awaited_once_with(owner_id=9)
-        uow.commit.side_effect = lambda: invalidator.invalidate.assert_not_awaited()
+        uow.commit.side_effect = first_commit_precedes_invalidation(uow, invalidator)
 
         await service.delete_user(current_user_id=9)
 
@@ -72,8 +77,8 @@ class TestDeleteUser:
         uow.card_repo.get_identities_by_user_id.assert_awaited_once_with(user_id=9)
         uow.deck_card_repo.get_all_deck_ids_by_card_ids.assert_awaited_once_with(card_ids=[100, 101])
         uow.user_repo.delete.assert_awaited_once_with(user)
-        uow.commit.assert_awaited_once()
-        invalidator.invalidate.assert_awaited_once()
+        assert uow.commit.await_count == 2
+        assert_invalidation_delivered_from_outbox(uow, invalidator)
         groups = invalidator.invalidate.await_args.args
         assert {op for group in groups for op in group} == {
             DelKey("user:9"), DelKey(f"user:id-by-uuid:{USER_UUID}"),
@@ -109,8 +114,8 @@ class TestDeleteUser:
         await service.delete_user(current_user_id=9)
 
         uow.user_repo.delete.assert_awaited_once_with(uow.user_repo.get_by_id.return_value)
-        uow.commit.assert_awaited_once()
-        invalidator.invalidate.assert_awaited_once()
+        assert uow.commit.await_count == 2
+        assert_invalidation_delivered_from_outbox(uow, invalidator)
         groups = invalidator.invalidate.await_args.args
         assert {op for group in groups for op in group} == {
             DelKey("user:9"), DelKey(f"user:id-by-uuid:{USER_UUID}"),
@@ -225,5 +230,6 @@ class TestDeleteUser:
 
         assert cache.mock_calls == []
         invalidator.invalidate.assert_not_awaited()
+        uow.outbox_repo.mark_published.assert_not_awaited()
         if stage == "delete":
             uow.commit.assert_not_awaited()

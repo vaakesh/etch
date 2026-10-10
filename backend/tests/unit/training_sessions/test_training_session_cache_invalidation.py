@@ -13,6 +13,15 @@ from app.training_sessions.repository import (
 )
 from app.training_sessions.schemas import SubmittedAnswerRequest
 from app.training_sessions.service import TrainingSessionService
+from redis.exceptions import ConnectionError as RedisConnectionError
+
+from tests.unit.outbox_helpers import (
+    OUTBOX_MESSAGE_ID,
+    assert_invalidation_delivered_from_outbox,
+    assert_no_invalidation_staged,
+    make_outbox_repo,
+    staged_message,
+)
 from tests.unit.factories import (
     TEST_TRAINING_SESSION_UUID,
     make_deck,
@@ -24,9 +33,9 @@ from tests.unit.factories import (
 NOW = datetime(2026, 8, 15, 17, 0, tzinfo=UTC)
 
 
-def invalidated_ops(invalidator):
-    invalidator.invalidate.assert_awaited_once()
-    return {op for group in invalidator.invalidate.await_args.args for op in group}
+def invalidated_ops(ctx):
+    assert_invalidation_delivered_from_outbox(ctx.uow, ctx.invalidator)
+    return {op for group in ctx.invalidator.invalidate.await_args.args for op in group}
 
 
 @pytest.fixture
@@ -41,8 +50,12 @@ def cache_context(monkeypatch):
     uow.__aenter__ = AsyncMock(return_value=uow)
     uow.__aexit__ = AsyncMock(return_value=False)
 
+    uow.outbox_repo = make_outbox_repo()
+
     async def commit():
-        invalidator.invalidate.assert_not_awaited()
+        # первый commit фиксирует изменения до сброса, второй закрывает событие
+        if not uow.outbox_repo.mark_published.await_count:
+            invalidator.invalidate.assert_not_awaited()
 
     async def flush():
         created = uow.training_session_repo.add.call_args.args[0]
@@ -107,7 +120,7 @@ class TestSubmitAnswerInvalidation:
         assert ctx.session.status == TrainingSessionStatus.COMPLETED
         assert ctx.state.last_studied_at == NOW
         assert ctx.state.sessions_count == 1
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:user-deck:42:200"),
             BumpGeneration("library:42:decks:generation"),
         }
@@ -119,7 +132,7 @@ class TestSubmitAnswerInvalidation:
 
         assert result.is_finished is False
         ctx.uow.commit.assert_awaited_once()
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
 
     async def test_does_not_invalidate_when_commit_fails(self, cache_context):
         ctx = cache_context
@@ -130,6 +143,21 @@ class TestSubmitAnswerInvalidation:
             await submit(ctx)
 
         ctx.invalidator.invalidate.assert_not_awaited()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
+
+    async def test_leaves_event_pending_when_redis_fails_after_commit(self, cache_context):
+        ctx = cache_context
+        ctx.session.answered_count = 9
+        failure = RedisConnectionError("Redis unavailable")
+        ctx.invalidator.invalidate.side_effect = failure
+
+        with pytest.raises(RedisConnectionError) as error:
+            await submit(ctx)
+
+        assert error.value is failure
+        assert staged_message(ctx.uow).id == OUTBOX_MESSAGE_ID
+        ctx.uow.commit.assert_awaited_once()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
 
 
 class TestStartTrainingSessionInvalidation:
@@ -153,7 +181,7 @@ class TestStartTrainingSessionInvalidation:
         assert result.total_count == 5
         assert ctx.uow.user_deck_repo.add.called is (not has_state)
         ctx.uow.commit.assert_awaited_once()
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
 
     async def test_refreshes_library_when_state_is_created_for_own_deck(self, cache_context):
         ctx = cache_context
@@ -163,7 +191,7 @@ class TestStartTrainingSessionInvalidation:
 
         created = ctx.uow.user_deck_repo.add.call_args.args[0]
         assert (created.user_id, created.deck_id) == (42, 200)
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             BumpGeneration("library:42:decks:generation"),
         }
 
@@ -176,3 +204,4 @@ class TestStartTrainingSessionInvalidation:
             await start(ctx)
 
         ctx.invalidator.invalidate.assert_not_awaited()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()

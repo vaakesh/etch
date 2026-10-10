@@ -10,16 +10,20 @@ from app.celery.celery_app import celery_app
 from app.common.utils import utcnow
 from app.database import get_async_session_maker, get_engine
 from app.deps import get_uow_factory
-from app.outbox.models import OutboxMessage
 from app.outbox.service import OutboxPublisher
 from app.redis.deps import get_redis
-from app.redis.invalidation import CacheInvalidator, dump_scopes, scopes
+from app.redis.invalidation import CacheInvalidator, scopes
 from app.redis.outbox import (
     CACHE_INVALIDATION_EVENT_TYPE,
     CacheInvalidationHandler,
+    cache_invalidation_message,
 )
 
 logger = get_task_logger(__name__)
+
+# Запрос сам доставляет своё событие сразу после commit; фоновая задача
+# подбирает только те, что остались pending дольше этого срока.
+PENDING_INVALIDATION_MIN_AGE = timedelta(seconds=10)
 
 
 class RetryableArchiveCleanupError(Exception):
@@ -82,16 +86,12 @@ async def _cleanup_expired_archives(
                 if not batch.decks:
                     break
 
-                payload = dump_scopes(
+                message = cache_invalidation_message(
                     scopes.deck_with_cards(*(deck_id for deck_id, _ in batch.decks)),
                     scopes.deck_ids_by_uuids(*(deck_uuid for _, deck_uuid in batch.decks)),
                     scopes.user_decks(*batch.user_deck_keys),
                     scopes.cards(*(card_id for card_id, _ in batch.cards)),
                     scopes.card_ids_by_uuids(*(card_uuid for _, card_uuid in batch.cards)),
-                )
-                message = OutboxMessage(
-                    event_type=CACHE_INVALIDATION_EVENT_TYPE,
-                    payload=payload,
                 )
                 uow.outbox_repo.add(message)
                 await uow.flush()
@@ -164,7 +164,10 @@ async def _publish_pending_cache_invalidations(batch_size: int) -> dict[str, int
         },
     )
     try:
-        published = await publisher.publish_pending(limit=batch_size)
+        published = await publisher.publish_pending(
+            created_before=utcnow() - PENDING_INVALIDATION_MIN_AGE,
+            limit=batch_size,
+        )
         logger.info("pending cache invalidation finished: published=%s", published)
         return {"published": published}
     except DBAPIError as error:
@@ -194,6 +197,91 @@ def publish_pending_cache_invalidations(batch_size: int = 100) -> dict[str, int]
     if not 1 <= batch_size <= 1000:
         raise ValueError("batch_size must be between 1 and 1000")
     return asyncio.run(_publish_pending_cache_invalidations(batch_size))
+
+
+async def _cleanup_published_outbox(
+    batch_size: int,
+    max_batches: int,
+    retention_days: int,
+) -> dict[str, int]:
+    engine = get_engine()
+    uow_factory = get_uow_factory(get_async_session_maker())
+    totals = {"messages": 0, "batches": 0}
+    cutoff = utcnow() - timedelta(days=retention_days)
+
+    try:
+        for _ in range(max_batches):
+            async with uow_factory() as uow:
+                # не держим воркер долго (тяжелый запрос/занятая строка)
+                await uow.session.execute(
+                    text("SET LOCAL lock_timeout = '5s'")
+                )
+                await uow.session.execute(
+                    text("SET LOCAL statement_timeout = '60s'")
+                )
+
+                deleted = await uow.outbox_repo.delete_published(
+                    cutoff=cutoff,
+                    limit=batch_size,
+                )
+
+                if not deleted:
+                    break
+
+                await uow.commit()
+
+            totals["messages"] += deleted
+            totals["batches"] += 1
+
+            logger.info("published outbox cleanup batch: messages=%s", deleted)
+
+            if deleted < batch_size:
+                break
+        logger.info("published outbox cleanup finished: %s", totals)
+        return totals
+    except DBAPIError as e:
+        if _is_retryable_database_error(e):
+            raise RetryableArchiveCleanupError(
+                "temporary database failure during published outbox cleanup"
+            ) from e
+
+        raise
+
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(
+    name="maintenance.cleanup_published_outbox",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    autoretry_for=(RetryableArchiveCleanupError,),
+    retry_backoff=10,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def cleanup_published_outbox(
+    batch_size: int = 1000,
+    max_batches: int = 20,
+    retention_days: int = 1,
+) -> dict[str, int]:
+    if not 1 <= batch_size <= 5000:
+        raise ValueError("batch_size must be between 1 and 5000")
+
+    if not 1 <= max_batches <= 100:
+        raise ValueError("max_batches must be between 1 and 100")
+
+    if not 1 <= retention_days <= 365:
+        raise ValueError("retention_days must be between 1 and 365")
+
+    return asyncio.run(
+        _cleanup_published_outbox(
+            batch_size=batch_size,
+            max_batches=max_batches,
+            retention_days=retention_days,
+        )
+    )
 
 
 async def _cleanup_stale_user_sessions(

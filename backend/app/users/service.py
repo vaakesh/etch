@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.redis.service import RedisCacheService
 from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
 from app.common.types import Username
 
 logger = logging.getLogger(__name__)
@@ -240,12 +241,17 @@ class UserService:
                     )
                     affected_deck_ids = [deck.id for deck in affected_decks]
 
-                await uow.commit()
-
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.users(internal_user_with_settings.id),
                     scopes.decks(*affected_deck_ids),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+                await uow.commit()
+
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
                 return internal_user_with_settings
 
@@ -282,12 +288,17 @@ class UserService:
                 obj=user_settings,
             )
 
-            await uow.commit()
-
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.users_settings(internal_user_settings.user_id),
             )
-            
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
+
             return internal_user_settings
 
     async def _archive_decks_after_user_deletion(
@@ -312,7 +323,7 @@ class UserService:
                 raise PermissionDeniedError()
 
             user_id = user.id
-            removed_user_ops = tuple(scopes.users_removed(user))
+            removed_user = scopes.users_removed(user)
 
             owned_decks = await uow.deck_repo.get_all_by_user_id(
                 user_id=user_id,
@@ -351,10 +362,9 @@ class UserService:
             )
 
             await uow.user_repo.delete(user)
-            await uow.commit()
 
-            await self.cache_invalidator.invalidate(
-                removed_user_ops,
+            invalidation = (
+                removed_user,
                 scopes.user_decks(*sorted(
                     existing_user_deck_keys
                     | removed_user_deck_keys
@@ -368,3 +378,10 @@ class UserService:
                 scopes.cards(*owned_card_ids),
                 scopes.card_ids_by_uuids(*owned_card_uuids),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()

@@ -9,6 +9,7 @@ from app.service import UnitOfWork
 from app.users.repository import UserRepository, UserSettingsRepository
 from app.users.service import UserService
 from tests.unit.factories import make_user, make_user_settings
+from tests.unit.outbox_helpers import make_outbox_repo
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def users_uow():
     unit.user_repo = create_autospec(UserRepository, instance=True)
     unit.user_settings_repo = create_autospec(UserSettingsRepository, instance=True)
     unit.deck_repo = create_autospec(DeckRepository, instance=True)
+    unit.outbox_repo = make_outbox_repo()
     unit.deck_repo.get_all_by_user_id.return_value = []
     return unit
 

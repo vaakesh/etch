@@ -15,6 +15,7 @@ from app.decks.models import Deck, UserDeck
 from app.errors import RequestValueError
 from app.decks.utils import make_user_deck_identity
 from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
     PermissionDeniedError,
@@ -476,12 +477,18 @@ class TrainingSessionService:
                 ) for item in training_session_items]
             )
 
+            if own_user_deck_created:
+                invalidation = (
+                    scopes.library_deck_pages(user_id),
+                )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
             await uow.commit()
 
             if own_user_deck_created:
-                await self.cache_invalidator.invalidate(
-                    scopes.library_deck_pages(user_id),
-                )
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
             return response
 
@@ -658,15 +665,21 @@ class TrainingSessionService:
                 )
 
             deck_id = training_session.deck_id
-            await uow.commit()
-
             if user_deck_changed:
                 # last_studied_at задаёт порядок library-страницы колод.
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.user_decks(
                         make_user_deck_identity(user_id=user_id, deck_id=deck_id),
                     ),
                     scopes.library_deck_pages(user_id),
                 )
-            
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+            await uow.commit()
+
+            if user_deck_changed:
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
+
             return response

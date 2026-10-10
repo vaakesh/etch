@@ -14,7 +14,16 @@ from app.redis.invalidation import CacheInvalidator, DelKey
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.repository import UserRepository
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from tests.unit.factories import make_user, make_user_session
+from tests.unit.outbox_helpers import (
+    OUTBOX_MESSAGE_ID,
+    assert_invalidation_delivered_from_outbox,
+    first_commit_precedes_invalidation,
+    make_outbox_repo,
+    staged_message,
+)
 
 
 NOW = datetime(2026, 8, 16, 12, 0, tzinfo=UTC)
@@ -27,6 +36,7 @@ def auth_context(monkeypatch):
     uow.__aexit__.return_value = False
     uow.user_repo = create_autospec(UserRepository, instance=True)
     uow.auth_repo = create_autospec(AuthRepository, instance=True)
+    uow.outbox_repo = make_outbox_repo()
     user = make_user()
     session = make_user_session(
         uuid=UUID("0198ad01-b200-7000-8000-000000000600"),
@@ -337,21 +347,22 @@ class TestChangePassword:
         ctx.uow.auth_repo.revoke_all_active_sessions_by_user_id.assert_awaited_once_with(
             user_id=42, revoked_at=NOW,
         )
-        ctx.uow.commit.assert_awaited_once_with()
+        assert ctx.uow.commit.await_args_list == [call(), call()]
 
     async def test_invalidates_cached_user_after_commit(self, auth_context):
         ctx = auth_context
-
-        async def commit():
-            ctx.invalidator.invalidate.assert_not_awaited()
-
-        ctx.uow.commit.side_effect = commit
+        ctx.uow.commit.side_effect = first_commit_precedes_invalidation(
+            ctx.uow, ctx.invalidator,
+        )
 
         await ctx.service.change_password(42, "old-password", "new-password")
 
-        ctx.invalidator.invalidate.assert_awaited_once()
+        assert_invalidation_delivered_from_outbox(ctx.uow, ctx.invalidator)
         ops = {op for group in ctx.invalidator.invalidate.await_args.args for op in group}
         assert ops == {DelKey("user:42")}
+        assert staged_message(ctx.uow).payload == {
+            "scopes": [{"name": "users", "args": [42]}],
+        }
 
     async def test_does_not_invalidate_when_commit_fails(self, auth_context):
         ctx = auth_context
@@ -361,6 +372,20 @@ class TestChangePassword:
             await ctx.service.change_password(42, "old-password", "new-password")
 
         ctx.invalidator.invalidate.assert_not_awaited()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
+
+    async def test_leaves_event_pending_when_redis_fails_after_commit(self, auth_context):
+        ctx = auth_context
+        failure = RedisConnectionError("Redis unavailable")
+        ctx.invalidator.invalidate.side_effect = failure
+
+        with pytest.raises(RedisConnectionError) as error:
+            await ctx.service.change_password(42, "old-password", "new-password")
+
+        assert error.value is failure
+        assert staged_message(ctx.uow).id == OUTBOX_MESSAGE_ID
+        ctx.uow.commit.assert_awaited_once()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
 
     @pytest.mark.parametrize("scenario", ["user-missing", "wrong-password"])
     async def test_rejects_credentials_without_changing_hash_or_revoking_sessions(

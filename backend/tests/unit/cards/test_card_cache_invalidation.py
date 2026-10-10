@@ -13,15 +13,23 @@ from app.decks.repository import DeckCardRepository, UserDeckRepository
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from tests.unit.factories import make_card
+from tests.unit.outbox_helpers import (
+    OUTBOX_MESSAGE_ID,
+    assert_invalidation_delivered_from_outbox,
+    make_outbox_repo,
+    staged_message,
+)
 
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
 
 
-def invalidated_ops(invalidator):
-    invalidator.invalidate.assert_awaited_once()
-    return {op for group in invalidator.invalidate.await_args.args for op in group}
+def invalidated_ops(ctx):
+    assert_invalidation_delivered_from_outbox(ctx.uow, ctx.invalidator)
+    return {op for group in ctx.invalidator.invalidate.await_args.args for op in group}
 
 
 @pytest.fixture
@@ -33,6 +41,7 @@ def card_cache_context():
     uow.card_repo = create_autospec(CardRepository, instance=True)
     uow.deck_card_repo = create_autospec(DeckCardRepository, instance=True)
     uow.user_deck_repo = create_autospec(UserDeckRepository, instance=True)
+    uow.outbox_repo = make_outbox_repo()
     uow.card_repo.get_by_uuid.return_value = card
     uow.deck_card_repo.get_all_deck_ids_by_card_ids.return_value = [200, 201]
     uow.user_deck_repo.get_library_user_ids_by_deck_ids.return_value = [7, 8, 42]
@@ -40,7 +49,9 @@ def card_cache_context():
     cache = create_autospec(RedisCacheService, instance=True)
 
     async def commit():
-        invalidator.invalidate.assert_not_awaited()
+        # первый commit фиксирует изменения до сброса, второй закрывает событие
+        if not uow.outbox_repo.mark_published.await_count:
+            invalidator.invalidate.assert_not_awaited()
         if uow.card_repo.add.called:
             created = uow.card_repo.add.call_args.args[0]
             created.id = card.id
@@ -60,7 +71,7 @@ class TestCreateCardInvalidation:
 
         await ctx.service.create_card(CreateCardRequest(front_text="front", back_text="back"), 42)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             BumpGeneration("library:42:cards:generation"),
         }
 
@@ -88,7 +99,7 @@ class TestUpdateCardInvalidation:
 
         await ctx.service.update_card(ctx.card.uuid, 42, UpdateCardRequest(**payload))
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("card:100"),
             BumpGeneration("library:42:cards:generation"),
         }
@@ -100,11 +111,38 @@ class TestUpdateCardInvalidation:
         with pytest.raises(RuntimeError, match="refresh failed"):
             await ctx.service.update_card(ctx.card.uuid, 42, UpdateCardRequest(front_text="new front"))
 
-        ctx.uow.commit.assert_awaited_once()
-        assert invalidated_ops(ctx.invalidator) == {
+        assert ctx.uow.commit.await_count == 2
+        assert invalidated_ops(ctx) == {
             DelKey("card:100"),
             BumpGeneration("library:42:cards:generation"),
         }
+
+    async def test_stages_explicit_outbox_payload_before_commit(self, card_cache_context):
+        ctx = card_cache_context
+
+        await ctx.service.update_card(ctx.card.uuid, 42, UpdateCardRequest(front_text="new front"))
+
+        message = staged_message(ctx.uow)
+        assert message.event_type == "cache.invalidation.v1"
+        assert message.payload == {
+            "scopes": [
+                {"name": "cards", "args": [100]},
+                {"name": "library_card_pages", "args": [42]},
+            ],
+        }
+
+    async def test_leaves_event_pending_when_redis_fails_after_commit(self, card_cache_context):
+        ctx = card_cache_context
+        failure = RedisConnectionError("Redis unavailable")
+        ctx.invalidator.invalidate.side_effect = failure
+
+        with pytest.raises(RedisConnectionError) as error:
+            await ctx.service.update_card(ctx.card.uuid, 42, UpdateCardRequest(front_text="new front"))
+
+        assert error.value is failure
+        assert staged_message(ctx.uow).id == OUTBOX_MESSAGE_ID
+        ctx.uow.commit.assert_awaited_once()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
 
     @pytest.mark.parametrize("failure", [
         RuntimeError("commit failed"), IntegrityError("update", {}, Exception("duplicate")),
@@ -138,7 +176,7 @@ class TestDeleteCardInvalidation:
 
         await ctx.service.delete_card(42, ctx.card.uuid)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("card:100"),
             DelKey("card:id-by-uuid:0198ad01-b200-7000-8000-000000000100"),
             DelKey("deck:200"), DelKey("deck:200:card-ids"),
@@ -156,7 +194,7 @@ class TestDeleteCardInvalidation:
 
         await ctx.service.delete_card(42, ctx.card.uuid)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("card:100"),
             DelKey("card:id-by-uuid:0198ad01-b200-7000-8000-000000000100"),
             BumpGeneration("library:42:cards:generation"),

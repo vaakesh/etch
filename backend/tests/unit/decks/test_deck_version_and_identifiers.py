@@ -13,6 +13,7 @@ from app.redis.service import RedisCacheService
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from app.users.models import User
 from tests.unit.factories import make_deck
+from tests.unit.outbox_helpers import make_outbox_repo
 
 
 @pytest.fixture
@@ -32,6 +33,7 @@ def service_context(deck):
     uow.__aenter__ = AsyncMock(return_value=uow)
     uow.__aexit__ = AsyncMock(return_value=False)
     uow.commit = AsyncMock()
+    uow.outbox_repo = make_outbox_repo()
     uow.deck_repo.get_owned_by_uuid = AsyncMock(return_value=deck)
     uow.user_deck_repo.get_library_user_ids_by_deck_ids = AsyncMock(return_value=[42])
     cache = create_autospec(RedisCacheService, instance=True)
@@ -53,7 +55,7 @@ class TestUpdateDeckVersion:
 
         assert result.version == 2
         assert result.updated_at == now
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
             op for group in service.cache_invalidator.invalidate.await_args.args for op in group
@@ -92,7 +94,7 @@ class TestReorderDeckVersion:
         assert link.position == 2
         assert deck.version == 1
         assert deck.updated_at == previous_date
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
             op for group in service.cache_invalidator.invalidate.await_args.args for op in group

@@ -22,16 +22,25 @@ from app.decks.service import DeckService, UserDeckService
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from app.redis.service import RedisCacheService
 from app.users.models import User
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from tests.unit.factories import make_card, make_deck, make_deck_card, make_user_deck
+from tests.unit.outbox_helpers import (
+    OUTBOX_MESSAGE_ID,
+    assert_invalidation_delivered_from_outbox,
+    assert_no_invalidation_staged,
+    make_outbox_repo,
+    staged_message,
+)
 
 
 COPY_UUID = UUID("0198ad01-b200-7000-8000-000000000201")
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
 
 
-def invalidated_ops(invalidator):
-    invalidator.invalidate.assert_awaited_once()
-    return {op for group in invalidator.invalidate.await_args.args for op in group}
+def invalidated_ops(ctx):
+    assert_invalidation_delivered_from_outbox(ctx.uow, ctx.invalidator)
+    return {op for group in ctx.invalidator.invalidate.await_args.args for op in group}
 
 
 @pytest.fixture
@@ -53,8 +62,12 @@ def cache_context(monkeypatch):
     uow.__aenter__ = AsyncMock(return_value=uow)
     uow.__aexit__ = AsyncMock(return_value=False)
 
+    uow.outbox_repo = make_outbox_repo()
+
     async def commit():
-        invalidator.invalidate.assert_not_awaited()
+        # первый commit фиксирует изменения до сброса, второй закрывает событие
+        if not uow.outbox_repo.mark_published.await_count:
+            invalidator.invalidate.assert_not_awaited()
 
     uow.commit = AsyncMock(side_effect=commit)
     uow.deck_repo = create_autospec(DeckRepository, instance=True)
@@ -124,7 +137,7 @@ class TestCreateDeckInvalidation:
             CreateDeckRequest(title="New deck"), 42, ctx.deck.user.uuid, "test-user",
         )
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             BumpGeneration("library:42:decks:generation"),
         }
 
@@ -139,7 +152,7 @@ class TestUpdateDeckInvalidation:
 
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(**payload))
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
@@ -151,7 +164,7 @@ class TestUpdateDeckInvalidation:
 
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(is_public=True))
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
@@ -169,7 +182,7 @@ class TestUpdateDeckInvalidation:
 
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(is_public=False))
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:201"),
             DelKey("deck:user-deck:7:200"), DelKey("deck:user-deck:7:201"),
             DelKey("deck:user-deck:9:200"), DelKey("deck:user-deck:9:201"),
@@ -183,7 +196,8 @@ class TestUpdateDeckInvalidation:
 
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(is_public=False))
 
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
+        ctx.uow.commit.assert_awaited_once()
         ctx.workflow.make_private.assert_not_awaited()
 
 
@@ -199,7 +213,7 @@ class TestDeleteDeckInvalidation:
 
         await ctx.service.delete_deck(ctx.deck.uuid, 42)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:200:card-ids"), DelKey("deck:201"),
             DelKey("deck:id-by-uuid:0198ad01-b200-7000-8000-000000000200"),
             DelKey("deck:user-deck:42:200"), DelKey("deck:user-deck:7:200"),
@@ -215,7 +229,7 @@ class TestDeleteDeckInvalidation:
 
         await ctx.service.delete_deck(ctx.deck.uuid, 42)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:200:card-ids"),
             DelKey("deck:id-by-uuid:0198ad01-b200-7000-8000-000000000200"),
             BumpGeneration("library:42:decks:generation"),
@@ -228,7 +242,7 @@ class TestPreserveArchivedDeckInvalidation:
 
         await ctx.service.preserve_archived_deck(ctx.deck.uuid, 42)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:201"),
             DelKey("deck:user-deck:42:200"), DelKey("deck:user-deck:42:201"),
             BumpGeneration("library:42:decks:generation"),
@@ -244,7 +258,8 @@ class TestPreserveArchivedDeckInvalidation:
 
         await ctx.service.preserve_archived_deck(ctx.deck.uuid, 42)
 
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
+        ctx.uow.commit.assert_awaited_once()
 
 
 class TestAddCardToDeckInvalidation:
@@ -254,7 +269,7 @@ class TestAddCardToDeckInvalidation:
 
         await ctx.service.add_card_to_deck(42, ctx.deck.uuid, ctx.card.uuid)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
@@ -275,7 +290,7 @@ class TestRemoveCardFromDeckInvalidation:
 
         await ctx.service.remove_card_from_deck(42, ctx.deck.uuid, ctx.card.uuid)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
@@ -292,7 +307,7 @@ class TestLoadCardsToDeckInvalidation:
             42,
         )
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:200"), DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
@@ -306,7 +321,15 @@ class TestReorderCardsInvalidation:
 
         await ctx.service.reorder_cards(42, ctx.deck.uuid, ctx.card.uuid, to_position=1)
 
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
+        ctx.uow.commit.assert_awaited_once()
+
+    async def test_refreshes_deck_card_order_after_move(self, cache_context):
+        ctx = cache_context
+
+        await ctx.service.reorder_cards(42, ctx.deck.uuid, ctx.card.uuid, to_position=2)
+
+        assert invalidated_ops(ctx) == {DelKey("deck:200:card-ids")}
 
 
 class TestSaveDeckInvalidation:
@@ -318,7 +341,7 @@ class TestSaveDeckInvalidation:
         await ctx.state_service.save_deck(42, ctx.deck.uuid)
 
         assert ctx.deck.saves_count == 6
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:user-deck:42:200"),
             BumpGeneration("library:42:decks:generation"),
         }
@@ -329,7 +352,8 @@ class TestSaveDeckInvalidation:
 
         await ctx.state_service.save_deck(42, ctx.deck.uuid)
 
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
+        ctx.uow.commit.assert_awaited_once()
 
 
 class TestUnsaveDeckInvalidation:
@@ -341,7 +365,7 @@ class TestUnsaveDeckInvalidation:
         await ctx.state_service.unsave_deck(42, ctx.deck.uuid)
 
         assert ctx.deck.saves_count == 4
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:user-deck:42:200"),
             BumpGeneration("library:42:decks:generation"),
         }
@@ -354,7 +378,8 @@ class TestUnsaveDeckInvalidation:
 
         await ctx.state_service.unsave_deck(42, ctx.deck.uuid)
 
-        ctx.invalidator.invalidate.assert_not_awaited()
+        assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
+        ctx.uow.commit.assert_awaited_once()
 
 
 class TestSetFavouriteDeckInvalidation:
@@ -365,7 +390,7 @@ class TestSetFavouriteDeckInvalidation:
 
         await ctx.state_service.set_favourite_deck(42, ctx.deck.uuid, value)
 
-        assert invalidated_ops(ctx.invalidator) == {
+        assert invalidated_ops(ctx) == {
             DelKey("deck:user-deck:42:200"),
             BumpGeneration("library:42:decks:generation"),
         }
@@ -404,6 +429,26 @@ class TestDeckMutationFailures:
             await getattr(service, method)(*args)
 
         ctx.invalidator.invalidate.assert_not_awaited()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
+
+    @pytest.mark.parametrize("method", ["update_deck", "delete_deck", "set_favourite_deck"])
+    async def test_leaves_event_pending_when_redis_fails_after_commit(self, cache_context, method):
+        ctx = cache_context
+        failure = RedisConnectionError("Redis unavailable")
+        ctx.invalidator.invalidate.side_effect = failure
+        service, args = {
+            "update_deck": (ctx.service, (42, ctx.deck.uuid, UpdateDeckRequest(title="New title"))),
+            "delete_deck": (ctx.service, (ctx.deck.uuid, 42)),
+            "set_favourite_deck": (ctx.state_service, (42, ctx.deck.uuid, True)),
+        }[method]
+
+        with pytest.raises(RedisConnectionError) as error:
+            await getattr(service, method)(*args)
+
+        assert error.value is failure
+        assert staged_message(ctx.uow).id == OUTBOX_MESSAGE_ID
+        ctx.uow.commit.assert_awaited_once()
+        ctx.uow.outbox_repo.mark_published.assert_not_awaited()
 
     @pytest.mark.parametrize("method", ["update_deck", "delete_deck", "load_cards_to_deck"])
     async def test_does_not_invalidate_missing_owned_deck(self, cache_context, method):

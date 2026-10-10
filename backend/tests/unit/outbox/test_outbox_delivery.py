@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, create_autospec
 
 import pytest
@@ -6,6 +7,8 @@ from app.outbox.models import OutboxMessage
 from app.outbox.repository import OutboxRepository
 from app.outbox.service import OutboxPublisher
 from app.service import UnitOfWork
+
+CREATED_BEFORE = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -90,11 +93,11 @@ class TestPublishPending:
         publisher, uow, handler, message = delivery_context
         uow.outbox_repo.get_pending.return_value = [message]
 
-        published = await publisher.publish_pending(limit=25)
+        published = await publisher.publish_pending(created_before=CREATED_BEFORE, limit=25)
 
         assert published == 1
         uow.outbox_repo.get_pending.assert_awaited_once_with(
-            event_types=["example.v1"], limit=25,
+            event_types=["example.v1"], created_before=CREATED_BEFORE, limit=25,
         )
         handler.assert_awaited_once_with({"object_id": 42})
 
@@ -103,6 +106,6 @@ class TestPublishPending:
         publisher, uow, handler, message = delivery_context
 
         with pytest.raises(ValueError, match="limit must be between"):
-            await publisher.publish_pending(limit=limit)
+            await publisher.publish_pending(created_before=CREATED_BEFORE, limit=limit)
 
         uow.outbox_repo.get_pending.assert_not_awaited()

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call, create_autospec
 
@@ -13,6 +14,8 @@ from app.outbox.models import OutboxMessage
 from app.redis.outbox import CACHE_INVALIDATION_EVENT_TYPE
 from app.service import UnitOfWork
 from tests.unit.redis.cases import CARD_UUID, DECK_UUID
+
+NOW = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -52,6 +55,7 @@ def cleanup_context(monkeypatch):
     monkeypatch.setattr(tasks, "get_async_session_maker", Mock())
     monkeypatch.setattr(tasks, "get_uow_factory", lambda session_maker: lambda: uow)
     monkeypatch.setattr(tasks, "get_redis", lambda: redis)
+    monkeypatch.setattr(tasks, "utcnow", lambda: NOW)
     return tasks, uow, redis, engine
 
 
@@ -187,8 +191,10 @@ class TestPublishPendingCacheInvalidations:
         totals = await tasks._publish_pending_cache_invalidations(batch_size=100)
 
         assert totals == {"published": 2}
+        # события моложе 10 секунд ещё доставляет создавший их запрос
         uow.outbox_repo.get_pending.assert_awaited_once_with(
             event_types=[CACHE_INVALIDATION_EVENT_TYPE],
+            created_before=datetime(2026, 10, 10, 11, 59, 50, tzinfo=UTC),
             limit=100,
         )
         assert redis.pipeline.return_value.method_calls == [

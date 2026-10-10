@@ -31,6 +31,15 @@ celery_app.conf.update(
                 "max_batches": 20,
             },
         },
+        "cleanup-published-outbox-hourly": {
+            "task": "maintenance.cleanup_published_outbox",
+            "schedule": crontab(minute=15),
+            "kwargs": {
+                "batch_size": 1000,
+                "max_batches": 20,
+                "retention_days": 1,
+            },
+        },
         "cleanup-stale-user-sessions-hourly": {
             "task": "maintenance.cleanup_stale_user_sessions",
             "schedule": crontab(minute=30),

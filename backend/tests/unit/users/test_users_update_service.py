@@ -8,6 +8,10 @@ from app.errors import RequestValueError
 from app.redis.invalidation import DelKey
 from app.users.errors import EmailAlreadyExistsError, UsernameAlreadyExistsError
 from app.users.schemas import UpdateUserRequest, UpdateUserSettingsRequest
+from tests.unit.outbox_helpers import (
+    assert_invalidation_delivered_from_outbox,
+    first_commit_precedes_invalidation,
+)
 from tests.unit.users.cases import SETTINGS_DATA, USER_WITH_SETTINGS_DATA
 
 
@@ -36,15 +40,17 @@ class TestUpdateUser:
             SimpleNamespace(id=200, is_public=True),
             SimpleNamespace(id=201, is_public=False),
         ]
-        users_uow.commit.side_effect = lambda: users_invalidator.invalidate.assert_not_awaited()
+        users_uow.commit.side_effect = first_commit_precedes_invalidation(
+            users_uow, users_invalidator,
+        )
 
         result = await users_domain_service.update_user(42, UpdateUserRequest(**changes))
 
         assert result.model_dump(mode="json") == {**USER_WITH_SETTINGS_DATA, **changes}
         users_uow.user_repo.update_user.assert_awaited_once_with(user_id=42, payload=changes)
         users_uow.flush.assert_awaited_once()
-        users_uow.commit.assert_awaited_once()
-        users_invalidator.invalidate.assert_awaited_once()
+        assert users_uow.commit.await_count == 2
+        assert_invalidation_delivered_from_outbox(users_uow, users_invalidator)
         groups = users_invalidator.invalidate.await_args.args
         assert [op for group in groups for op in group] == expected_ops
         if "username" in changes:
@@ -176,15 +182,17 @@ class TestUpdateUserSettings:
     ):
         users_entity.settings.__dict__.update(changes)
         users_uow.user_settings_repo.update_user_settings.return_value = users_entity.settings
-        users_uow.commit.side_effect = lambda: users_invalidator.invalidate.assert_not_awaited()
+        users_uow.commit.side_effect = first_commit_precedes_invalidation(
+            users_uow, users_invalidator,
+        )
 
         result = await users_domain_service.update_user_settings(42, UpdateUserSettingsRequest(**changes))
 
         assert result.model_dump(mode="json") == {**SETTINGS_DATA, **changes}
         users_uow.user_settings_repo.update_user_settings.assert_awaited_once_with(user_id=42, payload=changes)
         users_uow.flush.assert_awaited_once()
-        users_uow.commit.assert_awaited_once()
-        users_invalidator.invalidate.assert_awaited_once()
+        assert users_uow.commit.await_count == 2
+        assert_invalidation_delivered_from_outbox(users_uow, users_invalidator)
         groups = users_invalidator.invalidate.await_args.args
         assert [op for group in groups for op in group] == [DelKey("user:42:settings")]
         assert users_cache.mock_calls == []

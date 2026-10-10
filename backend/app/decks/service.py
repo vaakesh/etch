@@ -18,6 +18,7 @@ from app.common.types import SearchQuery, Username
 from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.redis.service import RedisCacheService
 from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from sqlalchemy.exc import IntegrityError
@@ -485,11 +486,17 @@ class DeckService:
                     last_seen_version=deck.version,
                 )
                 uow.user_deck_repo.add(user_deck)
-                await uow.commit()
 
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.library_deck_pages(user_id),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+                await uow.commit()
+
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
                 return InternalDeck(
                     id=deck.id,
@@ -581,14 +588,20 @@ class DeckService:
                         changes = archived.changes
                 affected_user_ids.add(user_id)
 
-                await uow.commit()
-
                 if changed:
-                    await self.cache_invalidator.invalidate(
+                    invalidation = (
                         scopes.decks(*sorted({deck_id} | changes.deck_ids)),
                         scopes.user_decks(*sorted(changes.user_deck_keys)),
                         scopes.library_deck_pages(*sorted(affected_user_ids)),
                     )
+                    message = cache_invalidation_message(*invalidation)
+                    uow.outbox_repo.add(message)
+                await uow.commit()
+
+                if changed:
+                    await self.cache_invalidator.invalidate(*invalidation)
+                    await uow.outbox_repo.mark_published(message.id)
+                    await uow.commit()
 
                 return InternalDeck.from_entity(
                     deck=deck,
@@ -620,15 +633,21 @@ class DeckService:
             )
             result = await DeckArchiveWorkflow(uow).delete_deck(removed_uuid)
             changes = result.changes
-            await uow.commit()
 
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.deck_with_cards(deck_id),
                 scopes.decks(*sorted(changes.deck_ids - {deck_id})),
                 scopes.deck_ids_by_uuids(removed_uuid),
                 scopes.user_decks(*sorted(existing_keys | changes.user_deck_keys)),
                 scopes.library_deck_pages(*sorted(affected_user_ids)),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
             return None
 
     @traced("decks.service.preserve_archived_deck")
@@ -639,16 +658,22 @@ class DeckService:
             result = await DeckArchiveWorkflow(uow).preserve(
                 archive_deck_uuid, user_id=user_id,
             )
+            if not result.already_preserved:
+                changes = result.changes
+                invalidation = (
+                    scopes.decks(*sorted(changes.deck_ids)),
+                    scopes.user_decks(*sorted(changes.user_deck_keys)),
+                    scopes.library_deck_pages(user_id),
+                    scopes.library_card_pages(user_id),
+                )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
             await uow.commit()
 
-        if not result.already_preserved:
-            changes = result.changes
-            await self.cache_invalidator.invalidate(
-                scopes.decks(*sorted(changes.deck_ids)),
-                scopes.user_decks(*sorted(changes.user_deck_keys)),
-                scopes.library_deck_pages(user_id),
-                scopes.library_card_pages(user_id),
-            )
+            if not result.already_preserved:
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
         return result
 
     @traced("decks.service.get_archives_for_user")
@@ -730,12 +755,17 @@ class DeckService:
                 affected_user_ids = {user_id} | set(
                     await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
                 )
-                await uow.commit()
-
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.deck_with_cards(deck_id),
                     scopes.library_deck_pages(*sorted(affected_user_ids)),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+                await uow.commit()
+
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
                 return InternalDeckCard.model_validate(obj=deck_card)
         except IntegrityError as e:
@@ -800,13 +830,18 @@ class DeckService:
             affected_user_ids = {user_id} | set(
                 await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
             )
-            await uow.commit()
-
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.deck_with_cards(deck_id),
                 scopes.library_deck_pages(*sorted(affected_user_ids)),
-                scopes.library_card_pages(user_id) if card_entities else (),
+                scopes.library_card_pages(*([user_id] if card_entities else [])),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
 
             return LoadCardsResponse(
                 imported_count=len(card_entities),
@@ -866,12 +901,18 @@ class DeckService:
             )
             deck_card.position = to_position
             deck_id = deck.id
+            if from_position != to_position:
+                invalidation = (
+                    scopes.deck_cards(deck_id),
+                )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
             await uow.commit()
 
             if from_position != to_position:
-                await self.cache_invalidator.invalidate(
-                    scopes.deck_cards(deck_id),
-                )
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
     @traced("decks.service.remove_card_from_deck")
     async def remove_card_from_deck(
@@ -921,12 +962,17 @@ class DeckService:
             affected_user_ids = {user_id} | set(
                 await uow.user_deck_repo.get_library_user_ids_by_deck_ids([deck_id])
             )
-            await uow.commit()
-
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.deck_with_cards(deck_id),
                 scopes.library_deck_pages(*sorted(affected_user_ids)),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
 
             return None
 
@@ -1067,13 +1113,19 @@ class UserDeckService:
             identity = make_user_deck_identity(
                 user_id=user_deck.user_id, deck_id=user_deck.deck_id,
             )
-            await uow.commit()
-
             if changed:
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.user_decks(identity),
                     scopes.library_deck_pages(user_id),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+            await uow.commit()
+
+            if changed:
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
             return InternalUserDeck.model_validate(user_deck)
 
@@ -1113,12 +1165,17 @@ class UserDeckService:
             identity = make_user_deck_identity(
                 user_id=user_deck.user_id, deck_id=user_deck.deck_id,
             )
-            await uow.commit()
-
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.user_decks(identity),
                 scopes.library_deck_pages(user_id),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
 
             return InternalUserDeck.model_validate(user_deck)
 
@@ -1158,12 +1215,18 @@ class UserDeckService:
             identity = make_user_deck_identity(
                 user_id=user_deck.user_id, deck_id=user_deck.deck_id,
             )
-            await uow.commit()
-
             if changed:
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.user_decks(identity),
                     scopes.library_deck_pages(user_id),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+            await uow.commit()
+
+            if changed:
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
             return InternalUserDeck.model_validate(user_deck)

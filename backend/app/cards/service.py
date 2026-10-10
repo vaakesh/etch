@@ -13,6 +13,7 @@ from app.common.types import SearchQuery
 from app.common.utils import decode_cursor, encode_cursor
 from app.redis.service import RedisCacheService
 from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
 from app.service import UnitOfWork
 from sqlalchemy.exc import IntegrityError
 
@@ -145,11 +146,16 @@ class CardService:
 
                 uow.card_repo.add(card)
 
-                await uow.commit()
-
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.library_card_pages(user_id),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+                await uow.commit()
+
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
 
                 return InternalCard.model_validate(card)
 
@@ -186,12 +192,17 @@ class CardService:
                     setattr(card, field, value)
 
                 card_id = card.id
-                await uow.commit()
-
-                await self.cache_invalidator.invalidate(
+                invalidation = (
                     scopes.cards(card_id),
                     scopes.library_card_pages(user_id),
                 )
+                message = cache_invalidation_message(*invalidation)
+                uow.outbox_repo.add(message)
+                await uow.commit()
+
+                await self.cache_invalidator.invalidate(*invalidation)
+                await uow.outbox_repo.mark_published(message.id)
+                await uow.commit()
                 await uow.card_repo.refresh(card)
 
                 return InternalCard.model_validate(card)
@@ -223,14 +234,19 @@ class CardService:
             await uow.deck_card_repo.update_cards_count(
                 deck_ids=deck_ids
             )
-            await uow.commit()
-
-            await self.cache_invalidator.invalidate(
+            invalidation = (
                 scopes.cards(card_id),
                 scopes.card_ids_by_uuids(removed_uuid),
                 scopes.library_card_pages(user_id),
                 scopes.deck_with_cards(*deck_ids),
                 scopes.library_deck_pages(*affected_user_ids),
             )
+            message = cache_invalidation_message(*invalidation)
+            uow.outbox_repo.add(message)
+            await uow.commit()
+
+            await self.cache_invalidator.invalidate(*invalidation)
+            await uow.outbox_repo.mark_published(message.id)
+            await uow.commit()
 
             return None

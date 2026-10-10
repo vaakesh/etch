@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import datetime
 from typing import Any
 
 from app.outbox.models import OutboxMessage
@@ -34,12 +35,14 @@ class OutboxPublisher:
             await uow.commit()
         return published
 
-    async def publish_pending(self, *, limit: int) -> int:
+    async def publish_pending(self, *, created_before: datetime, limit: int) -> int:
         if not 1 <= limit <= 1000:
             raise ValueError("limit must be between 1 and 1000")
         async with self.uow_factory() as uow:
             messages = await uow.outbox_repo.get_pending(
-                event_types=list(self.handlers), limit=limit,
+                event_types=list(self.handlers),
+                created_before=created_before,
+                limit=limit,
             )
         published = 0
         for message in messages:

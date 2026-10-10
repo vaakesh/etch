@@ -10,6 +10,7 @@ from app.decks.service import DeckService
 from app.redis.service import RedisCacheService
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from tests.unit.factories import make_card, make_deck, make_deck_card
+from tests.unit.outbox_helpers import make_outbox_repo
 
 
 @pytest.fixture
@@ -28,6 +29,7 @@ def lock_context():
     uow.card_repo = create_autospec(CardRepository, instance=True)
     uow.deck_repo = create_autospec(DeckRepository, instance=True)
     uow.deck_card_repo = create_autospec(DeckCardRepository, instance=True)
+    uow.outbox_repo = make_outbox_repo()
     uow.deck_card_repo.get_all_deck_ids_by_card_ids.return_value = [200]
     uow.deck_card_repo.get_max_position.return_value = 2
     cache = create_autospec(RedisCacheService, instance=True)
@@ -94,7 +96,7 @@ class TestAddCardToDeck:
             "updated_at": link.updated_at,
         }
         assert deck.words_count == 3
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
 
 
 class TestRemoveCardFromDeck:
@@ -116,7 +118,7 @@ class TestRemoveCardFromDeck:
         uow.deck_card_repo.update_deck_cards_positions_after_deleting.assert_awaited_once_with(
             deck_id=200, deleted_position=1,
         )
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
 
 
 class TestDeleteCard:
@@ -130,7 +132,7 @@ class TestDeleteCard:
         uow.card_repo.delete.assert_awaited_once_with(card)
         uow.deck_card_repo.normalize_positions.assert_awaited_once_with(deck_ids=[200])
         uow.deck_card_repo.update_cards_count.assert_awaited_once_with(deck_ids=[200])
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
         uow.rollback.assert_not_awaited()
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
@@ -166,7 +168,7 @@ class TestDeleteCard:
         uow.card_repo.delete.assert_awaited_once_with(card)
         uow.deck_card_repo.normalize_positions.assert_awaited_once_with(deck_ids=[200, 201])
         uow.deck_card_repo.update_cards_count.assert_awaited_once_with(deck_ids=[200, 201])
-        uow.commit.assert_awaited_once()
+        assert uow.commit.await_count == 2
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
             op for group in service.cache_invalidator.invalidate.await_args.args for op in group
