@@ -1,5 +1,20 @@
 # etch
 
+etch is a web app for learning vocabulary with flashcards: build decks of word pairs, share them publicly, save other people's decks, and practice in typed-answer training sessions with progress and daily activity tracking.
+
+## stack
+
+- **api:** python 3.14, fastapi, pydantic, sqlalchemy (async) with asyncpg, alembic
+- **data:** postgresql 18, redis for caching and rate limiting
+- **background jobs:** celery with rabbitmq, transactional outbox for durable cache invalidation
+- **auth:** rs256 jwt in httponly cookies, rotating refresh tokens, argon2, altcha proof-of-work captcha
+- **observability:** opentelemetry traces and logs, prometheus, loki, tempo, grafana
+- **tests:** pytest (unit and integration), vitest, playwright
+- **frontend:** react, typescript, vite
+- **infrastructure:** docker compose, caddy with automatic https, github actions ci/cd
+
+## requirements
+
 requires docker with compose, uv, make, and openssl. run commands from the repository root with docker running.
 
 on a fresh ubuntu system, install the tools for local development:
