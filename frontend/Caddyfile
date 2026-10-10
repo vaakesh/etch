@@ -1,16 +1,21 @@
 {$SITE_DOMAIN} {
-	@blocked not remote_ip {$ALLOWED_IP}
 	@api path /api /api/*
 	@internal_probes path /health /health/* /api/health /api/health/* /ready /ready/* /api/ready /api/ready/*
 
-	# Check the connection's IP before serving files or proxying API requests.
+	# Reject internal probes before serving files or proxying API requests.
 	route {
 		# Health probes are available directly within the Docker network only.
 		respond @internal_probes "Not Found" 404
-		respond @blocked "Forbidden" 403
+		header Strict-Transport-Security "max-age=31536000"
+		header X-Content-Type-Options "nosniff"
+		header Content-Security-Policy "frame-ancestors 'none'"
 		encode zstd gzip
 
 		handle @api {
+			# The largest legitimate request, a 500-card import, is about 300 KB.
+			request_body {
+				max_size 1MB
+			}
 			uri strip_prefix /api
 			reverse_proxy api:8000
 		}
