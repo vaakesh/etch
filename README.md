@@ -35,7 +35,7 @@ installation details: [docker](https://docs.docker.com/engine/install/ubuntu/), 
 ## quick start
 
 ```sh
-make up
+make dev-up
 ```
 
 setup copies missing configs from templates and prompts to generate jwt keys. containers start and migrations run automatically. open http://localhost:5173 (default port).
@@ -51,29 +51,48 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 cp redis/users.acl.example redis/users.acl
+cp prometheus/metrics_token.example prometheus/metrics_token
 chmod 600 .env backend/.env frontend/.env
 ```
 
-edit all three `.env` files: replace example credentials and secrets, and adjust ports and urls as needed. keep database names, users, and passwords consistent between `.env` and `backend/.env`. update redis passwords in `redis/users.acl` and match the admin password to `backend/.env`.
+edit all three `.env` files: replace example credentials and secrets, and adjust ports and urls as needed. keep these values consistent:
+
+- database name, user, and password in `.env` and `backend/.env`.
+- redis passwords in `redis/users.acl`; the admin password must match `redis_password` in `backend/.env`.
+- rabbitmq user and password in `.env` and in `celery_broker_url` in `backend/.env`.
+- `metrics_token` in `backend/.env` and the contents of `prometheus/metrics_token`.
+
+also set your own `refresh_pepper` and `altcha_hmac_key` in `backend/.env`, and `grafana_admin_password` in `.env`. a random value can be generated with `openssl rand -hex 32`.
 
 generate jwt keys and start:
 
 ```sh
 make certs
-make up
+make dev-up
 ```
 
 ## tests
 
 ```sh
-make test
+make test-api
 ```
 
 starts the separate test stack, applies migrations, and runs backend tests with file progress and no test logs. uses `backend/.env.test`; keep the test database name `etch_test_integration`.
 
+frontend and e2e tests run on the host and need node 24 with installed packages and playwright browsers:
+
+```sh
+npm --prefix frontend ci
+npm --prefix frontend exec playwright install -- --with-deps chromium firefox webkit
+make test-frontend  # format, typecheck, lint, unit tests, build
+make test-e2e       # playwright: mocked, visual, and integration on the test stack
+make test-all       # frontend, e2e, and backend tests
+```
+
 ## other commands
 
 ```sh
-make rebuild  # rebuild and start development containers
-make down     # stop development containers
+make dev-rebuild  # rebuild and start development containers
+make dev-down     # stop development containers
+make test-down    # stop the test stack and remove its volumes
 ```
