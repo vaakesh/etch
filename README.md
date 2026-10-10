@@ -2,6 +2,8 @@
 
 etch is a web app for learning vocabulary with flashcards: build decks of word pairs, share them publicly, save other people's decks, and practice in typed-answer training sessions with progress and daily activity tracking.
 
+live demo: https://168.113.158.206.nip.io/
+
 ## stack
 
 - **api:** python 3.14, fastapi, pydantic, sqlalchemy (async) with asyncpg, alembic
