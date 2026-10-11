@@ -59,6 +59,7 @@ describe("LoginPage", () => {
     expect(markup).toContain('autoComplete="new-password"');
     expect(markup).toContain("3–18 символов: латинские буквы, цифры, _ или -.");
     expect(markup).toContain("8–128 символов, без пробелов.");
+    expect(markup).toContain("Это демо-версия. Не указывайте настоящие данные");
     expect(markup).not.toContain('readonly=""');
   });
 

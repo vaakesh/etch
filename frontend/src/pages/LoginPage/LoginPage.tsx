@@ -59,6 +59,8 @@ const MESSAGES = defineMessages(
     registerTitle: "Начните с Etch",
     registerLead: "Создайте аккаунт, чтобы собирать свой словарь и запоминать больше.",
     expired: "Сессия истекла. Войдите снова.",
+    demoNotice:
+      "Это демо-версия. Не указывайте настоящие данные: подойдут вымышленные имя пользователя и email, а пароль не должен совпадать с вашими паролями на других сайтах.",
     username: "Имя пользователя",
     usernameHint: "3–18 символов: латинские буквы, цифры, _ или -.",
     email: "Email",
@@ -98,6 +100,8 @@ const MESSAGES = defineMessages(
     registerTitle: "Start with Etch",
     registerLead: "Create an account to build your vocabulary and remember more.",
     expired: "Your session expired. Sign in again.",
+    demoNotice:
+      "This is a demo. Do not enter real data: a made-up username and email will do, and the password must not match your passwords on other sites.",
     username: "Username",
     usernameHint: "3–18 characters: Latin letters, digits, _ or -.",
     email: "Email",
@@ -456,6 +460,7 @@ export function LoginPage() {
                 {messages.expired}
               </p>
             ) : null}
+            {isRegistration ? <p className={styles.notice}>{messages.demoNotice}</p> : null}
             <form
               aria-busy={isSubmitting}
               autoComplete="off"

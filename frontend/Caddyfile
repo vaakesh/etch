@@ -9,6 +9,7 @@
 		header Strict-Transport-Security "max-age=31536000"
 		header X-Content-Type-Options "nosniff"
 		header Content-Security-Policy "frame-ancestors 'none'"
+		header X-Robots-Tag "noindex, nofollow"
 		encode zstd gzip
 
 		handle @api {
