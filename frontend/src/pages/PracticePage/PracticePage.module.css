@@ -67,7 +67,7 @@
   overflow: auto;
   color: var(--practice-ink);
   font-family:
-    "Inter",
+    "Inter Variable",
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
@@ -243,7 +243,7 @@
 :global(html:not([data-theme="dark"])) .ambientLetter {
   right: -0.02em;
   bottom: -0.28em;
-  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-family: "Playfair Display Variable", Georgia, "Times New Roman", serif;
   font-size: clamp(15rem, 31vw, 30rem);
   font-weight: 500;
   letter-spacing: -0.12em;

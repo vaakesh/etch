@@ -115,7 +115,7 @@ PLAYWRIGHT_INTEGRATION_BASE_URL=http://localhost:YOUR_TEST_FRONTEND_PORT npm run
 
 Перед каждым integration-тестом и после него fixture очищает Redis test-стенда (`docker compose -f docker-compose-test.yml exec api …`), поэтому лимиты регистрации и входа не мешают повторным прогонам. Для этого стенд должен быть поднят локально из `docker-compose-test.yml` репозитория, а `docker` — доступен процессу тестов; скрипт отказывается работать с базой, отличной от `etch_test_integration`. WebKit для authenticated-цепочек и INT-003…010 — следующий этап.
 
-Шрифты во всех наборах обслуживаются из закреплённых devDependencies `@fontsource-variable/inter` и `@fontsource-variable/playfair-display` (OFL-1.1). Fixture заменяет только Google Fonts stylesheet/font resources; код приложения не меняется. Это исключает внешнюю сеть и стабилизирует шрифты, но не проверяет доступность Google Fonts в production.
+Шрифты бандлятся в приложение из закреплённых зависимостей `@fontsource-variable/inter` и `@fontsource-variable/playfair-display` (OFL-1.1) и отдаются с того же origin, что и frontend, поэтому во всех наборах внешняя сеть для них не нужна.
 
 ### Visual и артефакты
 

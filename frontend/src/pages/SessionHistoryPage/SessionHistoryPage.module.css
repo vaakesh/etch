@@ -50,7 +50,7 @@
   bottom: -0.32em;
   color: rgb(73 56 115 / 7%);
   content: "Aa";
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: "Playfair Display Variable", Georgia, serif;
   font-size: clamp(15rem, 31vw, 30rem);
   font-weight: 500;
   line-height: 1;

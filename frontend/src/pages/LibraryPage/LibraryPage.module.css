@@ -2761,7 +2761,7 @@ a.navigationItem:hover {
   overflow: auto;
   color: var(--library-ink);
   font-family:
-    "Inter",
+    "Inter Variable",
     system-ui,
     -apple-system,
     BlinkMacSystemFont,

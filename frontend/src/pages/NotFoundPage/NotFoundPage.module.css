@@ -17,7 +17,7 @@
   overflow: hidden;
   color: var(--error-ink);
   font-family:
-    "Inter",
+    "Inter Variable",
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
@@ -67,7 +67,7 @@
   right: -0.08em;
   bottom: -0.32em;
   color: rgb(73 56 115 / 7%);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: "Playfair Display Variable", Georgia, serif;
   font-size: clamp(17rem, 34vw, 34rem);
   font-weight: 600;
   line-height: 1;
@@ -196,7 +196,7 @@
 .code {
   margin: 0 0 8px;
   color: rgb(73 56 115 / 32%);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: "Playfair Display Variable", Georgia, serif;
   font-size: clamp(4.8rem, 10vw, 7.8rem);
   font-weight: 600;
   line-height: 0.76;

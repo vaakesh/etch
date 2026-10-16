@@ -6,7 +6,6 @@ import {
 } from "../integration-support/accounts";
 import type { TestAccount } from "../integration-support/accounts";
 import { flushTestRedis } from "../integration-support/redis";
-import { installLocalFonts } from "./local-fonts";
 
 export interface Accounts {
   /** Credentials for an account the scenario registers itself through the UI. */
@@ -89,7 +88,6 @@ export const test = base.extend<{ cleanRedis: void; standReady: void; accounts: 
         status: 401,
         reason: "Fresh guest context has no refresh cookie",
       });
-      await installLocalFonts(context, baseURL);
       await runFixture();
     },
     { auto: true },
