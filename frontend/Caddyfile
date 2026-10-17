@@ -1,9 +1,11 @@
 {$SITE_DOMAIN} {
+	@blocked not remote_ip {$ALLOWED_IP_PROD}
 	@api path /api /api/*
 	@internal_probes path /health /health/* /api/health /api/health/* /ready /ready/* /api/ready /api/ready/*
 
 	# Reject internal probes before serving files or proxying API requests.
 	route {
+		respond @blocked "Forbidden" 403
 		# Health probes are available directly within the Docker network only.
 		respond @internal_probes "Not Found" 404
 		header Strict-Transport-Security "max-age=31536000"

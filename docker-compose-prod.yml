@@ -122,6 +122,7 @@ services:
     logging: *default-logging
     environment:
       SITE_DOMAIN: ${site_domain_prod}
+      ALLOWED_IP_PROD: ${allowed_ip_prod:?Set allowed_ip_prod in .env}
     ports:
       - "80:80"
       - "443:443"
