@@ -1,0 +1,72 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # позиции чтения переживают перезапуск, поэтому логи не отправляются дважды
+  file_storage:
+    directory: /var/lib/otel-logs-agent
+
+receivers:
+  filelog:
+    # kubelet пишет stdout контейнеров в /var/log/pods/<namespace>_<pod>_<uid>/<container>/<n>.log
+    include:
+      - /var/log/pods/*/*/*.log
+    exclude:
+      # бэкенд сам отправляет свои логи по otlp; чтение здесь дало бы дубли
+      - /var/log/pods/etch_api-*/*/*.log
+      - /var/log/pods/etch_celery-worker-*/*/*.log
+      - /var/log/pods/etch_celery-beat-*/*/*.log
+      # чтение собственного вывода возвращало бы ошибки экспорта обратно в пайплайн
+      - /var/log/pods/etch_otel-logs-agent-*/*/*.log
+    start_at: beginning
+    include_file_path: true
+    include_file_name: false
+    storage: file_storage
+    operators:
+      # разбирает формат логов рантайма и берет имена пода, namespace и контейнера из пути
+      - type: container
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+
+  # loki группирует логи по service.name; здесь эту роль играет имя контейнера
+  transform/service_name:
+    log_statements:
+      - context: resource
+        statements:
+          - set(attributes["service.name"], attributes["k8s.container.name"])
+
+  resource/node:
+    attributes:
+      - key: k8s.node.name
+        value: ${env:NODE_NAME}
+        action: upsert
+
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+    send_batch_max_size: 512
+
+exporters:
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+    timeout: 5s
+    sending_queue:
+      enabled: true
+      queue_size: 256
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 5m
+
+service:
+  extensions: [health_check, file_storage]
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: [memory_limiter, transform/service_name, resource/node, batch]
+      exporters: [otlp_http/loki]

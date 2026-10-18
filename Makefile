@@ -1,7 +1,7 @@
 DEV_COMPOSE := docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml
 TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
-.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy
+.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
 
 dev-up:
 	uv run --no-project python setup.py check dev
@@ -54,3 +54,27 @@ certs:
 
 prod-deploy:
 	bash scripts/deploy-prod.sh
+
+# kind: кластер из трех нод в контейнерах docker, для локальной разработки
+k8s-kind-up:
+	uv run --no-project python setup.py check dev
+	bash scripts/k8s/kind-up.sh
+	K8S_CONTEXT=kind-etch bash scripts/k8s/deploy.sh
+
+k8s-kind-deploy:
+	K8S_CONTEXT=kind-etch bash scripts/k8s/deploy.sh
+
+k8s-kind-down:
+	kind delete cluster --name etch
+
+# prod: k3s на сервере, оверлей с let's encrypt и образами из ghcr.io; кластер задается при вызове:
+# make k8s-prod-deploy K8S_CONTEXT=<контекст kubectl сервера>
+# аддоны ставятся один раз на новый сервер и при смене их версий
+k8s-prod-addons:
+	bash scripts/k8s/addons.sh "$(K8S_CONTEXT)" k3s
+
+k8s-prod-render:
+	K8S_OVERLAY=prod bash scripts/k8s/deploy.sh render
+
+k8s-prod-deploy:
+	K8S_OVERLAY=prod bash scripts/k8s/deploy.sh

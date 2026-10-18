@@ -1,0 +1,28 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: etch
+nodes:
+  # здесь работают управляющие компоненты kubernetes и etcd; поды приложения остаются на воркерах
+  - role: control-plane
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+    labels:
+      ingress-ready: "true"
+    # через эти порты gateway публикует сайт на хосте
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        listenAddress: 127.0.0.1
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        listenAddress: 127.0.0.1
+        protocol: TCP
+
+  # здесь живут базы данных: их локальные тома привязаны к этой ноде
+  - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+    labels:
+      etch/role: data
+
+  - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5

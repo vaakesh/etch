@@ -1,0 +1,40 @@
+providers:
+  kubernetesGateway:
+    enabled: true
+  kubernetesIngress:
+    enabled: false
+
+ingressClass:
+  enabled: false
+
+# gateway приложения лежит в namespace etch; из чарта берется только gatewayclass
+gateway:
+  enabled: false
+
+# traefik занимает порты 80/443 ноды с меткой ingress-ready
+ports:
+  web:
+    hostPort: 80
+  websecure:
+    hostPort: 443
+
+# балансировщика нет ни в kind, ни в k3s (servicelb отключен); трафик входит через порты выше
+service:
+  type: ClusterIP
+
+nodeSelector:
+  ingress-ready: "true"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+# два пода не могут занять одни порты хоста на одной ноде, поэтому старый под уходит первым
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 0

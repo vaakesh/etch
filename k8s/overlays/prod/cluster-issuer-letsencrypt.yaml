@@ -1,0 +1,39 @@
+# выпускает доверенные сертификаты; домен должен указывать на сервер, а порт 80 - быть доступен снаружи
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account-key
+    solvers:
+      # cert-manager добавляет к http-слушателю временный маршрут для /.well-known/acme-challenge
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - kind: Gateway
+                name: etch
+                namespace: etch
+                sectionName: web
+---
+# тот же процесс на staging-сервере: сертификаты недоверенные, зато нет жестких лимитов
+# нужен для первого запуска на новом сервере
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - kind: Gateway
+                name: etch
+                namespace: etch
+                sectionName: web

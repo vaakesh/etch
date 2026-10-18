@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PROMETHEUS_DISABLE_CREATED_SERIES
+              value: "true"
+            - name: OTEL_SERVICE_NAME
+              value: etch-api
+            # по имени пода реплики различаются в логах и трейсах;
+            # заглушки окружения и версии подставляет scripts/k8s/deploy.sh
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment.name=environment-placeholder,service.version=image-tag-placeholder,k8s.namespace.name=etch,k8s.pod.name=$(POD_NAME)
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: http://otel-collector:4318/v1/traces
+            - name: OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+              value: http://otel-collector:4318/v1/logs

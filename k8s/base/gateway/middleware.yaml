@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: api-body-limit
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  buffering:
+    # самый большой легитимный запрос, импорт 500 карточек, весит около 300 кб
+    maxRequestBodyBytes: 1048576

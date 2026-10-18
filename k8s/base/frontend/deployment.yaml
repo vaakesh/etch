@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/name: frontend
+spec:
+  # число реплик задается в k8s/overlays/*/scale.yaml
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: frontend
+    spec:
+      enableServiceLinks: false
+      priorityClassName: etch-app
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+      containers:
+        - name: frontend
+          image: ghcr.io/vaakesh/etch-frontend
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: caddyfile
+              mountPath: /etc/caddy
+              readOnly: true
+          # /health намеренно отвечает 404, поэтому пробы запрашивают оболочку приложения
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: caddyfile
+          configMap:
+            name: frontend-caddyfile

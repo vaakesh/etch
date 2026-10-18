@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: loki
+  labels:
+    app.kubernetes.io/name: loki
+spec:
+  serviceName: loki
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loki
+    spec:
+      enableServiceLinks: false
+      # образ работает под uid 10001; fsGroup дает ему право записи в том
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: loki
+          image: grafana/loki:3.7.0
+          args:
+            - -config.file=/etc/loki/config.yaml
+            # на уровне info loki логирует каждый запрос; это была половина всех хранимых логов
+            - -log.level=warn
+          ports:
+            - name: http
+              containerPort: 3100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+              readOnly: true
+            - name: data
+              mountPath: /loki
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

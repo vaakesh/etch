@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: etch
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  gatewayClassName: traefik
+  listeners:
+    # порты слушателей - это порты entrypoint в traefik, а не публичные 80/443
+    - name: web
+      protocol: HTTP
+      port: 8000
+    # hostname и издателя сертификата задает оверлей
+    - name: websecure
+      protocol: HTTPS
+      port: 8443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: etch-tls

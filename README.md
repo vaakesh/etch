@@ -106,6 +106,27 @@ make test-e2e       # playwright: mocked, visual, and integration on the test st
 make test-all       # frontend, e2e, and backend tests
 ```
 
+## kubernetes
+
+manifests live in `k8s/`, scripts in `scripts/k8s/`; pod counts per mode are in `k8s/overlays/*/scale.yaml`.
+
+local development runs on a three-node [kind](https://kind.sigs.k8s.io/) cluster (needs kind, kubectl, helm; ports 80 and 443 free), served at https://localhost:
+
+```sh
+make k8s-kind-up      # create the cluster, install add-ons, build and deploy
+make k8s-kind-deploy  # rebuild and redeploy
+make k8s-kind-down    # delete the cluster
+```
+
+production runs on single-node [k3s](https://docs.k3s.io/), with all commands run on the server from its own checkout and env files. install k3s and set up the `etch-prod` kubectl context as described at the top of `k8s/k3s-config.yaml`, then:
+
+```sh
+make k8s-prod-addons K8S_CONTEXT=etch-prod  # once: gateway api, traefik, cert-manager
+make k8s-prod-deploy K8S_CONTEXT=etch-prod IMAGE_TAG=$(git rev-parse HEAD)
+```
+
+grafana: `kubectl -n etch port-forward svc/grafana 3000` (on the server, through `ssh -L 3000:127.0.0.1:3000`).
+
 ## other commands
 
 ```sh

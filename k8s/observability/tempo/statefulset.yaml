@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  labels:
+    app.kubernetes.io/name: tempo
+spec:
+  serviceName: tempo
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tempo
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      # образ работает под uid 10001; fsGroup дает ему право записи в том
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: grafana/tempo:3.1.0
+          args:
+            - -target=all
+            - -config.file=/etc/tempo.yaml
+          ports:
+            - name: http
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo.yaml
+              subPath: tempo.yaml
+              readOnly: true
+            - name: data
+              mountPath: /var/tempo
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

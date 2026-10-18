@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  labels:
+    app.kubernetes.io/name: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-exporter
+    spec:
+      enableServiceLinks: false
+      hostPID: true
+      # по одному поду на ноду, включая управляющую
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.12.1
+          args:
+            - --path.rootfs=/host
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --web.disable-exporter-metrics
+            - --collector.disable-defaults
+            - --collector.cpu
+            - --collector.meminfo
+            - --collector.loadavg
+            - --collector.filesystem
+            - --collector.diskstats
+            - --collector.stat
+            - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker|var/lib/containers)($|/)
+          ports:
+            - name: metrics
+              containerPort: 9100
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: host
+              mountPath: /host
+              readOnly: true
+              mountPropagation: HostToContainer
+          readinessProbe:
+            httpGet:
+              path: /
+              port: metrics
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 24Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: host
+          hostPath:
+            path: /

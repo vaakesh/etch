@@ -1,0 +1,16 @@
+# при нехватке памяти или cpu на ноде первыми вытесняются поды без класса (наблюдаемость),
+# затем приложение, базы данных последними; под с более высоким классом, которому
+# не хватает места, вытесняет поды с более низким
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: etch-data
+value: 1000
+description: postgres, redis, rabbitmq
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: etch-app
+value: 900
+description: api, celery, frontend, migrate

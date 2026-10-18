@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# логи, трейсы и метрики; добавляет свои поды и переменные OTEL_* в поды бэкенда
+components:
+  - ../../observability
+
+patches:
+  # число реплик и границы автомасштабирования для kind
+  - path: scale.yaml
+  # сайт открывается на https://localhost с самоподписанным сертификатом
+  - target:
+      kind: Gateway
+      name: etch
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/cluster-issuer: selfsigned
+      - op: add
+        path: /spec/listeners/1/hostname
+        value: localhost
+
+# образы собирает и кладет на ноды kind scripts/k8s/deploy.sh через `kind load docker-image`
+images:
+  - name: ghcr.io/vaakesh/etch-backend
+    newName: etch-backend
+    newTag: local
+  - name: ghcr.io/vaakesh/etch-frontend
+    newName: etch-frontend
+    newTag: local

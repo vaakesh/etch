@@ -1,0 +1,22 @@
+# количество подов в kind; ресурсы одного пода общие с prod и лежат в манифестах base
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+spec:
+  minReplicas: 1
+  maxReplicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+spec:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1

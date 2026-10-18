@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-logs-agent
+  labels:
+    app.kubernetes.io/name: otel-logs-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-logs-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-logs-agent
+    spec:
+      enableServiceLinks: false
+      # по одному поду на ноду, включая управляющую
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      # файлы логов на ноде читает только root
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      containers:
+        - name: otel-logs-agent
+          image: otel/opentelemetry-collector-contrib:0.162.0
+          args: ["--config=/etc/otelcol/config.yaml"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: health
+              containerPort: 13133
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: checkpoints
+              mountPath: /var/lib/otel-logs-agent
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: otel-logs-agent-config
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+        - name: checkpoints
+          hostPath:
+            path: /var/lib/otel-logs-agent
+            type: DirectoryOrCreate

@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  labels:
+    app.kubernetes.io/name: celery-worker
+spec:
+  # число реплик задается в k8s/overlays/*/scale.yaml
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-worker
+    spec:
+      enableServiceLinks: false
+      priorityClassName: etch-app
+      # дает воркеру закончить текущую задачу до того, как его убьют
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: celery-worker
+          image: ghcr.io/vaakesh/etch-backend
+          imagePullPolicy: IfNotPresent
+          command:
+            - uv
+            - run
+            - --no-sync
+            - celery
+            - -A
+            - app.celery.celery_app:celery_app
+            - worker
+            - --pool=prefork
+            - --concurrency=1
+            - --loglevel=INFO
+          envFrom:
+            - secretRef:
+                name: etch-backend-env
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              memory: 512Mi

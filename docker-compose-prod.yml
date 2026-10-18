@@ -11,6 +11,7 @@ services:
   api:
     image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     logging: *default-logging
+    mem_limit: 512m
     env_file:
       - ./backend/.env
     volumes:
@@ -38,6 +39,7 @@ services:
   celery-worker:
     image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     logging: *default-logging
+    mem_limit: 512m
     env_file:
       - ./backend/.env
     command:
@@ -64,6 +66,7 @@ services:
   celery-beat:
     image: ghcr.io/vaakesh/etch-backend:${IMAGE_TAG}
     logging: *default-logging
+    mem_limit: 192m
     env_file:
       - ./backend/.env
     command:
@@ -85,8 +88,9 @@ services:
     restart: unless-stopped
 
   rabbitmq:
-    image: rabbitmq:4-management
+    image: rabbitmq:4
     logging: *default-logging
+    mem_limit: 512m
     hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${rabbitmq_user}
@@ -104,6 +108,7 @@ services:
   postgres:
     image: postgres:18.4
     logging: *default-logging
+    mem_limit: 1g
     environment:
       POSTGRES_DB: ${db_name}
       POSTGRES_USER: ${db_user}
@@ -120,6 +125,7 @@ services:
   caddy:
     image: ghcr.io/vaakesh/etch-frontend:${IMAGE_TAG}
     logging: *default-logging
+    mem_limit: 128m
     environment:
       SITE_DOMAIN: ${site_domain_prod}
       ALLOWED_IP_PROD: ${allowed_ip_prod:?Set allowed_ip_prod in .env}
@@ -144,6 +150,7 @@ services:
   redis:
     image: redis:8.10.0-alpine
     logging: *default-logging
+    mem_limit: 256m
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     volumes:
       - redis_data:/data

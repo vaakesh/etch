@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+    spec:
+      enableServiceLinks: false
+      priorityClassName: etch-data
+      nodeSelector:
+        etch/role: data
+      containers:
+        - name: redis
+          image: redis:8.10.0-alpine
+          command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
+          readinessProbe:
+            exec:
+              # NOAUTH тоже подтверждает готовность redis, когда анонимный доступ отключен
+              command: ["sh", "-c", "redis-cli ping | grep -qE '^(PONG|NOAUTH)'"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        # redis.conf и users.acl
+        - name: config
+          projected:
+            sources:
+              - configMap:
+                  name: redis-config
+              - secret:
+                  name: redis-acl
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

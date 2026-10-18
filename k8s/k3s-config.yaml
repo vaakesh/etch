@@ -1,0 +1,35 @@
+# конфиг k3s на сервере: кладется в /etc/rancher/k3s/config.yaml до установки k3s;
+# кластер из одной ноды, на ней и gateway, и базы данных
+#
+# установка на сервере (из корня репозитория; наружу открыты только 80 и 443, 6443 закрыт):
+#   sudo mkdir -p /etc/rancher/k3s
+#   sudo cp k8s/k3s-config.yaml /etc/rancher/k3s/config.yaml
+#   curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.36.5+k3s1 sh -
+#
+# kubeconfig для пользователя, от которого идет деплой, с контекстом etch-prod:
+#   mkdir -p ~/.kube
+#   sudo k3s kubectl config view --raw > ~/.kube/config
+#   chmod 600 ~/.kube/config
+#   kubectl config rename-context default etch-prod
+#
+# после изменения этого файла на установленном сервере: sudo systemctl restart k3s
+
+# свои traefik и gateway api ставит scripts/k8s/addons.sh, а traefik занимает порты 80/443 ноды,
+# поэтому встроенные traefik и балансировщик servicelb не нужны;
+# metrics-server, local-path-provisioner и coredns остаются встроенными
+disable:
+  - traefik
+  - servicelb
+
+# память и cpu, которые поды не могут занять: ОС, sshd, containerd и сам k3s получают свое,
+# даже когда поды под нагрузкой; поды в сумме ограничены остатком (allocatable),
+# а при свободной памяти меньше eviction-hard kubelet вытесняет поды с низшим приоритетом
+kubelet-arg:
+  - system-reserved=cpu=250m,memory=768Mi
+  - kube-reserved=cpu=250m,memory=768Mi
+  - eviction-hard=memory.available<256Mi,nodefs.available<10%
+
+# метки, которых ждут манифесты: базы данных и traefik без них не запускаются
+node-label:
+  - etch/role=data
+  - ingress-ready=true

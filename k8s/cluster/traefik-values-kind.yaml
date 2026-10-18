@@ -1,0 +1,6 @@
+# дополнение к traefik-values.yaml для kind: порты хоста проброшены в управляющую ноду
+# (см. kind-cluster.yaml), а на ней taint, который не пускает обычные поды
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule

@@ -1,0 +1,84 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  parentRefs:
+    - name: etch
+      sectionName: web
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: etch
+  labels:
+    app.kubernetes.io/name: gateway
+spec:
+  parentRefs:
+    - name: etch
+      sectionName: websecure
+  rules:
+    # пробы остаются внутренними: на эти пути фронтенд отвечает 404
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/health
+        - path:
+            type: PathPrefix
+            value: /api/ready
+        - path:
+            type: PathPrefix
+            value: /health
+        - path:
+            type: PathPrefix
+            value: /ready
+      backendRefs:
+        - name: frontend
+          port: 8080
+
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: api-body-limit
+        # uvicorn запущен с --root-path /api и ждет пути без префикса
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000
+              - name: X-Content-Type-Options
+                value: nosniff
+              - name: Content-Security-Policy
+                value: frame-ancestors 'none'
+              - name: X-Robots-Tag
+                value: noindex, nofollow
+      backendRefs:
+        - name: api
+          port: 8000
+
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 8080

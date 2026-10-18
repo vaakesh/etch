@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# компонент добавляет свои ресурсы и патчит поды бэкенда той базы, к которой подключен
+namespace: etch
+
+resources:
+  - otel-collector/deployment.yaml
+  - otel-collector/service.yaml
+  - otel-logs-agent/daemonset.yaml
+  - tempo/statefulset.yaml
+  - tempo/service.yaml
+  - loki/statefulset.yaml
+  - loki/service.yaml
+  - prometheus/rbac.yaml
+  - prometheus/statefulset.yaml
+  - prometheus/service.yaml
+  - node-exporter/daemonset.yaml
+  - grafana/deployment.yaml
+  - grafana/service.yaml
+
+# у каждого configmap хеш в имени: при изменении файла поды перезапускаются сами
+configMapGenerator:
+  # конфиги, общие с docker compose, читаются из корня репозитория, чтобы не держать копии;
+  # для этого deploy.sh рендерит манифесты с --load-restrictor LoadRestrictionsNone
+  - name: otel-collector-config
+    files:
+      - config.yaml=../../observability/otel-collector-prod.yaml
+  - name: tempo-config
+    files:
+      - ../../observability/tempo.yaml
+  - name: loki-config
+    files:
+      - config.yaml=../../observability/loki.yaml
+  - name: grafana-datasources
+    files:
+      - ../../grafana/provisioning/datasources/loki.yaml
+      - ../../grafana/provisioning/datasources/prometheus.yml
+      - ../../grafana/provisioning/datasources/tempo.yml
+  - name: grafana-dashboard-providers
+    files:
+      - ../../grafana/provisioning/dashboards/etch.yml
+  # конфиги только для кластера лежат рядом
+  - name: otel-logs-agent-config
+    files:
+      - config.yaml=otel-logs-agent/config.yaml
+  - name: prometheus-config
+    files:
+      - prometheus/prometheus.yml
+  # дашборды у кластера свои; те, что в grafana/dashboards, относятся к docker compose
+  - name: grafana-dashboards
+    files:
+      - grafana/dashboards/etch-kubernetes.json
+
+patches:
+  - path: backend/api-otel.yaml
+  - path: backend/celery-worker-otel.yaml
+  - path: backend/celery-beat-otel.yaml

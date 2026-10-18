@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - cluster-issuer-letsencrypt.yaml
+  - serviceaccount-default.yaml
+
+components:
+  - ../../observability
+
+# значения-заглушки подставляет scripts/k8s/deploy.sh: домен и тег образа из .env
+# (site_domain_prod, IMAGE_TAG), издатель из K8S_CERT_ISSUER; заглушки окружения и версии
+# в метках телеметрии (k8s/observability/backend) заменяются там же
+patches:
+  # число реплик и границы автомасштабирования для сервера
+  - path: scale.yaml
+  - target:
+      kind: Gateway
+      name: etch
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/cluster-issuer: cert-issuer-placeholder
+      - op: add
+        path: /spec/listeners/1/hostname
+        value: site-domain.placeholder
+  # веб-интерфейс rabbitmq в проде не нужен: образ без management и без его порта
+  - target:
+      kind: StatefulSet
+      name: rabbitmq
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/0/ports/1/name
+        value: management
+      - op: remove
+        path: /spec/template/spec/containers/0/ports/1
+  - target:
+      kind: Service
+      name: rabbitmq
+    patch: |-
+      - op: test
+        path: /spec/ports/1/name
+        value: management
+      - op: remove
+        path: /spec/ports/1
+
+# образы собирает пайплайн и кладет в ghcr.io с тегом - sha коммита
+images:
+  - name: ghcr.io/vaakesh/etch-backend
+    newTag: image-tag-placeholder
+  - name: ghcr.io/vaakesh/etch-frontend
+    newTag: image-tag-placeholder
+  - name: rabbitmq
+    newTag: "4"
