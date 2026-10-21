@@ -142,6 +142,12 @@ START_PRACTICE_RATE_LIMIT_POLICY = RateLimitPolicy(
     window_seconds=60,
 )
 
+ASK_RATE_LIMIT_POLICY = RateLimitPolicy(
+    route="ask",
+    requests=5,
+    window_seconds=60 * 60 * 24,
+)
+
 
 profile_rate_limit = limit(
     policy=PROFILE_RATE_LIMIT_POLICY,
@@ -187,5 +193,10 @@ training_session_activity_rate_limit = limit(
 bff_rate_limit = limit(BFF_RATE_LIMIT_POLICY, by_identity="user")
 start_practice_rate_limit = limit(
     START_PRACTICE_RATE_LIMIT_POLICY,
+    by_identity="user",
+)
+
+ask_rate_limit = limit(
+    ASK_RATE_LIMIT_POLICY,
     by_identity="user",
 )

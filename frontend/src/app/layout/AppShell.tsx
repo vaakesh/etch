@@ -2,6 +2,7 @@ import { Suspense, useState, type CSSProperties } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { DashboardIcon, type DashboardIconName } from "../../components/DashboardVisuals";
+import { AssistantChat } from "../../features/assistant/ui/AssistantChat";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
 import { PageLoader } from "../PageLoader";
 import styles from "./AppShell.module.css";
@@ -217,6 +218,8 @@ export function AppShell() {
       </button>
 
       <Sidebar collapsed={isSidebarCollapsed} profile={profile} />
+
+      <AssistantChat key={user?.uuid ?? "guest"} />
 
       <div className={styles.content}>
         <Suspense fallback={<PageLoader contained tone="light" />}>

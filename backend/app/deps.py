@@ -1,4 +1,6 @@
 from collections.abc import Callable
+from contextlib import AsyncExitStack
+from functools import lru_cache
 from secrets import compare_digest
 from typing import Annotated
 
@@ -13,6 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.tracing import traced
 
 UoWFactory = Callable[[], UnitOfWork]
+
+
+@lru_cache(maxsize=1)
+def get_resources() -> AsyncExitStack:
+    """own resources until the application's lifespan exits"""
+    return AsyncExitStack()
+
 
 def get_uow_factory(
     session_maker: async_sessionmaker[AsyncSession] = Depends(get_async_session_maker),

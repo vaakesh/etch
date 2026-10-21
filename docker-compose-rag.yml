@@ -1,0 +1,65 @@
+services:
+  rag-api:
+    profiles: [rag]
+    build: ./user-guide-rag
+    image: etch-user-guide-rag-api:local
+    env_file:
+      - ./user-guide-rag/.env
+    environment:
+      QDRANT_URL: http://rag-qdrant:${QDRANT_HTTP_PORT:?Set QDRANT_HTTP_PORT}
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - ${API_PORT:?Set API_PORT in user-guide-rag/.env}
+      - --workers
+      - "1"
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:?Set API_HOST_PORT}:${API_PORT:?Set API_PORT}"
+    volumes:
+      - hf_cache:/models/huggingface
+    networks:
+      default:
+        aliases:
+          - user-guide-rag
+    depends_on:
+      rag-models-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  rag-qdrant:
+    profiles: [rag]
+    image: qdrant/qdrant:v1.19.2
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:?Set QDRANT_HTTP_PORT}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:?Set QDRANT_GRPC_PORT}
+    ports:
+      - "127.0.0.1:${QDRANT_HOST_PORT:?Set QDRANT_HOST_PORT}:${QDRANT_HTTP_PORT:?Set QDRANT_HTTP_PORT}"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  rag-models-init:
+    profiles: [rag]
+    build: ./user-guide-rag
+    image: etch-user-guide-rag-api:local
+    env_file:
+      - ./user-guide-rag/.env
+    environment:
+      HF_HUB_DISABLE_XET: "1"
+      QDRANT_URL: http://rag-qdrant:${QDRANT_HTTP_PORT:?Set QDRANT_HTTP_PORT}
+    command: ["python", "init_models.py"]
+    volumes:
+      - hf_cache:/models/huggingface
+    depends_on:
+      rag-qdrant:
+        condition: service_started
+    restart: "no"
+
+volumes:
+  qdrant_data:
+    name: etch-user-guide-rag_qdrant_data
+  hf_cache:
+    name: etch-user-guide-rag_hf_cache

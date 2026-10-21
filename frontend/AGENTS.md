@@ -30,6 +30,7 @@ Frontend является минимальным auth-aware UI-приложен�
 * защищённая практика на `/practice`: настройка новой сессии по `?deck=...`, восстановление по `?session=...`, список тренировочных сессий и feature-слой `src/features/practice`;
 * защищённая история карточек тренировочной сессии на `/practice/sessions/:session_uuid/history`.
 * защищённый профиль пользователя на `/users/:username` с его колодами.
+* помощник Etch в `src/features/assistant`: чат в общем `AppShell` на экранах от 1024px, обычный `POST /ask` через `apiFetch`, переписка хранится только до размонтирования shell или смены пользователя.
 
 Сейчас зарегистрированы guest-маршрут `/login`, protected-маршруты `/`, `/library` (совместимый вход в раздел колод), `/library/decks`, `/library/cards`, `/library/decks/archive`, `/decks/:deck_uuid`, `/library/:deck_uuid/edit`, `/catalog`, `/users/:username`, `/practice`, `/practice/sessions/:session_uuid/history` и `/settings`, а также публичный wildcard-маршрут `*` со страницей 404. Их route-pages расположены в `src/pages/LoginPage`, `src/pages/HomePage`, `src/pages/LibraryPage`, `src/pages/LibraryArchivePage`, `src/pages/DeckDetailsPage`, `src/pages/LibraryDeckEditPage`, `src/pages/CatalogPage`, `src/pages/UserProfilePage`, `src/pages/PracticePage`, `src/pages/SessionHistoryPage`, `src/pages/SettingsPage` и `src/pages/NotFoundPage`. Остальных маршрутов и страниц пока нет.
 

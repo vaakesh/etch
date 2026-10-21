@@ -12,7 +12,8 @@ export type DashboardIconName =
   | "flame"
   | "gauge"
   | "calendar"
-  | "clock";
+  | "clock"
+  | "chat";
 
 interface DashboardIconProps {
   name: DashboardIconName;
@@ -23,6 +24,14 @@ export function DashboardIcon({ name, className }: DashboardIconProps) {
   let content;
 
   switch (name) {
+    case "chat":
+      content = (
+        <>
+          <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-3 3V11.5A7.5 7.5 0 0 1 9.5 4h3a7.5 7.5 0 0 1 7.5 7.5Z" />
+          <path d="M7 10h8M7 14h5" />
+        </>
+      );
+      break;
     case "home":
       content = (
         <>

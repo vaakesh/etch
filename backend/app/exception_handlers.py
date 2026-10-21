@@ -42,6 +42,11 @@ from app.errors import (
     RequestValueError,
 )
 from app.redis.errors import RateLimitError
+from app.rag.errors import (
+    RagBadResponseError,
+    RagTimeoutError,
+    RagUnavailableError,
+)
 from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
     TrainingSessionAlreadyExistsError,
@@ -149,6 +154,10 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
         status.HTTP_403_FORBIDDEN,
         "TRAINING_SESSION_PERMISSION_DENIED",
     ),
+
+    (RagUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, "RAG_UNAVAILABLE"),
+    (RagTimeoutError, status.HTTP_504_GATEWAY_TIMEOUT, "RAG_TIMEOUT"),
+    (RagBadResponseError, status.HTTP_502_BAD_GATEWAY, "RAG_BAD_RESPONSE"),
 
     (RateLimitError, status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
 )

@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.tracing import traced
 
@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     altcha_cost: int = 5000
     altcha_min_counter: int = 500
     altcha_max_counter: int = 1000
+    rag_base_url: HttpUrl = HttpUrl("http://user-guide-rag:8000")
+    rag_request_timeout: int = 60
 
     def database_url(self) -> str:
         return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"

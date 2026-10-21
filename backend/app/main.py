@@ -7,7 +7,9 @@ from app.auth.router import router as auth_router
 from app.bff.router import router as bff_router
 from app.cards.router import router as cards_router
 from app.decks.router import router as decks_router
-from app.deps import require_metrics_access
+from app.rag.deps import get_rag_client
+from app.rag.router import router as rag_router
+from app.deps import get_resources, require_metrics_access
 from app.exception_handlers import register_exception_handlers
 from app.health import router as health_router
 from app.logging_config import setup_logging
@@ -20,7 +22,6 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from app.telemetry import (
-    get_trace_provider,
     setup_otel_logging,
     setup_tracing,
     shutdown_otel_logging,
@@ -37,35 +38,33 @@ async def lifespan(app: FastAPI):
         slow_query_ms=200,
     )
 
-    trace_provider = setup_tracing()
-    redis = get_redis()
+    async with get_resources() as resources:
+        resources.callback(get_resources.cache_clear)
+        resources.callback(get_rag_client.cache_clear)
 
-    log_provider, log_handler = setup_otel_logging(
-        resource=trace_provider.resource,
-    )
+        trace_provider = setup_tracing()
+        resources.push_async_callback(
+            asyncio.to_thread, shutdown_tracing, trace_provider,
+        )
 
-    try:
+        log_provider, log_handler = setup_otel_logging(
+            resource=trace_provider.resource,
+        )
+        resources.push_async_callback(
+            asyncio.to_thread, shutdown_otel_logging, log_provider, log_handler,
+        )
+
+        redis = get_redis()
+        resources.callback(get_redis.cache_clear)
+        resources.push_async_callback(redis.aclose)
+        get_rag_client()
+
         await redis.ping()
         logging.getLogger("app.startup").info(
             "OTLP logging is ready",
             extra={"event": "telemetry.ready"},
         )
         yield
-    finally:
-        try:
-            try:
-                await redis.aclose()
-            finally:
-                get_redis.cache_clear()
-        finally:
-            try:
-                await asyncio.to_thread(shutdown_tracing, trace_provider)
-            finally:
-                await asyncio.to_thread(
-                    shutdown_otel_logging,
-                    log_provider,
-                    log_handler,
-                )
 
 
 def create_app(*args, **kwargs) -> FastAPI:
@@ -78,6 +77,7 @@ def create_app(*args, **kwargs) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(bff_router)
     app.include_router(health_router)
+    app.include_router(rag_router)
 
     register_exception_handlers(app)
     setup_middlewares(app)

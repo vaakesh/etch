@@ -1,4 +1,10 @@
+RAG ?= 0
 DEV_COMPOSE := docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml
+
+ifeq ($(RAG),1)
+DEV_COMPOSE += -f docker-compose-rag.yml --env-file .env --env-file user-guide-rag/.env --profile rag
+endif
+
 TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
 .PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
