@@ -118,12 +118,12 @@ describe("HTML boot preferences", () => {
     { locale: null, theme: null },
     { locale: "de-DE", theme: "sepia" },
     { storageUnavailable: true },
-  ])("falls back to Russian and the system theme for unavailable preferences: %o", (options) => {
+  ])("falls back to Russian and the light theme for unavailable preferences: %o", (options) => {
     const { documentElement } = runBootScripts({ ...options, prefersDark: true });
 
     expect(documentElement.lang).toBe("ru-RU");
-    expect(documentElement.dataset.theme).toBe("dark");
-    expect(documentElement.style.colorScheme).toBe("dark");
+    expect(documentElement.dataset.theme).toBe("light");
+    expect(documentElement.style.colorScheme).toBe("light");
   });
 });
 

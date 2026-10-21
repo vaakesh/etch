@@ -3,7 +3,7 @@ export const APP_THEMES = ["light", "dark", "system"] as const;
 export type AppTheme = (typeof APP_THEMES)[number];
 export type ResolvedTheme = Exclude<AppTheme, "system">;
 
-export const DEFAULT_THEME: AppTheme = "system";
+export const DEFAULT_THEME: AppTheme = "light";
 
 export function isAppTheme(value: unknown): value is AppTheme {
   return typeof value === "string" && APP_THEMES.some((theme) => theme === value);

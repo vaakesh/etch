@@ -65,7 +65,9 @@ test("[INT-002] регистрация в UI → автоматический в
   const form = authForm(page);
 
   await test.step("Зарегистрироваться через форму", async () => {
+    await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/login?mode=register");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await enterField(form.username, account.username, false);
     await enterField(form.email, account.email, false);
     await enterField(form.password, account.password, false);
@@ -80,12 +82,14 @@ test("[INT-002] регистрация в UI → автоматический в
     expect(await me.json()).toMatchObject({
       username: account.username,
       email: account.email,
-      settings: { theme: "system", show_previews_for_long: true },
+      settings: { theme: "light", show_previews_for_long: true },
     });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });
 
   await test.step("Новый пользователь остаётся в системе после reload", async () => {
     await page.reload();
     await expectHome(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });
 });

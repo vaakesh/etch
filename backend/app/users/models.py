@@ -32,8 +32,8 @@ class UserSettings(Base):
     )
     theme: Mapped[str] = mapped_column(
         String(10),
-        default="system",
-        server_default="system",
+        default="light",
+        server_default="light",
         nullable=False,
     )
     show_previews_for_long: Mapped[bool] = mapped_column(

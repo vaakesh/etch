@@ -112,7 +112,7 @@ def user_factory(
             password=payload["password"],
             settings=CreatedSettings(
                 locale="ru-RU",
-                theme="system",
+                theme="light",
                 show_previews_for_long=True,
             )
         )

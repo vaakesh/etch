@@ -72,7 +72,7 @@ class TestUserCreate:
             assert user.settings is not None
             assert user.settings.user_id == user.id
             assert user.settings.locale == "ru-RU"
-            assert user.settings.theme == "system"
+            assert user.settings.theme == "light"
             assert user.settings.show_previews_for_long is True
 
             assert user.hashed_password != payload["password"]
@@ -93,7 +93,7 @@ class TestUserCreate:
             "email": "alice@example.com",
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -298,7 +298,7 @@ class TestUserCreate:
             assert verify_password(winning_payload["password"], user.hashed_password)
             assert settings.user_id == user.id
             assert settings.locale == "ru-RU"
-            assert settings.theme == "system"
+            assert settings.theme == "light"
             assert settings.show_previews_for_long is True
 
             data = success.json()
@@ -316,7 +316,7 @@ class TestUserCreate:
             "email": winning_payload["email"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -345,7 +345,7 @@ class TestUserClientIsolation:
             "updated_at": alice.updated_at,
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -358,7 +358,7 @@ class TestUserClientIsolation:
             "updated_at": bob.updated_at,
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }

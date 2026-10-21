@@ -28,7 +28,7 @@
       })();
       const selectedTheme = ["light", "dark", "system"].includes(storedTheme)
         ? storedTheme
-        : "system";
+        : "light";
       const resolvedTheme =
         selectedTheme === "system"
           ? window.matchMedia("(prefers-color-scheme: dark)").matches

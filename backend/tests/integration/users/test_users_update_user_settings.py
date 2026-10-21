@@ -42,11 +42,11 @@ class TestUpdateUserSettings:
             pytest.param(
                 {},
                 {"locale": "fil-PH"},
-                {"locale": "fil-PH", "theme": "system", "show_previews_for_long": True},
+                {"locale": "fil-PH", "theme": "light", "show_previews_for_long": True},
                 id="three_letter_locale",
             ),
             pytest.param(
-                {},
+                {"theme": "dark"},
                 {"theme": "light"},
                 {"locale": "ru-RU", "theme": "light", "show_previews_for_long": True},
                 id="light_theme",
@@ -60,13 +60,13 @@ class TestUpdateUserSettings:
             pytest.param(
                 {},
                 {"show_previews_for_long": False},
-                {"locale": "ru-RU", "theme": "system", "show_previews_for_long": False},
+                {"locale": "ru-RU", "theme": "light", "show_previews_for_long": False},
                 id="disable_previews",
             ),
             pytest.param(
                 {"show_previews_for_long": False},
                 {"show_previews_for_long": True},
-                {"locale": "ru-RU", "theme": "system", "show_previews_for_long": True},
+                {"locale": "ru-RU", "theme": "light", "show_previews_for_long": True},
                 id="enable_previews",
             ),
         ],
@@ -127,7 +127,7 @@ class TestUpdateUserSettings:
         async with async_session_maker() as session:
             settings = (await session.scalars(select(UserSettings))).one()
             assert settings.locale == "ru-RU"
-            assert settings.theme == "system"
+            assert settings.theme == "light"
             assert settings.show_previews_for_long is True
 
     @pytest.mark.parametrize("field", ["locale", "theme", "show_previews_for_long"])
@@ -159,7 +159,7 @@ class TestUpdateUserSettings:
         async with async_session_maker() as session:
             settings = (await session.scalars(select(UserSettings))).one()
             assert settings.locale == "ru-RU"
-            assert settings.theme == "system"
+            assert settings.theme == "light"
             assert settings.show_previews_for_long is True
 
     @pytest.mark.parametrize(
@@ -238,7 +238,7 @@ class TestUpdateUserSettings:
         async with async_session_maker() as session:
             settings = (await session.scalars(select(UserSettings))).one()
             assert settings.locale == "ru-RU"
-            assert settings.theme == "system"
+            assert settings.theme == "light"
             assert settings.show_previews_for_long is True
 
     async def test_rejects_unauthenticated_update_without_changing_settings(
@@ -261,7 +261,7 @@ class TestUpdateUserSettings:
         }
         async with async_session_maker() as session:
             settings = (await session.scalars(select(UserSettings))).one()
-            assert settings.theme == "system"
+            assert settings.theme == "light"
 
     async def test_updates_only_current_users_settings(
         self,
@@ -288,13 +288,13 @@ class TestUpdateUserSettings:
         assert bob_response.status_code == status.HTTP_200_OK
         assert bob_response.json()["settings"] == {
             "locale": "ru-RU",
-            "theme": "system",
+            "theme": "light",
             "show_previews_for_long": True,
         }
         async with async_session_maker() as session:
             settings = (await session.scalars(select(UserSettings))).all()
             assert len(settings) == 2
-            assert {setting.theme for setting in settings} == {"dark", "system"}
+            assert {setting.theme for setting in settings} == {"dark", "light"}
 
     async def test_other_session_sees_updated_settings(
         self,
@@ -308,7 +308,7 @@ class TestUpdateUserSettings:
         assert before.status_code == status.HTTP_200_OK
         assert before.json()["settings"] == {
             "locale": "ru-RU",
-            "theme": "system",
+            "theme": "light",
             "show_previews_for_long": True,
         }
 

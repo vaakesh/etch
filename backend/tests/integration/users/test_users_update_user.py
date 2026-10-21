@@ -45,7 +45,7 @@ class TestUserUpdate:
             "updated_at": data["updated_at"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -60,7 +60,7 @@ class TestUserUpdate:
             assert user.updated_at == datetime.fromisoformat(data["updated_at"])
             assert settings.user_id == user.id
             assert settings.locale == "ru-RU"
-            assert settings.theme == "system"
+            assert settings.theme == "light"
             assert settings.show_previews_for_long is True
 
     @pytest.mark.parametrize(
@@ -104,7 +104,7 @@ class TestUserUpdate:
             "updated_at": data["updated_at"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -266,7 +266,7 @@ class TestUserUpdate:
             "updated_at": data["updated_at"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -301,7 +301,7 @@ class TestUserUpdate:
             "updated_at": data["updated_at"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -333,7 +333,7 @@ class TestUserUpdate:
             "updated_at": data["updated_at"],
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -534,7 +534,7 @@ class TestUserUpdate:
             "updated_at": alice.updated_at,
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }
@@ -577,7 +577,7 @@ class TestUserUpdate:
             "updated_at": bob.updated_at,
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }

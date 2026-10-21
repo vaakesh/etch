@@ -186,7 +186,7 @@ class UserService:
                 user_settings = UserSettings(
                     user_id=user.id,
                     locale="ru-RU",
-                    theme="system",
+                    theme="light",
                     show_previews_for_long=True,
                 )
                 uow.user_settings_repo.add(user_settings)

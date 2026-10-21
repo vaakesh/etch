@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isAppTheme, resolveTheme } from "./theme";
+import { DEFAULT_THEME, isAppTheme, resolveTheme } from "./theme";
 
 describe("theme preferences", () => {
+  it.each([true, false])("defaults to light with system dark preference %s", (prefersDark) => {
+    expect(resolveTheme(DEFAULT_THEME, prefersDark)).toBe("light");
+  });
+
   it.each(["light", "dark", "system"])("accepts the %s backend value", (theme) => {
     expect(isAppTheme(theme)).toBe(true);
   });

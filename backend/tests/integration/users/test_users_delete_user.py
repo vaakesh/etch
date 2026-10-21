@@ -101,7 +101,7 @@ class TestUserDelete:
             "updated_at": bob.updated_at,
             "settings": {
                 "locale": "ru-RU",
-                "theme": "system",
+                "theme": "light",
                 "show_previews_for_long": True,
             },
         }

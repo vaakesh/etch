@@ -46,6 +46,7 @@ class TestCreateUser:
             **USER_WITH_SETTINGS_DATA,
             "username": "new-user", "email": "new@example.com",
             "hashed_password": "hashed-password",
+            "settings": {**USER_WITH_SETTINGS_DATA["settings"], "theme": "light"},
         }
         password_hasher.assert_called_once_with("password123")
         users_uow.user_repo.add.assert_called_once()
@@ -58,7 +59,7 @@ class TestCreateUser:
         settings = users_uow.user_settings_repo.add.call_args.args[0]
         assert isinstance(settings, UserSettings)
         assert (settings.user_id, settings.locale, settings.theme, settings.show_previews_for_long) == (
-            42, "ru-RU", "system", True,
+            42, "ru-RU", "light", True,
         )
         users_uow.commit.assert_awaited_once()
         assert users_cache.mock_calls == []
