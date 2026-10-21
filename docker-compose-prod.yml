@@ -128,7 +128,8 @@ services:
     mem_limit: 128m
     environment:
       SITE_DOMAIN: ${site_domain_prod}
-      ALLOWED_IP_PROD: ${allowed_ip_prod:?Set allowed_ip_prod in .env}
+      # Empty allowed_ip_prod opens the site to every client.
+      ALLOWED_IP_PROD: ${allowed_ip_prod:-0.0.0.0/0 ::/0}
     ports:
       - "80:80"
       - "443:443"
