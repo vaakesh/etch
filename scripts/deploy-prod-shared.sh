@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Deploy to the shared server: the host Caddy, Prometheus and Grafana live outside this project.
+# Deploy to the shared server: the host Caddy and the server-observability stack
+# (Prometheus, Grafana, otel-collector, Loki, Tempo) live outside this project.
 # Steps share one lock, error trap and IMAGE_TAG, so they run only through main, in order.
 set -Eeuo pipefail
 umask 077
@@ -32,19 +33,18 @@ preflight() {
   compose config --quiet
   test -d backend/certs
   test -f prometheus/metrics_token
-  test -f observability/otel-collector-prod.yaml
+  if ! docker network inspect observability > /dev/null 2>&1; then
+    echo "Docker network observability is missing: start server-observability first." >&2
+    return 1
+  fi
 
   # Repair public bind-mounted config permissions from earlier checkouts.
   # The host Prometheus reads metrics_token through its own bind mount.
   chmod 644 \
-    observability/otel-collector-prod.yaml \
-    observability/loki.yaml \
-    observability/tempo.yaml \
     prometheus/metrics_token \
     redis/redis.conf
 
   compose pull
-  compose run --rm -T --no-deps otel-collector validate --config=/etc/otelcol/config.yaml < /dev/null
 }
 
 # Stop writers first so the dump matches the state the migrations start from.
@@ -67,8 +67,11 @@ restart_infrastructure() {
     compose config --services |
     awk '$0 != "api" && $0 != "caddy" && $0 != "celery-worker" && $0 != "celery-beat"'
   )
-  compose up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 "${infrastructure[@]}"
+  # Orphans include the former per-project otel-collector, Loki and Tempo: left running,
+  # they would answer the same DNS names as the shared ones on the default network.
+  compose up -d --no-build --no-deps --force-recreate --remove-orphans --wait --wait-timeout 180 "${infrastructure[@]}"
 
+  # The shared telemetry stack is not restarted here, only checked through the observability network.
   compose run --rm -T --no-deps api uv run --no-sync python - <<'PY'
 import time
 import urllib.request
