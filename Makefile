@@ -7,7 +7,7 @@ endif
 
 TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
-.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
+.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy prod-deploy-shared k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
 
 dev-up:
 	uv run --no-project python setup.py check dev
@@ -60,6 +60,10 @@ certs:
 
 prod-deploy:
 	bash scripts/deploy-prod.sh
+
+# prod на общем сервере: системный caddy держит 80/443, etch слушает 127.0.0.1:caddy_proxy_port
+prod-deploy-shared:
+	bash scripts/deploy-prod-shared.sh
 
 # kind: кластер из трех нод в контейнерах docker, для локальной разработки
 k8s-kind-up:

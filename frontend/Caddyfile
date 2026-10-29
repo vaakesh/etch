@@ -1,5 +1,13 @@
+{
+	servers {
+		# Keep the real client address and scheme from a host-level proxy reaching Caddy via the Docker gateway.
+		# Public clients are never trusted, so a direct setup still ignores their X-Forwarded-* headers.
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_DOMAIN} {
-	@blocked not remote_ip {$ALLOWED_IP_PROD}
+	@blocked not client_ip {$ALLOWED_IP_PROD}
 	@api path /api /api/*
 	@internal_probes path /health /health/* /api/health /api/health/* /ready /ready/* /api/ready /api/ready/*
 

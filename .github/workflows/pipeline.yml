@@ -230,7 +230,7 @@ jobs:
           export IMAGE_TAG="$1"
           export GIT_TERMINAL_PROMPT=0
           [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
-          cd /home/vaakesh/etch
+          cd "$HOME/apps/etch"
 
           # Also serialize SSH sessions if a runner disconnects or is cancelled.
           exec 9> "$HOME/.etch-deploy.lock"
@@ -257,5 +257,5 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$IMAGE_TAG" ]]
 
           command -v make > /dev/null
-          make prod-deploy
+          make prod-deploy-shared
           DEPLOY

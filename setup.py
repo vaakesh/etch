@@ -28,6 +28,7 @@ REQUIRED_API_ENV = (
     "redis_password",
     "refresh_pepper",
     "metrics_token",
+    "celery_broker_url",
     "altcha_hmac_key",
     "auth_jwt__private_key_path",
     "auth_jwt__public_key_path",
@@ -194,6 +195,7 @@ def ensure_config_files() -> None:
         (".env", ".env.example"),
         ("backend/.env", "backend/.env.example"),
         ("frontend/.env", "frontend/.env.example"),
+        ("user-guide-rag/.env", "user-guide-rag/.env.example"),
         ("redis/users.acl", "redis/users.acl.example"),
         ("prometheus/metrics_token", "prometheus/metrics_token.example"),
     ):
