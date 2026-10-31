@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import tempfile
 import unittest
@@ -127,7 +128,7 @@ class SetupTests(unittest.TestCase):
             ".env.example": b"db_password=mock-root-secret\n",
             "backend/.env.example": b"redis_password=mock-backend-secret\n",
             "frontend/.env.example": b"VITE_API_URL=/api\nVITE_PROXY_TARGET=http://api:8000\n",
-            "redis/users.acl.example": b"user admin on >mock-acl-secret +@all\n",
+            "redis/users.acl.example": b"user admin reset on >mock-acl-secret +@all\n",
             "prometheus/metrics_token.example": b"mock-metrics-secret\n",
         }
         for filename, contents in templates.items():
@@ -136,12 +137,82 @@ class SetupTests(unittest.TestCase):
             path.write_bytes(contents)
         return templates
 
-    def test_missing_configs_are_copied_exactly_and_logged_without_values(self):
+    def install_real_templates(self):
+        repository = Path(__file__).resolve().parents[1]
+        for _, example, _ in setup.CONFIG_TEMPLATES:
+            path = self.root / example
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((repository / example).read_bytes())
+
+    def read_env(self, filename):
+        lines = (self.root / filename).read_text(encoding="utf-8").splitlines()
+        return dict(line.split("=", 1) for line in lines if "=" in line)
+
+    def test_real_templates_get_unique_consistent_secrets(self):
+        self.install_real_templates()
+        setup.ensure_config_files()
+        root = self.read_env(".env")
+        backend = self.read_env("backend/.env")
+        acl = (self.root / "redis/users.acl").read_text(encoding="utf-8")
+        token = (self.root / "prometheus/metrics_token").read_text(encoding="utf-8")
+        acl_passwords = re.findall(r">(\S+)", acl)
+        generated = [
+            root["db_password"],
+            root["rabbitmq_password"],
+            root["grafana_admin_password"],
+            backend["refresh_pepper"],
+            backend["altcha_hmac_key"],
+            backend["redis_password"],
+            backend["metrics_token"],
+            *acl_passwords,
+        ]
+        self.assertEqual(len(acl_passwords), 3)
+        for value in generated:
+            self.assertRegex(value, r"^[0-9a-f]{64}$")
+            self.assertNotIn(value, self.output.getvalue())
+        self.assertEqual(len(generated), len(set(generated)) + 1)  # redis_password
+        self.assertEqual(backend["db_password"], root["db_password"])
+        self.assertEqual(acl_passwords[0], backend["redis_password"])
+        self.assertEqual(token.strip(), backend["metrics_token"])
+        self.assertEqual(
+            backend["celery_broker_url"],
+            f"amqp://{root['rabbitmq_user']}:{root['rabbitmq_password']}@rabbitmq:5672//",
+        )
+        self.assertEqual(root["db_user"], "etch_change_this")
+        self.assertEqual(root["db_password_test"], "etch_test_integration")
+
+    def test_recreated_config_reuses_secrets_from_remaining_files(self):
+        self.install_real_templates()
+        setup.ensure_config_files()
+        before = (self.root / "backend/.env").read_bytes()
+        acl = (self.root / "redis/users.acl").read_bytes()
+        root = (self.root / ".env").read_bytes()
+        (self.root / "backend/.env").unlink()
+        (self.root / "redis/users.acl").unlink()
+        setup.ensure_config_files()
+        recreated = self.read_env("backend/.env")
+        original = dict(
+            line.split("=", 1) for line in before.decode().splitlines() if "=" in line
+        )
+        self.assertEqual(recreated["db_password"], original["db_password"])
+        self.assertEqual(recreated["metrics_token"], original["metrics_token"])
+        self.assertEqual(recreated["celery_broker_url"], original["celery_broker_url"])
+        self.assertEqual((self.root / ".env").read_bytes(), root)
+        self.assertNotEqual((self.root / "redis/users.acl").read_bytes(), acl)
+        self.assertIn(
+            f">{recreated['redis_password']} ",
+            (self.root / "redis/users.acl").read_text(encoding="utf-8"),
+        )
+
+    def test_missing_configs_keep_template_values_and_log_no_secrets(self):
         templates = self.install_config_templates()
         setup.ensure_config_files()
-        for example, contents in templates.items():
+        self.assertEqual(
+            (self.root / "frontend/.env").read_bytes(),
+            templates["frontend/.env.example"],
+        )
+        for example in templates:
             target = self.root / example.removesuffix(".example")
-            self.assertEqual(target.read_bytes(), contents)
             expected_mode = (
                 0o644
                 if target.suffix == ".acl" or target.name == "metrics_token"
@@ -315,7 +386,10 @@ class SetupTests(unittest.TestCase):
         token = self.root / "prometheus/metrics_token"
         token.unlink()
         template = self.root / "prometheus/metrics_token.example"
-        template.write_bytes(b"mock-metrics-secret\n")
+        template.write_bytes(b"token-placeholder\n")
+        (self.root / "backend/.env").write_text(
+            "metrics_token=mock-metrics-secret\n", encoding="utf-8"
+        )
         config["services"]["api"]["environment"]["metrics_token"] = "mock-metrics-secret"
         config["services"]["prometheus"] = {
             "volumes": [{"type": "bind", "source": str(token)}]
@@ -327,7 +401,7 @@ class SetupTests(unittest.TestCase):
             patch.object(setup.sys, "argv", ["setup.py", "check"]),
         ):
             self.assertEqual(setup.main(), 0)
-        self.assertEqual(token.read_bytes(), template.read_bytes())
+        self.assertEqual(token.read_bytes(), b"mock-metrics-secret\n")
         self.assertEqual(stat.S_IMODE(token.stat().st_mode), 0o644)
         self.assertIn("dev checks passed", self.output.getvalue())
         self.assertNotIn("mock-metrics-secret", self.output.getvalue())

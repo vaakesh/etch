@@ -4,6 +4,8 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -24,6 +26,21 @@ CONFIG_TEMPLATES = (
     ("frontend/.env", "frontend/.env.example", 0o600),
     ("redis/users.acl", "redis/users.acl.example", 0o644),
     ("prometheus/metrics_token", "prometheus/metrics_token.example", 0o644),
+)
+# Each entry is one secret: the config files that hold it and the text right before its value.
+SECRET_FIELDS = (
+    ((".env", "db_password="), ("backend/.env", "db_password=")),
+    (
+        (".env", "rabbitmq_password="),
+        ("backend/.env", "celery_broker_url=amqp://etch_change_this:"),
+    ),
+    ((".env", "grafana_admin_password="),),
+    (("backend/.env", "refresh_pepper="),),
+    (("backend/.env", "altcha_hmac_key="),),
+    (("backend/.env", "redis_password="), ("redis/users.acl", "user admin reset on >")),
+    (("redis/users.acl", "user readonly on >"),),
+    (("redis/users.acl", "user healthcheck on >"),),
+    (("backend/.env", "metrics_token="), ("prometheus/metrics_token", "")),
 )
 SOURCE_DIRECTORIES = ("backend/app", "backend/alembic", "frontend/src")
 SOURCE_FILES = (
@@ -214,6 +231,33 @@ def require_path(path: Path, kind: str = "file") -> None:
         raise SetupError(f"missing or inaccessible {kind}: {path}.")
 
 
+def secret_pattern(prefix: str) -> re.Pattern[str]:
+    return re.compile(rf"^{re.escape(prefix)}([^\s@]*)", re.MULTILINE)
+
+
+def secret_value(field: tuple[tuple[str, str], ...]) -> str:
+    # Reuse a value another config already holds, so the files stay consistent.
+    for target, prefix in field:
+        path = ROOT / target
+        if path.is_file():
+            found = secret_pattern(prefix).search(path.read_text(encoding="utf-8"))
+            if found and found[1]:
+                return found[1]
+    return secrets.token_hex(32)
+
+
+def render_config(target: str, template: bytes) -> bytes:
+    text = template.decode("utf-8")
+    for field in SECRET_FIELDS:
+        for config, prefix in field:
+            if config == target:
+                value = secret_value(field)
+                text = secret_pattern(prefix).sub(
+                    lambda _: prefix + value, text, count=1
+                )
+    return text.encode("utf-8")
+
+
 def ensure_config_files() -> None:
     for target, example, mode in CONFIG_TEMPLATES:
         destination = ROOT / target
@@ -224,15 +268,14 @@ def ensure_config_files() -> None:
         require_path(source)
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
-            write_new(destination, source.read_bytes(), mode)
+            write_new(destination, render_config(target, source.read_bytes()), mode)
         except FileExistsError:
             # Another setup process may have already created the configuration.
             require_path(destination)
             continue
         print(
             f"automatically copied {example} → {target} "
-            f"(using values from the template). replace the template values in {target} "
-            "with your own configuration before starting the application."
+            "(secrets are generated, other values come from the template)."
         )
 
 

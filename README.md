@@ -55,7 +55,7 @@ Installation details: [Docker](https://docs.docker.com/engine/install/ubuntu/), 
 make dev-up
 ```
 
-Setup copies missing configs from templates and prompts to generate JWT keys. Containers start and migrations run automatically. Open http://localhost:5173 (default port).
+Setup creates missing configs from templates, generates their passwords and tokens, and prompts to generate JWT keys. Existing configs are left unchanged. Containers start and migrations run automatically. Open http://localhost:5173 (default port).
 
 To include the optional RAG assistant, copy `user-guide-rag/.env.example` to
 `user-guide-rag/.env`, set `LLM_API_KEY`, then run `make dev-up RAG=1`.
@@ -81,7 +81,7 @@ RAG is intentionally disabled in production to avoid spending the project owner'
 LLM API tokens. The chat widget is still visible on desktop, but questions return
 an assistant-unavailable message.
 
-The copied configs use example values. To replace them before the first launch, follow the manual setup below.
+Names, ports, and URLs keep their example values. To set them before the first launch, follow the manual setup below. Secrets can't be regenerated for existing data: the database and RabbitMQ keep the password from their first start, so if you lose `.env` and `backend/.env`, restore them or remove the volumes.
 
 ## Manual setup
 
