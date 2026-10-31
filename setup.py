@@ -8,14 +8,31 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parent
 COMPOSE_FILES = {
     "dev": "docker-compose-dev.yml",
     "test": "docker-compose-test.yml",
-    "prod": "docker-compose-prod.yml",
+    "observability": "docker-compose-observability.yml",
 }
+# Redis and Prometheus read bind-mounted files as container users.
+CONFIG_TEMPLATES = (
+    (".env", ".env.example", 0o600),
+    ("backend/.env", "backend/.env.example", 0o600),
+    ("frontend/.env", "frontend/.env.example", 0o600),
+    ("redis/users.acl", "redis/users.acl.example", 0o644),
+    ("prometheus/metrics_token", "prometheus/metrics_token.example", 0o644),
+)
+SOURCE_DIRECTORIES = ("backend/app", "backend/alembic", "frontend/src")
+SOURCE_FILES = (
+    "backend/pyproject.toml",
+    "backend/uv.lock",
+    "backend/alembic.ini",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+)
 REQUIRED_API_ENV = (
     "db_host",
     "db_port",
@@ -50,6 +67,13 @@ def run(command: list[str]) -> bytes:
     if result.returncode:
         raise SetupError(f"command {command[0]} failed.")
     return result.stdout
+
+
+def docker(*args: str, failure: str) -> bytes:
+    try:
+        return run(["docker", *args])
+    except SetupError as exc:
+        raise SetupError(failure) from exc
 
 
 def require_tool(name: str) -> None:
@@ -191,14 +215,7 @@ def require_path(path: Path, kind: str = "file") -> None:
 
 
 def ensure_config_files() -> None:
-    for target, example in (
-        (".env", ".env.example"),
-        ("backend/.env", "backend/.env.example"),
-        ("frontend/.env", "frontend/.env.example"),
-        ("user-guide-rag/.env", "user-guide-rag/.env.example"),
-        ("redis/users.acl", "redis/users.acl.example"),
-        ("prometheus/metrics_token", "prometheus/metrics_token.example"),
-    ):
+    for target, example, mode in CONFIG_TEMPLATES:
         destination = ROOT / target
         if destination.exists() or destination.is_symlink():
             require_path(destination)
@@ -207,12 +224,6 @@ def ensure_config_files() -> None:
         require_path(source)
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
-            # Redis and Prometheus read bind-mounted files as container users.
-            mode = (
-                0o644
-                if target.endswith(".acl") or target == "prometheus/metrics_token"
-                else 0o600
-            )
             write_new(destination, source.read_bytes(), mode)
         except FileExistsError:
             # Another setup process may have already created the configuration.
@@ -225,65 +236,77 @@ def ensure_config_files() -> None:
         )
 
 
-def check_project(profile: str) -> None:
-    compose = ROOT / COMPOSE_FILES[profile]
-    require_path(compose)
-    ensure_config_files()
-    backend_env = "backend/.env.test" if profile == "test" else "backend/.env"
-    if not (ROOT / backend_env).is_file():
-        raise SetupError(
-            f"missing {backend_env}. copy backend/.env.example to {backend_env} "
-            "and configure values for test."
-        )
+def require_sources(backend_env: str) -> None:
     require_path(ROOT / backend_env)
-    for directory in ("backend/app", "backend/alembic", "frontend/src"):
+    for directory in SOURCE_DIRECTORIES:
         require_path(ROOT / directory, "directory")
-    for filename in (
-        "backend/pyproject.toml",
-        "backend/uv.lock",
-        "backend/alembic.ini",
-        "frontend/package.json",
-        "frontend/package-lock.json",
-    ):
+    for filename in SOURCE_FILES:
         require_path(ROOT / filename)
-    require_tool("docker")
-    try:
-        run(["docker", "compose", "version"])
-    except SetupError as exc:
-        raise SetupError(
-            "docker compose is unavailable. install the compose plugin."
-        ) from exc
-    try:
-        run(["docker", "info", "--format", "{{.ServerVersion}}"])
-    except SetupError as exc:
-        raise SetupError(
-            "the docker daemon is unavailable. start docker and check access permissions."
-        ) from exc
-    try:
-        config = json.loads(
-            run(
-                [
-                    "docker",
-                    "compose",
-                    "--project-directory",
-                    str(ROOT),
-                    "-f",
-                    str(compose),
-                    "config",
-                    "--format",
-                    "json",
-                ]
-            )
-        )
-    except (SetupError, json.JSONDecodeError) as exc:
-        raise SetupError(
-            f"invalid configuration in {compose.name}. check compose and required values in the env files."
-        ) from exc
 
-    api_env = {
-        key.lower(): value
-        for key, value in config["services"]["api"].get("environment", {}).items()
+
+def check_docker() -> None:
+    require_tool("docker")
+    docker(
+        "compose",
+        "version",
+        failure="docker compose is unavailable. install the compose plugin.",
+    )
+    docker(
+        "info",
+        "--format",
+        "{{.ServerVersion}}",
+        failure="the docker daemon is unavailable. start docker and check access permissions.",
+    )
+
+
+def compose_config(compose: Path, *options: str) -> dict:
+    output = docker(
+        "compose",
+        "--project-directory",
+        str(ROOT),
+        "-f",
+        str(compose),
+        "config",
+        "--format",
+        "json",
+        *options,
+        failure=(
+            f"invalid configuration in {compose.name}. "
+            "check compose and required values in the env files."
+        ),
+    )
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise SetupError(f"could not read the configuration of {compose.name}.") from exc
+
+
+def env_file_names(path: Path) -> set[str]:
+    names = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        name, _, value = line.strip().partition("=")
+        if value and not name.startswith("#"):
+            names.add(name.strip())
+    return names
+
+
+def check_compose_variables(compose: Path) -> None:
+    # Compose replaces an unset variable with an empty string and only warns about it.
+    defined = env_file_names(ROOT / ".env") | {
+        name for name, value in os.environ.items() if value
     }
+    missing = sorted(
+        name
+        for name, variable in compose_config(compose, "--variables").items()
+        if not variable["DefaultValue"] and name not in defined
+    )
+    if missing:
+        raise SetupError(
+            f"missing values in .env for {compose.name}: " + ", ".join(missing) + "."
+        )
+
+
+def check_api_settings(api_env: dict) -> None:
     missing = [
         key for key in REQUIRED_API_ENV if not str(api_env.get(key) or "").strip()
     ]
@@ -302,8 +325,57 @@ def check_project(profile: str) -> None:
                 f"for the current docker configuration, set {key}=/backend/certs/{filename}."
             )
 
+
+def redis_acl_accepts(user: str, password: str) -> bool:
+    acl = (ROOT / "redis/users.acl").read_text(encoding="utf-8")
+    for line in acl.splitlines():
+        tokens = line.split()
+        if tokens[:2] == ["user", user]:
+            # A hashed password cannot be compared with the plain value.
+            return f">{password}" in tokens or any(t.startswith("#") for t in tokens)
+    return False
+
+
+def check_matching_settings(services: dict, api_env: dict, profile: str) -> None:
+    mismatched = []
+    postgres = services.get("postgres", {}).get("environment", {})
+    for setting, variable in (
+        ("db_name", "POSTGRES_DB"),
+        ("db_user", "POSTGRES_USER"),
+        ("db_password", "POSTGRES_PASSWORD"),
+    ):
+        if postgres and api_env[setting] != postgres.get(variable):
+            mismatched.append(setting)
+
+    rabbitmq = services.get("rabbitmq", {}).get("environment", {})
+    if rabbitmq:
+        broker = urlsplit(api_env["celery_broker_url"])
+        credentials = (unquote(broker.username or ""), unquote(broker.password or ""))
+        if credentials != (
+            rabbitmq.get("RABBITMQ_DEFAULT_USER"),
+            rabbitmq.get("RABBITMQ_DEFAULT_PASS"),
+        ):
+            mismatched.append("celery_broker_url")
+
+    # The test stack mounts its own ACL and has no Prometheus.
+    if profile == "dev":
+        token = (ROOT / "prometheus/metrics_token").read_text(encoding="utf-8")
+        if api_env["metrics_token"] != token.strip():
+            mismatched.append("metrics_token")
+        if not redis_acl_accepts(api_env["redis_user"], api_env["redis_password"]):
+            mismatched.append("redis_password")
+
+    if mismatched:
+        raise SetupError(
+            "these backend settings do not match the rest of the configuration: "
+            + ", ".join(mismatched)
+            + ". see the manual setup section of README.md."
+        )
+
+
+def check_build_and_mounts(services: dict) -> None:
     cert_directory = ROOT / "backend/certs"
-    for service in config["services"].values():
+    for service in services.values():
         build = service.get("build")
         if build:
             context = Path(build["context"])
@@ -314,10 +386,28 @@ def check_project(profile: str) -> None:
                 source = Path(volume["source"])
                 require_path(source, "directory" if source.is_dir() else "file")
 
-    ensure_certs(interactive=True)
-    print(
-        f"{profile} checks passed. the application can start; run migrations separately."
-    )
+
+def check_project(profile: str) -> None:
+    compose = ROOT / COMPOSE_FILES[profile]
+    application = profile != "observability"
+    require_path(compose)
+    ensure_config_files()
+    if application:
+        require_sources("backend/.env.test" if profile == "test" else "backend/.env")
+    check_docker()
+    check_compose_variables(compose)
+    services = compose_config(compose)["services"]
+    if application:
+        api_env = {
+            key.lower(): value
+            for key, value in services["api"].get("environment", {}).items()
+        }
+        check_api_settings(api_env)
+        check_matching_settings(services, api_env, profile)
+    check_build_and_mounts(services)
+    if application:
+        ensure_certs(interactive=True)
+    print(f"{profile} checks passed.")
 
 
 def main() -> int:

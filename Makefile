@@ -1,5 +1,7 @@
 RAG ?= 0
-DEV_COMPOSE := docker compose -f docker-compose-dev.yml -f docker-compose-otel.yml
+DEV_COMPOSE := docker compose -f docker-compose-dev.yml
+OBS_COMPOSE := docker compose -f docker-compose-observability.yml
+OBS_NETWORK := docker network inspect observability >/dev/null 2>&1 || docker network create observability
 
 ifeq ($(RAG),1)
 DEV_COMPOSE += -f docker-compose-rag.yml --env-file .env --env-file user-guide-rag/.env --profile rag
@@ -7,20 +9,33 @@ endif
 
 TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
-.PHONY: dev-up dev-rebuild dev-down test-frontend test-e2e test-api test-all test-prepare test-down certs prod-deploy prod-deploy-shared k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
+.PHONY: dev-up dev-rebuild dev-down obs-up obs-down test-frontend test-e2e test-api test-setup test-all test-prepare test-down certs prod-deploy k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
+
+# телеметрия в dev включена, только если запущен локальный стек observability
+dev-up dev-rebuild: export OTEL_SDK_DISABLED = $(if $(shell $(OBS_COMPOSE) ps -q --status running otel-collector 2>/dev/null),false,true)
 
 dev-up:
 	uv run --no-project python setup.py check dev
+	$(OBS_NETWORK)
 	$(DEV_COMPOSE) up -d
 	$(DEV_COMPOSE) run --rm -T api uv run --no-sync alembic upgrade head
 
 dev-rebuild:
 	uv run --no-project python setup.py check dev
+	$(OBS_NETWORK)
 	$(DEV_COMPOSE) up --build -d
 	$(DEV_COMPOSE) run --rm -T api uv run --no-sync alembic upgrade head
 
 dev-down:
 	$(DEV_COMPOSE) down
+
+obs-up:
+	uv run --no-project python setup.py check observability
+	$(OBS_NETWORK)
+	$(OBS_COMPOSE) up -d
+
+obs-down:
+	$(OBS_COMPOSE) down
 
 test-frontend:
 	npm --prefix frontend run format:check
@@ -41,7 +56,11 @@ test-e2e:
 test-api: test-prepare
 	$(TEST_COMPOSE) run --rm -T --no-deps api uv run --no-sync pytest -o log_cli=false --show-capture=no
 
+test-setup:
+	uv run --no-project python -m unittest tests.test_setup
+
 test-all:
+	$(MAKE) test-setup
 	$(MAKE) test-frontend
 	$(MAKE) test-e2e
 	$(MAKE) test-api
@@ -58,12 +77,9 @@ test-down:
 certs:
 	uv run --no-project python setup.py certs
 
+# prod на общем сервере: системный caddy держит 80/443, etch слушает 127.0.0.1:caddy_proxy_port
 prod-deploy:
 	bash scripts/deploy-prod.sh
-
-# prod на общем сервере: системный caddy держит 80/443, etch слушает 127.0.0.1:caddy_proxy_port
-prod-deploy-shared:
-	bash scripts/deploy-prod-shared.sh
 
 # kind: кластер из трех нод в контейнерах docker, для локальной разработки
 k8s-kind-up:

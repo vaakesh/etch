@@ -92,6 +92,13 @@ class SetupTests(unittest.TestCase):
             "prometheus/metrics_token",
         ):
             (self.root / filename).write_text("fixture", encoding="utf-8")
+        (self.root / "prometheus/metrics_token").write_text(
+            "secret-must-not-appear\n", encoding="utf-8"
+        )
+        (self.root / "redis/users.acl").write_text(
+            "user secret-must-not-appear on >secret-must-not-appear +@all\n",
+            encoding="utf-8",
+        )
         environment = dict.fromkeys(setup.REQUIRED_API_ENV, "secret-must-not-appear")
         environment.update(
             {
@@ -103,11 +110,13 @@ class SetupTests(unittest.TestCase):
         )
         return {"services": {"api": {"environment": environment}}}
 
-    def docker_runner(self, config):
+    def docker_runner(self, config, variables=None):
         original = setup.run
 
         def run(command):
             if command[0] == "docker":
+                if "--variables" in command:
+                    return json.dumps(variables or {}).encode()
                 return json.dumps(config).encode() if "config" in command else b"ok"
             return original(command)
 
@@ -307,6 +316,7 @@ class SetupTests(unittest.TestCase):
         token.unlink()
         template = self.root / "prometheus/metrics_token.example"
         template.write_bytes(b"mock-metrics-secret\n")
+        config["services"]["api"]["environment"]["metrics_token"] = "mock-metrics-secret"
         config["services"]["prometheus"] = {
             "volumes": [{"type": "bind", "source": str(token)}]
         }
@@ -322,8 +332,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn("dev checks passed", self.output.getvalue())
         self.assertNotIn("mock-metrics-secret", self.output.getvalue())
 
-    def test_prod_check_accepts_manually_configured_key_ownership_and_permissions(self):
-        config = self.project_config("prod")
+    def test_check_accepts_manually_configured_key_ownership_and_permissions(self):
+        config = self.project_config()
         self.install_keys()
         self.private.chmod(0o644)
         original_stat = Path.stat
@@ -343,8 +353,8 @@ class SetupTests(unittest.TestCase):
             patch.object(Path, "stat", manually_configured_stat),
             patch("builtins.input", side_effect=AssertionError("unexpected prompt")),
         ):
-            setup.check_project("prod")
-        self.assertIn("prod checks passed", self.output.getvalue())
+            setup.check_project("dev")
+        self.assertIn("dev checks passed", self.output.getvalue())
         self.assertEqual(stat.S_IMODE(self.private.stat().st_mode), 0o644)
         self.assertEqual(self.private.read_bytes(), self.private_pem)
 
@@ -367,7 +377,7 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.directory.exists())
 
     def test_missing_or_blank_metrics_token_stops_before_generating_keys(self):
-        for profile in ("dev", "test", "prod"):
+        for profile in ("dev", "test"):
             for token in (None, "", "   "):
                 with self.subTest(profile=profile, token=token):
                     config = self.project_config(profile)
@@ -397,11 +407,128 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(self.directory.exists())
 
     def test_missing_template_stops_preparation_without_running_docker(self):
-        (self.root / "docker-compose-prod.yml").touch()
+        (self.root / "docker-compose-dev.yml").touch()
         with patch.object(setup, "run") as run:
             with self.assertRaisesRegex(setup.SetupError, r"\.env.example"):
-                setup.check_project("prod")
+                setup.check_project("dev")
         run.assert_not_called()
+
+    def test_rag_config_is_not_created_without_rag(self):
+        self.install_config_templates()
+        rag_template = self.root / "user-guide-rag/.env.example"
+        rag_template.parent.mkdir()
+        rag_template.write_bytes(b"LLM_API_KEY=mock-llm-secret\n")
+        setup.ensure_config_files()
+        self.assertFalse((self.root / "user-guide-rag/.env").exists())
+
+    def test_unset_compose_variable_stops_before_generating_keys(self):
+        config = self.project_config()
+        (self.root / ".env").write_text(
+            "grafana_port=3000\n# loki_port=3100\ntempo_port=\n", encoding="utf-8"
+        )
+        variables = {
+            "grafana_port": {"DefaultValue": ""},
+            "loki_port": {"DefaultValue": ""},
+            "tempo_port": {"DefaultValue": ""},
+            "caddy_proxy_port": {"DefaultValue": "11100"},
+        }
+        with (
+            self.docker_runner(config, variables),
+            patch.object(setup, "require_tool"),
+        ):
+            with self.assertRaisesRegex(
+                setup.SetupError, r"docker-compose-dev\.yml: loki_port, tempo_port\.$"
+            ):
+                setup.check_project("dev")
+        self.assertFalse(self.directory.exists())
+
+    def test_settings_shared_between_files_must_match(self):
+        services = {
+            "postgres": {
+                "environment": {
+                    "POSTGRES_DB": "other-db",
+                    "POSTGRES_USER": "secret-must-not-appear",
+                    "POSTGRES_PASSWORD": "secret-must-not-appear",
+                }
+            },
+            "rabbitmq": {
+                "environment": {
+                    "RABBITMQ_DEFAULT_USER": "etch",
+                    "RABBITMQ_DEFAULT_PASS": "p@ss",
+                }
+            },
+        }
+        cases = (
+            ({"services": services}, "db_name"),
+            ({"token": "other-token"}, "metrics_token"),
+            ({"acl": "user secret-must-not-appear on >other +@all\n"}, "redis_password"),
+            ({"broker": "amqp://etch:wrong@rabbitmq:5672//"}, "celery_broker_url"),
+        )
+        for change, setting in cases:
+            with self.subTest(setting=setting):
+                config = self.project_config()
+                environment = config["services"]["api"]["environment"]
+                environment["celery_broker_url"] = change.get(
+                    "broker", "amqp://etch:p%40ss@rabbitmq:5672//"
+                )
+                config["services"]["rabbitmq"] = services["rabbitmq"]
+                if "services" in change:
+                    config["services"]["postgres"] = services["postgres"]
+                if "token" in change:
+                    (self.root / "prometheus/metrics_token").write_text(
+                        change["token"], encoding="utf-8"
+                    )
+                if "acl" in change:
+                    (self.root / "redis/users.acl").write_text(
+                        change["acl"], encoding="utf-8"
+                    )
+                with self.docker_runner(config), patch.object(setup, "require_tool"):
+                    with self.assertRaises(setup.SetupError) as error:
+                        setup.check_project("dev")
+                self.assertIn(setting, str(error.exception))
+                self.assertNotIn("secret-must-not-appear", str(error.exception))
+                self.assertFalse(self.directory.exists())
+
+    def test_hashed_redis_password_is_accepted(self):
+        config = self.project_config()
+        (self.root / "redis/users.acl").write_text(
+            "user secret-must-not-appear on #abc123 +@all\n", encoding="utf-8"
+        )
+        self.install_keys()
+        with self.docker_runner(config), patch.object(setup, "require_tool"):
+            setup.check_project("dev")
+        self.assertIn("dev checks passed", self.output.getvalue())
+
+    def test_observability_check_needs_no_application_settings_or_keys(self):
+        config = self.project_config("observability")
+        config["services"] = {
+            "prometheus": {
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": str(self.root / "prometheus/metrics_token"),
+                    }
+                ]
+            }
+        }
+        (self.root / "backend/app").rmdir()
+        with self.docker_runner(config), patch.object(setup, "require_tool"):
+            setup.check_project("observability")
+        self.assertIn("observability checks passed", self.output.getvalue())
+        self.assertFalse(self.directory.exists())
+
+    def test_observability_check_reports_missing_mounted_config(self):
+        config = self.project_config("observability")
+        config["services"] = {
+            "loki": {
+                "volumes": [
+                    {"type": "bind", "source": str(self.root / "observability/loki.yaml")}
+                ]
+            }
+        }
+        with self.docker_runner(config), patch.object(setup, "require_tool"):
+            with self.assertRaisesRegex(setup.SetupError, "loki.yaml"):
+                setup.check_project("observability")
 
 
 if __name__ == "__main__":

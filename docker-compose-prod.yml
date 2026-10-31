@@ -14,6 +14,18 @@ services:
     mem_limit: 512m
     env_file:
       - ./backend/.env
+    environment:
+      PROMETHEUS_DISABLE_CREATED_SERIES: "true"
+      OTEL_SERVICE_NAME: etch-api
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.namespace=etch,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    # The host Prometheus scrapes /metrics here with the token from prometheus/metrics_token.
+    ports:
+      - "127.0.0.1:${api_metrics_port:-11101}:8000"
+    networks:
+      - default
+      - observability
     volumes:
       - ./backend/certs:/backend/certs:ro
     depends_on:
@@ -34,6 +46,7 @@ services:
       timeout: 10s
       start_period: 20s
       retries: 3
+    stop_grace_period: 30s
     restart: unless-stopped
 
   celery-worker:
@@ -42,6 +55,13 @@ services:
     mem_limit: 512m
     env_file:
       - ./backend/.env
+    environment:
+      OTEL_SERVICE_NAME: etch-worker
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.namespace=etch,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    networks:
+      - default
+      - observability
     command:
       - uv
       - run
@@ -60,7 +80,9 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    stop_grace_period: 60s
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
     restart: unless-stopped
 
   celery-beat:
@@ -69,6 +91,13 @@ services:
     mem_limit: 192m
     env_file:
       - ./backend/.env
+    environment:
+      OTEL_SERVICE_NAME: etch-beat
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment.name=production,service.namespace=etch,service.version=${IMAGE_TAG:?IMAGE_TAG is required}"
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
+    networks:
+      - default
+      - observability
     command:
       - uv
       - run
@@ -85,6 +114,7 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    stop_grace_period: 30s
     restart: unless-stopped
 
   rabbitmq:
@@ -127,13 +157,12 @@ services:
     logging: *default-logging
     mem_limit: 128m
     environment:
-      SITE_DOMAIN: ${site_domain_prod}
+      # The http:// prefix disables automatic HTTPS: certificates belong to the host Caddy.
+      SITE_DOMAIN: http://${site_domain_prod}
       # Empty allowed_ip_prod opens the site to every client.
       ALLOWED_IP_PROD: ${allowed_ip_prod:-0.0.0.0/0 ::/0}
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "127.0.0.1:${caddy_proxy_port:-11100}:80"
     volumes:
       - caddy_config:/config
       - caddy_data:/data
@@ -164,6 +193,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+networks:
+  # Created by server-observability; holds the shared otel-collector, Loki and Tempo.
+  observability:
+    external: true
 
 volumes:
   caddy_config:

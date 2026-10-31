@@ -84,6 +84,10 @@ jobs:
           python-version: "3.14"
           enable-cache: false
 
+      - name: test startup checks
+        working-directory: .
+        run: make test-setup
+
       - name: check ruff (app/common/utils.py)
         run: uvx --from ruff==0.15.4 ruff check --no-cache --output-format=github app/common/utils.py
 
@@ -257,5 +261,5 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$IMAGE_TAG" ]]
 
           command -v make > /dev/null
-          make prod-deploy-shared
+          make prod-deploy
           DEPLOY

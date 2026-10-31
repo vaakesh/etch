@@ -32,7 +32,7 @@ Dev proxy включается только при заданном `VITE_PROXY_
 
 Абсолютный `VITE_API_URL` обходит dev proxy. Vite proxy не является production reverse proxy.
 
-В `docker-compose-prod.yml` сервис `caddy` использует `Dockerfile.prod`: Node 24 собирает приложение с `VITE_API_URL` из `frontend/.env`, затем Caddy отдаёт готовый `dist` и проксирует `/api/*` в `api:8000`, удаляя `/api`. После изменения `frontend/.env` пересобери prod-образ. Node и Vite в runtime не запускаются. Caddy публикует порты 80 и 443, автоматически получает и обновляет HTTPS-сертификаты. Домен задаётся через обязательный `site_domain_prod` в корневом `.env`. Правила находятся в `Caddyfile`, инструкции для VPS — в [PRODUCTION.md](../PRODUCTION.md).
+В `docker-compose-prod.yml` сервис `caddy` использует `Dockerfile.prod`: Node 24 собирает приложение с `VITE_API_URL` из `frontend/.env`, затем Caddy отдаёт готовый `dist` и проксирует `/api/*` в `api:8000`, удаляя `/api`. После изменения `frontend/.env` пересобери prod-образ. Node и Vite в runtime не запускаются. Caddy отдаёт HTTP на loopback-порт `caddy_proxy_port`; TLS и порты 80 и 443 принадлежат внешнему прокси на хосте. Домен задаётся через обязательный `site_domain_prod` в корневом `.env`. Правила находятся в `Caddyfile`, схема размещения — в разделе Production корневого [README.md](../README.md).
 
 ## Проверки
 

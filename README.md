@@ -13,7 +13,7 @@ Live demo: https://168.113.158.206.nip.io/
 - **Observability:** OpenTelemetry traces and logs, Prometheus, Loki, Tempo, Grafana
 - **Tests:** pytest (unit and integration), Vitest, Playwright
 - **Frontend:** React, TypeScript, Vite
-- **Infrastructure:** Docker Compose, Caddy with automatic HTTPS, GitHub Actions CI/CD
+- **Infrastructure:** Docker Compose, Caddy, GitHub Actions CI/CD
 
 ## Requirements
 
@@ -64,6 +64,19 @@ It adds `docker-compose-rag.yml` and enables the `rag` profile in the existing
 Compose project. Plain `make dev-up` starts Etch without RAG and does not read
 the RAG env file.
 
+Grafana, Prometheus, Loki, Tempo and the OpenTelemetry Collector run as a separate
+Compose project on the external Docker network `observability`:
+
+```sh
+make obs-up    # Start the local stack; Grafana: http://localhost:3000 (default port)
+make dev-up    # Restart the application with telemetry enabled
+make obs-down  # Stop the local stack
+```
+
+`make dev-up` enables telemetry only if the local stack is running; otherwise the
+application starts with `OTEL_SDK_DISABLED=true`. Run `make dev-up` again after
+starting or stopping the stack.
+
 RAG is intentionally disabled in production to avoid spending the project owner's
 LLM API tokens. The chat widget is still visible on desktop, but questions return
 an assistant-unavailable message.
@@ -90,6 +103,8 @@ Edit all three `.env` files: replace example credentials and secrets, and adjust
 - RabbitMQ user and password in `.env` and in `celery_broker_url` in `backend/.env`.
 - `metrics_token` in `backend/.env` and the contents of `prometheus/metrics_token`.
 
+`make dev-up` checks these values and stops if they differ. A Redis password stored as a hash in `redis/users.acl` is not compared.
+
 Also set your own `refresh_pepper` and `altcha_hmac_key` in `backend/.env`, and `grafana_admin_password` in `.env`. A random value can be generated with `openssl rand -hex 32`.
 
 Generate JWT keys and start:
@@ -114,8 +129,19 @@ npm --prefix frontend ci
 npm --prefix frontend exec playwright install -- --with-deps chromium firefox webkit
 make test-frontend  # Format, typecheck, lint, unit tests, build
 make test-e2e       # Playwright: mocked, visual, and integration on the test stack
-make test-all       # Frontend, E2E, and backend tests
+make test-setup     # setup.py startup checks; needs no running services
+make test-all       # Startup checks, frontend, E2E, and backend tests
 ```
+
+## Production
+
+`docker-compose-prod.yml` targets a shared server, where these parts live outside the project:
+
+- A host-level reverse proxy owns ports 80 and 443, terminates TLS, and forwards to `127.0.0.1:${caddy_proxy_port}` (default 11100).
+- The Docker network `observability` holds `otel-collector`, Loki, and Tempo. `api`, `celery-worker`, and `celery-beat` join it and send OTLP to `otel-collector:4318`.
+- Prometheus scrapes `/metrics` on `127.0.0.1:${api_metrics_port}` (default 11101) with the token from `prometheus/metrics_token`.
+
+GitHub Actions deploys every push to `main` with `make prod-deploy`.
 
 ## Kubernetes
 
@@ -142,6 +168,6 @@ Grafana: `kubectl -n etch port-forward svc/grafana 3000` (on the server, through
 
 ```sh
 make dev-rebuild  # Rebuild and start development containers
-make dev-down     # Stop development containers
+make dev-down     # Stop development containers; the observability stack keeps running
 make test-down    # Stop the test stack and remove its volumes
 ```

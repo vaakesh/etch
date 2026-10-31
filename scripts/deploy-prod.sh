@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Deploy to the shared server: the host Caddy and the server-observability stack
+# (Prometheus, Grafana, otel-collector, Loki, Tempo) live outside this project.
+# Steps share one lock, error trap and IMAGE_TAG, so they run only through main, in order.
 set -Eeuo pipefail
 umask 077
 
@@ -10,11 +13,10 @@ if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
   exit 1
 fi
 
-exec 8> "$HOME/.etch-compose.lock"
-flock -w 600 8
+backup_dir="$HOME/etch-backups"
 
 compose() {
-  docker compose -f docker-compose-prod.yml -f docker-compose-prod-observability.yml "$@"
+  docker compose -f docker-compose-prod.yml "$@"
 }
 
 on_error() {
@@ -25,66 +27,52 @@ on_error() {
   compose logs --no-color --tail=40 || true
   exit "$status"
 }
-trap on_error ERR
 
-previous_tag="$(sed -n 's/^IMAGE_TAG=//p' .env 2>/dev/null | tail -n 1 || true)"
-backup_dir="$HOME/etch-backups"
+# Validate configuration and required files, then fetch the release images.
+preflight() {
+  compose config --quiet
+  test -d backend/certs
+  test -f prometheus/metrics_token
+  if ! docker network inspect observability > /dev/null 2>&1; then
+    echo "Docker network observability is missing: start server-observability first." >&2
+    return 1
+  fi
 
-# Free disk after a successful deployment: keep this and the previous release for rollback.
-cleanup_old_releases() {
-  local image
-  while IFS= read -r image; do
-    case "$image" in
-      *":$IMAGE_TAG" | *":${previous_tag:-$IMAGE_TAG}" | *":<none>") continue ;;
-    esac
-    # Images still used by a container are refused and stay in place.
-    docker image rm "$image" || true
-  done < <(
-    docker image ls --format '{{.Repository}}:{{.Tag}}' \
-      --filter reference=ghcr.io/vaakesh/etch-backend \
-      --filter reference=ghcr.io/vaakesh/etch-frontend
-  )
-  docker image prune -f
-  docker builder prune -f
+  # Repair public bind-mounted config permissions from earlier checkouts.
+  # The host Prometheus reads metrics_token through its own bind mount.
+  chmod 644 \
+    prometheus/metrics_token \
+    redis/redis.conf
 
-  # Backup names start with a UTC timestamp, so the newest ten sort first.
-  find "$backup_dir" -maxdepth 1 -type f -name '*.dump' | sort -r | tail -n +11 | xargs -r rm -f --
+  compose pull
 }
 
-compose config --quiet
-test -d backend/certs
-test -f prometheus/metrics_token
-test -f observability/otel-collector-prod.yaml
+# Stop writers first so the dump matches the state the migrations start from.
+backup_database() {
+  compose up -d --no-deps --no-recreate --wait --wait-timeout 120 postgres redis
+  compose stop caddy api celery-beat celery-worker
 
-# Repair public bind-mounted config permissions from earlier checkouts.
-chmod 644 \
-  observability/otel-collector-prod.yaml \
-  observability/loki.yaml \
-  observability/tempo.yaml \
-  prometheus/prometheus.yml \
-  redis/redis.conf
-chmod -R a+rX grafana/provisioning grafana/dashboards
+  mkdir -p "$backup_dir"
+  local backup_file
+  backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$IMAGE_TAG.dump"
+  compose exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' < /dev/null > "$backup_file.partial"
+  mv -- "$backup_file.partial" "$backup_file"
+  echo "Database backup: $backup_file"
+}
 
-compose pull
-compose run --rm -T --no-deps otel-collector validate --config=/etc/otelcol/config.yaml < /dev/null
+restart_infrastructure() {
+  compose stop
+  local infrastructure
+  mapfile -t infrastructure < <(
+    compose config --services |
+    awk '$0 != "api" && $0 != "caddy" && $0 != "celery-worker" && $0 != "celery-beat"'
+  )
+  # Orphans include the former per-project otel-collector, Loki and Tempo: left running,
+  # they would answer the same DNS names as the shared ones on the default network.
+  compose up -d --no-build --no-deps --force-recreate --remove-orphans --wait --wait-timeout 180 "${infrastructure[@]}"
 
-compose up -d --no-deps --no-recreate --wait --wait-timeout 120 postgres redis
-compose stop caddy api celery-beat celery-worker
-
-mkdir -p "$backup_dir"
-backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%SZ)-$IMAGE_TAG.dump"
-compose exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' < /dev/null > "$backup_file.partial"
-mv -- "$backup_file.partial" "$backup_file"
-echo "Database backup: $backup_file"
-
-compose stop
-mapfile -t infrastructure < <(
-  compose config --services |
-  awk '$0 != "api" && $0 != "caddy" && $0 != "celery-worker" && $0 != "celery-beat"'
-)
-compose up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 "${infrastructure[@]}"
-
-compose run --rm -T --no-deps api uv run --no-sync python - <<'PY'
+  # The shared telemetry stack is not restarted here, only checked through the observability network.
+  compose run --rm -T --no-deps api uv run --no-sync python - <<'PY'
 import time
 import urllib.request
 
@@ -92,9 +80,6 @@ pending = {
     "collector": "http://otel-collector:13133/",
     "loki": "http://loki:3100/ready",
     "tempo": "http://tempo:3200/ready",
-    "prometheus": "http://prometheus:9090/-/ready",
-    "node-exporter": "http://node-exporter:9100/metrics",
-    "grafana": "http://grafana:3000/api/health",
 }
 deadline = time.monotonic() + 120
 while pending and time.monotonic() < deadline:
@@ -111,13 +96,18 @@ while pending and time.monotonic() < deadline:
 if pending:
     raise SystemExit("Not ready: " + ", ".join(pending))
 PY
+}
 
-compose run --rm -T --no-deps api uv run --no-sync alembic upgrade head < /dev/null
-compose up -d --no-build --no-deps --force-recreate --remove-orphans --wait --wait-timeout 180 api celery-worker celery-beat caddy
+release_application() {
+  compose run --rm -T --no-deps api uv run --no-sync alembic upgrade head < /dev/null
+  compose up -d --no-build --no-deps --force-recreate --remove-orphans --wait --wait-timeout 180 api celery-worker celery-beat caddy
 
-compose exec -T celery-worker uv run --no-sync celery -A app.celery.celery_app:celery_app inspect ping --timeout=10
+  compose exec -T celery-worker uv run --no-sync celery -A app.celery.celery_app:celery_app inspect ping --timeout=10
+}
 
-compose run --rm -T --no-deps api uv run --no-sync python - "$IMAGE_TAG" <<'PY'
+# Logs tagged with the new version prove the release runs and telemetry reaches Loki.
+verify_telemetry() {
+  compose run --rm -T --no-deps api uv run --no-sync python - "$IMAGE_TAG" <<'PY'
 import json
 import sys
 import time
@@ -143,12 +133,55 @@ while pending and time.monotonic() < deadline:
 if pending:
     raise SystemExit("Logs missing in Loki: " + ", ".join(sorted(pending)))
 PY
+}
 
-if grep -q '^IMAGE_TAG=' .env; then
-  sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" .env
-else
-  printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
-fi
-cleanup_old_releases || echo "Cleanup failed; the deployment itself succeeded." >&2
-compose ps
-echo "Deployment completed: $IMAGE_TAG"
+record_release() {
+  if grep -q '^IMAGE_TAG=' .env; then
+    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" .env
+  else
+    printf '\nIMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+  fi
+}
+
+# Free disk after a successful deployment: keep this and the previous release for rollback.
+cleanup_old_releases() {
+  local previous_tag=$1 image
+  while IFS= read -r image; do
+    case "$image" in
+      *":$IMAGE_TAG" | *":${previous_tag:-$IMAGE_TAG}" | *":<none>") continue ;;
+    esac
+    # Images still used by a container are refused and stay in place.
+    docker image rm "$image" || true
+  done < <(
+    docker image ls --format '{{.Repository}}:{{.Tag}}' \
+      --filter reference=ghcr.io/vaakesh/etch-backend \
+      --filter reference=ghcr.io/vaakesh/etch-frontend
+  )
+  docker image prune -f
+  docker builder prune -f
+
+  # Backup names start with a UTC timestamp, so the newest ten sort first.
+  find "$backup_dir" -maxdepth 1 -type f -name '*.dump' | sort -r | tail -n +11 | xargs -r rm -f --
+}
+
+main() {
+  exec 8> "$HOME/.etch-compose.lock"
+  flock -w 600 8
+  trap on_error ERR
+
+  # Read before record_release overwrites it; cleanup keeps this release for rollback.
+  local previous_tag
+  previous_tag="$(sed -n 's/^IMAGE_TAG=//p' .env 2>/dev/null | tail -n 1 || true)"
+
+  preflight
+  backup_database
+  restart_infrastructure
+  release_application
+  verify_telemetry
+  record_release
+  cleanup_old_releases "$previous_tag" || echo "Cleanup failed; the deployment itself succeeded." >&2
+  compose ps
+  echo "Deployment completed: $IMAGE_TAG"
+}
+
+main "$@"
