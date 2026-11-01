@@ -1,6 +1,6 @@
 {
   "uid": "etch-compose",
-  "title": "Etch",
+  "title": "etch",
   "description": "API, процесс api, сервер и логи для запуска через docker compose. Данные Prometheus каждые 15 секунд.",
   "tags": ["etch", "compose"],
   "timezone": "browser",
