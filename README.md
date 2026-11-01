@@ -73,9 +73,10 @@ make dev-up    # Restart the application with telemetry enabled
 make obs-down  # Stop the local stack
 ```
 
-`make dev-up` enables telemetry only if the local stack is running; otherwise the
-application starts with `OTEL_SDK_DISABLED=true`. Run `make dev-up` again after
-starting or stopping the stack.
+`make dev-up` enables telemetry only if an `otel-collector` container is running on
+the `observability` network; otherwise the application starts with
+`OTEL_SDK_DISABLED=true`. Run `make dev-up` again after starting or stopping the
+stack. Run only one stack on this network at a time.
 
 RAG is intentionally disabled in production to avoid spending the project owner's
 LLM API tokens. The chat widget is still visible on desktop, but questions return

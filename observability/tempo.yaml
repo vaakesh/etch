@@ -22,6 +22,7 @@ backend_scheduler:
   provider:
     compaction:
       compaction:
+        # Traces carry request paths and client addresses: keep them short.
         block_retention: 24h
 
 usage_report:

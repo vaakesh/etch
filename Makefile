@@ -11,8 +11,9 @@ TEST_COMPOSE := docker compose -f docker-compose-test.yml
 
 .PHONY: dev-up dev-rebuild dev-down obs-up obs-down test-frontend test-e2e test-api test-setup test-all test-prepare test-down certs prod-deploy k8s-kind-up k8s-kind-deploy k8s-kind-down k8s-prod-addons k8s-prod-render k8s-prod-deploy
 
-# телеметрия в dev включена, только если запущен локальный стек observability
-dev-up dev-rebuild: export OTEL_SDK_DISABLED = $(if $(shell $(OBS_COMPOSE) ps -q --status running otel-collector 2>/dev/null),false,true)
+# телеметрия в dev включена, только если в сети observability запущен otel-collector
+OBS_COLLECTOR := docker ps -q --filter network=observability --filter label=com.docker.compose.service=otel-collector --filter status=running
+dev-up dev-rebuild: export OTEL_SDK_DISABLED = $(if $(shell $(OBS_COLLECTOR)),false,true)
 
 dev-up:
 	uv run --no-project python setup.py check dev
