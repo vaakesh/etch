@@ -18,7 +18,7 @@ Dockerfile использует Node 24.
 ```bash
 npm ci
 cp .env.example .env
-VITE_PROXY_TARGET=http://localhost:8000 npm run dev
+VITE_PROXY_TARGET=http://localhost:11101 npm run dev
 ```
 
 `frontend/.env` обязателен для frontend в dev и test Compose и используется при сборке prod. Если файла нет, `setup.py` создаёт его из `.env.example`. Значения:
