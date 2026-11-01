@@ -123,9 +123,6 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${rabbitmq_user}
       RABBITMQ_DEFAULT_PASS: ${rabbitmq_password}
-    ports:
-      - "127.0.0.1:${rabbitmq_port}:5672"
-      - "127.0.0.1:${rabbitmq_management_port}:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -145,8 +142,6 @@ services:
       POSTGRES_PASSWORD: ${db_password}
     volumes:
       - pgdata18:/var/lib/postgresql
-    ports:
-      - "${db_port}:5432"
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 10s
@@ -160,7 +155,7 @@ services:
     env_file:
       - ./frontend/.env
     ports:
-      - "${frontend_port}:5173"
+      - "127.0.0.1:${frontend_port}:5173"
     volumes:
       - ./frontend/public:/frontend/public
       - ./frontend/src:/frontend/src
@@ -193,8 +188,6 @@ services:
       - redis-server
       - /usr/local/etc/redis/redis.conf
 
-    ports: 
-      - "127.0.0.1:${redis_port}:6379"
     volumes:
       - redis_data:/data
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -210,7 +203,7 @@ services:
     image: dbeaver/cloudbeaver:latest
     restart: unless-stopped
     ports:
-      - "${cloudbeaver_port}:8978"
+      - "127.0.0.1:${cloudbeaver_port}:8978"
     volumes:
       - cloudbeaver_data:/opt/cloudbeaver/workspace
     depends_on:
@@ -220,7 +213,7 @@ services:
   redisinsight:
     image: redis/redisinsight:latest
     ports:
-      - "${redisinsight_port}:5540"
+      - "127.0.0.1:${redisinsight_port}:5540"
     volumes:
       - redisinsight:/data
     depends_on:
