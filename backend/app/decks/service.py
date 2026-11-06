@@ -4,6 +4,7 @@ from app.tracing import traced
 
 from sqlalchemy import update
 
+from app.card_memory.utils import SCHEDULER, to_knowledge_percent
 from app.cards.errors import CardNotFoundError
 from app.cards.models import Card
 from app.cards.schemas import (
@@ -1023,6 +1024,13 @@ class UserDeckService:
                     limit=page_size,
                 )
             )
+            knowledge = await uow.card_memory_repo.get_decks_knowledge(
+                user_id=user_id,
+                deck_ids=[deck.id for (deck, _) in rows],
+                now=utcnow(),
+                factor=SCHEDULER.params.factor,
+                decay=SCHEDULER.params.decay,
+            )
             result: list[DeckListItemResponse] = []
             for (deck, user_deck) in rows:
                 result.append(
@@ -1031,7 +1039,8 @@ class UserDeckService:
                             obj=deck,
                         ),
                         viewer_state=DeckViewerStateResponse.validate(
-                            user_deck=user_deck
+                            user_deck=user_deck,
+                            knowledge=to_knowledge_percent(knowledge.get(deck.id)),
                         )
                     )
                 )

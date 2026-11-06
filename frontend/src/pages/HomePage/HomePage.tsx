@@ -49,8 +49,8 @@ const MESSAGES = defineMessages(
     title: "Главная",
     createDeckTitle: "Создать новую колоду в библиотеке",
     newDeck: "Новая колода",
-    accuracy: "Точность колоды",
-    correctAnswers: (value: string) => `Правильных ответов — ${value}`,
+    knowledge: "Уровень знания",
+    knowledgeHint: (value: string) => `Сейчас вы вспомните примерно ${value} слов колоды`,
     noDescription: "Без описания",
     openDeckPage: (title: string) => `Открыть страницу колоды «${title}»`,
     lastUpdated: (value: string) => `Последнее обновление: ${value}`,
@@ -90,8 +90,8 @@ const MESSAGES = defineMessages(
     title: "Home",
     createDeckTitle: "Create a new deck in your library",
     newDeck: "New deck",
-    accuracy: "Deck accuracy",
-    correctAnswers: (value: string) => `Correct answers — ${value}`,
+    knowledge: "Deck knowledge",
+    knowledgeHint: (value: string) => `You would recall about ${value} of this deck right now`,
     noDescription: "No description",
     openDeckPage: (title: string) => `Open the “${title}” deck page`,
     lastUpdated: (value: string) => `Last updated: ${value}`,
@@ -193,7 +193,7 @@ function getAccuracyToneClassName(accuracy: number): string {
 function DeckCard({ deck }: DeckCardProps) {
   const { locale } = useLocale();
   const messages = useLocalizedMessages(MESSAGES);
-  const accuracy = clampPercent(deck.accuracy);
+  const knowledge = clampPercent(deck.knowledge);
   const accuracyTooltipId = useId();
   const [isAccuracyTooltipOpen, setIsAccuracyTooltipOpen] = useState(false);
   const updatedAtLabel = formatDeckUpdatedAt(deck.updatedAt, locale);
@@ -219,12 +219,12 @@ function DeckCard({ deck }: DeckCardProps) {
           <span className={accuracyHintClassName}>
             <span
               aria-describedby={accuracyTooltipId}
-              aria-label={messages.accuracy}
+              aria-label={messages.knowledge}
               aria-valuemax={100}
               aria-valuemin={0}
-              aria-valuenow={accuracy}
-              aria-valuetext={formatPercent(accuracy, locale)}
-              className={`${styles.deckAccuracy} ${getAccuracyToneClassName(accuracy)}`}
+              aria-valuenow={knowledge}
+              aria-valuetext={formatPercent(knowledge, locale)}
+              className={`${styles.deckAccuracy} ${getAccuracyToneClassName(knowledge)}`}
               onBlur={() => setIsAccuracyTooltipOpen(false)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -243,11 +243,11 @@ function DeckCard({ deck }: DeckCardProps) {
               role="meter"
               tabIndex={0}
             >
-              {formatCount(accuracy, locale)}
+              {formatCount(knowledge, locale)}
             </span>
             <span className={styles.deckAccuracyTooltip} id={accuracyTooltipId} role="tooltip">
-              <strong>{messages.accuracy}</strong>
-              <span>{messages.correctAnswers(formatPercent(accuracy, locale))}</span>
+              <strong>{messages.knowledge}</strong>
+              <span>{messages.knowledgeHint(formatPercent(knowledge, locale))}</span>
             </span>
           </span>
         </div>

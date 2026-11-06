@@ -10,6 +10,7 @@ from app.card_memory.utils import (
     effective_rating,
     end_of_local_day,
     rating_from_answer,
+    to_knowledge_percent,
 )
 from app.fsrs.types import Card, CardState, Rating
 from app.training_sessions.models import CardSide
@@ -42,6 +43,23 @@ class TestRatingFromAnswer:
     )
     def test_maps_correctness_to_rating(self, is_correct, expected):
         assert rating_from_answer(is_correct) == expected
+
+
+class TestToKnowledgePercent:
+    @pytest.mark.parametrize(
+        ("knowledge", "expected"),
+        [
+            pytest.param(None, 0, id="deck_not_in_result"),
+            pytest.param(0.0, 0, id="nothing_learned"),
+            pytest.param(0.6435, 64, id="rounds_down"),
+            pytest.param(0.6456, 65, id="rounds_up"),
+            pytest.param(1.0, 100, id="everything_fresh"),
+            pytest.param(1.0000001, 100, id="clamped_above_100"),
+            pytest.param(-0.0000001, 0, id="clamped_below_0"),
+        ],
+    )
+    def test_converts_mean_retrievability_to_percent(self, knowledge, expected):
+        assert to_knowledge_percent(knowledge) == expected
 
 
 class TestEndOfLocalDay:

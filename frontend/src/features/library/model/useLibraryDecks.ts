@@ -91,6 +91,7 @@ function toLibraryDeck(deck: CreatedLibraryDeck, ownerUuid: string): LibraryDeck
     totalWordsCount: deck.totalWordsCount,
     savesCount: deck.savesCount,
     accuracy: 0,
+    knowledge: 0,
     isFavourite: false,
     updatedAt: deck.updatedAt,
     cards: [],

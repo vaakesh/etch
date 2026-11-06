@@ -262,6 +262,7 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   const totalWordsCount = readInteger(deck.words_count, `${deckPath}.words_count`);
   const savesCount = readInteger(deck.saves_count, `${deckPath}.saves_count`);
   const accuracy = readInteger(viewerState.accuracy, `${viewerStatePath}.accuracy`);
+  const knowledge = readInteger(viewerState.knowledge, `${viewerStatePath}.knowledge`);
 
   if (savesCount < 0) {
     return invalidLibraryResponse(`${deckPath}.saves_count`);
@@ -277,6 +278,9 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
   if (accuracy < 0 || accuracy > 100) {
     return invalidLibraryResponse(`${viewerStatePath}.accuracy`);
   }
+  if (knowledge < 0 || knowledge > 100) {
+    return invalidLibraryResponse(`${viewerStatePath}.knowledge`);
+  }
 
   return {
     uuid: readUuid(deck.uuid, `${deckPath}.uuid`),
@@ -287,6 +291,7 @@ function parseDeck(value: unknown, index: number): LibraryDeck {
     totalWordsCount,
     savesCount,
     accuracy,
+    knowledge,
     isFavourite: readBoolean(viewerState.is_favourite, `${viewerStatePath}.is_favourite`),
     updatedAt: readNullableDateTime(deck.updated_at, `${deckPath}.updated_at`),
     cards: previewCards.map((card, cardIndex) =>

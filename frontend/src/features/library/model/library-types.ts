@@ -72,6 +72,7 @@ export interface LibraryDeck {
   totalWordsCount: number;
   savesCount: number;
   accuracy: number;
+  knowledge: number;
   isFavourite: boolean;
   updatedAt: string | null;
   cards: readonly LibraryPreviewCard[];

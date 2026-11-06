@@ -43,7 +43,8 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
         description: "Core vocabulary",
         totalWordsCount: 48,
         savesCount: 12,
-        accuracy: 88,
+        accuracy: 40,
+        knowledge: 88,
         isFavourite: true,
         updatedAt: "2026-07-17T10:30:00Z",
         cards: [
@@ -73,7 +74,8 @@ function createLibraryResult(overrides: Record<string, unknown> = {}) {
         description: null,
         totalWordsCount: 36,
         savesCount: 12,
-        accuracy: 64,
+        accuracy: 10,
+        knowledge: 64,
         isFavourite: false,
         updatedAt: null,
         cards: [],
@@ -314,7 +316,7 @@ describe("LibraryPage", () => {
     expect(markup).toContain("путешествие");
     expect(markup).toContain("Карточек нет");
     expect(markup).not.toContain("Точность пользователя:");
-    expect(markup.match(/aria-label="Точность колоды"/g)).toHaveLength(2);
+    expect(markup.match(/aria-label="Уровень знания"/g)).toHaveLength(2);
     expect(markup).toContain('aria-valuetext="88%"');
     expect(markup).toContain('aria-valuetext="64%"');
     expect(markup).toMatch(/<span[^>]*role="meter"[^>]*tabindex="0">88<\/span>/);
@@ -322,7 +324,7 @@ describe("LibraryPage", () => {
     expect(new Set(accuracyTooltipIds).size).toBe(2);
     accuracyTooltipIds.forEach((id) => expect(markup).toContain(`id="${id}"`));
     expect(markup.match(/role="tooltip"/g)).toHaveLength(2);
-    expect(markup).toContain("Правильных ответов — 88%");
+    expect(markup).toContain("Сейчас вы вспомните примерно 88% слов колоды");
     expect(markup).toContain("Редактировать");
     expect(markup).toContain('href="/library/714d882d-726e-4dcb-9303-a8bf4638429c/edit"');
     expect(markup).toContain("Начать");
@@ -670,7 +672,8 @@ describe("LibraryPage", () => {
             description: null,
             totalWordsCount: 12,
             savesCount: 12,
-            accuracy: 91,
+            accuracy: 50,
+            knowledge: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,
             cards: [
@@ -715,7 +718,8 @@ describe("LibraryPage", () => {
             description: null,
             totalWordsCount: 12,
             savesCount: 12,
-            accuracy: 91,
+            accuracy: 50,
+            knowledge: 91,
             updatedAt: "2026-07-20T09:15:00Z",
             isFavourite: true,
             cards: [],
@@ -768,6 +772,6 @@ describe("LibraryPage", () => {
     expect(markup).toContain("Cards");
     expect(markup).toContain("Favorites only");
     expect(markup).toContain('placeholder="Search decks"');
-    expect(markup).toContain("Deck accuracy");
+    expect(markup).toContain("Deck knowledge");
   });
 });

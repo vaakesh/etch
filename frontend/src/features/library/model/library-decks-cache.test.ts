@@ -33,6 +33,7 @@ function cacheLibrary(onlyFavourites = false): void {
         totalWordsCount: 10,
         savesCount: 12,
         accuracy: 75,
+        knowledge: 62,
         isFavourite: true,
         updatedAt: null,
         cards: [],

@@ -22,6 +22,8 @@ class HomeDeckItemResponse(BaseModel):
     description: DeckDescription = None
     words_count: Counter
     user_accuracy: Percent
+    # Средняя по словам вероятность вспомнить сейчас (FSRS)
+    user_knowledge: Percent
     updated_at: PastDatetime | None = None
 
 class UserProgressResponse(BaseModel):

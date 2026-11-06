@@ -114,8 +114,8 @@ const MESSAGES = defineMessages(
       deckDeleteNotFound: "Колода уже удалена или больше не существует.",
       deckDeleteServer: "Сервер временно не может удалить колоду.",
     },
-    accuracy: "Точность колоды",
-    correctAnswers: (value: number) => `Правильных ответов — ${value}%`,
+    knowledge: "Уровень знания",
+    knowledgeHint: (value: number) => `Сейчас вы вспомните примерно ${value}% слов колоды`,
     removeFavourite: "Удалить из избранного",
     addFavourite: "Добавить в избранное",
     saving: "Сохраняем…",
@@ -211,8 +211,8 @@ const MESSAGES = defineMessages(
       deckDeleteNotFound: "This deck was already deleted or no longer exists.",
       deckDeleteServer: "The server cannot delete the deck right now.",
     },
-    accuracy: "Deck accuracy",
-    correctAnswers: (value: number) => `Correct answers — ${value}%`,
+    knowledge: "Deck knowledge",
+    knowledgeHint: (value: number) => `You would recall about ${value}% of this deck right now`,
     removeFavourite: "Remove from favorites",
     addFavourite: "Add to favorites",
     saving: "Saving…",
@@ -540,7 +540,7 @@ function AccuracyStat({ value }: { value: number }) {
     <span className={hintClassName}>
       <span
         aria-describedby={tooltipId}
-        aria-label={messages.accuracy}
+        aria-label={messages.knowledge}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={value}
@@ -567,8 +567,8 @@ function AccuracyStat({ value }: { value: number }) {
         {value}
       </span>
       <span className={styles.accuracyTooltip} id={tooltipId} role="tooltip">
-        <strong>{messages.accuracy}</strong>
-        <span>{messages.correctAnswers(value)}</span>
+        <strong>{messages.knowledge}</strong>
+        <span>{messages.knowledgeHint(value)}</span>
       </span>
     </span>
   );
@@ -618,7 +618,7 @@ function DeckCard({
     >
       <div className={styles.deckTopline}>
         <div className={styles.deckSignals}>
-          <AccuracyStat value={deck.accuracy} />
+          <AccuracyStat value={deck.knowledge} />
           <span className={styles.deckSaves} title={savesCount.text}>
             <svg
               aria-hidden="true"

@@ -18,6 +18,13 @@ def end_of_local_day(now: datetime, timezone: str) -> datetime:
     return next_midnight.astimezone(UTC)
 
 
+def to_knowledge_percent(knowledge: float | None) -> int:
+    # Средняя R колоды (0..1) в целые проценты для API
+    if knowledge is None:
+        return 0
+    return min(max(round(knowledge * 100), 0), 100)
+
+
 def rating_from_answer(is_correct: bool) -> Rating:
     # Автоматическая оценка, если пользователь не оценил ответ сам.
     # Пропуск и ошибка означают «не вспомнил»

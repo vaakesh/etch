@@ -1321,7 +1321,7 @@ class TestGetMySavedDecks:
         user_deck = make_user_deck(is_saved=True)
         saved_deck = DeckListItemResponse(
             deck=DeckResponse.model_validate(deck),
-            viewer_state=DeckViewerStateResponse.validate(user_deck),
+            viewer_state=DeckViewerStateResponse.validate(user_deck, knowledge=0),
         )
 
         user_deck_service.get_page_of_saved_decks_by_user_id.return_value = [saved_deck]
@@ -1348,6 +1348,7 @@ class TestGetMySavedDecks:
                     "correct_count": 0,
                     "wrong_count": 0,
                     "accuracy": 0,
+                    "knowledge": 0,
                     "last_studied_at": None,
                     "is_favourite": False,
                     "is_saved": True,
@@ -1396,11 +1397,17 @@ class TestGetMySavedDecks:
         saved_decks = [
             DeckListItemResponse(
                 deck=DeckResponse.model_validate(first_deck),
-                viewer_state=DeckViewerStateResponse.validate(first_user_deck),
+                viewer_state=DeckViewerStateResponse.validate(
+                    first_user_deck,
+                    knowledge=73,
+                ),
             ),
             DeckListItemResponse(
                 deck=DeckResponse.model_validate(second_deck),
-                viewer_state=DeckViewerStateResponse.validate(second_user_deck),
+                viewer_state=DeckViewerStateResponse.validate(
+                    second_user_deck,
+                    knowledge=40,
+                ),
             ),
         ]
 
@@ -1430,6 +1437,7 @@ class TestGetMySavedDecks:
                     "correct_count": 8,
                     "wrong_count": 2,
                     "accuracy": 80,
+                    "knowledge": 73,
                     "last_studied_at": None,
                     "is_favourite": False,
                     "is_saved": True,
@@ -1452,6 +1460,7 @@ class TestGetMySavedDecks:
                     "correct_count": 3,
                     "wrong_count": 2,
                     "accuracy": 60,
+                    "knowledge": 40,
                     "last_studied_at": None,
                     "is_favourite": False,
                     "is_saved": True,

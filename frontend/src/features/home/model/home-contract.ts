@@ -116,12 +116,16 @@ function parseDeck(value: unknown, index: number): HomeDeck {
   const deck = readRecord(value, path);
   const totalWordsCount = readInteger(deck.words_count, `${path}.words_count`);
   const accuracy = readInteger(deck.user_accuracy, `${path}.user_accuracy`);
+  const knowledge = readInteger(deck.user_knowledge, `${path}.user_knowledge`);
 
   if (totalWordsCount < 0) {
     return invalidHomeResponse(`${path}.words_count`);
   }
   if (accuracy < 0 || accuracy > 100) {
     return invalidHomeResponse(`${path}.user_accuracy`);
+  }
+  if (knowledge < 0 || knowledge > 100) {
+    return invalidHomeResponse(`${path}.user_knowledge`);
   }
 
   return {
@@ -131,6 +135,7 @@ function parseDeck(value: unknown, index: number): HomeDeck {
     description: readNullableString(deck.description, `${path}.description`),
     totalWordsCount,
     accuracy,
+    knowledge,
     updatedAt: readNullableDateTime(deck.updated_at, `${path}.updated_at`),
   };
 }

@@ -14,6 +14,7 @@ const VALID_RESPONSE = {
       description: null,
       words_count: 48,
       user_accuracy: 75,
+      user_knowledge: 62,
       updated_at: "2026-07-17T10:30:00Z",
     },
   ],
@@ -45,6 +46,7 @@ describe("parseHomeDashboard", () => {
           description: null,
           totalWordsCount: 48,
           accuracy: 75,
+          knowledge: 62,
           updatedAt: "2026-07-17T10:30:00Z",
         },
       ],
@@ -102,6 +104,20 @@ describe("parseHomeDashboard", () => {
       parseHomeDashboard({
         ...VALID_RESPONSE,
         progress: { ...VALID_RESPONSE.progress, user_weekly_accuracy: 55.5 },
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["above 100", 101],
+    ["negative", -1],
+    ["fractional", 62.5],
+  ])("rejects deck knowledge that is %s", (_case, userKnowledge) => {
+    expect(() =>
+      parseHomeDashboard({
+        ...VALID_RESPONSE,
+        decks: [{ ...VALID_RESPONSE.decks[0], user_knowledge: userKnowledge }],
       }),
     ).toThrow();
   });

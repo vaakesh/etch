@@ -58,6 +58,7 @@ const VALID_DECK_PAGE = {
         correct_count: 9,
         wrong_count: 3,
         accuracy: 75,
+        knowledge: 62,
         last_studied_at: "2026-07-17T10:30:00Z",
         is_favourite: true,
         is_following: false,
@@ -217,6 +218,7 @@ describe("parseLibraryDeckPage", () => {
           totalWordsCount: 48,
           savesCount: 12,
           accuracy: 75,
+          knowledge: 62,
           isFavourite: true,
           updatedAt: "2026-07-17T10:30:00Z",
           cards: [
@@ -274,6 +276,25 @@ describe("parseLibraryDeckPage", () => {
     ).toThrow();
     expect(() =>
       parseLibraryDeckPage({ ...VALID_DECK_PAGE, next_cursor: "cursor", has_more: false }),
+    ).toThrow();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["above 100", 101],
+    ["negative", -1],
+    ["fractional", 62.5],
+  ])("rejects viewer knowledge that is %s", (_case, knowledge) => {
+    expect(() =>
+      parseLibraryDeckPage({
+        ...VALID_DECK_PAGE,
+        items: [
+          {
+            ...VALID_DECK_PAGE.items[0],
+            viewer_state: { ...VALID_DECK_PAGE.items[0].viewer_state, knowledge },
+          },
+        ],
+      }),
     ).toThrow();
   });
 });

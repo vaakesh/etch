@@ -5,6 +5,7 @@ export interface HomeDeck {
   description: string | null;
   totalWordsCount: number;
   accuracy: number;
+  knowledge: number;
   updatedAt: string | null;
 }
 

@@ -10,7 +10,12 @@ import uuid
 
 from app.bff.schemas import DailyActivityResponse, UserProgressResponse
 from app.card_memory.replay import replay_reviews
-from app.card_memory.utils import SCHEDULER, end_of_local_day, rating_from_answer
+from app.card_memory.utils import (
+    SCHEDULER,
+    end_of_local_day,
+    rating_from_answer,
+    to_knowledge_percent,
+)
 from app.common.types import PositiveInt, SessionSize
 from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
@@ -817,6 +822,28 @@ class TrainingSessionService:
             await uow.commit()
 
             return RateAnswerResponse(rating=rating, next_review_at=next_review_at)
+
+    @traced("training_sessions.service.get_decks_knowledge")
+    async def get_decks_knowledge(
+        self,
+        user_id: int,
+        deck_ids: list[int],
+    ) -> dict[int, int]:
+        # Считается на лету: R зависит от текущего времени, поэтому не кэшируется
+        if not deck_ids:
+            return {}
+        async with self.uow_factory() as uow:
+            knowledge = await uow.card_memory_repo.get_decks_knowledge(
+                user_id=user_id,
+                deck_ids=deck_ids,
+                now=utcnow(),
+                factor=self.scheduler.params.factor,
+                decay=self.scheduler.params.decay,
+            )
+        return {
+            deck_id: to_knowledge_percent(knowledge.get(deck_id))
+            for deck_id in deck_ids
+        }
 
     @traced("training_sessions.service.get_review_summary")
     async def get_review_summary(self, user_id: int) -> ReviewSummaryResponse:

@@ -544,11 +544,15 @@ class BffService:
     def _build_library_deck(
         deck: InternalDeck,
         user_deck: InternalUserDeck,
+        knowledge: int,
         cards: list[InternalCard],
     ) -> LibraryDeckItemResponse:
         return LibraryDeckItemResponse(
             deck=DeckResponse.model_validate(obj=deck),
-            viewer_state=DeckViewerStateResponse.validate(user_deck=user_deck),
+            viewer_state=DeckViewerStateResponse.validate(
+                user_deck=user_deck,
+                knowledge=knowledge,
+            ),
             preview_cards=[
                 CardResponse.model_validate(obj=card)
                 for card in cards
@@ -588,6 +592,11 @@ class BffService:
             for user_deck in user_decks
         }
 
+        knowledge_by_deck_id = await self.training_session_service.get_decks_knowledge(
+            user_id=user_id,
+            deck_ids=[deck.id for deck in decks],
+        )
+
         user_daily_activity: list[DailyActivityResponse] = (
             await self.training_session_service.get_user_activity_for_last_days(
                 user_id=user_id,
@@ -606,6 +615,7 @@ class BffService:
                     user_accuracy=calculate_accuracy(
                         user_decks_by_deck_id.get(deck.id, None),
                     ),
+                    user_knowledge=knowledge_by_deck_id[deck.id],
                     updated_at=deck.updated_at,
                 ) for deck in decks
             ],
@@ -641,6 +651,10 @@ class BffService:
                     deck_id=user_deck.deck_id,
                 )
             ] = user_deck
+        knowledge_by_deck_id = await self.training_session_service.get_decks_knowledge(
+            user_id=user_id,
+            deck_ids=[user_deck.deck_id for user_deck in user_decks],
+        )
 
         return [
             CatalogDeckItemResponse(
@@ -651,7 +665,8 @@ class BffService:
                             user_id=user_id,
                             deck_id=deck.id,
                         )
-                    ]
+                    ],
+                    knowledge=knowledge_by_deck_id[deck.id],
                 ) if make_user_deck_identity(
                     user_id=user_id,
                     deck_id=deck.id,
@@ -688,7 +703,7 @@ class BffService:
 
         decks = library_result.items
 
-        cards_by_deck, user_decks = await asyncio.gather(
+        cards_by_deck, user_decks, knowledge_by_deck_id = await asyncio.gather(
             self._get_cards_library_deck_page(
                 user_id=user_id,
                 deck_ids=[deck.id for deck in decks],
@@ -696,7 +711,11 @@ class BffService:
             self._get_user_decks_by_deck_ids(
                 user_id=user_id,
                 deck_ids=[deck.id for deck in decks],
-            )
+            ),
+            self.training_session_service.get_decks_knowledge(
+                user_id=user_id,
+                deck_ids=[deck.id for deck in decks],
+            ),
         )
         # проверка, что все UserDecks существуют
         for deck in decks:
@@ -709,6 +728,7 @@ class BffService:
                 self._build_library_deck(
                     deck=deck,
                     user_deck=user_decks[(user_id, deck.id)],
+                    knowledge=knowledge_by_deck_id[deck.id],
                     cards=cards_by_deck[deck.id]
                 ) for deck in decks
             ],

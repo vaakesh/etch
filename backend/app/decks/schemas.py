@@ -217,12 +217,18 @@ class DeckViewerStateResponse(BaseModel):
     correct_count: Counter
     wrong_count: Counter
     accuracy: Percent
+    # Средняя по словам вероятность вспомнить сейчас (FSRS)
+    knowledge: Percent
     last_studied_at: PastDatetime | None
     is_favourite: StrictBool
     is_saved: StrictBool
 
     @classmethod
-    def validate(cls, user_deck: InternalUserDeck) -> DeckViewerStateResponse:
+    def validate(
+        cls,
+        user_deck: InternalUserDeck,
+        knowledge: int,
+    ) -> DeckViewerStateResponse:
         return cls(
             sessions_count=user_deck.sessions_count,
             correct_count=user_deck.correct_count,
@@ -230,6 +236,7 @@ class DeckViewerStateResponse(BaseModel):
             accuracy=calculate_accuracy(
                 user_deck=user_deck
             ),
+            knowledge=knowledge,
             last_studied_at=user_deck.last_studied_at,
             is_favourite=user_deck.is_favourite,
             is_saved=user_deck.is_saved,

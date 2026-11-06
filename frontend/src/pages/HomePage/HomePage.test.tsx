@@ -16,7 +16,8 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
           title: "Daily Words",
           description: "Core vocabulary",
           totalWordsCount: 48,
-          accuracy: 72,
+          accuracy: 30,
+          knowledge: 72,
           updatedAt: "2026-07-17T10:30:00Z",
         },
         {
@@ -25,7 +26,8 @@ vi.mock("../../features/home/model/useHomeDashboard", () => ({
           title: "Travel Essentials",
           description: null,
           totalWordsCount: 36,
-          accuracy: 64,
+          accuracy: 20,
+          knowledge: 64,
           updatedAt: null,
         },
       ],
@@ -92,8 +94,9 @@ describe("HomePage", () => {
     expect(accuracyTooltipIds).toHaveLength(2);
     expect(new Set(accuracyTooltipIds).size).toBe(2);
     accuracyTooltipIds.forEach((id) => expect(markup).toContain(`id="${id}"`));
-    expect(markup).toContain("Точность колоды");
-    expect(markup).toContain("Правильных ответов — 72%");
+    expect(markup).toContain("Уровень знания");
+    expect(markup).toContain("Сейчас вы вспомните примерно 72% слов колоды");
+    expect(markup).not.toContain("Точность колоды");
     expect(markup).not.toContain('title="Точность:');
     expect(markup).not.toContain('role="progressbar"');
     expect(markup).toContain('dateTime="2026-07-17T10:30:00Z"');
@@ -112,7 +115,7 @@ describe("HomePage", () => {
     expect(markup).toContain("Your decks");
     expect(markup).toContain("Your progress");
     expect(markup).toContain("Weekly activity");
-    expect(markup).toContain("Deck accuracy");
+    expect(markup).toContain("Deck knowledge");
     expect(markup).toContain("Last updated:");
   });
 });

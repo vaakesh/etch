@@ -11,7 +11,18 @@ from app.decks.models import Deck, DeckCard, UserDeck
 from app.fsrs.types import CardState
 from app.tracing import traced
 from app.training_sessions.models import CardSide, TrainingSession, TrainingSessionItem
-from sqlalchemy import ColumnElement, and_, func, literal, or_, select, tuple_
+from sqlalchemy import (
+    ColumnElement,
+    DateTime,
+    Double,
+    and_,
+    cast,
+    func,
+    literal,
+    or_,
+    select,
+    tuple_,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,6 +158,63 @@ class CardMemoryRepository:
             DueCard(card_id=row.card_id, learning_key=row.learning_key, due=row.due)
             for row in rows
         ]
+
+    @traced("card_memory.repository.get_decks_knowledge")
+    async def get_decks_knowledge(
+        self,
+        user_id: int,
+        deck_ids: Sequence[int],
+        now: datetime,
+        factor: float,
+        decay: float,
+    ) -> dict[int, float]:
+        # Уровень знания колоды: средняя по словам вероятность вспомнить сейчас.
+        # Слово без памяти даёт 0, из двух направлений берётся лучшее
+        if not deck_ids:
+            return {}
+
+        elapsed_days = func.greatest(
+            cast(
+                func.extract(
+                    "epoch",
+                    literal(now, type_=DateTime(timezone=True))
+                    - CardMemoryState.last_review,
+                ),
+                Double,
+            )
+            / 86400.0,
+            0.0,
+        )
+        # Та же кривая, что в fsrs.model.retrievability
+        retrievability = func.power(
+            1.0 + literal(factor, type_=Double) * elapsed_days / CardMemoryState.stability,
+            literal(decay, type_=Double),
+        )
+        per_card = (
+            select(
+                DeckCard.deck_id,
+                func.coalesce(func.max(retrievability), 0.0).label("r"),
+            )
+            .join(Card, Card.id == DeckCard.card_id)
+            # Условие на пользователя в ON: в WHERE оно отбросило бы невыученные слова
+            .outerjoin(
+                CardMemoryState,
+                and_(
+                    CardMemoryState.learning_key == Card.learning_key,
+                    CardMemoryState.user_id == user_id,
+                    CardMemoryState.stability.is_not(None),
+                ),
+            )
+            .where(DeckCard.deck_id.in_(deck_ids))
+            .group_by(DeckCard.deck_id, DeckCard.id)
+            .subquery("per_card")
+        )
+        stmt = (
+            select(per_card.c.deck_id, func.avg(per_card.c.r).label("knowledge"))
+            .group_by(per_card.c.deck_id)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return {row.deck_id: float(row.knowledge) for row in rows}
 
     @traced("card_memory.repository.get_or_create_for_update")
     async def get_or_create_for_update(
