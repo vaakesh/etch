@@ -5,6 +5,7 @@ import {
   parsePracticeHistoryPage,
   parsePracticeSession,
   parsePracticeSessionHistory,
+  parseRatePracticeAnswerResult,
   parseSubmitPracticeAnswerResult,
 } from "../model/practice-contract";
 import type {
@@ -13,8 +14,10 @@ import type {
   PracticeActivityResponse,
   PracticeHistorySession,
   PracticeDeckSummary,
+  PracticeSelfRating,
   PracticeSession,
   PracticeSessionHistoryItem,
+  RatePracticeAnswerResult,
   StartPracticeSessionInput,
   SubmitPracticeAnswerInput,
   SubmitPracticeAnswerResult,
@@ -210,6 +213,32 @@ export async function submitPracticeAnswer(
   );
 
   return parseSubmitPracticeAnswerResult(payload);
+}
+
+export async function ratePracticeAnswer(
+  sessionUuid: string,
+  sequenceNumber: number,
+  rating: PracticeSelfRating,
+  signal?: AbortSignal,
+): Promise<RatePracticeAnswerResult> {
+  const payload = await apiFetch<unknown>(
+    `/training-sessions/${sessionUuid}/items/${sequenceNumber}/rating`,
+    {
+      method: "PUT",
+      body: { rating },
+      signal,
+    },
+  );
+  const result = parseRatePracticeAnswerResult(payload);
+
+  if (result.rating !== rating) {
+    throw new ApiError({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
+      message: "The backend saved a different self-rating than requested.",
+    });
+  }
+  return result;
 }
 
 export async function recordPracticeActivity(

@@ -1,16 +1,22 @@
 import { AUTH_ENDPOINTS, USER_ENDPOINTS, apiFetch } from "../../api";
+import { detectBrowserTimezone } from "../../features/settings/model/timezones";
 import type { LoginCredentials, RegistrationCredentials, User } from "../model/auth-types";
 import { parseCurrentUser } from "./auth-contract";
 import { CAPTCHA_HEADER, solveCaptcha } from "./captcha-api";
+
+type RegistrationBody = RegistrationCredentials & { timezone?: string };
 
 export async function registerRequest(
   credentials: RegistrationCredentials,
   signal?: AbortSignal,
 ): Promise<User> {
   const captcha = await solveCaptcha(signal);
-  const response = await apiFetch<unknown, RegistrationCredentials>(USER_ENDPOINTS.create, {
+  // Без пояса браузера backend ставит UTC; пользователь сменит его в настройках
+  const timezone = detectBrowserTimezone();
+  const body: RegistrationBody = timezone === null ? credentials : { ...credentials, timezone };
+  const response = await apiFetch<unknown, RegistrationBody>(USER_ENDPOINTS.create, {
     method: "POST",
-    body: credentials,
+    body,
     headers: { [CAPTCHA_HEADER]: captcha },
     auth: false,
     retryOnUnauthorized: false,

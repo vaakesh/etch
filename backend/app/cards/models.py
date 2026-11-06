@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid7
 
 from app.database import Base
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -93,6 +93,8 @@ class Card(Base):
             name="ck_cards_learning_key_v7",
         ),
         CheckConstraint("updated_at >= created_at", name="ck_cards_dates_order"),
+        # Переход от памяти FSRS к карточкам слова: learning_key общий у копий
+        Index("ix_cards_learning_key", "learning_key"),
         CheckConstraint(
             "front_lang ~ '^[a-z]{2,3}$' AND char_length(front_lang) BETWEEN 2 AND 3",
             name="ck_cards_front_lang_format",

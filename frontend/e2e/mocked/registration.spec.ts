@@ -44,7 +44,11 @@ test(
       const createRequest = page.waitForRequest(isPost(CREATE_PATH));
       const loginRequest = page.waitForRequest(isPost(LOGIN_PATH));
       await activate(form.submitRegistration, hasTouch);
-      expect((await createRequest).postDataJSON()).toEqual(ACCOUNT);
+      // Пояс берётся из браузера: timezoneId в playwright.config.ts
+      expect((await createRequest).postDataJSON()).toEqual({
+        ...ACCOUNT,
+        timezone: "Europe/Moscow",
+      });
       expect((await loginRequest).postDataJSON()).toEqual({
         username: ACCOUNT.username,
         password: ACCOUNT.password,

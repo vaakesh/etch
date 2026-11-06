@@ -16,6 +16,12 @@ vi.mock("../../api", () => ({
 
 vi.mock("./captcha-api", () => ({ CAPTCHA_HEADER: "X-Altcha", solveCaptcha }));
 
+const { detectBrowserTimezone } = vi.hoisted(() => ({
+  detectBrowserTimezone: vi.fn<() => string | null>(),
+}));
+
+vi.mock("../../features/settings/model/timezones", () => ({ detectBrowserTimezone }));
+
 import { getCurrentUser, loginRequest, refreshSessionRequest, registerRequest } from "./auth-api";
 
 describe("auth API", () => {
@@ -23,6 +29,8 @@ describe("auth API", () => {
     apiFetch.mockReset();
     solveCaptcha.mockReset();
     solveCaptcha.mockResolvedValue("solved-captcha");
+    detectBrowserTimezone.mockReset();
+    detectBrowserTimezone.mockReturnValue("Europe/Moscow");
   });
 
   it("loads the authenticated user from /users/me", async () => {
@@ -30,14 +38,14 @@ describe("auth API", () => {
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true, timezone: "UTC" },
     });
 
     await expect(getCurrentUser()).resolves.toEqual({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "light" },
+      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "light", timezone: "UTC" },
     });
     expect(apiFetch).toHaveBeenCalledWith("/users/me", {
       signal: undefined,
@@ -67,7 +75,7 @@ describe("auth API", () => {
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true, timezone: "UTC" },
     });
 
     await registerRequest(
@@ -96,7 +104,7 @@ describe("auth API", () => {
       email: "alice@example.com",
       created_at: "2026-08-14T12:00:00Z",
       updated_at: "2026-08-14T12:00:00Z",
-      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true },
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true, timezone: "UTC" },
     });
 
     await expect(
@@ -115,12 +123,32 @@ describe("auth API", () => {
         username: "alice",
         email: "alice@example.com",
         password: "password",
+        timezone: "Europe/Moscow",
       },
       headers: { "X-Altcha": "solved-captcha" },
       auth: false,
       retryOnUnauthorized: false,
       signal: undefined,
     });
+  });
+
+  it("registers without a timezone when the browser does not report one", async () => {
+    detectBrowserTimezone.mockReturnValue(null);
+    apiFetch.mockResolvedValue({
+      uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
+      username: "alice",
+      email: "alice@example.com",
+      settings: { locale: "ru-RU", theme: "light", show_previews_for_long: true, timezone: "UTC" },
+    });
+
+    await registerRequest({ username: "alice", email: "alice@example.com", password: "password" });
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/users/create",
+      expect.objectContaining({
+        body: { username: "alice", email: "alice@example.com", password: "password" },
+      }),
+    );
   });
 
   it("refreshes the cookie session without exposing response tokens", async () => {

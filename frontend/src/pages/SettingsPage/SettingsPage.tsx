@@ -1,4 +1,5 @@
-import { type FormEvent } from "react";
+import { useMemo, type FormEvent } from "react";
+import { detectBrowserTimezone, getTimezoneOptions } from "../../features/settings/model/timezones";
 import { useUserSettings } from "../../features/settings/model/useUserSettings";
 import {
   defineMessages,
@@ -29,6 +30,8 @@ const MESSAGES = defineMessages(
     enabled: "Включено",
     disabled: "Выключено",
     themeNames: { light: "Светлая", dark: "Тёмная", system: "Системная" },
+    timezone: "Часовой пояс",
+    useBrowserTimezone: (timezone: string) => `Как на устройстве: ${timezone}`,
     success: "Сохранено",
     dirty: "Есть изменения",
     cancel: "Отменить",
@@ -44,6 +47,8 @@ const MESSAGES = defineMessages(
     enabled: "On",
     disabled: "Off",
     themeNames: { light: "Light", dark: "Dark", system: "System" },
+    timezone: "Time zone",
+    useBrowserTimezone: (timezone: string) => `Use this device's: ${timezone}`,
     success: "Saved",
     dirty: "Unsaved changes",
     cancel: "Cancel",
@@ -152,6 +157,67 @@ function ThemePicker({
   );
 }
 
+function TimezonePicker({
+  disabled,
+  onChange,
+  timezone,
+}: {
+  disabled: boolean;
+  onChange: (timezone: string) => void;
+  timezone: string;
+}) {
+  const messages = useLocalizedMessages(MESSAGES);
+  const options = useMemo(
+    () =>
+      getTimezoneOptions(timezone, new Date()).map(({ value, offset }) => ({
+        value,
+        label: offset === null || value === "UTC" ? value : `${value} (${offset})`,
+      })),
+    [timezone],
+  );
+  const browserTimezone = useMemo(() => detectBrowserTimezone(), []);
+  const canUseBrowserTimezone =
+    browserTimezone !== null &&
+    browserTimezone !== timezone &&
+    options.some((option) => option.value === browserTimezone);
+
+  return (
+    <div className={styles.settingRow}>
+      <span className={styles.settingCopy}>
+        <label className={styles.settingLabel} htmlFor="settings-timezone">
+          {messages.timezone}
+        </label>
+        {canUseBrowserTimezone ? (
+          <button
+            className={styles.inlineAction}
+            disabled={disabled}
+            onClick={() => onChange(browserTimezone)}
+            type="button"
+          >
+            {messages.useBrowserTimezone(browserTimezone)}
+          </button>
+        ) : null}
+      </span>
+      <span className={styles.selectControl}>
+        <select
+          disabled={disabled}
+          id="settings-timezone"
+          name="timezone"
+          onChange={(event) => onChange(event.currentTarget.value)}
+          value={timezone}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </span>
+    </div>
+  );
+}
+
 function LongTextPreviewToggle({
   disabled,
   enabled,
@@ -203,6 +269,7 @@ export function SettingsPage() {
     setLocale,
     setShowPreviewsForLong,
     setTheme,
+    setTimezone,
     status,
   } = useUserSettings();
   const isSaving = status === "saving";
@@ -223,6 +290,7 @@ export function SettingsPage() {
           <div className={styles.settingsList}>
             <LocalePicker disabled={isSaving} locale={draft.locale} onChange={setLocale} />
             <ThemePicker disabled={isSaving} onChange={setTheme} theme={draft.theme} />
+            <TimezonePicker disabled={isSaving} onChange={setTimezone} timezone={draft.timezone} />
             <LongTextPreviewToggle
               disabled={isSaving}
               enabled={draft.showPreviewsForLong}

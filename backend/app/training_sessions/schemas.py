@@ -10,14 +10,27 @@ from app.common.types import (
     SessionSize,
 )
 from app.errors import RequestValueError
-from app.training_sessions.models import CardSide, TrainingSessionStatus
-from pydantic import BaseModel, ConfigDict, Field, PastDatetime, StrictBool, UUID7, field_validator, model_validator
+from app.training_sessions.models import CardSide, TrainingSessionKind, TrainingSessionStatus
+from app.users.types import Timezone
+from pydantic import (
+    UUID7,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PastDatetime,
+    StrictBool,
+    StrictInt,
+    field_validator,
+    model_validator,
+)
 
 
 class TrainingSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     uuid: UUID7
+    kind: TrainingSessionKind
     deck_uuid: UUID7 | None
     deck_title: DeckTitle | None
     status: TrainingSessionStatus
@@ -114,6 +127,8 @@ class PracticeCardResponse(BaseModel):
 class PracticeSessionResponse(BaseModel):
     training_session_uuid: UUID7
 
+    kind: TrainingSessionKind
+    # None у сессии повторения: слова из разных колод
     deck_uuid: UUID7 | None
 
     prompt_side: CardSide
@@ -154,10 +169,52 @@ class SubmitAnswerResponse(BaseModel):
     total_count: Counter
     is_finished: StrictBool
     time_to_complete: Seconds | None
+    # Когда слово вернётся на повторение по автоматической оценке ответа. None — у ответа
+    # нет learning_key или запрос повторный: память с тех пор могла уйти вперёд
+    next_review_at: AwareDatetime | None
+
+# 1 = again, 2 = hard, 3 = good, 4 = easy — как Rating в app/fsrs
+type SelfRating = Annotated[StrictInt, Field(ge=1, le=4)]
+
+class RateAnswerRequest(BaseModel):
+    rating: SelfRating
+
+class RateAnswerResponse(BaseModel):
+    rating: SelfRating
+    # Когда слово стоит повторить. None — у старого ответа нет learning_key
+    next_review_at: AwareDatetime | None
 
 class StartPracticeSessionRequest(BaseModel):
     prompt_side: CardSide
     words_per_session: SessionSize
+
+class StartReviewSessionRequest(BaseModel):
+    prompt_side: CardSide
+    words_per_session: SessionSize
+
+class ReviewSideSummary(BaseModel):
+    # Срок уже наступил
+    due_now: Counter
+    # Срок наступает до конца дня пользователя, включая due_now
+    due_today: Counter
+    # Ближайший срок после текущего момента, None — больше нечего повторять
+    next_due_at: AwareDatetime | None
+
+class ReviewSidesSummary(BaseModel):
+    front: ReviewSideSummary
+    back: ReviewSideSummary
+
+class ActiveReviewSessionResponse(BaseModel):
+    training_session_uuid: UUID7
+    prompt_side: CardSide
+    answered_count: Counter
+    total_count: SessionSize
+
+class ReviewSummaryResponse(BaseModel):
+    timezone: Timezone
+    # Ключ — prompt_side, с которой стартует сессия повторения
+    sides: ReviewSidesSummary
+    active_session: ActiveReviewSessionResponse | None
 
 class TrainingSessionHistoryItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

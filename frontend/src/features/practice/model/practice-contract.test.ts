@@ -5,6 +5,7 @@ import {
   parsePracticeHistoryPage,
   parsePracticeSession,
   parsePracticeSessionHistory,
+  parseRatePracticeAnswerResult,
   parseSubmitPracticeAnswerResult,
 } from "./practice-contract";
 import { MAX_SESSION_SIZE } from "./practice-session-size";
@@ -46,10 +47,12 @@ const VALID_ANSWER_RESULT = {
   total_count: 3,
   is_finished: false,
   time_to_complete: null,
+  next_review_at: "2026-08-01T10:16:30Z",
 };
 
 const VALID_HISTORY_SESSION = {
   uuid: SESSION_UUID,
+  kind: "deck",
   deck_uuid: DECK_UUID,
   deck_title: "French basics",
   status: "completed",
@@ -234,6 +237,16 @@ describe("parsePracticeHistoryPage", () => {
       wrongCount: 1,
     });
   });
+  it("maps a review session without a deck", () => {
+    const page = parsePracticeHistoryPage({
+      items: [{ ...VALID_HISTORY_SESSION, kind: "review", deck_uuid: null, deck_title: null }],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    expect(page.sessions[0]).toMatchObject({ kind: "review", deckUuid: null, deckTitle: null });
+  });
+
   it("maps the training-session cursor page", () => {
     expect(
       parsePracticeHistoryPage({
@@ -245,6 +258,7 @@ describe("parsePracticeHistoryPage", () => {
       sessions: [
         {
           uuid: SESSION_UUID,
+          kind: "deck",
           deckUuid: DECK_UUID,
           deckTitle: "French basics",
           status: "completed",
@@ -307,6 +321,11 @@ describe("parsePracticeHistoryPage", () => {
 
   it.each([
     ["unknown status", { items: [{ ...VALID_HISTORY_SESSION, status: "finished" }] }],
+    ["unknown kind", { items: [{ ...VALID_HISTORY_SESSION, kind: "exam" }] }],
+    [
+      "review session with a deck",
+      { items: [{ ...VALID_HISTORY_SESSION, kind: "review", deck_title: null }] },
+    ],
     ["invalid deck title", { items: [{ ...VALID_HISTORY_SESSION, deck_title: 42 }] }],
     ["invalid counters", { items: [{ ...VALID_HISTORY_SESSION, correct_count: 3 }] }],
     [
@@ -419,7 +438,14 @@ describe("parseSubmitPracticeAnswerResult", () => {
       totalCount: 3,
       isFinished: false,
       timeToCompleteSeconds: null,
+      nextReviewAt: "2026-08-01T10:16:30Z",
     });
+  });
+
+  it("maps a missing schedule to null", () => {
+    expect(
+      parseSubmitPracticeAnswerResult({ ...VALID_ANSWER_RESULT, next_review_at: null }),
+    ).toMatchObject({ nextReviewAt: null });
   });
 
   it("accepts a finished result only with a non-negative completion time", () => {
@@ -447,6 +473,8 @@ describe("parseSubmitPracticeAnswerResult", () => {
       "negative completion time",
       { answered_count: 3, correct_count: 2, is_finished: true, time_to_complete: -1 },
     ],
+    ["missing next review", { next_review_at: undefined }],
+    ["next review that is not a date", { next_review_at: "soon" }],
   ])("rejects %s", (_caseName, override) => {
     expectInvalidPracticeResponse(() =>
       parseSubmitPracticeAnswerResult({ ...VALID_ANSWER_RESULT, ...override }),
@@ -462,5 +490,31 @@ describe("parseSubmitPracticeAnswerResult", () => {
         correct_count: 0,
       }),
     );
+  });
+});
+
+describe("parseRatePracticeAnswerResult", () => {
+  it("maps the saved rating and the next review time", () => {
+    expect(
+      parseRatePracticeAnswerResult({ rating: 4, next_review_at: "2026-11-09T08:30:00Z" }),
+    ).toEqual({ rating: 4, nextReviewAt: "2026-11-09T08:30:00Z" });
+  });
+
+  it("accepts an answer without a review time", () => {
+    expect(parseRatePracticeAnswerResult({ rating: 1, next_review_at: null })).toEqual({
+      rating: 1,
+      nextReviewAt: null,
+    });
+  });
+
+  it.each([
+    ["a rating below the scale", { rating: 0, next_review_at: null }],
+    ["a rating above the scale", { rating: 5, next_review_at: null }],
+    ["a fractional rating", { rating: 2.5, next_review_at: null }],
+    ["a string rating", { rating: "3", next_review_at: null }],
+    ["a naive review time", { rating: 3, next_review_at: "2026-11-09T08:30:00" }],
+    ["a missing review time", { rating: 3 }],
+  ])("rejects %s", (_, payload) => {
+    expectInvalidPracticeResponse(() => parseRatePracticeAnswerResult(payload));
   });
 });

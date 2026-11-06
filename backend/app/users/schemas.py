@@ -3,7 +3,15 @@ from typing import TypedDict
 
 from app.common.types import Counter, Password, PositiveInt, Username
 from app.errors import RequestValueError
-from app.users.types import Locale, NormalizedEmail, PasswordHash, Theme
+from app.users.types import (
+    AVAILABLE_TIMEZONES,
+    DEFAULT_TIMEZONE,
+    Locale,
+    NormalizedEmail,
+    PasswordHash,
+    Theme,
+    Timezone,
+)
 from pydantic import UUID7, BaseModel, ConfigDict, PastDatetime, StrictBool, ValidationInfo, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
@@ -50,6 +58,7 @@ class InternalUserSettings(UserTimestamps):
     locale: Locale
     theme: Theme
     show_previews_for_long: StrictBool
+    timezone: Timezone
 
 class InternalUserWithSettings(UserTimestamps):
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +103,7 @@ class UserSettingsResponse(BaseModel):
     locale: Locale
     theme: Theme
     show_previews_for_long: StrictBool
+    timezone: Timezone
 
 class PrivateUserResponse(UserTimestamps):
     model_config = ConfigDict(from_attributes=True)
@@ -118,6 +128,7 @@ class PrivateUserResponse(UserTimestamps):
                 locale=user.settings.locale,
                 theme=user.settings.theme,
                 show_previews_for_long=user.settings.show_previews_for_long,
+                timezone=user.settings.timezone,
             )
         )
 
@@ -125,6 +136,16 @@ class CreateUserRequest(BaseModel):
     username: Username
     email: NormalizedEmail
     password: Password
+    # Пояс из браузера при регистрации. Не пришёл или неизвестен серверу — UTC:
+    # регистрация не падает из-за пояса, его можно сменить в настройках
+    timezone: Timezone = DEFAULT_TIMEZONE
+
+    @field_validator("timezone", mode="before")
+    @classmethod
+    def fallback_to_default_timezone(cls, value):
+        if not isinstance(value, str) or value not in AVAILABLE_TIMEZONES:
+            return DEFAULT_TIMEZONE
+        return value
 
 class UpdateUserRequest(BaseModel):
     username: Username | SkipJsonSchema[None] = None
@@ -148,8 +169,9 @@ class UpdateUserSettingsRequest(BaseModel):
     locale: Locale | SkipJsonSchema[None] = None
     theme: Theme | SkipJsonSchema[None] = None
     show_previews_for_long: StrictBool | SkipJsonSchema[None] = None
+    timezone: Timezone | SkipJsonSchema[None] = None
 
-    @field_validator("locale", "theme", "show_previews_for_long")
+    @field_validator("locale", "theme", "show_previews_for_long", "timezone")
     @classmethod
     def reject_explicit_null(cls, value, info: ValidationInfo):
         if value is None:
@@ -163,3 +185,4 @@ class UserSettingsUpdateData(TypedDict, total=False):
     locale: Locale
     theme: Theme
     show_previews_for_long: StrictBool
+    timezone: Timezone

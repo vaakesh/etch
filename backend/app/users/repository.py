@@ -25,6 +25,11 @@ class UserSettingsRepository:
     async def refresh(self, user_settings: UserSettings) -> None:
         await self.session.refresh(user_settings)
 
+    @traced("users.settings_repository.get_timezone")
+    async def get_timezone(self, user_id: PositiveInt) -> str:
+        stmt = select(UserSettings.timezone).where(UserSettings.user_id == user_id)
+        return (await self.session.execute(stmt)).scalar_one()
+
     # checked
     @traced("users.settings_repository.update_user_settings")
     async def update_user_settings(

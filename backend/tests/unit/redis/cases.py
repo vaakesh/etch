@@ -32,7 +32,7 @@ DECK_DATA = {
 }
 SETTINGS_DATA = {
     "user_id": 42, "locale": "ru-RU", "theme": "system", "show_previews_for_long": True,
-    "created_at": "2020-01-01T12:00:00Z", "updated_at": "2020-01-01T13:00:00Z",
+    "timezone": "UTC", "created_at": "2020-01-01T12:00:00Z", "updated_at": "2020-01-01T13:00:00Z",
 }
 USER_DECK_DATA = {
     "user_id": 42, "deck_id": 200, "sessions_count": 0, "correct_count": 0,

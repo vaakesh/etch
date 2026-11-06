@@ -12,6 +12,7 @@ export async function updateUserSettingsRequest(
       locale: UserSettings["locale"];
       show_previews_for_long: boolean;
       theme: UserSettings["theme"];
+      timezone: string;
     }
   >(USER_ENDPOINTS.settings, {
     method: "PATCH",
@@ -19,6 +20,7 @@ export async function updateUserSettingsRequest(
       locale: settings.locale,
       show_previews_for_long: settings.showPreviewsForLong,
       theme: settings.theme,
+      timezone: settings.timezone,
     },
     signal,
   });

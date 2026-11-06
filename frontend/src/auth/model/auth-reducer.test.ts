@@ -11,6 +11,7 @@ const authorizedState = {
       locale: "ru-RU" as const,
       showPreviewsForLong: true,
       theme: "light" as const,
+      timezone: "UTC",
     },
   },
   error: null,
@@ -43,13 +44,23 @@ describe("auth reducer settings", () => {
     expect(
       authReducer(authorizedState, {
         type: "settings-updated",
-        settings: { locale: "en-US", showPreviewsForLong: false, theme: "system" },
+        settings: {
+          locale: "en-US",
+          showPreviewsForLong: false,
+          theme: "system",
+          timezone: "Europe/Moscow",
+        },
       }),
     ).toEqual({
       ...authorizedState,
       user: {
         ...authorizedState.user,
-        settings: { locale: "en-US", showPreviewsForLong: false, theme: "system" },
+        settings: {
+          locale: "en-US",
+          showPreviewsForLong: false,
+          theme: "system",
+          timezone: "Europe/Moscow",
+        },
       },
     });
   });
@@ -58,7 +69,7 @@ describe("auth reducer settings", () => {
     expect(
       authReducer(initialAuthState, {
         type: "settings-updated",
-        settings: { locale: "en-US", showPreviewsForLong: false, theme: "dark" },
+        settings: { locale: "en-US", showPreviewsForLong: false, theme: "dark", timezone: "UTC" },
       }),
     ).toBe(initialAuthState);
   });

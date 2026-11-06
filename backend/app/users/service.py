@@ -176,7 +176,7 @@ class UserService:
     ) -> InternalUserWithSettings:
         try:
             async with self.uow_factory() as uow:
-                user_data = payload.model_dump(exclude={"password"})
+                user_data = payload.model_dump(exclude={"password", "timezone"})
                 user = User(
                     **user_data,
                     hashed_password=await hash_password_async(payload.password),
@@ -188,6 +188,7 @@ class UserService:
                     locale="ru-RU",
                     theme="light",
                     show_previews_for_long=True,
+                    timezone=payload.timezone,
                 )
                 uow.user_settings_repo.add(user_settings)
                 await uow.flush()

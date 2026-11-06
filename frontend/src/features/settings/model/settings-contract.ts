@@ -19,7 +19,9 @@ export function parseUserSettings(payload: unknown): UserSettings {
     !isRecord(payload) ||
     !isSupportedLocale(payload.locale) ||
     !isAppTheme(payload.theme) ||
-    typeof payload.show_previews_for_long !== "boolean"
+    typeof payload.show_previews_for_long !== "boolean" ||
+    typeof payload.timezone !== "string" ||
+    payload.timezone.length === 0
   ) {
     throw new SettingsContractError("The backend returned an unexpected settings shape.");
   }
@@ -28,5 +30,6 @@ export function parseUserSettings(payload: unknown): UserSettings {
     locale: payload.locale,
     showPreviewsForLong: payload.show_previews_for_long,
     theme: payload.theme,
+    timezone: payload.timezone,
   };
 }

@@ -10,6 +10,10 @@ class CardAlreadyAnsweredError(Exception):
     def __init__(self, message: str = "Card already answered"):
         super().__init__(message)
 
+class CardNotAnsweredError(Exception):
+    def __init__(self, message: str = "Card must be answered before rating"):
+        super().__init__(message)
+
 class TrainingSessionAlreadyFinishedError(Exception):
     def __init__(self, message: str = "Training session already finished"):
             super().__init__(message)
@@ -30,6 +34,10 @@ class TrainingSessionDeckUnavailableError(Exception):
 
 class TrainingSessionAlreadyExistsError(Exception):
     def __init__(self, message: str = "Training session already exists"):
+        super().__init__(message)
+
+class NoCardsToReviewError(Exception):
+    def __init__(self, message: str = "No cards are due for review today"):
         super().__init__(message)
 
 class TrainingSessionNotFinishedYet(Exception):

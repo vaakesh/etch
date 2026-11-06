@@ -23,11 +23,13 @@ Frontend является минимальным auth-aware UI-приложен�
 * `AuthProvider` и `useAuth()`;
 * `AppRouter`, `RouteGuard` и конфигурация маршрутов;
 * защищённая главная страница с данными из `GET /bff/home` и feature-слоем `src/features/home`.
+* виджет «Повторить сегодня» на главной под прогрессом: сводка FSRS-повторений из `GET /bff/reviews/summary`, старт сессии повторения через `POST /bff/reviews/start` с переходом на `/practice?session=...`, feature-слой `src/features/reviews`.
 * защищённая библиотека с cursor-пагинацией из `GET /bff/library/decks` и `GET /bff/library/cards`, а также feature-слоем `src/features/library`.
 * защищённый архив колод на `/library/decks/archive` со страницей `src/pages/LibraryArchivePage`, списком из `GET /decks/archives` и просмотром деталей и карточек через `/decks/archives/{deck_uuid}` и `/decks/archives/{deck_uuid}/cards`.
 * защищённая страница колоды на `/decks/:deck_uuid` с пакетной загрузкой карточек из `GET /decks/{deck_uuid}/cards` и feature-слоем `src/features/decks`;
 * защищённый каталог публичных колод на `/catalog` из `GET /bff/catalog` и feature-слоем `src/features/catalog`;
-* защищённая практика на `/practice`: настройка новой сессии по `?deck=...`, восстановление по `?session=...`, список тренировочных сессий и feature-слой `src/features/practice`;
+* защищённая практика на `/practice`: настройка новой сессии по `?deck=...`, восстановление по `?session=...`, список тренировочных сессий и feature-слой `src/features/practice`; после набранного ответа — самооценка 1–4 с клавиатуры (`PUT /training-sessions/{uuid}/items/{n}/rating`, после сохранения показывается срок следующего повторения из `next_review_at`, автопереход после анимации, Enter пропускает её или оценку);
+* часовой пояс пользователя (IANA) в `settings.timezone`: при регистрации `registerRequest` отправляет пояс браузера (без него backend ставит UTC), сменить его можно на `/settings`; от пояса backend считает «сегодня» для повторений.
 * защищённая история карточек тренировочной сессии на `/practice/sessions/:session_uuid/history`.
 * защищённый профиль пользователя на `/users/:username` с его колодами.
 * помощник Etch в `src/features/assistant`: чат в общем `AppShell` на экранах от 1024px, обычный `POST /ask` через `apiFetch`, переписка хранится только до размонтирования shell или смены пользователя.

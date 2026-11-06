@@ -2,7 +2,32 @@ import pytest
 from pydantic import ValidationError
 
 from app.errors import RequestValueError
-from app.users.schemas import UpdateUserRequest, UserProfileResponse
+from app.users.schemas import CreateUserRequest, UpdateUserRequest, UserProfileResponse
+
+CREATE_USER_DATA = {
+    "username": "new-user",
+    "email": "new@example.com",
+    "password": "password123",
+}
+
+
+class TestCreateUserRequest:
+    @pytest.mark.parametrize("timezone", ["Europe/Moscow", "America/Argentina/Buenos_Aires", "UTC"])
+    def test_keeps_known_timezone(self, timezone):
+        payload = CreateUserRequest(**CREATE_USER_DATA, timezone=timezone)
+
+        assert payload.timezone == timezone
+
+    def test_defaults_to_utc_when_timezone_is_omitted(self):
+        payload = CreateUserRequest(**CREATE_USER_DATA)
+
+        assert payload.timezone == "UTC"
+
+    @pytest.mark.parametrize("timezone", [None, "", "Mars/Olympus", "europe/moscow", 3, "x" * 65])
+    def test_falls_back_to_utc_for_missing_or_unknown_timezone(self, timezone):
+        payload = CreateUserRequest(**CREATE_USER_DATA, timezone=timezone)
+
+        assert payload.timezone == "UTC"
 
 
 class TestUpdateUserRequest:

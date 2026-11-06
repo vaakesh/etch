@@ -10,13 +10,23 @@ describe("auth contract", () => {
         email: "alice@example.com",
         created_at: "2026-07-31T10:15:00Z",
         updated_at: "2026-08-01T08:30:00Z",
-        settings: { locale: "ru-RU", theme: "system", show_previews_for_long: true },
+        settings: {
+          locale: "ru-RU",
+          theme: "system",
+          show_previews_for_long: true,
+          timezone: "Europe/Moscow",
+        },
       }),
     ).toEqual({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "system" },
+      settings: {
+        locale: "ru-RU",
+        showPreviewsForLong: true,
+        theme: "system",
+        timezone: "Europe/Moscow",
+      },
     });
   });
 
@@ -27,7 +37,7 @@ describe("auth contract", () => {
       email: "alice@example.com",
       created_at: "2026-07-31T10:15:00Z",
       updated_at: "2026-08-01T08:30:00Z",
-      settings: { locale: "en-US", theme: "dark", show_previews_for_long: false },
+      settings: { locale: "en-US", theme: "dark", show_previews_for_long: false, timezone: "UTC" },
     });
 
     expect(user).not.toHaveProperty("created_at");
@@ -46,7 +56,12 @@ describe("auth contract", () => {
         uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
         username: "alice",
         email: "alice@example.com",
-        settings: { locale: "fr-FR", theme: "light", show_previews_for_long: true },
+        settings: {
+          locale: "fr-FR",
+          theme: "light",
+          show_previews_for_long: true,
+          timezone: "UTC",
+        },
       }),
     ).toThrowError(expect.objectContaining({ code: "INVALID_USER_RESPONSE" }));
   });

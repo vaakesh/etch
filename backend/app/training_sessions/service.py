@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import asdict
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID
@@ -8,17 +9,23 @@ from app.tracing import traced
 import uuid
 
 from app.bff.schemas import DailyActivityResponse, UserProgressResponse
+from app.card_memory.replay import replay_reviews
+from app.card_memory.utils import SCHEDULER, end_of_local_day, rating_from_answer
 from app.common.types import PositiveInt, SessionSize
 from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.decks.errors import DeckIsEmptyError, DeckNotFoundError, UserDeckNotFoundError
 from app.decks.models import Deck, UserDeck
 from app.errors import RequestValueError
 from app.decks.utils import make_user_deck_identity
+from app.fsrs.scheduler import Scheduler
 from app.redis.invalidation import CacheInvalidator, scopes
 from app.redis.outbox import cache_invalidation_message
 from app.service import UnitOfWork
 from app.training_sessions.errors import (
+    CardNotAnsweredError,
+    NoCardsToReviewError,
     PermissionDeniedError,
+    TrainingSessionAlreadyExistsError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionDeckArchivedError,
     TrainingSessionDeckUnavailableError,
@@ -26,12 +33,22 @@ from app.training_sessions.errors import (
     TrainingSessionNotFinishedYet,
     TrainingSessionNotFoundError,
 )
-from app.training_sessions.models import TrainingSession, TrainingSessionItem
+from app.training_sessions.models import (
+    CardSide,
+    TrainingSession,
+    TrainingSessionItem,
+    TrainingSessionKind,
+)
 from app.training_sessions.schemas import (
+    ActiveReviewSessionResponse,
     InternalTrainingSession,
     InternalTrainingSessionItem,
     PracticeCardResponse,
     PracticeSessionResponse,
+    RateAnswerResponse,
+    ReviewSideSummary,
+    ReviewSidesSummary,
+    ReviewSummaryResponse,
     SubmitAnswerResponse,
     TrainingSessionActivityRequest,
     TrainingSessionActivityResponse,
@@ -39,7 +56,8 @@ from app.training_sessions.schemas import (
 )
 from app.training_sessions.types import UserAnswer
 from app.training_sessions.utils import pick_random_positions
-from app.users.errors import UserNotFoundError
+from app.users.errors import UserNotFoundError, get_unique_constraint_name
+from sqlalchemy.exc import IntegrityError
 from app.decks.schemas import DeckLoad
 
 logger = logging.getLogger(__name__)
@@ -49,9 +67,11 @@ class TrainingSessionService:
         self,
         uow_factory: Callable[[], UnitOfWork],
         cache_invalidator: CacheInvalidator,
+        scheduler: Scheduler = SCHEDULER,
     ) -> None:
         self.uow_factory = uow_factory
         self.cache_invalidator = cache_invalidator
+        self.scheduler = scheduler
 
     # helpers
     async def _get_by_uuid(
@@ -90,6 +110,19 @@ class TrainingSessionService:
             raise TrainingSessionDeckArchivedError()
 
         return deck
+
+    async def _require_session_available(
+        self,
+        uow: UnitOfWork,
+        training_session: TrainingSession,
+    ) -> Deck | None:
+        # У сессии повторения нет колоды: слова лежат снимком в items
+        if training_session.kind == TrainingSessionKind.REVIEW:
+            return None
+        return await self._require_available_session_deck(
+            uow=uow,
+            training_session=training_session,
+        )
 
     def _accrue_activity(
         self,
@@ -169,7 +202,7 @@ class TrainingSessionService:
             if training_session.finished_at is not None:
                 raise TrainingSessionAlreadyFinishedError()
 
-            deck = await self._require_available_session_deck(
+            deck = await self._require_session_available(
                 uow=uow,
                 training_session=training_session,
             )
@@ -182,7 +215,8 @@ class TrainingSessionService:
 
             return PracticeSessionResponse(
                 training_session_uuid=training_session.uuid,
-                deck_uuid=deck.uuid,
+                kind=training_session.kind,
+                deck_uuid=deck.uuid if deck is not None else None,
                 prompt_side=training_session.prompt_side,
                 answer_side=training_session.answer_side,
                 total_count=training_session.requested_count,
@@ -416,6 +450,7 @@ class TrainingSessionService:
 
             training_session = TrainingSession(
                 user_id=user_id,
+                kind=TrainingSessionKind.DECK,
                 deck_id=deck.id,
                 deck_title_snapshot=deck.title,
                 requested_count=words_per_session,
@@ -436,6 +471,7 @@ class TrainingSessionService:
 
             training_session_items = await uow.training_session_item_repo.create_snapshot(
                 training_session_id=training_session.id,
+                user_id=training_session.user_id,
                 deck_id=deck.id,
                 prompt_side=prompt_side,
                 answer_side=answer_side,
@@ -446,6 +482,7 @@ class TrainingSessionService:
             if positions is not None and len(training_session_items) < words_per_session:
                 gap_items = await uow.training_session_item_repo.fill_snapshot_gap(
                     training_session_id=training_session.id,
+                    user_id=training_session.user_id,
                     deck_id=deck.id,
                     prompt_side=prompt_side,
                     answer_side=answer_side,
@@ -461,6 +498,7 @@ class TrainingSessionService:
 
             response = PracticeSessionResponse(
                 training_session_uuid=training_session.uuid,
+                kind=training_session.kind,
                 deck_uuid=deck.uuid,
                 prompt_side=training_session.prompt_side,
                 answer_side=training_session.answer_side,
@@ -513,7 +551,7 @@ class TrainingSessionService:
                     tracker_uuid=None,
                 )
 
-            await self._require_available_session_deck(
+            await self._require_session_available(
                 uow=uow,
                 training_session=training_session,
             )
@@ -574,7 +612,7 @@ class TrainingSessionService:
             if training_session.status != TrainingSessionStatus.IN_PROGRESS:
                 raise TrainingSessionAlreadyFinishedError()
 
-            await self._require_available_session_deck(
+            await self._require_session_available(
                 uow=uow,
                 training_session=training_session,
             )
@@ -604,10 +642,34 @@ class TrainingSessionService:
                         if training_session.finished_at is not None
                         else None
                     ),
+                    next_review_at=None,
                 )
                 return response
 
+            # Память блокируется до того, как берётся время ответа. Ответы на одно
+            # слово из разных сессий выстраиваются в очередь на этой блокировке,
+            # поэтому answered_at растёт в том же порядке, в каком обновляется
+            # память, и пересборка из журнала проигрывает их так же.
+            # Порядок блокировок: сессия -> item -> память
+            memory = None
+            if item.learning_key_snapshot is not None:
+                memory = await uow.card_memory_repo.get_or_create_for_update(
+                    user_id=user_id,
+                    learning_key=item.learning_key_snapshot,
+                    prompt_side=training_session.prompt_side,
+                    now=utcnow(),
+                )
+
             now = utcnow()
+            if (
+                memory is not None
+                and memory.last_review is not None
+                and now <= memory.last_review
+            ):
+                # Часы другого инстанса API ушли вперёд. Сдвигаем ответ на 1 мкс
+                # после прошлого повторения: время в журнале строго растёт, и
+                # порядок ответов не зависит от id items при равном answered_at
+                now = memory.last_review + timedelta(microseconds=1)
             if now < training_session.started_at:
                 raise RequestValueError("Answer must not precede started_at", failed_field="answered_at")
             item.is_answered = True
@@ -632,6 +694,18 @@ class TrainingSessionService:
 
             if user_answer.action == "answer":
                 item.user_typed_text = user_answer.answer.strip()
+
+            # Память обновляется в той же транзакции, что и ответ: журнал (items)
+            # и состояния не расходятся, а пересборка из журнала даёт тот же результат
+            next_review_at = None
+            if memory is not None:
+                card, _ = self.scheduler.review(
+                    memory.to_fsrs_card(),
+                    rating_from_answer(item.is_correct),
+                    now,
+                )
+                memory.apply_fsrs_card(card)
+                next_review_at = card.due
 
             # в статистику идут только завершенные сессии
             if (
@@ -662,6 +736,7 @@ class TrainingSessionService:
                         if training_session.finished_at is not None
                         else None
                     ),
+                    next_review_at=next_review_at,
                 )
 
             deck_id = training_session.deck_id
@@ -681,5 +756,185 @@ class TrainingSessionService:
                 await self.cache_invalidator.invalidate(*invalidation)
                 await uow.outbox_repo.mark_published(message.id)
                 await uow.commit()
+
+            return response
+
+    @traced("training_sessions.service.rate_answer")
+    async def rate_answer(
+        self,
+        user_id: int,
+        training_session_uuid: UUID,
+        sequence_number: int,
+        rating: int,
+    ) -> RateAnswerResponse:
+        # Оценить можно любой отвеченный item своей сессии, в том числе после
+        # завершения сессии, и оценку можно поменять. Колода не проверяется:
+        # память пользователя о слове от неё не зависит
+        async with self.uow_factory() as uow:
+            training_session = await self._get_by_uuid(
+                uow=uow,
+                session_uuid=training_session_uuid,
+                for_update=True,
+            )
+            if training_session.user_id != user_id:
+                raise TrainingSessionNotFoundError()
+
+            item = (
+                await uow.training_session_item_repo
+                .get_item_by_sequence_number_and_session_id(
+                    training_session_id=training_session.id,
+                    sequence_number=sequence_number,
+                    for_update=True,
+                )
+            )
+            if item is None:
+                raise TrainingSessionItemNotFoundError()
+            if not item.is_answered or item.answered_at is None:
+                raise CardNotAnsweredError()
+
+            item.self_rating = rating
+            next_review_at = None
+
+            if item.learning_key_snapshot is not None:
+                key = (user_id, item.learning_key_snapshot, training_session.prompt_side)
+                # Блокировка памяти до чтения истории: параллельный submit_answer
+                # на это слово либо уже закоммичен и виден в истории, либо ждёт нас
+                memory = await uow.card_memory_repo.get_or_create_for_update(
+                    user_id=user_id,
+                    learning_key=item.learning_key_snapshot,
+                    prompt_side=training_session.prompt_side,
+                    now=item.answered_at,
+                )
+                # Новая оценка нужна в истории, которую читаем следующим запросом
+                await uow.flush()
+                # Оценка могла стоять не у последнего ответа на слово, поэтому
+                # память пересчитывается по всей истории слова, а не одним review
+                events = await uow.card_memory_repo.get_review_events(key=key)
+                card = replay_reviews(events, self.scheduler)[key]
+                memory.apply_fsrs_card(card)
+                next_review_at = card.due
+
+            await uow.commit()
+
+            return RateAnswerResponse(rating=rating, next_review_at=next_review_at)
+
+    @traced("training_sessions.service.get_review_summary")
+    async def get_review_summary(self, user_id: int) -> ReviewSummaryResponse:
+        async with self.uow_factory() as uow:
+            user_timezone = await uow.user_settings_repo.get_timezone(user_id=user_id)
+            now = utcnow()
+            summary = await uow.card_memory_repo.get_due_summary(
+                user_id=user_id,
+                now=now,
+                end_of_day=end_of_local_day(now, user_timezone),
+            )
+            active = await uow.training_session_repo.get_active_review_session(
+                user_id=user_id,
+            )
+
+            return ReviewSummaryResponse(
+                timezone=user_timezone,
+                sides=ReviewSidesSummary(
+                    front=ReviewSideSummary(**asdict(summary["front"])),
+                    back=ReviewSideSummary(**asdict(summary["back"])),
+                ),
+                active_session=(
+                    ActiveReviewSessionResponse(
+                        training_session_uuid=active.uuid,
+                        prompt_side=active.prompt_side,
+                        answered_count=active.answered_count,
+                        total_count=active.requested_count,
+                    )
+                    if active is not None
+                    else None
+                ),
+            )
+
+    @traced("training_sessions.service.start_review_session")
+    async def start_review_session(
+        self,
+        user_id: int,
+        prompt_side: CardSide,
+        words_per_session: SessionSize,
+    ) -> PracticeSessionResponse:
+        async with self.uow_factory() as uow:
+            user_timezone = await uow.user_settings_repo.get_timezone(user_id=user_id)
+            now = utcnow()
+
+            # Новый старт собирает свежий список слов, прошлая сессия повторения
+            # закрывается. Продолжить её можно через resume до нового старта
+            active = await uow.training_session_repo.get_active_review_session(
+                user_id=user_id,
+                for_update=True,
+            )
+
+            due_cards = await uow.card_memory_repo.get_due_cards(
+                user_id=user_id,
+                prompt_side=prompt_side,
+                until=end_of_local_day(now, user_timezone),
+                limit=words_per_session,
+            )
+            if not due_cards:
+                raise NoCardsToReviewError()
+
+            if active is not None:
+                self._accrue_activity(training_session=active, now=now)
+                active.status = TrainingSessionStatus.ABANDONED
+                active.finished_at = now
+                active.activity_tracker_uuid = None
+                active.activity_last_seen_at = None
+                # Частичный уникальный индекс: старая сессия должна выйти из
+                # in_progress до вставки новой
+                await uow.flush()
+
+            training_session = TrainingSession(
+                user_id=user_id,
+                kind=TrainingSessionKind.REVIEW,
+                deck_id=None,
+                deck_title_snapshot=None,
+                requested_count=len(due_cards),
+                answered_count=0,
+                correct_count=0,
+                wrong_count=0,
+                prompt_side=prompt_side,
+                answer_side="back" if prompt_side == "front" else "front",
+            )
+            uow.training_session_repo.add(training_session)
+            try:
+                await uow.flush()
+            except IntegrityError as e:
+                # Параллельный старт успел создать активную сессию повторения
+                if get_unique_constraint_name(e) == "uq_training_sessions_active_review":
+                    raise TrainingSessionAlreadyExistsError() from e
+                raise
+
+            items = await uow.training_session_item_repo.create_review_snapshot(
+                training_session_id=training_session.id,
+                user_id=user_id,
+                card_ids=[due_card.card_id for due_card in due_cards],
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+            )
+
+            response = PracticeSessionResponse(
+                training_session_uuid=training_session.uuid,
+                kind=training_session.kind,
+                deck_uuid=None,
+                prompt_side=training_session.prompt_side,
+                answer_side=training_session.answer_side,
+                total_count=training_session.requested_count,
+                answered_count=training_session.answered_count,
+                correct_count=training_session.correct_count,
+                wrong_count=training_session.wrong_count,
+                started_at=training_session.started_at,
+                cards=[PracticeCardResponse(
+                    sequence_number=item.sequence_number,
+                    prompt_text=item.prompt_text,
+                    prompt_language=item.prompt_lang,
+                    answer_language=item.answer_lang,
+                ) for item in items],
+            )
+
+            await uow.commit()
 
             return response

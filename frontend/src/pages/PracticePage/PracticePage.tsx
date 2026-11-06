@@ -1,4 +1,13 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { API_ERROR_CODES, hasAnyApiErrorCode, hasApiErrorCode, isApiError } from "../../api";
 import { DashboardIcon } from "../../components/DashboardVisuals";
@@ -8,12 +17,17 @@ import {
   usePracticeActivity,
   type UsePracticeActivityResult,
 } from "../../features/practice/model/usePracticeActivity";
-import type {
-  CardSide,
-  PracticeCard,
-  PracticeHistoryFilter,
-  PracticeHistorySession,
-  PracticeSession,
+import { isPracticeSelfRating } from "../../features/practice/model/practice-contract";
+import { formatNextReviewIn } from "../../features/practice/model/practice-next-review";
+import { PRACTICE_RATING_ADVANCE_DELAY_MS } from "../../features/practice/model/practice-rating-flow";
+import {
+  PRACTICE_SELF_RATINGS,
+  type CardSide,
+  type PracticeCard,
+  type PracticeHistoryFilter,
+  type PracticeHistorySession,
+  type PracticeSelfRating,
+  type PracticeSession,
 } from "../../features/practice/model/practice-types";
 import { usePracticeHistory } from "../../features/practice/model/usePracticeHistory";
 import {
@@ -27,6 +41,7 @@ import {
 import {
   usePracticeSession,
   type PracticeCardFeedback,
+  type PracticeRatingOutcome,
   type ReadyPracticeState,
   type UsePracticeSessionResult,
 } from "../../features/practice/model/usePracticeSession";
@@ -44,6 +59,7 @@ import {
 } from "../../i18n";
 import styles from "./PracticePage.module.css";
 import { usePracticeFullscreen } from "./usePracticeFullscreen";
+import { usePracticeRatingFlow } from "./usePracticeRatingFlow";
 import { PRACTICE_MESSAGES, type PracticeMessages } from "./PracticePage.messages";
 import { CatalogDeckPreview } from "../CatalogPage/CatalogDeckPreview";
 
@@ -483,7 +499,12 @@ function PracticeHistoryCard({
         </span>
       </header>
 
-      {session.deckUuid === null ? (
+      {session.kind === "review" ? (
+        <p className={`${styles.historyDeck} ${styles.historyDeckReview}`}>
+          <RepeatIcon />
+          <strong>{messages.reviewSession}</strong>
+        </p>
+      ) : session.deckUuid === null ? (
         <p className={`${styles.historyDeck} ${styles.historyDeckDeleted}`}>
           <strong>
             {session.deckTitle === null
@@ -1403,6 +1424,112 @@ function CardPagination({
   );
 }
 
+const RATING_MESSAGE_KEYS = {
+  1: "again",
+  2: "hard",
+  3: "good",
+  4: "easy",
+} as const satisfies Record<PracticeSelfRating, keyof PracticeMessages["ratings"]>;
+
+type PracticeRatingPickerState = "choosing" | "confirming" | "locked";
+
+interface PracticeRatingPickerProps {
+  /** Formatted time until the next review, shown once the rating is saved. */
+  nextReview: string | null;
+  saveError: unknown;
+  selectedRating: PracticeSelfRating | null;
+  state: PracticeRatingPickerState;
+  onProceed: () => void;
+  onSelect: (rating: PracticeSelfRating) => void;
+}
+
+/** When the word comes back. The line keeps its height while empty, so nothing jumps. */
+function NextReviewLine({ nextReview }: { nextReview: string | null }) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
+  return (
+    <p
+      aria-hidden={nextReview === null ? true : undefined}
+      className={styles.ratingNextReview}
+      data-visible={nextReview !== null}
+    >
+      {nextReview === null ? null : (
+        <>
+          <DashboardIcon name="clock" />
+          <span>{messages.ratingNextReview(nextReview)}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
+function PracticeRatingPicker({
+  nextReview,
+  onProceed,
+  onSelect,
+  saveError,
+  selectedRating,
+  state,
+}: PracticeRatingPickerProps) {
+  const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+
+  return (
+    <>
+      <div
+        aria-label={messages.ratingOptions}
+        className={styles.ratingOptions}
+        data-state={state}
+        role="group"
+      >
+        {PRACTICE_SELF_RATINGS.map((rating) => {
+          const copy = messages.ratings[RATING_MESSAGE_KEYS[rating]];
+          const isSelected = rating === selectedRating;
+
+          return (
+            <button
+              aria-disabled={state !== "choosing" && !isSelected ? true : undefined}
+              aria-keyshortcuts={String(rating)}
+              aria-pressed={isSelected}
+              className={styles.ratingOption}
+              data-rating={rating}
+              key={rating}
+              onClick={() => {
+                if (state === "choosing") {
+                  onSelect(rating);
+                } else if (isSelected) {
+                  onProceed();
+                }
+              }}
+              // The answer field keeps the focus: the keyboard flow continues from there.
+              onMouseDown={(event) => event.preventDefault()}
+              type="button"
+            >
+              <span aria-hidden="true" className={styles.ratingKey}>
+                {rating}
+              </span>
+              <span className={styles.ratingLabel}>{copy.label}</span>
+              <span className={styles.ratingOptionHint}>{copy.hint}</span>
+              {isSelected && state === "confirming" ? (
+                <span
+                  aria-hidden="true"
+                  className={styles.ratingTimer}
+                  style={{ animationDuration: `${PRACTICE_RATING_ADVANCE_DELAY_MS}ms` }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <NextReviewLine nextReview={nextReview} />
+      {saveError === null ? null : (
+        <p className={styles.ratingError} role="alert">
+          {messages.ratingSaveError}
+        </p>
+      )}
+    </>
+  );
+}
+
 interface AnswerAreaProps {
   card: PracticeCard;
   feedback: PracticeCardFeedback | undefined;
@@ -1414,6 +1541,7 @@ interface AnswerAreaProps {
   onChange: (value: string) => void;
   onContinue: () => void;
   onFinish: () => void;
+  onRate: (rating: PracticeSelfRating) => Promise<PracticeRatingOutcome>;
   onSkip: () => void;
   onSubmit: () => void;
 }
@@ -1427,27 +1555,92 @@ function AnswerArea({
   onChange,
   onContinue,
   onFinish,
+  onRate,
   onSkip,
   onSubmit,
   submitError,
   value,
 }: AnswerAreaProps) {
   const messages = useLocalizedMessages(PRACTICE_MESSAGES);
+  const { locale } = useLocale();
   const inputId = useId();
+  const ratingShortcutId = useId();
   const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const isLastCard = isFinished || nextSequenceNumber === null;
+  const leaveCard = isLastCard ? onFinish : onContinue;
+  const ratingFlow = usePracticeRatingFlow(onRate, leaveCard);
+  // Only a typed answer is rated: after "I don't know" the backend already counts "again".
+  const isRatingMode = feedback?.action === "answer";
+  const savedRating = feedback?.rating ?? null;
+  const ratingState: PracticeRatingPickerState =
+    ratingFlow.state.status === "confirming"
+      ? "confirming"
+      : savedRating === null
+        ? "choosing"
+        : "locked";
+  const selectedRating =
+    ratingFlow.state.status === "confirming" ? ratingFlow.state.rating : savedRating;
+  // "I don't know" is not rated: its schedule is known right after the answer. A typed answer
+  // shows the schedule only once rated, the rating changes it.
+  const nextReviewAt =
+    feedback?.action === "skip"
+      ? feedback.nextReviewAt
+      : ratingFlow.state.status === "confirming"
+        ? ratingFlow.state.nextReviewAt
+        : savedRating === null
+          ? null
+          : (feedback?.nextReviewAt ?? null);
+  const nextReview =
+    nextReviewAt === null ? null : formatNextReviewIn(nextReviewAt, new Date(), locale);
+  const feedbackAction = feedback?.action;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (value.trim()) {
+    if (!isRatingMode && value.trim()) {
       onSubmit();
     }
   };
 
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    if (!isRatingMode) {
+      onChange(event.target.value);
+      return;
+    }
+
+    // In rating mode the field stays empty and only catches the digit, also from mobile keyboards.
+    const typed = event.target.value.trim();
+    const rating = Number(typed);
+    if (typed.length === 1 && isPracticeSelfRating(rating) && ratingState === "choosing") {
+      ratingFlow.select(rating);
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    if (isRatingMode) {
+      // A held Enter from the answer must not skip the rating.
+      if (!event.repeat) {
+        ratingFlow.proceed();
+      }
+      return;
+    }
+    if (!isSubmitting && value.trim()) {
+      event.currentTarget.form?.requestSubmit();
+    }
+  };
+
   useEffect(() => {
-    if (feedback !== undefined) {
+    if (feedbackAction === "answer") {
+      answerInputRef.current?.focus({ preventScroll: true });
+    } else if (feedbackAction === "skip") {
       continueButtonRef.current?.focus();
     }
-  }, [feedback]);
+  }, [feedbackAction]);
 
   useEffect(() => {
     const input = answerInputRef.current;
@@ -1480,16 +1673,34 @@ function AnswerArea({
       ? submitError === null
         ? ""
         : getPracticeErrorMessage(submitError, "submit", messages)
-      : feedback.isCorrect
-        ? messages.correctLiveMessage(feedback.answerText)
-        : messages.wrongLiveMessage(feedback.answerText);
+      : ratingFlow.state.status === "confirming"
+        ? [
+            messages.ratingSelectedLive(
+              messages.ratings[RATING_MESSAGE_KEYS[ratingFlow.state.rating]].label,
+            ),
+            nextReview === null ? null : messages.ratingNextReview(nextReview),
+          ]
+            .filter((part) => part !== null)
+            .join(". ")
+        : [
+            feedback.isCorrect
+              ? messages.correctLiveMessage(feedback.answerText)
+              : messages.wrongLiveMessage(feedback.answerText),
+            feedback.action === "skip" && nextReview !== null
+              ? messages.ratingNextReview(nextReview)
+              : null,
+          ]
+            .filter((part) => part !== null)
+            .join(". ");
 
-  if (feedback !== undefined) {
-    return (
-      <div className={styles.answerRegion}>
-        <span aria-atomic="true" aria-live="polite" className={styles.visuallyHidden}>
-          {liveMessage}
-        </span>
+  // One tree for both modes: the textarea keeps its DOM node and focus after the answer,
+  // so the rating digit is typed into the same field (and a mobile keyboard stays open).
+  return (
+    <div className={styles.answerRegion} data-rating={isRatingMode ? "true" : undefined}>
+      <span aria-atomic="true" aria-live="polite" className={styles.visuallyHidden}>
+        {liveMessage}
+      </span>
+      {feedback === undefined ? null : (
         <div
           className={`${styles.feedback} ${feedback.isCorrect ? styles.feedbackCorrect : styles.feedbackWrong}`}
         >
@@ -1509,70 +1720,96 @@ function AnswerArea({
           </div>
           <button
             className={styles.continueButton}
-            data-practice-primary-focus
-            onClick={isFinished || nextSequenceNumber === null ? onFinish : onContinue}
+            data-practice-primary-focus={isRatingMode ? undefined : true}
+            onClick={isRatingMode ? ratingFlow.proceed : leaveCard}
             ref={continueButtonRef}
             type="button"
           >
-            {isFinished || nextSequenceNumber === null ? messages.result : messages.next}
+            {isLastCard ? messages.result : messages.next}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.answerRegion}>
-      <span aria-atomic="true" aria-live="polite" className={styles.visuallyHidden}>
-        {liveMessage}
-      </span>
-      <form className={styles.answerForm} onSubmit={handleSubmit}>
-        <label className={styles.answerLabel} htmlFor={inputId}>
-          {messages.yourAnswer}
-        </label>
-        <div className={styles.answerControls}>
-          <textarea
-            autoComplete="off"
-            autoFocus
-            data-practice-primary-focus
-            disabled={isSubmitting}
-            id={inputId}
-            lang={card.answerLanguage}
-            maxLength={255}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                if (!isSubmitting && value.trim()) {
-                  event.currentTarget.form?.requestSubmit();
-                }
-              }
-            }}
-            placeholder={messages.yourAnswer}
-            ref={answerInputRef}
-            rows={1}
-            value={value}
-          />
-          <button
-            aria-label={messages.submitAnswer}
-            className={styles.submitButton}
-            disabled={isSubmitting || !value.trim()}
-            type="submit"
-          >
-            {isSubmitting ? <span className={styles.buttonSpinner} /> : <CheckIcon />}
-          </button>
+      )}
+      {feedback?.action === "skip" ? (
+        <div className={styles.skipNextReview}>
+          <NextReviewLine nextReview={nextReview} />
         </div>
-        <div className={styles.answerMeta}>
-          <button disabled={isSubmitting} onClick={onSkip} type="button">
-            {messages.doNotKnow}
-          </button>
-        </div>
-        {submitError === null ? null : (
-          <p className={styles.submitError}>
-            {getPracticeErrorMessage(submitError, "submit", messages)}
-          </p>
-        )}
-      </form>
+      ) : (
+        <form
+          className={isRatingMode ? styles.ratingForm : styles.answerForm}
+          onSubmit={handleSubmit}
+        >
+          {isRatingMode ? (
+            <div className={styles.ratingHeader}>
+              <label className={styles.answerLabel} htmlFor={inputId}>
+                {ratingState === "locked" ? messages.yourRating : messages.rateAnswer}
+              </label>
+              <p className={styles.ratingShortcut} id={ratingShortcutId}>
+                <span aria-hidden="true" className={styles.ratingCaret} />
+                {ratingState === "choosing"
+                  ? messages.ratingHintChoose
+                  : ratingState === "confirming"
+                    ? messages.ratingHintConfirm
+                    : messages.ratingHintSaved}
+              </p>
+            </div>
+          ) : (
+            <label className={styles.answerLabel} htmlFor={inputId}>
+              {messages.yourAnswer}
+            </label>
+          )}
+          <div className={isRatingMode ? styles.visuallyHidden : styles.answerControls}>
+            <textarea
+              aria-describedby={isRatingMode ? ratingShortcutId : undefined}
+              autoComplete="off"
+              autoFocus
+              data-practice-primary-focus
+              id={inputId}
+              inputMode={isRatingMode ? "numeric" : undefined}
+              lang={isRatingMode ? undefined : card.answerLanguage}
+              maxLength={255}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder={messages.yourAnswer}
+              // Read-only instead of disabled: a disabled field would drop the focus.
+              readOnly={!isRatingMode && isSubmitting}
+              ref={answerInputRef}
+              rows={1}
+              value={isRatingMode ? "" : value}
+            />
+            {isRatingMode ? null : (
+              <button
+                aria-label={messages.submitAnswer}
+                className={styles.submitButton}
+                disabled={isSubmitting || !value.trim()}
+                type="submit"
+              >
+                {isSubmitting ? <span className={styles.buttonSpinner} /> : <CheckIcon />}
+              </button>
+            )}
+          </div>
+          {isRatingMode ? (
+            <PracticeRatingPicker
+              nextReview={nextReview}
+              onProceed={ratingFlow.proceed}
+              onSelect={ratingFlow.select}
+              saveError={ratingFlow.state.status === "choosing" ? ratingFlow.state.error : null}
+              selectedRating={selectedRating}
+              state={ratingState}
+            />
+          ) : (
+            <div className={styles.answerMeta}>
+              <button disabled={isSubmitting} onClick={onSkip} type="button">
+                {messages.doNotKnow}
+              </button>
+            </div>
+          )}
+          {isRatingMode || submitError === null ? null : (
+            <p className={styles.submitError}>
+              {getPracticeErrorMessage(submitError, "submit", messages)}
+            </p>
+          )}
+        </form>
+      )}
     </div>
   );
 }
@@ -1581,6 +1818,7 @@ interface ActiveSessionViewProps {
   activity?: Pick<UsePracticeActivityResult, "focusRevision" | "phase" | "resume">;
   state: ReadyPracticeState;
   onSubmit: UsePracticeSessionResult["submit"];
+  onRate: UsePracticeSessionResult["rate"];
   onComplete: (summary: PracticeCompletionSummary) => void;
 }
 
@@ -1593,6 +1831,7 @@ const DEFAULT_ACTIVITY_VIEW = {
 export function ActivePracticeSessionView({
   activity = DEFAULT_ACTIVITY_VIEW,
   onComplete,
+  onRate,
   onSubmit,
   state,
 }: ActiveSessionViewProps) {
@@ -1720,6 +1959,7 @@ export function ActivePracticeSessionView({
               onFinish={() =>
                 onComplete(createCompletionSummary(state.session, state.timeToCompleteSeconds))
               }
+              onRate={(rating) => onRate(selectedCard.sequenceNumber, rating)}
               onSkip={() => void onSubmit(selectedCard.sequenceNumber, { action: "skip" })}
               onSubmit={() =>
                 void onSubmit(selectedCard.sequenceNumber, {
@@ -1774,6 +2014,7 @@ interface TrackedActivePracticeSessionViewProps extends Omit<ActiveSessionViewPr
 
 function TrackedActivePracticeSessionView({
   onComplete,
+  onRate,
   onSessionUnavailable,
   onSubmit,
   state,
@@ -1795,6 +2036,7 @@ function TrackedActivePracticeSessionView({
     <ActivePracticeSessionView
       activity={activity}
       onComplete={onComplete}
+      onRate={onRate}
       onSubmit={handleSubmit}
       state={state}
     />
@@ -1942,6 +2184,7 @@ export function PracticePage() {
             navigate("/practice", { replace: true, state: { practiceCompletion: summary } });
           }}
           onSessionUnavailable={practice.retryResume}
+          onRate={practice.rate}
           onSubmit={practice.submit}
           state={practice.state}
         />

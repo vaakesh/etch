@@ -126,6 +126,11 @@ SUBMIT_ANSWER_RATE_LIMIT_POLICY = RateLimitPolicy(
     requests=300,
     window_seconds=60,
 )
+RATE_ANSWER_RATE_LIMIT_POLICY = RateLimitPolicy(
+    route="training-sessions:rate-answer",
+    requests=300,
+    window_seconds=60,
+)
 TRAINING_SESSION_ACTIVITY_RATE_LIMIT_POLICY = RateLimitPolicy(
     route="training-sessions:activity",
     requests=20,
@@ -183,6 +188,10 @@ training_sessions_rate_limit = limit(
 )
 submit_answer_rate_limit = limit(
     SUBMIT_ANSWER_RATE_LIMIT_POLICY,
+    by_identity="user",
+)
+rate_answer_rate_limit = limit(
+    RATE_ANSWER_RATE_LIMIT_POLICY,
     by_identity="user",
 )
 training_session_activity_rate_limit = limit(

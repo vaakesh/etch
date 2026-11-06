@@ -9,10 +9,24 @@ vi.mock("../../auth/hooks/useAuth", () => ({
       uuid: "3bc4b650-292f-480f-b1bb-3f5414269714",
       username: "alice",
       email: "alice@example.com",
-      settings: { locale: "ru-RU", showPreviewsForLong: true, theme: "system" },
+      settings: {
+        locale: "ru-RU",
+        showPreviewsForLong: true,
+        theme: "system",
+        timezone: "Europe/Moscow",
+      },
     },
     applyUserSettings: vi.fn(),
   }),
+}));
+
+const { detectBrowserTimezone } = vi.hoisted(() => ({
+  detectBrowserTimezone: vi.fn<() => string | null>(() => "Asia/Tokyo"),
+}));
+
+vi.mock("../../features/settings/model/timezones", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../features/settings/model/timezones")>()),
+  detectBrowserTimezone,
 }));
 
 import { SettingsPage } from "./SettingsPage";
@@ -44,6 +58,42 @@ describe("SettingsPage", () => {
     expect(markup).not.toContain("Выберите локаль");
   });
 
+  it("renders the saved timezone with its offset, without a hint", () => {
+    const markup = renderToStaticMarkup(<SettingsPage />);
+
+    expect(markup).toContain("Часовой пояс");
+    expect(markup).not.toContain("По нему считается");
+    expect(markup).toMatch(/<select[^>]*name="timezone"/);
+    expect(markup).not.toMatch(/<select[^>]*aria-describedby/);
+    expect(markup).toMatch(
+      /<option value="Europe\/Moscow" selected="">Europe\/Moscow \(UTC\+03:00\)</,
+    );
+  });
+
+  it("orders timezones from the western offset to the eastern one", () => {
+    const markup = renderToStaticMarkup(<SettingsPage />);
+
+    const positions = ["America/New_York", "UTC", "Europe/Moscow", "Asia/Tokyo"].map((zone) =>
+      markup.indexOf(`<option value="${zone}"`),
+    );
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+  });
+
+  it("offers the device timezone when it differs from the saved one", () => {
+    const markup = renderToStaticMarkup(<SettingsPage />);
+
+    expect(markup).toContain("Как на устройстве: Asia/Tokyo");
+  });
+
+  it("does not offer the device timezone when it is already saved", () => {
+    detectBrowserTimezone.mockReturnValueOnce("Europe/Moscow");
+
+    const markup = renderToStaticMarkup(<SettingsPage />);
+
+    expect(markup).not.toContain("Как на устройстве");
+  });
+
   it("renders settings controls in English", () => {
     const markup = renderToStaticMarkup(
       <LocaleProvider initialLocale="en-US">
@@ -55,6 +105,7 @@ describe("SettingsPage", () => {
     expect(markup).toContain(">Language<");
     expect(markup).toContain("Appearance");
     expect(markup).toContain("Long text previews");
+    expect(markup).toContain("Time zone");
     expect(markup).toContain("Show the full text on hover or focus");
     expect(markup).toContain("Save");
     expect(markup).not.toContain("Hello");

@@ -58,11 +58,33 @@ class TestCreateUser:
         users_uow.user_settings_repo.add.assert_called_once()
         settings = users_uow.user_settings_repo.add.call_args.args[0]
         assert isinstance(settings, UserSettings)
-        assert (settings.user_id, settings.locale, settings.theme, settings.show_previews_for_long) == (
-            42, "ru-RU", "light", True,
-        )
+        assert (
+            settings.user_id,
+            settings.locale,
+            settings.theme,
+            settings.show_previews_for_long,
+            settings.timezone,
+        ) == (42, "ru-RU", "light", True, "UTC")
         users_uow.commit.assert_awaited_once()
         assert users_cache.mock_calls == []
+
+    async def test_stores_timezone_from_registration_in_settings(
+        self, users_domain_service, users_uow, password_hasher, persisted_defaults,
+    ):
+        payload = CreateUserRequest(
+            username="new-user",
+            email="new@example.com",
+            password="password123",
+            timezone="Europe/Moscow",
+        )
+
+        result = await users_domain_service.create_user(payload)
+
+        assert result.settings.timezone == "Europe/Moscow"
+        settings = users_uow.user_settings_repo.add.call_args.args[0]
+        assert settings.timezone == "Europe/Moscow"
+        user = users_uow.user_repo.add.call_args.args[0]
+        assert not hasattr(user, "timezone")
 
     @pytest.mark.parametrize(
         ("constraint", "expected_error"),

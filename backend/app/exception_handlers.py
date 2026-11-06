@@ -49,6 +49,8 @@ from app.rag.errors import (
 )
 from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
+    CardNotAnsweredError,
+    NoCardsToReviewError,
     TrainingSessionAlreadyExistsError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionDeckArchivedError,
@@ -128,6 +130,8 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
         "TRAINING_SESSION_ITEM_NOT_FOUND",
     ),
     (CardAlreadyAnsweredError, status.HTTP_409_CONFLICT, "CARD_ALREADY_ANSWERED"),
+    (CardNotAnsweredError, status.HTTP_409_CONFLICT, "CARD_NOT_ANSWERED"),
+    (NoCardsToReviewError, status.HTTP_409_CONFLICT, "NO_CARDS_TO_REVIEW"),
     (
         TrainingSessionAlreadyExistsError,
         status.HTTP_409_CONFLICT,

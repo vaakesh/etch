@@ -56,6 +56,7 @@ class TestGetMe:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -101,6 +102,7 @@ class TestGetMe:
                 "locale": "ru-RU",
                 "theme": "dark",
                 "show_previews_for_long": False,
+                "timezone": "UTC",
             },
         }
 
@@ -282,6 +284,7 @@ class TestChangeSettings:
             "locale": "ru-RU",
             "theme": "dark",
             "show_previews_for_long": False,
+            "timezone": "UTC",
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -301,6 +304,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "system",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="locale_ru",
             ),
@@ -310,6 +314,7 @@ class TestChangeSettings:
                     "locale": "en-US",
                     "theme": "system",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="locale_en",
             ),
@@ -319,6 +324,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "dark",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="theme_dark",
             ),
@@ -328,6 +334,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "light",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="theme_light",
             ),
@@ -337,6 +344,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "system",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="theme_system",
             ),
@@ -346,6 +354,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "system",
                     "show_previews_for_long": True,
+                    "timezone": "UTC",
                 },
                 id="previews_enabled",
             ),
@@ -355,6 +364,7 @@ class TestChangeSettings:
                     "locale": "ru-RU",
                     "theme": "system",
                     "show_previews_for_long": False,
+                    "timezone": "UTC",
                 },
                 id="previews_disabled",
             ),
@@ -863,6 +873,7 @@ class TestGetMyTrainingSessions:
             "items": [
                 {
                     "uuid": "0198ad01-b200-7000-8000-000000000400",
+                    "kind": "deck",
                     "deck_uuid": ("0198ad01-b200-7000-8000-000000000200"),
                     "deck_title": "Test deck",
                     "status": "in_progress",
@@ -922,6 +933,7 @@ class TestGetMyTrainingSessions:
             "items": [
                 {
                     "uuid": "0198ad01-b200-7000-8000-000000000400",
+                    "kind": "deck",
                     "deck_uuid": ("0198ad01-b200-7000-8000-000000000200"),
                     "deck_title": "Test deck",
                     "status": "in_progress",
@@ -936,6 +948,7 @@ class TestGetMyTrainingSessions:
                 },
                 {
                     "uuid": "0198ad01-b200-7000-8000-000000000400",
+                    "kind": "deck",
                     "deck_uuid": ("0198ad01-b200-7000-8000-000000000200"),
                     "deck_title": "Test deck",
                     "status": "completed",
@@ -1018,6 +1031,7 @@ class TestGetMyTrainingSessions:
             "items": [
                 {
                     "uuid": "0198ad01-b200-7000-8000-000000000400",
+                    "kind": "deck",
                     "deck_uuid": ("0198ad01-b200-7000-8000-000000000200"),
                     "deck_title": "Test deck",
                     "status": "in_progress",
@@ -1719,6 +1733,7 @@ class TestCreateUser:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -1830,6 +1845,7 @@ class TestCreateUser:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -1920,6 +1936,7 @@ class TestCreateUser:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -2210,6 +2227,7 @@ class TestUpdateUser:
                 "locale": "en-US",
                 "theme": "dark",
                 "show_previews_for_long": False,
+                "timezone": "UTC",
             },
         }
 
@@ -2269,6 +2287,7 @@ class TestUpdateUser:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -2349,6 +2368,7 @@ class TestUpdateUser:
                 "locale": "ru-RU",
                 "theme": "system",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 

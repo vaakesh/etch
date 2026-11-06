@@ -14,7 +14,9 @@ from app.common.types import PageLimit, PaginationCursor, SearchQuery
 from app.redis.rate_limiters import bff_rate_limit, start_practice_rate_limit
 from app.training_sessions.schemas import (
     PracticeSessionResponse,
+    ReviewSummaryResponse,
     StartPracticeSessionRequest,
+    StartReviewSessionRequest,
 )
 from app.users.models import User
 from fastapi import APIRouter, Depends, Query
@@ -101,6 +103,32 @@ async def start_practice_session(
     return await bff_service.start_practice_session(
         user_id=current_user.id,
         deck_uuid=deck_uuid,
+        prompt_side=payload.prompt_side,
+        words_per_session=payload.words_per_session,
+    )
+
+@router.get(
+    "/reviews/summary",
+    response_model=ReviewSummaryResponse,
+)
+async def get_review_summary(
+    current_user: CurrentUser,
+    bff_service: BffService = Depends(get_bff_service),
+):
+    return await bff_service.get_review_summary(user_id=current_user.id)
+
+@router.post(
+    "/reviews/start",
+    response_model=PracticeSessionResponse,
+    dependencies=[Depends(start_practice_rate_limit)],
+)
+async def start_review_session(
+    payload: StartReviewSessionRequest,
+    current_user: CurrentUser,
+    bff_service: BffService = Depends(get_bff_service),
+):
+    return await bff_service.start_review_session(
+        user_id=current_user.id,
         prompt_side=payload.prompt_side,
         words_per_session=payload.words_per_session,
     )

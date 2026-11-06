@@ -1,16 +1,20 @@
 import { ApiError } from "../../../api";
 import { MAX_SESSION_SIZE } from "./practice-session-size";
-import type {
-  CardSide,
-  PracticeActivityResponse,
-  PracticeCard,
-  PracticeDeckSummary,
-  PracticeHistoryPage,
-  PracticeHistorySession,
-  PracticeSession,
-  PracticeSessionHistoryItem,
-  SubmitPracticeAnswerResult,
-  TrainingSessionStatus,
+import {
+  PRACTICE_SELF_RATINGS,
+  type CardSide,
+  type PracticeActivityResponse,
+  type PracticeCard,
+  type PracticeDeckSummary,
+  type PracticeHistoryPage,
+  type PracticeHistorySession,
+  type PracticeSelfRating,
+  type PracticeSession,
+  type PracticeSessionHistoryItem,
+  type RatePracticeAnswerResult,
+  type SubmitPracticeAnswerResult,
+  type TrainingSessionKind,
+  type TrainingSessionStatus,
 } from "./practice-types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -109,6 +113,14 @@ function readCardSide(value: unknown, path: string): CardSide {
 
 function readTrainingSessionStatus(value: unknown, path: string): TrainingSessionStatus {
   if (value !== "completed" && value !== "in_progress" && value !== "abandoned") {
+    return invalidPracticeResponse(path);
+  }
+
+  return value;
+}
+
+function readTrainingSessionKind(value: unknown, path: string): TrainingSessionKind {
+  if (value !== "deck" && value !== "review") {
     return invalidPracticeResponse(path);
   }
 
@@ -311,10 +323,19 @@ function parsePracticeHistorySession(value: unknown, index: number): PracticeHis
     return invalidPracticeResponse(`${path}.finished_at`);
   }
 
+  const kind = readTrainingSessionKind(session.kind, `${path}.kind`);
+  const deckUuid = readNullableUuid(session.deck_uuid, `${path}.deck_uuid`);
+  const deckTitle = readNullableString(session.deck_title, `${path}.deck_title`);
+  // У повторения нет колоды: слова собраны из разных колод
+  if (kind === "review" && (deckUuid !== null || deckTitle !== null)) {
+    return invalidPracticeResponse(`${path}.deck_uuid`);
+  }
+
   return {
     uuid: readUuid(session.uuid, `${path}.uuid`),
-    deckUuid: readNullableUuid(session.deck_uuid, `${path}.deck_uuid`),
-    deckTitle: readNullableString(session.deck_title, `${path}.deck_title`),
+    kind,
+    deckUuid,
+    deckTitle,
     status,
     requestedCount,
     answeredCount,
@@ -409,6 +430,26 @@ export function parsePracticeSessionHistory(value: unknown): readonly PracticeSe
   return items;
 }
 
+export function isPracticeSelfRating(value: unknown): value is PracticeSelfRating {
+  return PRACTICE_SELF_RATINGS.some((rating) => rating === value);
+}
+
+export function parseRatePracticeAnswerResult(value: unknown): RatePracticeAnswerResult {
+  const result = readRecord(value, "practiceRating");
+  const rating = result.rating;
+  if (!isPracticeSelfRating(rating)) {
+    return invalidPracticeResponse("practiceRating.rating");
+  }
+
+  return {
+    rating,
+    nextReviewAt:
+      result.next_review_at === null
+        ? null
+        : readDateTime(result.next_review_at, "practiceRating.next_review_at"),
+  };
+}
+
 export function parseSubmitPracticeAnswerResult(value: unknown): SubmitPracticeAnswerResult {
   const result = readRecord(value, "practiceAnswer");
   const isCorrect = readBoolean(result.is_correct, "practiceAnswer.is_correct");
@@ -451,5 +492,9 @@ export function parseSubmitPracticeAnswerResult(value: unknown): SubmitPracticeA
     totalCount,
     isFinished,
     timeToCompleteSeconds: timeToComplete,
+    nextReviewAt:
+      result.next_review_at === null
+        ? null
+        : readDateTime(result.next_review_at, "practiceAnswer.next_review_at"),
   };
 }

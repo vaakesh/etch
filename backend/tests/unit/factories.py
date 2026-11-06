@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID
 
-from app.training_sessions.models import TrainingSessionStatus
+from app.training_sessions.models import TrainingSessionKind, TrainingSessionStatus
 
 TEST_USER_UUID = UUID(
     "0198ad01-b200-7000-8000-000000000042"
@@ -37,6 +37,7 @@ def make_user_settings(**overrides):
         "locale": "ru-RU",
         "theme": "system",
         "show_previews_for_long": True,
+        "timezone": "UTC",
     }
 
     data.update(overrides)
@@ -170,6 +171,7 @@ def make_training_session(**overrides):
         "user_id": 42,
         "deck_id": deck.id if deck is not None else None,
         "status": TrainingSessionStatus.IN_PROGRESS,
+        "kind": TrainingSessionKind.DECK,
         "requested_count": 10,
         "answered_count": 3,
         "active_study_time_ms": 0,
@@ -202,8 +204,10 @@ def make_training_session_item(**overrides):
         "id": 500,
         "uuid": TEST_TRAINING_SESSION_ITEM_UUID,
         "training_session_id": 400,
+        "user_id": 42,
         "sequence_number": 1,
         "original_card_id": 100,
+        "learning_key_snapshot": None,
         "user_typed_text": None,
         "prompt_text": "привет",
         "answer_text": "hello",
@@ -212,6 +216,7 @@ def make_training_session_item(**overrides):
         "is_answered": False,
         "is_correct": None,
         "answered_at": None,
+        "self_rating": None,
     }
 
     data.update(overrides)

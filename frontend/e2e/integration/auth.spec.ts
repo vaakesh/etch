@@ -82,7 +82,8 @@ test("[INT-002] регистрация в UI → автоматический в
     expect(await me.json()).toMatchObject({
       username: account.username,
       email: account.email,
-      settings: { theme: "light", show_previews_for_long: true },
+      // Пояс пришёл из браузера при регистрации: timezoneId в playwright.config.ts
+      settings: { theme: "light", show_previews_for_long: true, timezone: "Europe/Moscow" },
     });
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   });

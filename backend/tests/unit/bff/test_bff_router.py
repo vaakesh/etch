@@ -878,6 +878,7 @@ class TestStartPracticeSession:
         payload = {"prompt_side": "front", "words_per_session": 10}
         bff_service.start_practice_session.return_value = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
@@ -903,6 +904,7 @@ class TestStartPracticeSession:
 
         expected = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
@@ -941,6 +943,7 @@ class TestStartPracticeSession:
         payload = {"prompt_side": "back", "words_per_session": words_per_session}
         bff_service.start_practice_session.return_value = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "back",
             "answer_side": "front",
@@ -959,6 +962,7 @@ class TestStartPracticeSession:
 
         expected = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "back",
             "answer_side": "front",
@@ -1162,6 +1166,7 @@ class TestResumePracticeSession:
     ):
         bff_service.resume_practice_session.return_value = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",
@@ -1186,6 +1191,7 @@ class TestResumePracticeSession:
 
         expected = {
             "training_session_uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "prompt_side": "front",
             "answer_side": "back",

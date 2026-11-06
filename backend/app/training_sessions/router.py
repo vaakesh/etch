@@ -4,6 +4,7 @@ from app.common.limits import MAX_SESSION_SIZE
 from app.auth.deps import CurrentUser, OptionalCurrentUser
 from app.redis.rate_limiters import (
     public_training_sessions_rate_limit,
+    rate_answer_rate_limit,
     submit_answer_rate_limit,
     training_session_activity_rate_limit,
     training_sessions_rate_limit,
@@ -12,6 +13,8 @@ from app.training_sessions.deps import (
     TrainingSessionServiceDeps,
 )
 from app.training_sessions.schemas import (
+    RateAnswerRequest,
+    RateAnswerResponse,
     SubmitAnswerResponse,
     TrainingSessionActivityRequest,
     TrainingSessionActivityResponse,
@@ -109,4 +112,23 @@ async def submit_answer(
         training_session_uuid=training_session_uuid,
         sequence_number=sequence_number,
         user_answer=user_answer,
+    )
+
+@router.put(
+        "/{training_session_uuid}/items/{sequence_number}/rating",
+        response_model=RateAnswerResponse,
+        dependencies=[Depends(rate_answer_rate_limit)],
+)
+async def rate_answer(
+    training_session_uuid: UUID7,
+    payload: RateAnswerRequest,
+    current_user: CurrentUser,
+    training_session_service: TrainingSessionServiceDeps,
+    sequence_number: int = Path(ge=1, le=MAX_SESSION_SIZE),
+):
+    return await training_session_service.rate_answer(
+        user_id=current_user.id,
+        training_session_uuid=training_session_uuid,
+        sequence_number=sequence_number,
+        rating=payload.rating,
     )

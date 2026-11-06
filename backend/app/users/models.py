@@ -42,6 +42,13 @@ class UserSettings(Base):
         server_default="true",
         nullable=False,
     )
+    # IANA-зона пользователя: граница «сегодня» для повторений FSRS
+    timezone: Mapped[str] = mapped_column(
+        String(64),
+        default="UTC",
+        server_default="UTC",
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -71,6 +78,8 @@ class UserSettings(Base):
             "theme IN ('light', 'dark', 'system')",
             name="theme_allowed_values",
         ),
+        # Список IANA-зон меняется с обновлениями tzdata, его проверяет приложение
+        CheckConstraint("char_length(timezone) >= 1", name="timezone_not_empty"),
     )
 
 

@@ -8,6 +8,7 @@ import type {
 } from "../../features/practice/model/practice-types";
 import type { UsePracticeHistoryResult } from "../../features/practice/model/usePracticeHistory";
 import type {
+  PracticeCardFeedback,
   ReadyPracticeState,
   UsePracticeSessionResult,
 } from "../../features/practice/model/usePracticeSession";
@@ -83,6 +84,7 @@ function createPracticeResult(
     retryResume: vi.fn(),
     start: vi.fn(async () => null),
     submit: vi.fn(async () => null),
+    rate: vi.fn(async () => ({ status: "saved" as const, nextReviewAt: null })),
   };
 }
 
@@ -91,6 +93,7 @@ function createHistorySession(
 ): PracticeHistorySession {
   return {
     uuid: SESSION_UUID,
+    kind: "deck",
     deckUuid: DECK_UUID,
     deckTitle: "Английский на каждый день",
     status: "completed",
@@ -277,6 +280,33 @@ describe("PracticePage", () => {
     expect(markup).toContain("Продолжить");
     expect(markup).toContain(`/practice/sessions/${SESSION_UUID}/history`);
     expect(markup).not.toContain("deck=null");
+  });
+
+  it("labels review sessions as review instead of a deleted deck", () => {
+    usePracticeHistoryMock.mockReturnValue(
+      createHistoryResult({
+        status: "ready",
+        sessions: [
+          createHistorySession({ kind: "review", deckUuid: null, deckTitle: null }),
+          createHistorySession({
+            uuid: "019c05e5-bc86-70e6-8f5c-d31bfa1aac11",
+            kind: "review",
+            deckUuid: null,
+            deckTitle: null,
+            status: "in_progress",
+            finishedAt: null,
+          }),
+        ],
+      }),
+    );
+
+    const markup = renderPractice("/practice");
+
+    expect(markup.match(/Повторение/g)).toHaveLength(2);
+    expect(markup).not.toContain("Колода удалена");
+    expect(markup).not.toContain('aria-haspopup="dialog"');
+    expect(markup).toContain("Продолжить");
+    expect(markup).toContain(`/practice/sessions/${SESSION_UUID}/history`);
   });
 
   it("renders previous sessions with a compact result summary and actions", () => {
@@ -578,6 +608,7 @@ describe("active practice feedback", () => {
           <ActivePracticeSessionView
             activity={{ focusRevision: 0, phase: "paused", resume: vi.fn() }}
             onComplete={vi.fn()}
+            onRate={vi.fn()}
             onSubmit={vi.fn(async () => null)}
             state={createReadyState()}
           />
@@ -598,6 +629,7 @@ describe("active practice feedback", () => {
         <ActivePracticeSessionView
           activity={{ focusRevision: 0, phase: "paused", resume }}
           onComplete={vi.fn()}
+          onRate={vi.fn()}
           onSubmit={vi.fn(async () => null)}
           state={createReadyState()}
         />
@@ -620,6 +652,8 @@ describe("active practice feedback", () => {
           answerText: "неизгладимый",
           isCorrect: false,
           submittedAnswer: "вечный",
+          rating: null,
+          nextReviewAt: null,
         },
       },
     });
@@ -628,6 +662,7 @@ describe("active practice feedback", () => {
       <MemoryRouter>
         <ActivePracticeSessionView
           onComplete={vi.fn()}
+          onRate={vi.fn()}
           onSubmit={vi.fn(async () => null)}
           state={state}
         />
@@ -639,6 +674,130 @@ describe("active practice feedback", () => {
     expect(markup).toContain("неизгладимый");
     expect(markup).toContain("Дальше");
     expect(markup).not.toContain("Введите перевод");
+  });
+
+  function renderAnsweredCard(
+    feedback: Partial<PracticeCardFeedback>,
+    locale: "ru-RU" | "en-US" = "ru-RU",
+  ): string {
+    const state = createReadyState({
+      session: createSession({ answeredCount: 1, correctCount: 1 }),
+      feedbackBySequence: {
+        1: {
+          action: "answer",
+          answerText: "cat",
+          isCorrect: true,
+          submittedAnswer: "cat",
+          rating: null,
+          nextReviewAt: null,
+          ...feedback,
+        },
+      },
+    });
+
+    return renderToStaticMarkup(
+      <LocaleProvider initialLocale={locale}>
+        <MemoryRouter>
+          <ActivePracticeSessionView
+            onComplete={vi.fn()}
+            onRate={vi.fn()}
+            onSubmit={vi.fn(async () => null)}
+            state={state}
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+  }
+
+  it.each([
+    ["a correct answer", { isCorrect: true }],
+    ["a wrong answer, which may be a typo", { isCorrect: false }],
+  ])("offers the four self-ratings after %s", (_, feedback) => {
+    const markup = renderAnsweredCard(feedback);
+
+    expect(markup).toContain("Оцените ответ");
+    expect(markup).toContain("1–4 — оценить · Enter — без оценки");
+    expect(markup).toContain('aria-label="Оценка ответа"');
+    ["Снова", "Трудно", "Хорошо", "Легко"].forEach((label) => expect(markup).toContain(label));
+    ["Не вспомнил", "Вспомнил с трудом", "Вспомнил, подумав", "Знаю идеально"].forEach((hint) =>
+      expect(markup).toContain(hint),
+    );
+    expect(markup.match(/aria-keyshortcuts="[1-4]"/g)).toHaveLength(4);
+    expect(markup).not.toContain('aria-pressed="true"');
+  });
+
+  it("keeps the answer field as the keyboard target of the rating", () => {
+    const markup = renderAnsweredCard({});
+
+    expect(markup).toMatch(/<textarea[^>]*inputMode="numeric"/);
+    expect(markup).toMatch(/<textarea[^>]*data-practice-primary-focus/);
+    expect(markup).not.toMatch(/<button[^>]*data-practice-primary-focus/);
+    expect(markup).not.toContain("Не знаю");
+    expect(markup).not.toContain('aria-label="Отправить ответ"');
+  });
+
+  it("does not offer a rating after “I don't know”", () => {
+    const markup = renderAnsweredCard({ action: "skip", isCorrect: false, submittedAnswer: null });
+
+    expect(markup).not.toContain("Оцените ответ");
+    expect(markup).not.toContain("<textarea");
+    expect(markup).toMatch(/<button[^>]*data-practice-primary-focus[^>]*>Дальше</);
+  });
+
+  it("shows when the word comes back right after “I don't know”", () => {
+    vi.useFakeTimers({ now: new Date("2026-11-06T09:00:00Z") });
+    try {
+      const markup = renderAnsweredCard({
+        action: "skip",
+        isCorrect: false,
+        submittedAnswer: null,
+        nextReviewAt: "2026-11-06T09:01:00Z",
+      });
+
+      expect(markup).toMatch(/data-visible="true"[^>]*>.*Повторим через 1 минуту/);
+      expect(markup).not.toContain("Оцените ответ");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the line empty after “I don't know” without a schedule", () => {
+    const markup = renderAnsweredCard({
+      action: "skip",
+      isCorrect: false,
+      submittedAnswer: null,
+      nextReviewAt: null,
+    });
+
+    expect(markup).toContain('data-visible="false"');
+    expect(markup).not.toContain("Повторим");
+  });
+
+  it("shows a saved rating as chosen and locks the other ones", () => {
+    const markup = renderAnsweredCard({ rating: 3 }, "en-US");
+
+    expect(markup).toContain("Your rating");
+    expect(markup).toContain("Rating saved · Enter to move on");
+    expect(markup).toMatch(/aria-pressed="true"[^>]*data-rating="3"/);
+    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(3);
+  });
+
+  it("shows when the word comes back for a saved rating", () => {
+    vi.useFakeTimers({ now: new Date("2026-11-06T09:00:00Z") });
+    try {
+      const markup = renderAnsweredCard({ rating: 3, nextReviewAt: "2026-11-10T09:00:00Z" });
+
+      expect(markup).toMatch(/data-visible="true"[^>]*>.*Повторим через 4 дня/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps an empty next review line before the rating is saved", () => {
+    const markup = renderAnsweredCard({ nextReviewAt: "2026-11-10T09:00:00Z" });
+
+    expect(markup).toContain('data-visible="false"');
+    expect(markup).not.toContain("Повторим");
   });
 
   it("renders the final summary with score, errors, duration, and restart link", () => {

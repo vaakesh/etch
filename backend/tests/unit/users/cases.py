@@ -16,6 +16,7 @@ SETTINGS_DATA = {
     "locale": "ru-RU",
     "theme": "system",
     "show_previews_for_long": True,
+    "timezone": "UTC",
     "created_at": "2020-01-01T12:00:00Z",
     "updated_at": "2020-01-01T13:00:00Z",
 }

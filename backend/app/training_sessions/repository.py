@@ -13,9 +13,11 @@ from app.decks.models import Deck, DeckCard
 from app.training_sessions.models import (
     TrainingSession,
     TrainingSessionItem,
+    TrainingSessionKind,
     TrainingSessionStatus,
 )
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -43,15 +45,15 @@ class TrainingSessionItemRepository:
         self.session = session
 
     # helpers
-    def _ranked_cards_subquery(
+    def _snapshot_columns(
             self,
             training_session_id: PositiveInt,
-            deck_id: PositiveInt,
+            user_id: PositiveInt,
             prompt_side: Literal["front", "back"],
             answer_side: Literal["front", "back"],
             sequence_number,
-            where_extra: list,
-    ):
+    ) -> list:
+        # Колонки снимка карточки в порядке _insert_snapshot_rows
         side_columns = {
             "front": (Card.front_text, Card.front_lang),
             "back": (Card.back_text, Card.back_lang),
@@ -60,19 +62,40 @@ class TrainingSessionItemRepository:
         prompt_text_column, prompt_lang_column = side_columns[prompt_side]
         answer_text_column, answer_lang_column = side_columns[answer_side]
 
+        return [
+            literal(training_session_id).label("training_session_id"),
+            literal(user_id, type_=BigInteger).label("user_id"),
+            sequence_number.label("sequence_number"),
+            Card.id.label("original_card_id"),
+            Card.learning_key.label("learning_key_snapshot"),
+            prompt_text_column.label("prompt_text"),
+            answer_text_column.label("answer_text"),
+            prompt_lang_column.label("prompt_lang"),
+            answer_lang_column.label("answer_lang"),
+            false().label("is_answered"),
+            cast(null(), Boolean).label("is_correct"),
+            cast(null(), DateTime(timezone=True)).label("answered_at"),
+        ]
+
+    def _ranked_cards_subquery(
+            self,
+            training_session_id: PositiveInt,
+            user_id: PositiveInt,
+            deck_id: PositiveInt,
+            prompt_side: Literal["front", "back"],
+            answer_side: Literal["front", "back"],
+            sequence_number,
+            where_extra: list,
+    ):
         return (
             select(
-                literal(training_session_id).label("training_session_id"),
-                sequence_number.label("sequence_number"),
-                Card.id.label("original_card_id"),
-                Card.learning_key.label("learning_key_snapshot"),
-                prompt_text_column.label("prompt_text"),
-                answer_text_column.label("answer_text"),
-                prompt_lang_column.label("prompt_lang"),
-                answer_lang_column.label("answer_lang"),
-                false().label("is_answered"),
-                cast(null(), Boolean).label("is_correct"),
-                cast(null(), DateTime(timezone=True)).label("answered_at"),
+                *self._snapshot_columns(
+                    training_session_id=training_session_id,
+                    user_id=user_id,
+                    prompt_side=prompt_side,
+                    answer_side=answer_side,
+                    sequence_number=sequence_number,
+                )
             )
             .select_from(DeckCard)
             .join(Card, Card.id == DeckCard.card_id)
@@ -96,6 +119,7 @@ class TrainingSessionItemRepository:
             .from_select(
                 [
                     "training_session_id",
+                    "user_id",
                     "sequence_number",
                     "original_card_id",
                     "learning_key_snapshot",
@@ -415,6 +439,7 @@ class TrainingSessionItemRepository:
     async def create_snapshot(
             self,
             training_session_id: PositiveInt,
+            user_id: PositiveInt,
             deck_id: PositiveInt,
             prompt_side: Literal["front", "back"],
             answer_side: Literal["front", "back"],
@@ -436,6 +461,7 @@ class TrainingSessionItemRepository:
 
         ranked_cards = self._ranked_cards_subquery(
             training_session_id=training_session_id,
+            user_id=user_id,
             deck_id=deck_id,
             prompt_side=prompt_side,
             answer_side=answer_side,
@@ -448,9 +474,42 @@ class TrainingSessionItemRepository:
             limit=words_per_session,
         )
 
+    @traced("training_sessions.item_repository.create_review_snapshot")
+    async def create_review_snapshot(
+            self,
+            training_session_id: PositiveInt,
+            user_id: PositiveInt,
+            card_ids: list[int],
+            prompt_side: Literal["front", "back"],
+            answer_side: Literal["front", "back"],
+    ) -> list[TrainingSessionItem]:
+        """
+        снимок карточек сессии повторения: card_ids уже выбраны по due,
+        порядок показа случайный
+        """
+        ranked_cards = (
+            select(
+                *self._snapshot_columns(
+                    training_session_id=training_session_id,
+                    user_id=user_id,
+                    prompt_side=prompt_side,
+                    answer_side=answer_side,
+                    sequence_number=func.row_number().over(order_by=func.random()),
+                )
+            )
+            .where(Card.id.in_(card_ids))
+            .subquery("ranked_cards")
+        )
+
+        return await self._insert_snapshot_rows(
+            ranked_cards=ranked_cards,
+            limit=len(card_ids),
+        )
+
     async def fill_snapshot_gap(
             self,
             training_session_id: PositiveInt,
+            user_id: PositiveInt,
             deck_id: PositiveInt,
             prompt_side: Literal["front", "back"],
             answer_side: Literal["front", "back"],
@@ -471,6 +530,7 @@ class TrainingSessionItemRepository:
 
         ranked_cards = self._ranked_cards_subquery(
             training_session_id=training_session_id,
+            user_id=user_id,
             deck_id=deck_id,
             prompt_side=prompt_side,
             answer_side=answer_side,
@@ -579,6 +639,21 @@ class TrainingSessionRepository:
             stmt = stmt.with_for_update(of=TrainingSession)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    @traced("training_sessions.repository.get_active_review_session")
+    async def get_active_review_session(
+            self,
+            user_id: int,
+            for_update: bool = False,
+        ) -> TrainingSession | None:
+        stmt = select(TrainingSession).where(
+            TrainingSession.user_id == user_id,
+            TrainingSession.kind == TrainingSessionKind.REVIEW,
+            TrainingSession.status == TrainingSessionStatus.IN_PROGRESS,
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
     @traced("training_sessions.repository.get_sessions_by_user_id")
     async def get_sessions_by_user_id(

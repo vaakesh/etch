@@ -8,6 +8,7 @@ from httpx import AsyncClient
 
 from app.decks.errors import UserDeckNotFoundError
 from app.training_sessions.errors import (
+    CardNotAnsweredError,
     TrainingSessionAlreadyFinishedError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFinishedYet,
@@ -15,6 +16,7 @@ from app.training_sessions.errors import (
 )
 from app.training_sessions.models import TrainingSessionStatus
 from app.training_sessions.schemas import (
+    RateAnswerResponse,
     SkipAnswerRequest,
     SubmittedAnswerRequest,
 )
@@ -44,6 +46,7 @@ class TestTrainingSessionUuidValidation:
         ("GET", "/training-sessions/{uuid}/history", None, "session_uuid"),
         ("POST", "/training-sessions/{uuid}/activity", {"event": "resume"}, "session_uuid"),
         ("PUT", "/training-sessions/{uuid}/items/1/submit", {"action": "skip"}, "training_session_uuid"),
+        ("PUT", "/training-sessions/{uuid}/items/1/rating", {"rating": 3}, "training_session_uuid"),
         ("GET", "/bff/practice/{uuid}/resume", None, "training_session_uuid"),
         ("POST", "/bff/practice/{uuid}/start", {"prompt_side": "front", "words_per_session": 1}, "deck_uuid"),
     ])
@@ -72,7 +75,7 @@ class TestGetTrainingSession:
 
         assert response.status_code == 200
         assert response.json() == {
-            "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "uuid": "0198ad01-b200-7000-8000-000000000400", "kind": "deck",
             "deck_uuid": None, "deck_title": None, "status": "in_progress",
             "requested_count": 10, "answered_count": 3, "correct_count": 2, "wrong_count": 1,
             "prompt_side": "front", "answer_side": "back",
@@ -92,6 +95,7 @@ class TestGetTrainingSession:
 
         expected = {
             "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "deck_title": "Test deck",
             "status": "in_progress",
@@ -131,6 +135,7 @@ class TestGetTrainingSession:
 
         expected = {
             "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
             "deck_uuid": "0198ad01-b200-7000-8000-000000000200",
             "deck_title": "Test deck",
             "status": "completed",
@@ -496,6 +501,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         response = await client.put(
@@ -511,6 +517,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -539,6 +546,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         response = await client.put(
@@ -554,6 +562,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -585,6 +594,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": True,
             "time_to_complete": 60,
+            "next_review_at": "2026-11-07T09:00:00Z",
         }
 
         response = await client.put(
@@ -600,6 +610,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": True,
             "time_to_complete": 60,
+            "next_review_at": "2026-11-07T09:00:00Z",
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -631,6 +642,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         response = await client.put(
@@ -646,6 +658,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -688,6 +701,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         response = await client.put(
@@ -703,6 +717,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
 
         assert response.status_code == status.HTTP_200_OK
@@ -1010,3 +1025,152 @@ class TestSubmitAnswer:
         assert response.json() == expected
 
         training_session_service.submit_answer.assert_not_awaited()
+
+
+class TestRateAnswer:
+    @pytest.mark.parametrize("rating", [1, 2, 3, 4])
+    async def test_passes_rating_to_service(
+        self,
+        client: AsyncClient,
+        current_user,
+        training_session,
+        training_session_service: AsyncMock,
+        rating: int,
+    ):
+        training_session_service.rate_answer.return_value = RateAnswerResponse(
+            rating=rating,
+            next_review_at=datetime(2026, 8, 23, 16, 0, tzinfo=UTC),
+        )
+
+        response = await client.put(
+            f"/training-sessions/{training_session.uuid}/items/3/rating",
+            json={"rating": rating},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "rating": rating,
+            "next_review_at": "2026-08-23T16:00:00Z",
+        }
+        training_session_service.rate_answer.assert_awaited_once_with(
+            user_id=current_user.id,
+            training_session_uuid=training_session.uuid,
+            sequence_number=3,
+            rating=rating,
+        )
+
+    async def test_returns_null_next_review_for_item_without_memory(
+        self,
+        client: AsyncClient,
+        training_session,
+        training_session_service: AsyncMock,
+    ):
+        training_session_service.rate_answer.return_value = RateAnswerResponse(
+            rating=2,
+            next_review_at=None,
+        )
+
+        response = await client.put(
+            f"/training-sessions/{training_session.uuid}/items/3/rating",
+            json={"rating": 2},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"rating": 2, "next_review_at": None}
+
+    @pytest.mark.parametrize(
+        ("payload", "expected_detail"),
+        [
+            pytest.param(
+                {"rating": 0},
+                {
+                    "type": "greater_than_equal",
+                    "loc": ["body", "rating"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": 0,
+                    "ctx": {"ge": 1},
+                },
+                id="rating_below_range",
+            ),
+            pytest.param(
+                {"rating": 5},
+                {
+                    "type": "less_than_equal",
+                    "loc": ["body", "rating"],
+                    "msg": "Input should be less than or equal to 4",
+                    "input": 5,
+                    "ctx": {"le": 4},
+                },
+                id="rating_above_range",
+            ),
+            pytest.param(
+                {"rating": "3"},
+                {
+                    "type": "int_type",
+                    "loc": ["body", "rating"],
+                    "msg": "Input should be a valid integer",
+                    "input": "3",
+                },
+                id="rating_string",
+            ),
+            pytest.param(
+                {"rating": True},
+                {
+                    "type": "int_type",
+                    "loc": ["body", "rating"],
+                    "msg": "Input should be a valid integer",
+                    "input": True,
+                },
+                id="rating_bool",
+            ),
+            pytest.param(
+                {},
+                {
+                    "type": "missing",
+                    "loc": ["body", "rating"],
+                    "msg": "Field required",
+                    "input": {},
+                },
+                id="rating_missing",
+            ),
+        ],
+    )
+    async def test_rejects_invalid_rating_before_calling_service(
+        self,
+        client: AsyncClient,
+        training_session,
+        training_session_service: AsyncMock,
+        payload: dict,
+        expected_detail: dict,
+    ):
+        response = await client.put(
+            f"/training-sessions/{training_session.uuid}/items/3/rating",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert response.json() == {
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [expected_detail],
+        }
+        training_session_service.rate_answer.assert_not_awaited()
+
+    async def test_maps_not_answered_error_to_conflict(
+        self,
+        client: AsyncClient,
+        training_session,
+        training_session_service: AsyncMock,
+    ):
+        training_session_service.rate_answer.side_effect = CardNotAnsweredError()
+
+        response = await client.put(
+            f"/training-sessions/{training_session.uuid}/items/3/rating",
+            json={"rating": 3},
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.json() == {
+            "code": "CARD_NOT_ANSWERED",
+            "message": "Card must be answered before rating",
+        }

@@ -47,6 +47,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -106,6 +107,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -268,6 +270,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
         async with async_session_maker() as session:
@@ -303,6 +306,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
         async with async_session_maker() as session:
@@ -335,6 +339,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
         async with async_session_maker() as session:
@@ -536,6 +541,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -579,6 +585,7 @@ class TestUserUpdate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
         async with async_session_maker() as session:

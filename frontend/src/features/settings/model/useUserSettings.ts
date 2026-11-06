@@ -10,6 +10,7 @@ import {
 import { DEFAULT_THEME, type AppTheme } from "../../../theme";
 import { updateUserSettingsRequest } from "../api/settings-api";
 import type { UserSettings } from "./settings-types";
+import { DEFAULT_TIMEZONE } from "./timezones";
 
 export type SettingsMutationStatus = "idle" | "saving" | "success" | "error";
 
@@ -20,6 +21,7 @@ export interface UseUserSettingsResult {
   setLocale: (locale: AppLocale) => void;
   setShowPreviewsForLong: (value: boolean) => void;
   setTheme: (theme: AppTheme) => void;
+  setTimezone: (timezone: string) => void;
   reset: () => void;
   save: () => Promise<void>;
   status: SettingsMutationStatus;
@@ -29,6 +31,7 @@ const FALLBACK_SETTINGS: UserSettings = {
   locale: DEFAULT_LOCALE,
   showPreviewsForLong: true,
   theme: DEFAULT_THEME,
+  timezone: DEFAULT_TIMEZONE,
 };
 
 const ERROR_MESSAGES = defineMessages(
@@ -112,6 +115,11 @@ export function useUserSettings(): UseUserSettingsResult {
 
   const setTheme = useCallback((theme: AppTheme): void => updateDraft({ theme }), [updateDraft]);
 
+  const setTimezone = useCallback(
+    (timezone: string): void => updateDraft({ timezone }),
+    [updateDraft],
+  );
+
   const setShowPreviewsForLong = useCallback(
     (showPreviewsForLong: boolean): void => updateDraft({ showPreviewsForLong }),
     [updateDraft],
@@ -166,7 +174,8 @@ export function useUserSettings(): UseUserSettingsResult {
     () =>
       draft.locale !== savedSettings.locale ||
       draft.theme !== savedSettings.theme ||
-      draft.showPreviewsForLong !== savedSettings.showPreviewsForLong,
+      draft.showPreviewsForLong !== savedSettings.showPreviewsForLong ||
+      draft.timezone !== savedSettings.timezone,
     [draft, savedSettings],
   );
 
@@ -179,6 +188,7 @@ export function useUserSettings(): UseUserSettingsResult {
     setLocale,
     setShowPreviewsForLong,
     setTheme,
+    setTimezone,
     status,
   };
 }

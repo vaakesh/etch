@@ -11,7 +11,10 @@ from sqlalchemy import (
     DateTime,
     Enum as SQLAlchemyEnum,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
@@ -45,6 +48,24 @@ class TrainingSessionStatus(StrEnum):
 session_status_enum = SQLAlchemyEnum(
     TrainingSessionStatus,
     name="training_session_status",
+    native_enum=False,
+    create_constraint=True,
+    validate_strings=True,
+    values_callable=lambda enum_class: [
+        member.value for member in enum_class
+    ],
+)
+
+
+class TrainingSessionKind(StrEnum):
+    # Тренировка по одной колоде
+    DECK = "deck"
+    # Повторение слов FSRS со сроком due из всех доступных колод
+    REVIEW = "review"
+
+session_kind_enum = SQLAlchemyEnum(
+    TrainingSessionKind,
+    name="training_session_kind",
     native_enum=False,
     create_constraint=True,
     validate_strings=True,
@@ -89,6 +110,12 @@ class TrainingSession(Base):
         default=TrainingSessionStatus.IN_PROGRESS,
         server_default=TrainingSessionStatus.IN_PROGRESS.value,
         index=True,
+    )
+    kind: Mapped[TrainingSessionKind] = mapped_column(
+        session_kind_enum,
+        nullable=False,
+        default=TrainingSessionKind.DECK,
+        server_default=TrainingSessionKind.DECK.value,
     )
 
     requested_count: Mapped[int] = mapped_column(
@@ -160,6 +187,8 @@ class TrainingSession(Base):
     items: Mapped[list["TrainingSessionItem"]] = relationship(
         "TrainingSessionItem",
         back_populates="training_session",
+        # Второй путь к сессии — составной ключ (training_session_id, user_id)
+        foreign_keys="TrainingSessionItem.training_session_id",
         cascade="all, delete-orphan",
         order_by="TrainingSessionItem.sequence_number",
         passive_deletes=True,
@@ -168,6 +197,19 @@ class TrainingSession(Base):
 
     __table_args__ = (
         CheckConstraint("user_id > 0", name="ck_training_session_user_id_positive"),
+        # Цель составного внешнего ключа training_session_items (id, user_id)
+        UniqueConstraint("id", "user_id", name="uq_training_session_id_user"),
+        CheckConstraint(
+            "kind = 'deck' OR (deck_id IS NULL AND deck_title_snapshot IS NULL)",
+            name="ck_training_session_review_without_deck",
+        ),
+        # Одна активная сессия повторения на пользователя
+        Index(
+            "uq_training_sessions_active_review",
+            "user_id",
+            unique=True,
+            postgresql_where=text("kind = 'review' AND status = 'in_progress'"),
+        ),
         CheckConstraint("deck_id > 0", name="ck_training_session_deck_id_positive"),
         CheckConstraint(
             "deck_id IS NULL OR deck_title_snapshot IS NOT NULL",
@@ -285,6 +327,10 @@ class TrainingSessionItem(Base):
         nullable=False,
         index=True,
     )
+    # Копия training_sessions.user_id: история слова пользователя для FSRS
+    # читается по индексу без join, публичные слова общие для многих пользователей.
+    # Совпадение с сессией гарантирует составной внешний ключ ниже
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     original_card_id: Mapped[int | None] = mapped_column(
@@ -318,12 +364,26 @@ class TrainingSessionItem(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # Самооценка FSRS (1 = again ... 4 = easy). NULL — оценка выводится из is_correct
+    self_rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
-    training_session: Mapped["TrainingSession"] = relationship("TrainingSession", back_populates="items", lazy="raise")
+    training_session: Mapped["TrainingSession"] = relationship(
+        "TrainingSession",
+        back_populates="items",
+        foreign_keys=[training_session_id],
+        lazy="raise",
+    )
 
     __table_args__ = (
         CheckConstraint("id > 0", name="ck_training_session_item_id_positive"),
         CheckConstraint("training_session_id > 0", name="ck_training_session_item_session_id_positive"),
+        CheckConstraint("user_id > 0", name="ck_training_session_item_user_id_positive"),
+        ForeignKeyConstraint(
+            ["training_session_id", "user_id"],
+            ["training_sessions.id", "training_sessions.user_id"],
+            name="fk_training_session_items_session_user",
+            ondelete="CASCADE",
+        ),
         CheckConstraint("original_card_id > 0", name="ck_training_session_item_card_id_positive"),
         CheckConstraint(
             "substring(uuid::text from 15 for 1) = '7' "
@@ -385,5 +445,22 @@ class TrainingSessionItem(Base):
         CheckConstraint(
             "is_answered = (is_correct IS NOT NULL)",
             name="ck_training_session_item_answer_correct_state"
-        )
+        ),
+        CheckConstraint(
+            "self_rating BETWEEN 1 AND 4",
+            name="ck_training_session_item_self_rating_range",
+        ),
+        CheckConstraint(
+            "self_rating IS NULL OR is_answered",
+            name="ck_training_session_item_self_rating_answered",
+        ),
+        # История слова пользователя для FSRS: rate_answer и пересборка памяти
+        Index(
+            "ix_training_session_items_user_learning_key_answered",
+            "user_id",
+            "learning_key_snapshot",
+            "answered_at",
+            "id",
+            postgresql_where=text("is_answered"),
+        ),
     )

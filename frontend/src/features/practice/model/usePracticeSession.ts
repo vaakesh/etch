@@ -8,6 +8,7 @@ import {
   type SessionCacheScope,
 } from "../../../auth/model/session-cache";
 import {
+  ratePracticeAnswer,
   resumePracticeSession,
   startPracticeSession,
   submitPracticeAnswer,
@@ -16,6 +17,7 @@ import { invalidatePracticeHistory } from "./practice-history-cache";
 import { applyPracticeAnswerResult } from "./practice-session-state";
 import type {
   CardSide,
+  PracticeSelfRating,
   PracticeSession,
   SubmitPracticeAnswerInput,
   SubmitPracticeAnswerResult,
@@ -26,7 +28,18 @@ export interface PracticeCardFeedback {
   answerText: string;
   isCorrect: boolean;
   submittedAnswer: string | null;
+  // Saved self-rating; null while the answer keeps the automatic rating of the backend.
+  rating: PracticeSelfRating | null;
+  // When the backend schedules the word again: by the automatic rating of the answer, then by
+  // the saved self-rating. Null when the backend has no schedule for the word.
+  nextReviewAt: string | null;
 }
+
+/** "stale" means the session or auth scope changed while the rating was in flight. */
+export type PracticeRatingOutcome =
+  | { status: "saved"; nextReviewAt: string | null }
+  | { status: "failed"; error: unknown }
+  | { status: "stale" };
 
 interface IdlePracticeState {
   status: "idle";
@@ -68,6 +81,7 @@ export interface UsePracticeSessionResult {
     sequenceNumber: number,
     input: SubmitPracticeAnswerInput,
   ) => Promise<SubmitPracticeAnswerResult | null>;
+  rate: (sequenceNumber: number, rating: PracticeSelfRating) => Promise<PracticeRatingOutcome>;
 }
 
 const IDLE_STATE: IdlePracticeState = { status: "idle" };
@@ -377,6 +391,9 @@ export function usePracticeSession(
           answerText: result.answerText,
           isCorrect: result.isCorrect,
           submittedAnswer: input.action === "answer" ? input.answer.trim() : null,
+          rating: null,
+          // Schedule by the automatic rating; a self-rating replaces it.
+          nextReviewAt: result.nextReviewAt,
         };
 
         sessionRef.current = nextSession;
@@ -436,6 +453,59 @@ export function usePracticeSession(
     [cacheScope],
   );
 
+  // The rating is not aborted when the card view goes away: the user has already moved on and
+  // still expects the backend to keep the rating.
+  const rate = useCallback(
+    async (sequenceNumber: number, rating: PracticeSelfRating): Promise<PracticeRatingOutcome> => {
+      const activeSession = sessionRef.current;
+      if (activeSession === null || !isSessionCacheScopeActive(cacheScope)) {
+        return { status: "stale" };
+      }
+
+      let nextReviewAt: string | null;
+      try {
+        ({ nextReviewAt } = await ratePracticeAnswer(activeSession.uuid, sequenceNumber, rating));
+      } catch (error: unknown) {
+        if (
+          sessionRef.current?.uuid !== activeSession.uuid ||
+          !isSessionCacheScopeActive(cacheScope)
+        ) {
+          return { status: "stale" };
+        }
+        return { status: "failed", error };
+      }
+
+      if (
+        sessionRef.current?.uuid !== activeSession.uuid ||
+        !isSessionCacheScopeActive(cacheScope)
+      ) {
+        return { status: "stale" };
+      }
+
+      setState((currentState) => {
+        const feedback =
+          currentState.status === "ready" && currentState.session.uuid === activeSession.uuid
+            ? currentState.feedbackBySequence[sequenceNumber]
+            : undefined;
+        if (currentState.status !== "ready" || feedback === undefined) {
+          return currentState;
+        }
+
+        const nextState: ReadyPracticeState = {
+          ...currentState,
+          feedbackBySequence: {
+            ...currentState.feedbackBySequence,
+            [sequenceNumber]: { ...feedback, rating, nextReviewAt },
+          },
+        };
+        setCachedPracticeSession(cacheScope, activeSession.uuid, nextState);
+        return nextState;
+      });
+      return { status: "saved", nextReviewAt };
+    },
+    [cacheScope],
+  );
+
   const retryResume = useCallback(() => {
     if (sessionUuid !== null) {
       deleteCachedPracticeSession(cacheScope, sessionUuid);
@@ -451,5 +521,5 @@ export function usePracticeSession(
         ? IDLE_STATE
         : { status: "loading", operation: "resume" };
 
-  return { state: visibleState, retryResume, start, submit };
+  return { state: visibleState, retryResume, start, submit, rate };
 }

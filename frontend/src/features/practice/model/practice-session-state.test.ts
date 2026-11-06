@@ -23,6 +23,7 @@ const RESULT: SubmitPracticeAnswerResult = {
   totalCount: 4,
   isFinished: false,
   timeToCompleteSeconds: null,
+  nextReviewAt: null,
 };
 
 describe("applyPracticeAnswerResult", () => {

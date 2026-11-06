@@ -1,6 +1,8 @@
 export type CardSide = "front" | "back";
 export type PracticeHistoryFilter = "all" | "completed" | "in_progress" | "abandoned";
 export type TrainingSessionStatus = Exclude<PracticeHistoryFilter, "all">;
+/** deck — тренировка по колоде, review — повторение слов из разных колод, без колоды. */
+export type TrainingSessionKind = "deck" | "review";
 
 export interface PracticeCard {
   sequenceNumber: number;
@@ -24,6 +26,7 @@ export interface PracticeSession {
 
 export interface PracticeHistorySession {
   uuid: string;
+  kind: TrainingSessionKind;
   deckUuid: string | null;
   deckTitle: string | null;
   status: TrainingSessionStatus;
@@ -87,6 +90,16 @@ export type SubmitPracticeAnswerInput =
       action: "skip";
     };
 
+// Self-rating of an answer, the FSRS scale: 1 = again, 2 = hard, 3 = good, 4 = easy.
+export type PracticeSelfRating = 1 | 2 | 3 | 4;
+
+export const PRACTICE_SELF_RATINGS: readonly PracticeSelfRating[] = [1, 2, 3, 4];
+
+export interface RatePracticeAnswerResult {
+  rating: PracticeSelfRating;
+  nextReviewAt: string | null;
+}
+
 export interface SubmitPracticeAnswerResult {
   isCorrect: boolean;
   answerText: string;
@@ -95,4 +108,6 @@ export interface SubmitPracticeAnswerResult {
   totalCount: number;
   isFinished: boolean;
   timeToCompleteSeconds: number | null;
+  /** When the word comes back by the automatic rating of this answer; null without a schedule. */
+  nextReviewAt: string | null;
 }

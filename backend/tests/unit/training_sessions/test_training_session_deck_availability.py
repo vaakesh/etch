@@ -118,6 +118,7 @@ class TestResumePracticeSession:
 
         assert result.model_dump() == {
             "training_session_uuid": context.session.uuid,
+            "kind": "deck",
             "deck_uuid": COPY_UUID,
             "prompt_side": "front",
             "answer_side": "back",
@@ -183,6 +184,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
         assert context.item.answered_at == NOW
         context.uow.commit.assert_awaited_once()
@@ -243,6 +245,7 @@ class TestSubmitAnswer:
             "total_count": 10,
             "is_finished": False,
             "time_to_complete": None,
+            "next_review_at": None,
         }
         context.uow.commit.assert_not_awaited()
 

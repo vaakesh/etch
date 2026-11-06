@@ -35,6 +35,7 @@ import type {
 } from "../../features/home/model/home-types";
 import { useHomeDashboard } from "../../features/home/model/useHomeDashboard";
 import styles from "./HomePage.module.css";
+import { ReviewTodayPanel } from "./ReviewTodayPanel";
 
 const MESSAGES = defineMessages(
   {
@@ -652,6 +653,7 @@ function DashboardContent({ dashboard }: { dashboard: HomeDashboard }) {
   return (
     <div className={styles.contentGrid}>
       <ProgressPanel progress={dashboard.progress} weeklyActivity={dashboard.weeklyActivity} />
+      <ReviewTodayPanel />
       <div className={styles.mainColumn}>
         <DecksSection decks={dashboard.decks} />
       </div>

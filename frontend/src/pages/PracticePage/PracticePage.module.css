@@ -721,6 +721,31 @@
   opacity: 1;
 }
 
+/* Повторение собрано из разных колод: вместо ссылки на колоду — статичная метка. */
+.historyDeckReview {
+  gap: 8px;
+  min-height: calc(0.9375rem * 2.5 + 10px);
+  margin-bottom: 0;
+  cursor: default;
+}
+
+.historyDeckReview svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--history-action-deep);
+}
+
+.historyDeckReview strong {
+  display: block;
+  min-height: 0;
+  text-decoration: none;
+}
+
+.historyDeckReview:active {
+  opacity: 1;
+}
+
 .historyRemaining {
   display: inline-flex;
   width: fit-content;
@@ -1780,7 +1805,8 @@
   border-color: var(--practice-primary);
 }
 
-.answerControls textarea:disabled {
+.answerControls textarea:disabled,
+.answerControls textarea:read-only {
   opacity: 0.58;
 }
 
@@ -1948,6 +1974,325 @@
     background-color var(--practice-motion-fast),
     border-color var(--practice-motion-fast),
     box-shadow var(--practice-motion-fast);
+}
+
+/* Self-rating after a typed answer: four keyed tiles under the feedback. */
+.answerRegion[data-rating="true"] {
+  height: auto;
+  min-height: 172px;
+  align-content: center;
+}
+
+.ratingForm {
+  display: grid;
+  width: min(100%, 760px);
+  gap: 8px;
+  margin: 12px auto 0;
+  animation: ratingEnter 220ms ease-out both;
+}
+
+.ratingHeader {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+  flex-wrap: wrap;
+}
+
+.ratingHeader .answerLabel {
+  margin: 0;
+}
+
+.ratingShortcut {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--practice-faint);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Shows that the typed digit goes to the rating while the hidden answer field has the focus. */
+.ratingCaret {
+  width: 2px;
+  height: 0.95em;
+  background: var(--practice-primary);
+  border-radius: 1px;
+  opacity: 0;
+}
+
+.ratingForm:has(textarea:focus) .ratingCaret {
+  opacity: 1;
+  animation: previewCaret 1.05s steps(1) infinite;
+}
+
+.ratingOptions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ratingOption {
+  --rating-tone: var(--practice-primary);
+  --rating-soft: var(--practice-primary-soft);
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 58px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "key label"
+    "key hint";
+  align-content: center;
+  align-items: center;
+  gap: 1px 10px;
+  padding: 9px 12px 9px 10px;
+  color: var(--practice-ink);
+  text-align: left;
+  background: var(--practice-surface);
+  border: 1px solid var(--practice-line);
+  border-radius: 12px;
+  transition:
+    background-color var(--practice-motion-fast),
+    border-color var(--practice-motion-fast),
+    box-shadow var(--practice-motion-fast),
+    opacity var(--practice-motion-base),
+    transform var(--practice-motion-fast);
+}
+
+.ratingOption[data-rating="1"] {
+  --rating-tone: var(--practice-danger);
+  --rating-soft: var(--practice-danger-soft);
+}
+
+.ratingOption[data-rating="2"] {
+  --rating-tone: var(--practice-warning);
+  --rating-soft: var(--practice-warning-soft);
+}
+
+.ratingOption[data-rating="3"] {
+  --rating-tone: var(--practice-success);
+  --rating-soft: var(--practice-success-soft);
+}
+
+.ratingKey {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  grid-area: key;
+  place-items: center;
+  color: var(--rating-tone);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1;
+  background: var(--practice-surface-raised);
+  border: 1px solid var(--practice-line-strong);
+  border-radius: 8px;
+  box-shadow: inset 0 -2px 0 var(--practice-line);
+  transition:
+    color var(--practice-motion-fast),
+    background-color var(--practice-motion-fast),
+    border-color var(--practice-motion-fast),
+    box-shadow var(--practice-motion-fast);
+}
+
+.ratingLabel {
+  grid-area: label;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ratingOptionHint {
+  grid-area: hint;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--practice-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ratingOption[aria-pressed="true"] {
+  background: var(--rating-soft);
+  border-color: var(--rating-tone);
+  box-shadow: 0 0 0 1px var(--rating-tone);
+}
+
+.ratingOption[aria-pressed="true"] .ratingKey {
+  color: var(--practice-primary-ink);
+  background: var(--rating-tone);
+  border-color: var(--rating-tone);
+  box-shadow: none;
+}
+
+.ratingOptions[data-state="confirming"] .ratingOption[aria-pressed="true"] {
+  animation: ratingPick 360ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+
+/* The ring spreads out from the chosen tile once. */
+.ratingOptions[data-state="confirming"] .ratingOption[aria-pressed="true"]::after {
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--rating-tone);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  animation: ratingRing 620ms ease-out both;
+}
+
+.ratingOptions:not([data-state="choosing"]) .ratingOption[aria-pressed="false"] {
+  opacity: 0.45;
+}
+
+/* Fills while the chosen rating stays on screen: the next card opens when it is full. */
+.ratingTimer {
+  position: absolute;
+  right: 12px;
+  bottom: 4px;
+  left: 12px;
+  height: 2px;
+  background: var(--rating-tone);
+  border-radius: 1px;
+  transform-origin: left center;
+  animation-name: ratingTimer;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+/* Next review of the word: rises in together with the rating ring once the save is done. */
+.ratingNextReview {
+  display: flex;
+  min-height: 1.3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--practice-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ratingNextReview svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--practice-primary);
+}
+
+/* After "I don't know" there is no rating: the line sits right under the feedback. */
+.skipNextReview {
+  width: min(100%, 760px);
+  margin: 10px auto 0;
+}
+
+.ratingNextReview[data-visible="true"] {
+  animation: ratingNextReviewEnter 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+.ratingError {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--practice-danger-strong);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  background: var(--practice-danger-soft);
+  border: 1px solid var(--practice-danger-line);
+  border-radius: var(--practice-radius-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ratingOptions[data-state="choosing"] .ratingOption:hover {
+    background: var(--practice-surface-hover);
+    border-color: var(--rating-tone);
+    transform: translateY(-1px);
+  }
+}
+
+.ratingOptions[data-state="choosing"] .ratingOption:active {
+  transform: translateY(0) scale(0.98);
+}
+
+@keyframes ratingEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes ratingPick {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.035);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ratingRing {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.12, 1.35);
+  }
+}
+
+@keyframes ratingNextReviewEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes ratingTimer {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 700px) {
+  .ratingForm {
+    margin-top: 10px;
+  }
+
+  .ratingOptions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .ratingOption {
+    min-height: 52px;
+    padding-block: 7px;
+  }
+
+  .ratingOptionHint {
+    white-space: normal;
+  }
 }
 
 .pagination {
@@ -2210,7 +2555,7 @@
     border-color: rgb(118 98 207 / 16%);
   }
 
-  .historyDeck:not(.historyDeckDeleted):hover {
+  .historyDeck:not(.historyDeckDeleted, .historyDeckReview):hover {
     color: var(--history-action-deep);
   }
 
@@ -2706,7 +3051,8 @@
   .historyRepeatButtonAccent,
   .submitButton,
   .continueButton,
-  .pageNumberCurrent {
+  .pageNumberCurrent,
+  .ratingOption[aria-pressed="true"] {
     border-color: ButtonText;
   }
 
@@ -2814,6 +3160,27 @@
   overflow: hidden;
   background: var(--app-background);
   overscroll-behavior: none;
+}
+
+/*
+ * Карточка занимает всю высоту экрана, поэтому при обычной ширине 1078px на широких мониторах
+ * она становится почти квадратной. Ширина колонки растёт вместе с высотой экрана (~1.6:1),
+ * чтобы карточка оставалась горизонтальным прямоугольником. На узких и портретных экранах
+ * ограничение — доступная ширина.
+ */
+.sessionMain[data-session-fullscreen="true"] .sessionToolbar,
+.sessionMain[data-session-fullscreen="true"] .cardStage {
+  width: min(100%, max(1078px, var(--session-viewport-height, 100dvh) * 1.6), 1720px);
+}
+
+.sessionMain[data-session-fullscreen="true"] .promptArea h1 {
+  max-width: min(100%, 1240px);
+}
+
+.sessionMain[data-session-fullscreen="true"] .answerForm,
+.sessionMain[data-session-fullscreen="true"] .feedback,
+.sessionMain[data-session-fullscreen="true"] .ratingForm {
+  width: min(100%, 920px);
 }
 
 .sessionMain[data-session-fullscreen="true"] .progressPanel {
@@ -2963,6 +3330,10 @@
 
 .sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .answerRegion {
   padding: 8px 12px;
+}
+
+.sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .ratingOptionHint {
+  display: none;
 }
 
 .sessionMain[data-session-fullscreen="true"][data-compact-viewport="true"] .submitError {

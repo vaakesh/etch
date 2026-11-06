@@ -95,6 +95,7 @@ class TestUserCreate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -318,6 +319,7 @@ class TestUserCreate:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
 
@@ -347,6 +349,7 @@ class TestUserClientIsolation:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }
         assert bob_response.status_code == 200
@@ -360,5 +363,6 @@ class TestUserClientIsolation:
                 "locale": "ru-RU",
                 "theme": "light",
                 "show_previews_for_long": True,
+                "timezone": "UTC",
             },
         }

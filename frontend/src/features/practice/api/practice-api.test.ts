@@ -3,6 +3,7 @@ import { apiFetch } from "../../../api";
 import {
   getPracticeSessionItemsHistory,
   getPracticeSessionHistory,
+  ratePracticeAnswer,
   recordPracticeActivity,
   resumePracticeSession,
   startPracticeSession,
@@ -55,10 +56,12 @@ const ANSWER_RESPONSE = {
   total_count: 2,
   is_finished: false,
   time_to_complete: null,
+  next_review_at: "2026-11-06T09:10:00Z",
 };
 
 const HISTORY_SESSION_RESPONSE = {
   uuid: SESSION_UUID,
+  kind: "deck",
   deck_uuid: DECK_UUID,
   deck_title: "French basics",
   status: "completed",
@@ -415,6 +418,7 @@ describe("submitPracticeAnswer", () => {
       totalCount: 2,
       isFinished: false,
       timeToCompleteSeconds: null,
+      nextReviewAt: "2026-11-06T09:10:00Z",
     });
 
     expect(apiFetch).toHaveBeenCalledOnce();
@@ -441,6 +445,38 @@ describe("submitPracticeAnswer", () => {
       method: "PUT",
       body: { action: "skip" },
       signal: undefined,
+    });
+  });
+});
+
+describe("ratePracticeAnswer", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+  });
+
+  it("puts the rating on the exact session item path", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ rating: 2, next_review_at: "2026-11-07T09:00:00Z" });
+    const controller = new AbortController();
+
+    await expect(ratePracticeAnswer(SESSION_UUID, 3, 2, controller.signal)).resolves.toEqual({
+      rating: 2,
+      nextReviewAt: "2026-11-07T09:00:00Z",
+    });
+
+    expect(apiFetch).toHaveBeenCalledOnce();
+    expect(apiFetch).toHaveBeenCalledWith(`/training-sessions/${SESSION_UUID}/items/3/rating`, {
+      method: "PUT",
+      body: { rating: 2 },
+      signal: controller.signal,
+    });
+  });
+
+  it("rejects a response that saved a different rating", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ rating: 4, next_review_at: null });
+
+    await expect(ratePracticeAnswer(SESSION_UUID, 1, 2)).rejects.toMatchObject({
+      status: 0,
+      code: "INVALID_PRACTICE_RESPONSE",
     });
   });
 });

@@ -143,6 +143,43 @@
   line-height: 1.45;
 }
 
+.inlineAction {
+  justify-self: start;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--settings-accent);
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentcolor 40%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.inlineAction:hover:not(:disabled) {
+  color: var(--settings-accent-strong);
+  text-decoration-color: currentcolor;
+}
+
+.inlineAction:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-focus-shadow);
+}
+
+.inlineAction:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+:global(html[data-theme="dark"]) .inlineAction:hover:not(:disabled) {
+  color: var(--settings-ink);
+}
+
 .previewToggle {
   display: inline-flex;
   min-height: 44px;

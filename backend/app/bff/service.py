@@ -35,7 +35,7 @@ from app.redis.invalidation import CacheInvalidator
 from app.redis.service import (
     RedisCacheService,
 )
-from app.training_sessions.schemas import PracticeSessionResponse
+from app.training_sessions.schemas import PracticeSessionResponse, ReviewSummaryResponse
 from app.training_sessions.service import TrainingSessionService
 from app.users.service import UserService
 
@@ -740,6 +740,14 @@ class BffService:
             has_more=cards_page.has_more,
         )
 
+    async def get_review_summary(
+            self,
+            user_id: int,
+    ) -> ReviewSummaryResponse:
+        return await self.training_session_service.get_review_summary(
+            user_id=user_id,
+        )
+
     async def resume_practice_session(
             self,
             user_id: int,
@@ -767,3 +775,15 @@ class BffService:
             words_per_session=words_per_session,
         )
         return response
+
+    async def start_review_session(
+            self,
+            user_id: PositiveInt,
+            prompt_side: Literal["front", "back"],
+            words_per_session: PositiveInt,
+    ) -> PracticeSessionResponse:
+        return await self.training_session_service.start_review_session(
+            user_id=user_id,
+            prompt_side=prompt_side,
+            words_per_session=words_per_session,
+        )

@@ -22,6 +22,7 @@ describe("settings API", () => {
       locale: "en-US",
       theme: "system",
       show_previews_for_long: false,
+      timezone: "Asia/Tokyo",
     });
 
     await expect(
@@ -29,16 +30,23 @@ describe("settings API", () => {
         locale: "en-US",
         showPreviewsForLong: false,
         theme: "system",
+        timezone: "Asia/Tokyo",
       }),
     ).resolves.toEqual({
       locale: "en-US",
       showPreviewsForLong: false,
       theme: "system",
+      timezone: "Asia/Tokyo",
     });
 
     expect(apiFetch).toHaveBeenCalledWith("/users/me/settings", {
       method: "PATCH",
-      body: { locale: "en-US", show_previews_for_long: false, theme: "system" },
+      body: {
+        locale: "en-US",
+        show_previews_for_long: false,
+        theme: "system",
+        timezone: "Asia/Tokyo",
+      },
       signal: undefined,
     });
   });
