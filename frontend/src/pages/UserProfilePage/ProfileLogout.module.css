@@ -274,16 +274,16 @@
 }
 
 :global(html[data-theme="dark"]) .logoutDialogConfirm {
-  color: var(--dark-on-cta);
-  background: #a92f4b;
-  border-color: #c84b64;
+  color: var(--dark-background);
+  background: var(--dark-danger);
+  border-color: var(--dark-danger);
   box-shadow: 0 9px 22px var(--dark-shadow);
 }
 
 :global(html[data-theme="dark"]) .logoutDialogConfirm:hover {
-  color: var(--dark-on-cta);
-  background: #91253e;
-  border-color: #d85b73;
+  color: var(--dark-background);
+  background: var(--dark-danger-hover);
+  border-color: var(--dark-danger-hover);
   box-shadow: 0 11px 26px var(--dark-shadow);
 }
 

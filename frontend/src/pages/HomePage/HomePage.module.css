@@ -1612,6 +1612,15 @@
 }
 
 :global(html[data-theme="dark"]) .page {
+  --home-action: var(--dark-cta);
+  --home-action-bright: var(--dark-cta-hover);
+  --home-action-deep: var(--dark-cta-pressed);
+  --home-action-soft: var(--dark-cta-soft);
+  --home-on-action: var(--dark-on-cta);
+  --home-start-ink: var(--dark-on-cta);
+  --home-start-light: var(--dark-cta);
+  --home-start: var(--dark-cta);
+  --home-start-deep: var(--dark-cta-hover);
   --home-gradient-lavender: var(--dark-background);
   --home-gradient-aqua: var(--dark-cyan);
   --home-gradient-pink: var(--dark-pink);

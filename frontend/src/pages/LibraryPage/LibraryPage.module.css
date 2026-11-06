@@ -6999,6 +6999,16 @@ a.navigationItem:hover {
    authoritative dark palette. */
 
 :global(html[data-theme="dark"]) .page {
+  --library-action: var(--dark-cta);
+  --library-action-bright: var(--dark-cta-hover);
+  --library-action-deep: var(--dark-cta-pressed);
+  --library-action-soft: var(--dark-cta-soft);
+  --library-action-ring: var(--dark-border-accent);
+  --library-on-action: var(--dark-on-cta);
+  --start-ink: var(--dark-on-cta);
+  --start-accent-light: var(--dark-cta);
+  --start-accent: var(--dark-cta);
+  --start-accent-deep: var(--dark-cta-hover);
   --canvas: var(--dark-background);
   --surface: var(--dark-surface);
   --surface-muted: var(--dark-surface-raised);
@@ -7311,28 +7321,29 @@ a.navigationItem:hover {
   --accuracy-ink: var(--accuracy-tone);
 }
 
+/* Muted accuracy scale: tones stay distinguishable without neon glare at night. */
 :global(html[data-theme="dark"]) .page .accuracygreen {
-  --accuracy-tone: #4ade48;
+  --accuracy-tone: #82b596;
 }
 
 :global(html[data-theme="dark"]) .page .accuracyturquoise {
-  --accuracy-tone: #22d3ee;
+  --accuracy-tone: #6cb2be;
 }
 
 :global(html[data-theme="dark"]) .page .accuracyyellow {
-  --accuracy-tone: #f4d439;
+  --accuracy-tone: #bcb07e;
 }
 
 :global(html[data-theme="dark"]) .page .accuracyorange {
-  --accuracy-tone: #ff953d;
+  --accuracy-tone: #c39a76;
 }
 
 :global(html[data-theme="dark"]) .page .accuracypurple {
-  --accuracy-tone: #c084fc;
+  --accuracy-tone: #a399cf;
 }
 
 :global(html[data-theme="dark"]) .page .accuracyred {
-  --accuracy-tone: #ff6467;
+  --accuracy-tone: #c98688;
 }
 
 :global(html[data-theme="dark"]) .page .accuracyTooltip,

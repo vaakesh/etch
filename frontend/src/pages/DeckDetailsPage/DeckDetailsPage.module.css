@@ -1006,6 +1006,10 @@
 }
 
 :global(html[data-theme="dark"]) .page {
+  --start-ink: var(--dark-on-cta);
+  --start-accent-light: var(--dark-cta);
+  --start-accent: var(--dark-cta);
+  --start-accent-deep: var(--dark-cta-hover);
   --details-ink: var(--dark-text);
   --details-muted: var(--dark-text-muted);
   --details-purple: var(--dark-cta);

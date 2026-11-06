@@ -47,7 +47,7 @@
       document.documentElement.dataset.bootPalette = usesLightBootPalette ? "light" : "dark";
       document.documentElement.style.colorScheme = resolvedTheme;
       if (resolvedTheme === "dark") {
-        document.getElementById("theme-color")?.setAttribute("content", "#171a18");
+        document.getElementById("theme-color")?.setAttribute("content", "#141518");
       } else if (usesLightBootPalette) {
         document.getElementById("theme-color")?.setAttribute("content", "#f6f2eb");
       }
@@ -72,10 +72,10 @@
       }
 
       :root[data-theme="dark"] {
-        --app-background: #171a18;
-        --loader-background: #171a18;
-        --loader-track: rgb(159 186 174 / 12%);
-        --loader-accent: #9fbaae;
+        --app-background: #141518;
+        --loader-background: #141518;
+        --loader-track: rgb(108 178 190 / 10%);
+        --loader-accent: #6cb2be;
       }
 
       html,

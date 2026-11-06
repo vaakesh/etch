@@ -92,7 +92,7 @@ describe("HTML boot preferences", () => {
   it("applies the dark browser theme color on content routes", () => {
     const { elements } = runBootScripts({ pathname: "/library", theme: "dark" });
 
-    expect(elements["theme-color"].setAttribute).toHaveBeenCalledWith("content", "#171a18");
+    expect(elements["theme-color"].setAttribute).toHaveBeenCalledWith("content", "#141518");
   });
 
   it("localizes the document, metadata and boot status from the saved locale", () => {
