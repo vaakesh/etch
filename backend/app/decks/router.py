@@ -1,7 +1,7 @@
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import UUID7
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
-from app.cards.deps import CardServiceDeps
 from app.cards.schemas import (
     CardResponse,
     LoadCardsRequest,
@@ -12,13 +12,12 @@ from app.redis.rate_limiters import (
     decks_rate_limit,
     public_decks_rate_limit,
 )
-from fastapi import APIRouter, Depends, Query, Response, status
 
 from .deps import DeckServiceDeps, UserDeckServiceDeps
 from .schemas import (
     ArchivedDeckResponse,
-    CreateDeckRequest,
     ArchiveOfferResponse,
+    CreateDeckRequest,
     DeckCardResponse,
     DeckResponse,
     PreserveArchivedDeckResponse,
@@ -52,7 +51,8 @@ async def get_archive_deck(
     deck_service: DeckServiceDeps,
 ):
     return await deck_service.get_archive_deck(
-        deck_uuid=deck_uuid, user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        user_id=current_user.id,
     )
 
 
@@ -91,6 +91,7 @@ async def get_deck(
         viewer_id=current_user.id if current_user else None,
     )
 
+
 @router.post(
     "/create",
     response_model=DeckResponse,
@@ -102,11 +103,12 @@ async def create_deck(
     deck_service: DeckServiceDeps,
 ):
     return await deck_service.create_deck(
-        payload, 
+        payload,
         user_id=current_user.id,
         user_uuid=current_user.uuid,
         user_username=current_user.username,
     )
+
 
 @router.patch(
     "/{deck_uuid}",
@@ -124,6 +126,7 @@ async def update_deck(
         deck_uuid=deck_uuid,
         payload=payload,
     )
+
 
 @router.delete(
     "/{deck_uuid}",
@@ -163,6 +166,7 @@ async def preserve_archived_deck(
         copy_deleted=result.copy_deleted,
     )
 
+
 @router.get(
     "/{deck_uuid}/cards",
     response_model=list[CardResponse],
@@ -181,6 +185,7 @@ async def get_deck_cards(
         offset=offset,
         limit=limit,
     )
+
 
 @router.post(
     "/{deck_uuid}/cards/remove/{card_uuid}",
@@ -201,6 +206,7 @@ async def remove_card_from_deck(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     return response
 
+
 @router.post(
     "/{deck_uuid}/cards/reorder",
     dependencies=[Depends(decks_rate_limit)],
@@ -212,11 +218,12 @@ async def reorder_deck_cards(
     deck_service: DeckServiceDeps,
 ):
     await deck_service.reorder_cards(
-            user_id=current_user.id,
-            deck_uuid=deck_uuid,
-            card_uuid=payload.card_uuid,
-            to_position=payload.to_position,
+        user_id=current_user.id,
+        deck_uuid=deck_uuid,
+        card_uuid=payload.card_uuid,
+        to_position=payload.to_position,
     )
+
 
 @router.post(
     "/{deck_uuid}/cards/import",
@@ -236,6 +243,7 @@ async def load_cards_to_deck(
         user_id=current_user.id,
     )
 
+
 @router.post(
     "/{deck_uuid}/cards/{card_uuid}",
     response_model=DeckCardResponse,
@@ -252,6 +260,7 @@ async def add_card_to_deck(
         deck_uuid=deck_uuid,
         card_uuid=card_uuid,
     )
+
 
 @router.patch(
     "/{deck_uuid}/set-favourite",
@@ -270,6 +279,7 @@ async def set_favourite(
     )
     return user_deck.is_favourite
 
+
 @router.post(
     "/{deck_uuid}/save",
     status_code=status.HTTP_200_OK,
@@ -286,6 +296,7 @@ async def save_deck(
     )
     response = Response(status_code=status.HTTP_200_OK)
     return response
+
 
 @router.post(
     "/{deck_uuid}/unsave",

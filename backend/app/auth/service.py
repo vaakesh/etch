@@ -1,19 +1,16 @@
-
-
-
 import hashlib
 import hmac
 import logging
 import secrets
 from collections.abc import Callable
-
-from redis.asyncio import Redis
-from app.tracing import traced
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
 import jwt
+from altcha import Challenge, Payload, create_challenge, verify_solution
+from redis.asyncio import Redis
+
 from app.auth.errors import (
     CaptchaError,
     InvalidLoginCredentials,
@@ -30,18 +27,18 @@ from app.auth.schemas import (
     VerifiedUser,
 )
 from app.auth.utils import hash_password_async, verify_password_async
+from app.common.utils import decode_cursor, encode_cursor, utcnow
 from app.config import AuthTokensConfig, Settings
 from app.redis.invalidation import CacheInvalidator, scopes
 from app.redis.outbox import cache_invalidation_message
+from app.redis.ttl import CHALLENGE_TTL_SECONDS
 from app.service import UnitOfWork
+from app.tracing import traced
 from app.users.errors import UserNotFoundError
 from app.users.models import User
-from app.common.utils import decode_cursor, encode_cursor, utcnow
-from altcha import Challenge, create_challenge, verify_solution, Payload
-
-from app.redis.ttl import CHALLENGE_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
+
 
 class AuthTokensService:
     def __init__(self, config: AuthTokensConfig) -> None:
@@ -59,10 +56,10 @@ class AuthTokensService:
             )
         except jwt.InvalidTokenError as e:
             raise InvalidTokenError() from e
-        
+
         if payload.get("type") != "access":
             raise InvalidTokenTypeError()
-        
+
         return payload
 
     def hash_refresh_token(self, refresh_token: str) -> str:
@@ -106,15 +103,15 @@ class AuthTokensService:
             refresh_token=refresh_token,
             refresh_token_hash=refresh_token_hash,
         )
-    
+
 
 class AuthService:
     def __init__(
-            self, 
-            uow_factory: Callable[[], UnitOfWork], 
-            auth_tokens_service: AuthTokensService,
-            cache_invalidator: CacheInvalidator,
-        ):
+        self,
+        uow_factory: Callable[[], UnitOfWork],
+        auth_tokens_service: AuthTokensService,
+        cache_invalidator: CacheInvalidator,
+    ):
         self.uow_factory = uow_factory
         self.auth_tokens_service = auth_tokens_service
         self.cache_invalidator = cache_invalidator
@@ -134,9 +131,9 @@ class AuthService:
 
     @traced("auth.service.authenticate_user")
     async def _authenticate_user(
-            self,
-            username: str,
-            password: str,
+        self,
+        username: str,
+        password: str,
     ) -> VerifiedUser:
         # Argon2 runs after this transaction is closed: no lock, no connection.
         async with self.uow_factory() as uow:
@@ -145,16 +142,17 @@ class AuthService:
             )
 
         if verified is None or not await verify_password_async(
-            password, verified.hashed_password,
+            password,
+            verified.hashed_password,
         ):
             raise InvalidLoginCredentials("Invalid username or password")
 
         return verified
 
     async def _lock_user_with_same_password(
-            self,
-            verified: VerifiedUser,
-            uow: UnitOfWork,
+        self,
+        verified: VerifiedUser,
+        uow: UnitOfWork,
     ) -> User | None:
         # The password could change or the user could be deleted while Argon2 ran.
         user = await uow.user_repo.get_by_id(user_id=verified.id, for_update=True)
@@ -180,7 +178,7 @@ class AuthService:
         self, refresh_token_hash: str, uow: UnitOfWork
     ) -> UserSession:
         user_session = await uow.auth_repo.get_user_session_by_refresh(
-            refresh_token_hash, 
+            refresh_token_hash,
             for_update=True,
         )
 
@@ -227,19 +225,18 @@ class AuthService:
     # write
 
     async def build_user_session(
-            self,
-            user: User,
-            refresh_token_hash,
-            client: ClientInfo | None = None,
+        self,
+        user: User,
+        refresh_token_hash,
+        client: ClientInfo | None = None,
     ) -> UserSession:
         user_session = UserSession(
             user_id=user.id,
             refresh_token_hash=refresh_token_hash,
             ip=client.ip if client is not None else None,
             user_agent=client.user_agent if client is not None else None,
-            expires_at=utcnow() + timedelta(
-                days=self.auth_tokens_service.config.refresh_token_expire_days
-            ),
+            expires_at=utcnow()
+            + timedelta(days=self.auth_tokens_service.config.refresh_token_expire_days),
         )
         return user_session
 
@@ -261,7 +258,9 @@ class AuthService:
 
             tokens = self.auth_tokens_service.issue_tokens(user_uuid=user.uuid)
             user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash, client,
+                user,
+                tokens.refresh_token_hash,
+                client,
             )
             uow.auth_repo.add(user_session=user_session)
             await uow.commit()
@@ -269,7 +268,9 @@ class AuthService:
             return TokenPair(tokens.access_token, tokens.refresh_token)
 
     @traced("auth.service.login_by_bearer_token_without_refresh")
-    async def login_by_bearer_token_without_refresh(self, username: str, password: str) -> AccessTokenResponse:
+    async def login_by_bearer_token_without_refresh(
+        self, username: str, password: str
+    ) -> AccessTokenResponse:
         verified = await self._authenticate_user(username, password)
         bearer_access_token = self.auth_tokens_service.create_access_token(verified.uuid)
         return AccessTokenResponse(bearer_access_token)
@@ -286,7 +287,9 @@ class AuthService:
             user_session = await self._validate_refresh_session(refresh_token_hash, uow)
             tokens = self.auth_tokens_service.issue_tokens(user.uuid)
             new_user_session = await self.build_user_session(
-                user, tokens.refresh_token_hash, client,
+                user,
+                tokens.refresh_token_hash,
+                client,
             )
             uow.auth_repo.add(new_user_session)
             await uow.auth_repo.flush()
@@ -335,9 +338,7 @@ class AuthService:
             )
 
             # Cached users embed hashed_password and updated_at.
-            invalidation = (
-                scopes.users(user_id),
-            )
+            invalidation = (scopes.users(user_id),)
             message = cache_invalidation_message(*invalidation)
             uow.outbox_repo.add(message)
             await uow.commit()
@@ -357,7 +358,7 @@ class AuthService:
             refresh_token_hash = self.auth_tokens_service.hash_refresh_token(refresh_token)
             try:
                 await self._get_user_by_refresh_token_hash(refresh_token_hash, uow)
-            except (InvalidRefreshTokenError, UserNotFoundError):
+            except InvalidRefreshTokenError, UserNotFoundError:
                 return
 
             is_updated = await uow.auth_repo.revoke_active_session_by_refresh_token_hash(
@@ -366,6 +367,7 @@ class AuthService:
             )
             if is_updated:
                 await uow.commit()
+
 
 class CaptchaService:
     def __init__(

@@ -5,6 +5,7 @@ Revises: 2b7d4e91a6c0
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "3c8a7f26d9e1"
@@ -39,7 +40,9 @@ def upgrade() -> None:
     op.drop_constraint("ck_cards_archive_deck_id_positive", "cards", type_="check")
     op.drop_index("ix_cards_archive_deck_id", table_name="cards")
     op.drop_constraint(
-        "fk_cards_archive_deck_id_decks", "cards", type_="foreignkey",
+        "fk_cards_archive_deck_id_decks",
+        "cards",
+        type_="foreignkey",
     )
     op.drop_column("cards", "archive_deck_id")
 
@@ -56,18 +59,26 @@ def downgrade() -> None:
     """)
 
     op.add_column(
-        "cards", sa.Column("archive_deck_id", sa.BigInteger(), nullable=True),
+        "cards",
+        sa.Column("archive_deck_id", sa.BigInteger(), nullable=True),
     )
     op.create_foreign_key(
-        "fk_cards_archive_deck_id_decks", "cards", "decks",
-        ["archive_deck_id"], ["id"], ondelete="CASCADE",
+        "fk_cards_archive_deck_id_decks",
+        "cards",
+        "decks",
+        ["archive_deck_id"],
+        ["id"],
+        ondelete="CASCADE",
     )
     op.create_index("ix_cards_archive_deck_id", "cards", ["archive_deck_id"])
     op.create_check_constraint(
-        "ck_cards_archive_deck_id_positive", "cards", "archive_deck_id > 0",
+        "ck_cards_archive_deck_id_positive",
+        "cards",
+        "archive_deck_id > 0",
     )
     op.create_check_constraint(
-        "ck_cards_owner_or_archive", "cards",
+        "ck_cards_owner_or_archive",
+        "cards",
         "(user_id IS NOT NULL AND archive_deck_id IS NULL) OR "
         "(user_id IS NULL AND archive_deck_id IS NOT NULL)",
     )

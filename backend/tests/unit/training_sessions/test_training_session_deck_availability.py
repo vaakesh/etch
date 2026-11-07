@@ -46,32 +46,42 @@ def context(monkeypatch):
     uow.commit = AsyncMock()
     uow.deck_repo = create_autospec(DeckRepository, instance=True)
     uow.training_session_repo = create_autospec(
-        TrainingSessionRepository, instance=True,
+        TrainingSessionRepository,
+        instance=True,
     )
     uow.training_session_item_repo = create_autospec(
-        TrainingSessionItemRepository, instance=True,
+        TrainingSessionItemRepository,
+        instance=True,
     )
     uow.deck_repo.get_by_id.return_value = deck
     uow.training_session_repo.get_by_uuid.return_value = session
     uow.training_session_item_repo.get_next_cards.return_value = [item]
-    uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.return_value = item
+    item_repo = uow.training_session_item_repo
+    item_repo.get_item_by_sequence_number_and_session_id.return_value = item
     invalidator = create_autospec(CacheInvalidator, instance=True)
     service = TrainingSessionService(
-        uow_factory=lambda: uow, cache_invalidator=invalidator,
+        uow_factory=lambda: uow,
+        cache_invalidator=invalidator,
     )
     return SimpleNamespace(
-        service=service, uow=uow, session=session, item=item, deck=deck,
+        service=service,
+        uow=uow,
+        session=session,
+        item=item,
+        deck=deck,
     )
 
 
-@pytest.fixture(params=[
-    pytest.param("archived", id="unexpired_archive"),
-    pytest.param("expired", id="expired_archive"),
-    pytest.param("expires_now", id="archive_expiration_boundary"),
-    pytest.param("missing_expiration", id="archive_without_expiration"),
-    pytest.param("deleted", id="deleted_deck"),
-    pytest.param("missing", id="missing_deck"),
-])
+@pytest.fixture(
+    params=[
+        pytest.param("archived", id="unexpired_archive"),
+        pytest.param("expired", id="expired_archive"),
+        pytest.param("expires_now", id="archive_expiration_boundary"),
+        pytest.param("missing_expiration", id="archive_without_expiration"),
+        pytest.param("deleted", id="deleted_deck"),
+        pytest.param("missing", id="missing_deck"),
+    ]
+)
 def blocked_session(context, request):
     case = request.param
     expected_error = TrainingSessionDeckUnavailableError
@@ -127,16 +137,19 @@ class TestResumePracticeSession:
             "correct_count": 2,
             "wrong_count": 1,
             "started_at": datetime(2026, 8, 15, 16, 0, tzinfo=UTC),
-            "cards": [{
-                "sequence_number": 4,
-                "prompt_text": "привет",
-                "prompt_language": "ru",
-                "answer_language": "en",
-            }],
+            "cards": [
+                {
+                    "sequence_number": 4,
+                    "prompt_text": "привет",
+                    "prompt_language": "ru",
+                    "answer_language": "en",
+                }
+            ],
         }
         context.uow.deck_repo.get_by_id.assert_awaited_with(deck_id=201)
         context.uow.training_session_repo.get_by_uuid.assert_awaited_with(
-            context.session.uuid, for_update=True,
+            context.session.uuid,
+            for_update=True,
         )
 
     async def test_checks_session_owner_before_deck_availability(self, context):
@@ -166,7 +179,9 @@ class TestSubmitAnswer:
     async def test_accepts_answer_after_transfer_to_active_copy(self, context):
         context.session.deck_id = 201
         context.uow.deck_repo.get_by_id.return_value = make_deck(
-            id=201, uuid=COPY_UUID, is_public=False,
+            id=201,
+            uuid=COPY_UUID,
+            is_public=False,
         )
 
         result = await context.service.submit_answer(
@@ -195,7 +210,10 @@ class TestSubmitAnswer:
     )
     @pytest.mark.parametrize("deck_id", [200, None])
     async def test_rejects_finished_session_before_loading_deck_or_answer(
-        self, context, session_status, deck_id,
+        self,
+        context,
+        session_status,
+        deck_id,
     ):
         context.session.status = session_status
         context.session.finished_at = NOW
@@ -253,17 +271,21 @@ class TestSubmitAnswer:
 class TestRecordActivity:
     @pytest.mark.parametrize("event", ["resume", "heartbeat", "pause"])
     async def test_rejects_unavailable_deck_without_accruing_time(
-        self, blocked_session, event,
+        self,
+        blocked_session,
+        event,
     ):
         context, expected_error = blocked_session
         context.session.activity_tracker_uuid = TRACKER_UUID
         context.session.activity_last_seen_at = NOW - timedelta(seconds=10)
         if event == "resume":
             from app.training_sessions.schemas import ResumeTrainingSessionActivityRequest
+
             payload = ResumeTrainingSessionActivityRequest(event="resume")
         else:
             payload = ActiveTrainingSessionActivityRequest(
-                event=event, tracker_uuid=TRACKER_UUID,
+                event=event,
+                tracker_uuid=TRACKER_UUID,
             )
 
         with pytest.raises(expected_error):
@@ -277,12 +299,15 @@ class TestRecordActivity:
     async def test_records_activity_for_active_copy(self, context):
         context.session.deck_id = 201
         context.uow.deck_repo.get_by_id.return_value = make_deck(
-            id=201, uuid=COPY_UUID, is_public=False,
+            id=201,
+            uuid=COPY_UUID,
+            is_public=False,
         )
         context.session.activity_tracker_uuid = TRACKER_UUID
         context.session.activity_last_seen_at = NOW - timedelta(seconds=10)
         payload = ActiveTrainingSessionActivityRequest(
-            event="heartbeat", tracker_uuid=TRACKER_UUID,
+            event="heartbeat",
+            tracker_uuid=TRACKER_UUID,
         )
 
         result = await context.service.record_activity(42, context.session.uuid, payload)
@@ -297,7 +322,8 @@ class TestRecordActivity:
         context.session.finished_at = NOW
         context.session.deck_id = None
         payload = ActiveTrainingSessionActivityRequest(
-            event="heartbeat", tracker_uuid=TRACKER_UUID,
+            event="heartbeat",
+            tracker_uuid=TRACKER_UUID,
         )
 
         result = await context.service.record_activity(42, context.session.uuid, payload)

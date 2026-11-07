@@ -5,9 +5,11 @@ from typing import Self
 
 from pydantic import BaseModel, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from app.tracing import traced
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent # /etch
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # /etch
+
 
 class AuthJWT(BaseModel):
     base_dir: Path = BASE_DIR
@@ -56,14 +58,15 @@ class Settings(BaseSettings):
 
     def redis_url(self) -> str:
         return f"redis://{self.redis_user}:{self.redis_password}@{self.redis_name}:{self.redis_port}/0"
-    
 
     auth_jwt: AuthJWT
-    
+
+
 @lru_cache
 @traced("config.get_settings")
 def get_settings() -> Settings:
     return Settings()
+
 
 @dataclass(slots=True, frozen=True)
 class AuthTokensConfig:
@@ -73,6 +76,7 @@ class AuthTokensConfig:
     access_token_expire_minutes: int
     refresh_token_expire_days: int
     refresh_pepper_bytes: bytes
+
 
 @lru_cache
 @traced("config.get_auth_tokens_config")

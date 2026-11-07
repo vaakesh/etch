@@ -7,7 +7,6 @@ from app.users.models import UserSettings
 from tests.integration.conftest import ClientFactory
 from tests.integration.users.conftest import AuthClientFactory, UserFactory
 
-
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
@@ -44,31 +43,56 @@ class TestUpdateUserSettings:
             pytest.param(
                 {},
                 {"locale": "fil-PH"},
-                {"locale": "fil-PH", "theme": "light", "show_previews_for_long": True, "timezone": "UTC"},
+                {
+                    "locale": "fil-PH",
+                    "theme": "light",
+                    "show_previews_for_long": True,
+                    "timezone": "UTC",
+                },
                 id="three_letter_locale",
             ),
             pytest.param(
                 {"theme": "dark"},
                 {"theme": "light"},
-                {"locale": "ru-RU", "theme": "light", "show_previews_for_long": True, "timezone": "UTC"},
+                {
+                    "locale": "ru-RU",
+                    "theme": "light",
+                    "show_previews_for_long": True,
+                    "timezone": "UTC",
+                },
                 id="light_theme",
             ),
             pytest.param(
                 {"theme": "dark"},
                 {"theme": "system"},
-                {"locale": "ru-RU", "theme": "system", "show_previews_for_long": True, "timezone": "UTC"},
+                {
+                    "locale": "ru-RU",
+                    "theme": "system",
+                    "show_previews_for_long": True,
+                    "timezone": "UTC",
+                },
                 id="system_theme",
             ),
             pytest.param(
                 {},
                 {"show_previews_for_long": False},
-                {"locale": "ru-RU", "theme": "light", "show_previews_for_long": False, "timezone": "UTC"},
+                {
+                    "locale": "ru-RU",
+                    "theme": "light",
+                    "show_previews_for_long": False,
+                    "timezone": "UTC",
+                },
                 id="disable_previews",
             ),
             pytest.param(
                 {"show_previews_for_long": False},
                 {"show_previews_for_long": True},
-                {"locale": "ru-RU", "theme": "light", "show_previews_for_long": True, "timezone": "UTC"},
+                {
+                    "locale": "ru-RU",
+                    "theme": "light",
+                    "show_previews_for_long": True,
+                    "timezone": "UTC",
+                },
                 id="enable_previews",
             ),
         ],
@@ -133,7 +157,8 @@ class TestUpdateUserSettings:
             assert settings.show_previews_for_long is True
 
     @pytest.mark.parametrize(
-        "field", ["locale", "theme", "show_previews_for_long", "timezone"],
+        "field",
+        ["locale", "theme", "show_previews_for_long", "timezone"],
     )
     async def test_rejects_explicit_null_without_changing_settings(
         self,
@@ -286,9 +311,7 @@ class TestUpdateUserSettings:
         await user_factory(username="alice", email="alice@example.com")
         guest_client = await client_factory()
 
-        response = await guest_client.patch(
-            "/users/me/settings", json={"theme": "dark"}
-        )
+        response = await guest_client.patch("/users/me/settings", json={"theme": "dark"})
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json() == {
@@ -310,9 +333,7 @@ class TestUpdateUserSettings:
         alice_client = await auth_client_factory(alice)
         bob_client = await auth_client_factory(bob)
 
-        response = await alice_client.patch(
-            "/users/me/settings", json={"theme": "dark"}
-        )
+        response = await alice_client.patch("/users/me/settings", json={"theme": "dark"})
         bob_response = await bob_client.get("/users/me")
 
         assert response.status_code == status.HTTP_200_OK
@@ -351,9 +372,7 @@ class TestUpdateUserSettings:
             "timezone": "UTC",
         }
 
-        update = await first_client.patch(
-            "/users/me/settings", json={"theme": "dark"}
-        )
+        update = await first_client.patch("/users/me/settings", json={"theme": "dark"})
         after = await second_client.get("/users/me")
 
         assert update.status_code == status.HTTP_200_OK

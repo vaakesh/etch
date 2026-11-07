@@ -32,4 +32,34 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "ruff>=0.17.4",
+    "ty>=0.0.99",
 ]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 92
+
+[tool.ruff.lint]
+extend-select = [
+    "UP", # pyupgrade
+    "I", # isort
+    "E501", # line too long
+]
+ignore = [
+    "TRY004", # parsing malformed payloads raises ValueError, callers catch it
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "app.decks.schemas.DeckLoad", # frozen dataclass
+]
+
+[tool.ruff.lint.per-file-ignores]
+# applied migrations keep raw SQL as it was executed
+"alembic/versions/*" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

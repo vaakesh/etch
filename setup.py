@@ -12,7 +12,6 @@ import sys
 import tempfile
 from urllib.parse import unquote, urlsplit
 
-
 ROOT = Path(__file__).resolve().parent
 COMPOSE_FILES = {
     "dev": "docker-compose-dev.yml",
@@ -76,7 +75,9 @@ class SetupError(Exception):
 def run(command: list[str]) -> bytes:
     # Capture output to keep secrets and PEM contents out of terminal/logs.
     try:
-        result = subprocess.run(command, capture_output=True, input=b"", timeout=30)
+        result = subprocess.run(
+            command, check=False, capture_output=True, input=b"", timeout=30
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise SetupError(
             f"could not run {command[0]}; check its installation and availability."
@@ -251,9 +252,10 @@ def render_config(target: str, template: bytes) -> bytes:
     for field in SECRET_FIELDS:
         for config, prefix in field:
             if config == target:
-                value = secret_value(field)
+                # a function, not a string, so re does not expand backslashes
+                replacement = prefix + secret_value(field)
                 text = secret_pattern(prefix).sub(
-                    lambda _: prefix + value, text, count=1
+                    lambda _, replacement=replacement: replacement, text, count=1
                 )
     return text.encode("utf-8")
 
@@ -321,7 +323,9 @@ def compose_config(compose: Path, *options: str) -> dict:
     try:
         return json.loads(output)
     except json.JSONDecodeError as exc:
-        raise SetupError(f"could not read the configuration of {compose.name}.") from exc
+        raise SetupError(
+            f"could not read the configuration of {compose.name}."
+        ) from exc
 
 
 def env_file_names(path: Path) -> set[str]:

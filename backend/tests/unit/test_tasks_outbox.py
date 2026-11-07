@@ -9,8 +9,8 @@ from redis.exceptions import ConnectionError
 
 from app.decks.repository import DeckRepository
 from app.decks.schemas import ArchiveCleanupBatch
-from app.outbox.repository import OutboxRepository
 from app.outbox.models import OutboxMessage
+from app.outbox.repository import OutboxRepository
 from app.redis.outbox import CACHE_INVALIDATION_EVENT_TYPE
 from app.service import UnitOfWork
 from tests.unit.redis.cases import CARD_UUID, DECK_UUID
@@ -21,7 +21,8 @@ NOW = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 @pytest.fixture
 def cleanup_context(monkeypatch):
     monkeypatch.setattr(
-        "app.config.get_settings", lambda: SimpleNamespace(celery_broker_url="memory://"),
+        "app.config.get_settings",
+        lambda: SimpleNamespace(celery_broker_url="memory://"),
     )
     from app.celery import tasks
 
@@ -34,7 +35,8 @@ def cleanup_context(monkeypatch):
     uow.outbox_repo.mark_published.return_value = True
     uow.deck_repo.delete_expired_archived_decks.side_effect = [
         ArchiveCleanupBatch(
-            decks=[(200, DECK_UUID)], cards=[(100, CARD_UUID)],
+            decks=[(200, DECK_UUID)],
+            cards=[(100, CARD_UUID)],
             user_deck_keys=[(42, 200)],
         ),
         ArchiveCleanupBatch(),
@@ -60,7 +62,9 @@ def cleanup_context(monkeypatch):
 
 
 class TestCleanupExpiredArchives:
-    async def test_records_event_before_commit_and_marks_it_after_invalidation(self, cleanup_context):
+    async def test_records_event_before_commit_and_marks_it_after_invalidation(
+        self, cleanup_context
+    ):
         tasks, uow, redis, engine = cleanup_context
 
         async def check_committed_before_invalidation(*keys):
@@ -68,7 +72,9 @@ class TestCleanupExpiredArchives:
             assert uow.outbox_repo.add.called
             return 1
 
-        redis.pipeline.return_value.execute.side_effect = check_committed_before_invalidation
+        redis.pipeline.return_value.execute.side_effect = (
+            check_committed_before_invalidation
+        )
 
         totals = await tasks._cleanup_expired_archives(batch_size=100, max_batches=2)
 
@@ -85,8 +91,12 @@ class TestCleanupExpiredArchives:
             ],
         }
         redis.pipeline.return_value.unlink.assert_called_once_with(
-            "deck:200", "deck:200:card-ids", f"deck:id-by-uuid:{DECK_UUID}",
-            "deck:user-deck:42:200", "card:100", f"card:id-by-uuid:{CARD_UUID}",
+            "deck:200",
+            "deck:200:card-ids",
+            f"deck:id-by-uuid:{DECK_UUID}",
+            "deck:user-deck:42:200",
+            "card:100",
+            f"card:id-by-uuid:{CARD_UUID}",
         )
         uow.outbox_repo.mark_published.assert_awaited_once_with(17)
         assert uow.commit.await_count == 2
@@ -94,8 +104,10 @@ class TestCleanupExpiredArchives:
         engine.dispose.assert_awaited_once()
 
     async def test_recovers_saved_event_after_redis_failure(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
-        redis.pipeline.return_value.execute.side_effect = ConnectionError("Redis unavailable")
+        tasks, uow, redis, _engine = cleanup_context
+        redis.pipeline.return_value.execute.side_effect = ConnectionError(
+            "Redis unavailable"
+        )
 
         with pytest.raises(ConnectionError):
             await tasks._cleanup_expired_archives(batch_size=100, max_batches=2)
@@ -113,8 +125,10 @@ class TestCleanupExpiredArchives:
         assert uow.deck_repo.delete_expired_archived_decks.await_count == 1
 
     @pytest.mark.parametrize("stage", ["flush", "commit"])
-    async def test_does_not_invalidate_when_outbox_transaction_fails(self, cleanup_context, stage):
-        tasks, uow, redis, engine = cleanup_context
+    async def test_does_not_invalidate_when_outbox_transaction_fails(
+        self, cleanup_context, stage
+    ):
+        tasks, uow, redis, _engine = cleanup_context
         getattr(uow, stage).side_effect = RuntimeError("database unavailable")
 
         with pytest.raises(RuntimeError, match="database unavailable"):
@@ -124,7 +138,7 @@ class TestCleanupExpiredArchives:
         uow.outbox_repo.mark_published.assert_not_awaited()
 
     async def test_does_not_create_event_for_empty_batch(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
+        tasks, uow, redis, _engine = cleanup_context
         uow.deck_repo.delete_expired_archived_decks.side_effect = None
         uow.deck_repo.delete_expired_archived_decks.return_value = ArchiveCleanupBatch()
 
@@ -135,8 +149,10 @@ class TestCleanupExpiredArchives:
         uow.commit.assert_not_awaited()
         redis.pipeline.assert_not_called()
 
-    async def test_omits_empty_scopes_when_batch_has_no_cards_or_user_decks(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
+    async def test_omits_empty_scopes_when_batch_has_no_cards_or_user_decks(
+        self, cleanup_context
+    ):
+        tasks, uow, redis, _engine = cleanup_context
         uow.deck_repo.delete_expired_archived_decks.side_effect = [
             ArchiveCleanupBatch(decks=[(200, DECK_UUID)]),
             ArchiveCleanupBatch(),
@@ -146,45 +162,62 @@ class TestCleanupExpiredArchives:
 
         assert totals == {"decks": 1, "cards": 0, "batches": 1}
         message = uow.outbox_repo.add.call_args.args[0]
-        assert message.payload == {"scopes": [
-            {"name": "deck_with_cards", "args": [200]},
-            {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
-        ]}
+        assert message.payload == {
+            "scopes": [
+                {"name": "deck_with_cards", "args": [200]},
+                {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
+            ]
+        }
         redis.pipeline.return_value.unlink.assert_called_once_with(
-            "deck:200", "deck:200:card-ids", f"deck:id-by-uuid:{DECK_UUID}",
+            "deck:200",
+            "deck:200:card-ids",
+            f"deck:id-by-uuid:{DECK_UUID}",
         )
         uow.outbox_repo.mark_published.assert_awaited_once_with(17)
 
 
 class TestPublishPendingCacheInvalidations:
     def test_schedule_uses_generic_cache_delivery_task(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
+        tasks, _uow, _redis, _engine = cleanup_context
 
-        schedule = tasks.celery_app.conf.beat_schedule["publish-pending-cache-invalidations"]
+        schedule = tasks.celery_app.conf.beat_schedule[
+            "publish-pending-cache-invalidations"
+        ]
 
         assert schedule == {
             "task": "maintenance.publish_pending_cache_invalidations",
             "schedule": 30.0,
             "kwargs": {"batch_size": 100},
         }
-        assert tasks.publish_pending_cache_invalidations.name == "maintenance.publish_pending_cache_invalidations"
+        assert (
+            tasks.publish_pending_cache_invalidations.name
+            == "maintenance.publish_pending_cache_invalidations"
+        )
 
     async def test_delivers_pending_scope_events(self, cleanup_context):
         tasks, uow, redis, engine = cleanup_context
         uow.outbox_repo.get_pending.return_value = [
             OutboxMessage(
-                id=17, published=False, event_type=CACHE_INVALIDATION_EVENT_TYPE,
-                payload={"scopes": [
-                    {"name": "users", "args": [42]},
-                    {"name": "library_card_pages", "args": [42]},
-                ]},
+                id=17,
+                published=False,
+                event_type=CACHE_INVALIDATION_EVENT_TYPE,
+                payload={
+                    "scopes": [
+                        {"name": "users", "args": [42]},
+                        {"name": "library_card_pages", "args": [42]},
+                    ]
+                },
             ),
             OutboxMessage(
-                id=18, published=False, event_type=CACHE_INVALIDATION_EVENT_TYPE,
-                payload={"scopes": [
-                    {"name": "deck_with_cards", "args": [200]},
-                    {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
-                ]},
+                id=18,
+                published=False,
+                event_type=CACHE_INVALIDATION_EVENT_TYPE,
+                payload={
+                    "scopes": [
+                        {"name": "deck_with_cards", "args": [200]},
+                        {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
+                    ]
+                },
             ),
         ]
 
@@ -209,11 +242,15 @@ class TestPublishPendingCacheInvalidations:
         engine.dispose.assert_awaited_once()
 
     async def test_retries_generation_event_after_redis_failure(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
-        uow.outbox_repo.get_pending.return_value = [OutboxMessage(
-            id=17, published=False, event_type=CACHE_INVALIDATION_EVENT_TYPE,
-            payload={"scopes": [{"name": "library_deck_pages", "args": [42]}]},
-        )]
+        tasks, uow, redis, _engine = cleanup_context
+        uow.outbox_repo.get_pending.return_value = [
+            OutboxMessage(
+                id=17,
+                published=False,
+                event_type=CACHE_INVALIDATION_EVENT_TYPE,
+                payload={"scopes": [{"name": "library_deck_pages", "args": [42]}]},
+            )
+        ]
         pipeline = redis.pipeline.return_value
         pipeline.execute.side_effect = ConnectionError("Redis unavailable")
 
@@ -225,16 +262,23 @@ class TestPublishPendingCacheInvalidations:
 
         assert totals == {"published": 1}
         assert pipeline.incr.call_args_list == [
-            call("library:42:decks:generation"), call("library:42:decks:generation"),
+            call("library:42:decks:generation"),
+            call("library:42:decks:generation"),
         ]
         uow.outbox_repo.mark_published.assert_awaited_once_with(17)
 
-    async def test_retries_delivered_event_after_publication_commit_fails(self, cleanup_context):
-        tasks, uow, redis, engine = cleanup_context
-        uow.outbox_repo.get_pending.return_value = [OutboxMessage(
-            id=17, published=False, event_type=CACHE_INVALIDATION_EVENT_TYPE,
-            payload={"scopes": [{"name": "library_deck_pages", "args": [42]}]},
-        )]
+    async def test_retries_delivered_event_after_publication_commit_fails(
+        self, cleanup_context
+    ):
+        tasks, uow, redis, _engine = cleanup_context
+        uow.outbox_repo.get_pending.return_value = [
+            OutboxMessage(
+                id=17,
+                published=False,
+                event_type=CACHE_INVALIDATION_EVENT_TYPE,
+                payload={"scopes": [{"name": "library_deck_pages", "args": [42]}]},
+            )
+        ]
         uow.commit.side_effect = RuntimeError("database unavailable")
 
         with pytest.raises(RuntimeError, match="database unavailable"):
@@ -244,16 +288,21 @@ class TestPublishPendingCacheInvalidations:
 
         assert totals == {"published": 1}
         assert redis.pipeline.return_value.incr.call_args_list == [
-            call("library:42:decks:generation"), call("library:42:decks:generation"),
+            call("library:42:decks:generation"),
+            call("library:42:decks:generation"),
         ]
         assert uow.outbox_repo.mark_published.await_args_list == [call(17), call(17)]
 
     async def test_does_not_publish_invalid_scope(self, cleanup_context):
         tasks, uow, redis, engine = cleanup_context
-        uow.outbox_repo.get_pending.return_value = [OutboxMessage(
-            id=17, published=False, event_type=CACHE_INVALIDATION_EVENT_TYPE,
-            payload={"scopes": [{"name": "__dict__", "args": []}]},
-        )]
+        uow.outbox_repo.get_pending.return_value = [
+            OutboxMessage(
+                id=17,
+                published=False,
+                event_type=CACHE_INVALIDATION_EVENT_TYPE,
+                payload={"scopes": [{"name": "__dict__", "args": []}]},
+            )
+        ]
 
         with pytest.raises(ValueError, match="Unknown cache scope"):
             await tasks._publish_pending_cache_invalidations(batch_size=100)

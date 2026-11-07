@@ -1,7 +1,6 @@
 import asyncio
 from datetime import timedelta
 
-from celery.utils.log import get_task_logger
 from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -18,6 +17,7 @@ from app.redis.outbox import (
     CacheInvalidationHandler,
     cache_invalidation_message,
 )
+from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
 
@@ -32,14 +32,13 @@ class RetryableArchiveCleanupError(Exception):
 
 def _is_retryable_database_error(error: DBAPIError) -> bool:
     sqlstate = (
-        getattr(error.orig, "sqlstate", None)
-        or getattr(error.orig, "pgcode", None)
-        or ""
+        getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None) or ""
     )
     return (
         error.connection_invalidated  # connection invalidated
         or sqlstate.startswith("08")  # connection error
-        or sqlstate in {
+        or sqlstate
+        in {
             "40001",  # serialization failure
             "40P01",  # deadlock detected
             "55P03",  # lock unavailable (including lock timeout)
@@ -53,9 +52,7 @@ async def _cleanup_expired_archives(
     max_batches: int,
 ) -> dict[str, int]:
     engine = get_engine()
-    uow_factory = get_uow_factory(
-        get_async_session_maker()
-    )
+    uow_factory = get_uow_factory(get_async_session_maker())
     redis = get_redis()
     invalidator = CacheInvalidator(redis=redis)
     publisher = OutboxPublisher(
@@ -71,12 +68,8 @@ async def _cleanup_expired_archives(
         for _ in range(max_batches):
             async with uow_factory() as uow:
                 # не держим воркер долго (тяжелый запрос/занятая строка)
-                await uow.session.execute(
-                    text("SET LOCAL lock_timeout = '5s'")
-                )
-                await uow.session.execute(
-                    text("SET LOCAL statement_timeout = '60s'")
-                )
+                await uow.session.execute(text("SET LOCAL lock_timeout = '5s'"))
+                await uow.session.execute(text("SET LOCAL statement_timeout = '60s'"))
 
                 batch = await uow.deck_repo.delete_expired_archived_decks(
                     now=cutoff,
@@ -123,6 +116,7 @@ async def _cleanup_expired_archives(
             await redis.aclose()
         finally:
             await engine.dispose()
+
 
 @celery_app.task(
     name="maintenance.cleanup_expired_archives",
@@ -213,12 +207,8 @@ async def _cleanup_published_outbox(
         for _ in range(max_batches):
             async with uow_factory() as uow:
                 # не держим воркер долго (тяжелый запрос/занятая строка)
-                await uow.session.execute(
-                    text("SET LOCAL lock_timeout = '5s'")
-                )
-                await uow.session.execute(
-                    text("SET LOCAL statement_timeout = '60s'")
-                )
+                await uow.session.execute(text("SET LOCAL lock_timeout = '5s'"))
+                await uow.session.execute(text("SET LOCAL statement_timeout = '60s'"))
 
                 deleted = await uow.outbox_repo.delete_published(
                     cutoff=cutoff,
@@ -298,12 +288,8 @@ async def _cleanup_stale_user_sessions(
         for _ in range(max_batches):
             async with uow_factory() as uow:
                 # не держим воркер долго (тяжелый запрос/занятая строка)
-                await uow.session.execute(
-                    text("SET LOCAL lock_timeout = '5s'")
-                )
-                await uow.session.execute(
-                    text("SET LOCAL statement_timeout = '60s'")
-                )
+                await uow.session.execute(text("SET LOCAL lock_timeout = '5s'"))
+                await uow.session.execute(text("SET LOCAL statement_timeout = '60s'"))
 
                 deleted = await uow.auth_repo.delete_stale_sessions(
                     cutoff=cutoff,

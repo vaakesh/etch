@@ -60,7 +60,8 @@ class TestGetReviewSummary:
         alice = await user_factory(username="alice", email="alice@example.com")
         client = await auth_client_factory(alice)
         response = await client.patch(
-            "/users/me/settings", json={"timezone": "Asia/Tokyo"},
+            "/users/me/settings",
+            json={"timezone": "Asia/Tokyo"},
         )
         assert response.status_code == status.HTTP_200_OK
         answers = {"кот": "cat", "пёс": "dog", "лис": "fox"}
@@ -77,7 +78,10 @@ class TestGetReviewSummary:
         await set_memory_due(async_session_maker, "кот", "back", overdue)
         for front_text in ("пёс", "лис"):
             await set_memory_due(
-                async_session_maker, front_text, "back", end_of_day + timedelta(days=30),
+                async_session_maker,
+                front_text,
+                "back",
+                end_of_day + timedelta(days=30),
             )
 
         response = await client.get("/bff/reviews/summary")
@@ -109,7 +113,10 @@ class TestGetReviewSummary:
         kept_uuid = await create_deck(alice_client, "Kept", [("кот", "cat")])
         deleted_uuid = await create_deck(alice_client, "Deleted", [("пёс", "dog")])
         public_uuid = await create_deck(
-            bob_client, "Public", [("лис", "fox")], is_public=True,
+            bob_client,
+            "Public",
+            [("лис", "fox")],
+            is_public=True,
         )
         await study_deck(alice_client, kept_uuid, "front", {"кот": "cat"})
         await study_deck(alice_client, deleted_uuid, "front", {"пёс": "dog"})
@@ -119,7 +126,9 @@ class TestGetReviewSummary:
             await set_memory_due(async_session_maker, front_text, "front", overdue)
         response = await alice_client.delete(f"/decks/{deleted_uuid}")
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        response = await bob_client.patch(f"/decks/{public_uuid}", json={"is_public": False})
+        response = await bob_client.patch(
+            f"/decks/{public_uuid}", json={"is_public": False}
+        )
         assert response.status_code == status.HTTP_200_OK
 
         response = await alice_client.get("/bff/reviews/summary")
@@ -141,7 +150,10 @@ class TestGetReviewSummary:
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
         await study_deck(client, deck_uuid, "front", {"кот": "cat"})
         await set_memory_due(
-            async_session_maker, "кот", "front", datetime.now(UTC) - timedelta(hours=1),
+            async_session_maker,
+            "кот",
+            "front",
+            datetime.now(UTC) - timedelta(hours=1),
         )
         review = await start_review(client, "front", 10)
 

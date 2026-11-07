@@ -41,10 +41,10 @@ class DeckContentCopier:
         self,
         source_deck_uuid: UUID,
         *,
-        reason: "ArchiveReason",
+        reason: ArchiveReason,
         retention: timedelta = timedelta(days=30),
         now: datetime | None = None,
-    ) -> "DeckCopyResult":
+    ) -> DeckCopyResult:
         if retention <= timedelta(0):
             raise ValueError("Archive retention must be positive")
 
@@ -73,7 +73,7 @@ class DeckContentCopier:
         source_deck_uuid: UUID,
         *,
         owner_id: int,
-    ) -> "DeckCopyResult":
+    ) -> DeckCopyResult:
         if owner_id <= 0:
             raise ValueError("The new deck owner must have a positive ID")
 
@@ -100,7 +100,7 @@ class DeckContentCopier:
         target: Deck,
         *,
         now: datetime,
-    ) -> "DeckCopyResult":
+    ) -> DeckCopyResult:
         source_card_ids = {deck_card.card_id for deck_card in deck_cards}
         if len(cards) != len(deck_cards) or {card.id for card in cards} != source_card_ids:
             raise ValueError("The deck links and cards do not match")
@@ -135,18 +135,22 @@ class DeckContentCopier:
                 deck_id=target.id,
                 card_id=new_cards_by_source_id[deck_card.card_id].id,
                 position=deck_card.position,
-            ) for deck_card in deck_cards
+            )
+            for deck_card in deck_cards
         ]
         self.uow.deck_card_repo.add_all(deck_cards=new_deck_cards)
         await self.uow.flush()
 
         return DeckCopyResult(
             deck=target,
-            card_id_map={source_id: card.id for source_id, card in new_cards_by_source_id.items()},
+            card_id_map={
+                source_id: card.id for source_id, card in new_cards_by_source_id.items()
+            },
             changes=ArchiveChanges(
                 deck_ids={source.id, target.id},
                 deck_uuids={source.uuid, target.uuid},
-                card_ids=source_card_ids | {card.id for card in new_cards_by_source_id.values()},
+                card_ids=source_card_ids
+                | {card.id for card in new_cards_by_source_id.values()},
                 card_uuids={card.uuid for card in cards}
                 | {card.uuid for card in new_cards_by_source_id.values()},
             ),
@@ -195,40 +199,45 @@ class DeckContentCopier:
                 updated_at=now,
             )
             targets.append(target)
-            new_cards_by_source.append({
-                card.id: Card(
-                    user_id=None,
-                    learning_key=card.learning_key,
-                    front_text=card.front_text,
-                    back_text=card.back_text,
-                    front_lang=card.front_lang,
-                    back_lang=card.back_lang,
-                    created_at=now,
-                    updated_at=now,
-                )
-                for card in cards
-            })
+            new_cards_by_source.append(
+                {
+                    card.id: Card(
+                        user_id=None,
+                        learning_key=card.learning_key,
+                        front_text=card.front_text,
+                        back_text=card.back_text,
+                        front_lang=card.front_lang,
+                        back_lang=card.back_lang,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    for card in cards
+                }
+            )
             source_card_ids_by_deck.append(source_card_ids)
 
         self.uow.deck_repo.add_all(targets)
         await self.uow.flush()
-        self.uow.card_repo.add_all([
-            card
-            for card_map in new_cards_by_source
-            for card in card_map.values()
-        ])
+        self.uow.card_repo.add_all(
+            [card for card_map in new_cards_by_source for card in card_map.values()]
+        )
         await self.uow.flush()
-        self.uow.deck_card_repo.add_all([
-            DeckCard(
-                deck_id=target.id,
-                card_id=card_map[link.card_id].id,
-                position=link.position,
-            )
-            for (_, links, _), target, card_map in zip(
-                graphs, targets, new_cards_by_source, strict=True,
-            )
-            for link in links
-        ])
+        self.uow.deck_card_repo.add_all(
+            [
+                DeckCard(
+                    deck_id=target.id,
+                    card_id=card_map[link.card_id].id,
+                    position=link.position,
+                )
+                for (_, links, _), target, card_map in zip(
+                    graphs,
+                    targets,
+                    new_cards_by_source,
+                    strict=True,
+                )
+                for link in links
+            ]
+        )
         await self.uow.flush()
 
         return [
@@ -245,10 +254,14 @@ class DeckContentCopier:
                 source_deck=source,
             )
             for (source, _, cards), target, card_map, source_card_ids in zip(
-                graphs, targets, new_cards_by_source, source_card_ids_by_deck,
+                graphs,
+                targets,
+                new_cards_by_source,
+                source_card_ids_by_deck,
                 strict=True,
             )
         ]
+
 
 class DeckTransferUserProgress:
     """Переносит историю и состояние пользователей после копирования колоды."""
@@ -281,10 +294,9 @@ class DeckTransferUserProgress:
         if ids == ():
             return ArchiveChanges()
 
-        if (
-            await self.uow.training_session_repo.has_by_deck_id(target.id, None)
-            or await self.uow.user_deck_repo.get_user_ids_by_deck_ids([target.id])
-        ):
+        if await self.uow.training_session_repo.has_by_deck_id(
+            target.id, None
+        ) or await self.uow.user_deck_repo.get_user_ids_by_deck_ids([target.id]):
             raise DeckProgressConflictError("Target deck already has user progress")
 
         sessions = await self.uow.training_session_repo.lock_for_transfer(source.id, ids)
@@ -298,9 +310,7 @@ class DeckTransferUserProgress:
         if not affected_user_ids:
             return ArchiveChanges()
 
-        new_cards = await self.uow.card_repo.get_by_ids(
-            list(copied.card_id_map.values())
-        )
+        new_cards = await self.uow.card_repo.get_by_ids(list(copied.card_id_map.values()))
         if {card.id for card in new_cards} != set(copied.card_id_map.values()):
             raise ValueError("Copied cards are missing")
         card_ids_by_learning_key: dict[UUID, set[int]] = {}
@@ -313,9 +323,7 @@ class DeckTransferUserProgress:
             if item.learning_key_snapshot is None:
                 new_card_id = mapped_by_id
             else:
-                candidates = card_ids_by_learning_key.get(
-                    item.learning_key_snapshot, set()
-                )
+                candidates = card_ids_by_learning_key.get(item.learning_key_snapshot, set())
                 if mapped_by_id in candidates:
                     new_card_id = mapped_by_id
                 elif len(candidates) == 1:
@@ -346,30 +354,38 @@ class DeckTransferUserProgress:
             if user_id in existing_state_users:
                 continue
             completed = [
-                session for session in user_sessions
+                session
+                for session in user_sessions
                 if session.status == TrainingSessionStatus.COMPLETED
                 and session.finished_at is not None
             ]
-            self.uow.user_deck_repo.add(UserDeck(
-                user_id=user_id,
-                deck_id=target.id,
-                sessions_count=len(completed),
-                correct_count=sum(session.correct_count for session in completed),
-                wrong_count=sum(session.wrong_count for session in completed),
-                last_studied_at=(
-                    max(session.finished_at for session in completed)
-                    if completed else None
-                ),
-                added_at=min(session.started_at for session in user_sessions),
-                is_saved=False,
-                is_favourite=False,
-                last_seen_version=(target.version if target.state == "active" else None),
-            ))
+            finished_ats = [
+                session.finished_at
+                for session in completed
+                if session.finished_at is not None
+            ]
+            self.uow.user_deck_repo.add(
+                UserDeck(
+                    user_id=user_id,
+                    deck_id=target.id,
+                    sessions_count=len(completed),
+                    correct_count=sum(session.correct_count for session in completed),
+                    wrong_count=sum(session.wrong_count for session in completed),
+                    last_studied_at=max(finished_ats) if finished_ats else None,
+                    added_at=min(session.started_at for session in user_sessions),
+                    is_saved=False,
+                    is_favourite=False,
+                    last_seen_version=(
+                        target.version if target.state == "active" else None
+                    ),
+                )
+            )
 
         await self.uow.flush()
         source.saves_count = (
             await self.uow.user_deck_repo.count_saved(source.id)
-            if source.state == "active" else 0
+            if source.state == "active"
+            else 0
         )
         target.saves_count = 0
         await self.uow.flush()
@@ -509,19 +525,23 @@ class DeckArchiveWorkflow:
             retention=self.retention,
             now=self.clock(),
         )
-        self.uow.deck_repo.add_archive_recipients([
-            DeckArchiveRecipient(
-                archive_deck_id=copied.deck.id, user_id=user_id,
-            )
-            for user_id in recipient_ids
-        ])
+        self.uow.deck_repo.add_archive_recipients(
+            [
+                DeckArchiveRecipient(
+                    archive_deck_id=copied.deck.id,
+                    user_id=user_id,
+                )
+                for user_id in recipient_ids
+            ]
+        )
         changes.include(copied.changes)
         changes.include(await self.progress.transfer(copied, user_ids=recipient_ids))
         await self.uow.flush()
         return DeckArchiveResult(copied.deck, recipient_ids, changes)
 
     async def archive_owner_public_decks(
-        self, owner_id: int,
+        self,
+        owner_id: int,
     ) -> DeckArchiveBatchResult:
         """Пакетный снимок публичных колод перед удалением владельца."""
         if owner_id <= 0:
@@ -531,18 +551,18 @@ class DeckArchiveWorkflow:
             return DeckArchiveBatchResult([], (), ArchiveChanges())
 
         deck_ids = [source.id for source, _, _ in graphs]
-        recipients_by_deck = {deck_id: set() for deck_id in deck_ids} # deck_id: set(user_ids)
+        recipients_by_deck = {
+            deck_id: set() for deck_id in deck_ids
+        }  # deck_id: set(user_ids)
         # берем пользователей по user_deck
-        for deck_id, user_id in (
-            await self.uow.user_deck_repo.get_archive_recipient_pairs(deck_ids)
+        for deck_id, user_id in await self.uow.user_deck_repo.get_archive_recipient_pairs(
+            deck_ids
         ):
-            if user_id != owner_id: # исключаем владельца, аккаунт все равно удаляется
+            if user_id != owner_id:  # исключаем владельца, аккаунт все равно удаляется
                 recipients_by_deck[deck_id].add(user_id)
 
         # список колоды, у которых есть получатели архивной копии
-        eligible = [
-            graph for graph in graphs if recipients_by_deck[graph[0].id]
-        ]
+        eligible = [graph for graph in graphs if recipients_by_deck[graph[0].id]]
         if not eligible:
             return DeckArchiveBatchResult([], (), ArchiveChanges())
 
@@ -554,7 +574,8 @@ class DeckArchiveWorkflow:
         )
         recipients = [
             DeckArchiveRecipient(
-                archive_deck_id=copied.deck.id, user_id=user_id,
+                archive_deck_id=copied.deck.id,
+                user_id=user_id,
             )
             for copied in copied_decks
             for user_id in sorted(recipients_by_deck[copied.source_deck.id])
@@ -573,12 +594,15 @@ class DeckArchiveWorkflow:
             affected_users.update(ids)
         await self.uow.flush()
         return DeckArchiveBatchResult(
-            results, tuple(sorted(affected_users)), changes,
+            results,
+            tuple(sorted(affected_users)),
+            changes,
         )
 
     async def delete_deck(self, source_deck_uuid: UUID) -> DeckArchiveResult:
         result = await self.archive_deck(
-            source_deck_uuid, reason=ArchiveReason.DELETED,
+            source_deck_uuid,
+            reason=ArchiveReason.DELETED,
         )
         source = await self.uow.deck_repo.get_by_uuid(source_deck_uuid)
         await self.uow.deck_repo.delete(source)
@@ -587,7 +611,8 @@ class DeckArchiveWorkflow:
 
     async def make_private(self, source_deck_uuid: UUID) -> DeckArchiveResult:
         result = await self.archive_deck(
-            source_deck_uuid, reason=ArchiveReason.MADE_PRIVATE,
+            source_deck_uuid,
+            reason=ArchiveReason.MADE_PRIVATE,
         )
         source = await self.uow.deck_repo.get_by_uuid(source_deck_uuid)
         source.is_public = False
@@ -597,17 +622,19 @@ class DeckArchiveWorkflow:
 
     @traced("decks.archiver.preserve")
     async def preserve(
-        self, archive_deck_uuid: UUID, *, user_id: int,
+        self,
+        archive_deck_uuid: UUID,
+        *,
+        user_id: int,
     ) -> DeckPreservationResult:
         if user_id <= 0:
             raise ValueError("User ID must be positive")
-        archive, deck_cards, cards = await self.copier._lock_source_graph(
-            archive_deck_uuid
-        )
+        archive, deck_cards, cards = await self.copier._lock_source_graph(archive_deck_uuid)
         if archive.state != "archived":
             raise DeckNotFoundError()
         recipient = await self.uow.deck_repo.get_archive_recipient_for_update(
-            archive_deck_id=archive.id, user_id=user_id,
+            archive_deck_id=archive.id,
+            user_id=user_id,
         )
         if (
             recipient is None
@@ -629,10 +656,17 @@ class DeckArchiveWorkflow:
         if archive.expires_at is None or now >= archive.expires_at:
             raise ArchiveExpiredError("Archive preservation period has expired")
         target = Deck(
-            user_id=user_id, state="active", is_public=False, version=1,
+            user_id=user_id,
+            state="active",
+            is_public=False,
+            version=1,
         )
         copied = await self.copier.create_copy(
-            archive, deck_cards, cards, target, now=now,
+            archive,
+            deck_cards,
+            cards,
+            target,
+            now=now,
         )
         changes = copied.changes
         changes.include(await self.progress.transfer(copied, user_ids=(user_id,)))
@@ -641,6 +675,9 @@ class DeckArchiveWorkflow:
         recipient.preserved_deck_uuid_snapshot = copied.deck.uuid
         await self.uow.flush()
         return DeckPreservationResult(
-            copied.deck.id, copied.deck.uuid,
-            already_preserved=False, copy_deleted=False, changes=changes,
+            copied.deck.id,
+            copied.deck.uuid,
+            already_preserved=False,
+            copy_deleted=False,
+            changes=changes,
         )

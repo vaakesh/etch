@@ -17,7 +17,8 @@ def runtime(dependency_runtime, monkeypatch):
         clock.now += seconds
 
     monkeypatch.setattr(init_models.time, "monotonic", lambda: clock.now)
-    monkeypatch.setattr(init_models.time, "sleep", Mock(side_effect=sleep))
+    dependency_runtime.sleep = Mock(side_effect=sleep)
+    monkeypatch.setattr(init_models.time, "sleep", dependency_runtime.sleep)
     dependency_runtime.download = Mock()
     monkeypatch.setattr(init_models, "snapshot_download", dependency_runtime.download)
     dependency_runtime.readiness.get.return_value = httpx.Response(
@@ -65,7 +66,7 @@ class TestWaitForServices:
             call("http://rag-qdrant:6333/readyz", timeout=1.0),
             call("http://rag-qdrant:6333/readyz", timeout=1.0),
         ]
-        assert init_models.time.sleep.call_args_list == [call(1.0), call(1.0)]
+        assert runtime.sleep.call_args_list == [call(1.0), call(1.0)]
         assert runtime.download.call_args_list == [
             call(repo_id="BAAI/bge-m3"),
             call(repo_id="BAAI/bge-reranker-v2-m3"),

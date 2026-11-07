@@ -1,8 +1,7 @@
-from typing import TYPE_CHECKING
-import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
+from uuid import UUID
 
-from app.database import Base
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -17,23 +16,26 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.limits import MAX_DECK_SIZE
+from app.common.sql import single_line_sql, trimmed_sql
 from app.common.utils import utcnow
+from app.database import Base
+
 if TYPE_CHECKING:
     from app.cards.models import Card
-    from app.users.models import User
     from app.training_sessions.models import TrainingSession
+    from app.users.models import User
 
 
 class Deck(Base):
     __tablename__ = "decks"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    uuid: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
@@ -62,8 +64,8 @@ class Deck(Base):
         nullable=True,
     )
     archive_reason: Mapped[str | None] = mapped_column(String(13), nullable=True)
-    source_deck_uuid_snapshot: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+    source_deck_uuid_snapshot: Mapped[UUID | None] = mapped_column(
+        postgresUUID(as_uuid=True),
         nullable=True,
     )
 
@@ -73,13 +75,13 @@ class Deck(Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     words_count: Mapped[int] = mapped_column(
-        Integer, 
+        Integer,
         default=0,
         server_default="0",
         nullable=False,
     )
     is_public: Mapped[bool] = mapped_column(
-        Boolean, 
+        Boolean,
         default=False,
         server_default=text("false"),
         nullable=False,
@@ -110,30 +112,30 @@ class Deck(Base):
         nullable=False,
     )
 
-    user: Mapped["User | None"] = relationship("User", back_populates="decks", lazy="raise")
-    card_links: Mapped[list["DeckCard"]] = relationship(
-        "DeckCard", 
-        back_populates="deck", 
+    user: Mapped[User | None] = relationship("User", back_populates="decks", lazy="raise")
+    card_links: Mapped[list[DeckCard]] = relationship(
+        "DeckCard",
+        back_populates="deck",
         cascade="all, delete-orphan",
         passive_deletes=True,
         lazy="raise",
     )
-    archive_recipients: Mapped[list["DeckArchiveRecipient"]] = relationship(
+    archive_recipients: Mapped[list[DeckArchiveRecipient]] = relationship(
         "DeckArchiveRecipient",
         foreign_keys="DeckArchiveRecipient.archive_deck_id",
         back_populates="archive_deck",
         passive_deletes="all",
         lazy="raise",
     )
-    training_sessions: Mapped[list["TrainingSession"]] = relationship(
-        "TrainingSession", 
+    training_sessions: Mapped[list[TrainingSession]] = relationship(
+        "TrainingSession",
         back_populates="deck",
         passive_deletes="all",
         lazy="raise",
     )
 
     @property
-    def owner_uuid(self) -> uuid.UUID | None:
+    def owner_uuid(self) -> UUID | None:
         return self.user.uuid if self.user is not None else None
 
     @property
@@ -195,23 +197,17 @@ class Deck(Base):
             name="ck_deck_version_ge_1",
         ),
         CheckConstraint(
-            'char_length(title) BETWEEN 3 AND 50',
+            "char_length(title) BETWEEN 3 AND 50",
             name="ck_deck_title_length",
         ),
+        CheckConstraint(trimmed_sql("title"), name="ck_deck_title_trimmed"),
+        CheckConstraint(single_line_sql("title"), name="ck_deck_title_single_line"),
         CheckConstraint(
-            "title = btrim(title, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
-            name="ck_deck_title_trimmed",
-        ),
-        CheckConstraint(
-            "title = translate(title, U&'\\0009\\000A\\000B\\000C\\000D\\0085\\2028\\2029', '')",
-            name="ck_deck_title_single_line",
-        ),
-        CheckConstraint(
-            'description IS NULL OR char_length(description) BETWEEN 1 AND 3000',
+            "description IS NULL OR char_length(description) BETWEEN 1 AND 3000",
             name="ck_deck_description_length",
         ),
         CheckConstraint(
-            "description IS NULL OR description = btrim(description, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
+            f"description IS NULL OR {trimmed_sql('description')}",
             name="ck_deck_description_trimmed",
         ),
         Index(
@@ -227,12 +223,12 @@ class DeckCard(Base):
     __tablename__ = "deck_cards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    uuid: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
 
     deck_id: Mapped[int] = mapped_column(
@@ -253,7 +249,7 @@ class DeckCard(Base):
         Integer,
         nullable=False,
     )
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -266,8 +262,8 @@ class DeckCard(Base):
         nullable=False,
     )
 
-    deck: Mapped["Deck"] = relationship("Deck", back_populates="card_links", lazy="raise")
-    card: Mapped["Card"] = relationship("Card", back_populates="deck_links", lazy="raise")
+    deck: Mapped[Deck] = relationship("Deck", back_populates="card_links", lazy="raise")
+    card: Mapped[Card] = relationship("Card", back_populates="deck_links", lazy="raise")
 
     __table_args__ = (
         UniqueConstraint("deck_id", "card_id", name="uq_deck_card"),
@@ -297,7 +293,7 @@ class DeckCard(Base):
             name="uq_deck_cards_deck_position",
             deferrable=True,
             initially="DEFERRED",
-        )
+        ),
     )
 
 
@@ -318,27 +314,36 @@ class UserDeck(Base):
     )
 
     sessions_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0", nullable=False,
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
     )
     correct_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0", nullable=False,
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
     )
     wrong_count: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0", nullable=False,
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
     )
     last_studied_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
     is_favourite: Mapped[bool] = mapped_column(
-        Boolean, 
+        Boolean,
         default=False,
         server_default=text("false"),
         nullable=False,
     )
     is_saved: Mapped[bool] = mapped_column(
         Boolean,
-        default=False, 
+        default=False,
         server_default=text("false"),
         nullable=False,
     )
@@ -357,13 +362,16 @@ class UserDeck(Base):
         CheckConstraint("user_id > 0", name="ck_user_decks_user_id_positive"),
         CheckConstraint("deck_id > 0", name="ck_user_decks_deck_id_positive"),
         CheckConstraint(
-            "sessions_count >= 0", name="ck_user_decks_sessions_count_ge_0",
+            "sessions_count >= 0",
+            name="ck_user_decks_sessions_count_ge_0",
         ),
         CheckConstraint(
-            "correct_count >= 0", name="ck_user_decks_correct_count_ge_0",
+            "correct_count >= 0",
+            name="ck_user_decks_correct_count_ge_0",
         ),
         CheckConstraint(
-            "wrong_count >= 0", name="ck_user_decks_wrong_count_ge_0",
+            "wrong_count >= 0",
+            name="ck_user_decks_wrong_count_ge_0",
         ),
         CheckConstraint(
             "sessions_count > 0 OR (correct_count = 0 AND wrong_count = 0)",
@@ -396,7 +404,8 @@ class DeckArchiveRecipient(Base):
         primary_key=True,
     )
     preserved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     preserved_deck_id: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -404,20 +413,23 @@ class DeckArchiveRecipient(Base):
         index=True,
         nullable=True,
     )
-    preserved_deck_uuid_snapshot: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True,
+    preserved_deck_uuid_snapshot: Mapped[UUID | None] = mapped_column(
+        postgresUUID(as_uuid=True),
+        nullable=True,
     )
 
-    archive_deck: Mapped["Deck"] = relationship(
+    archive_deck: Mapped[Deck] = relationship(
         "Deck",
         foreign_keys=[archive_deck_id],
         back_populates="archive_recipients",
         lazy="raise",
     )
-    preserved_deck: Mapped["Deck | None"] = relationship(
-        "Deck", foreign_keys=[preserved_deck_id], lazy="raise",
+    preserved_deck: Mapped[Deck | None] = relationship(
+        "Deck",
+        foreign_keys=[preserved_deck_id],
+        lazy="raise",
     )
-    user: Mapped["User"] = relationship("User", lazy="raise")
+    user: Mapped[User] = relationship("User", lazy="raise")
 
     __table_args__ = (
         CheckConstraint(

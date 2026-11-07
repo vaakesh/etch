@@ -1,11 +1,10 @@
 from typing import Annotated
 
-from app.deps import UoWFactory, get_uow_factory
-from app.training_sessions.service import TrainingSessionService
 from fastapi import Depends
 
+from app.deps import UoWFactory, get_uow_factory
 from app.redis.deps import CacheInvalidatorDeps
-from app.tracing import traced
+from app.training_sessions.service import TrainingSessionService
 
 
 def get_training_session_service(
@@ -16,6 +15,7 @@ def get_training_session_service(
         uow_factory=uow_factory,
         cache_invalidator=cache_invalidator,
     )
+
 
 TrainingSessionServiceDeps = Annotated[
     TrainingSessionService,

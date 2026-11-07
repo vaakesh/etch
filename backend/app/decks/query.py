@@ -16,18 +16,15 @@ def apply_library_pagination[T: tuple](
             stmt = stmt.where(
                 or_(
                     UserDeck.last_studied_at < cursor.last_studied_at,
-
                     and_(
                         UserDeck.last_studied_at == cursor.last_studied_at,
                         UserDeck.added_at < cursor.added_at,
                     ),
-
                     and_(
                         UserDeck.last_studied_at == cursor.last_studied_at,
                         UserDeck.added_at == cursor.added_at,
                         Deck.id < cursor.id,
                     ),
-
                     UserDeck.last_studied_at.is_(None),
                 )
             )
@@ -40,8 +37,8 @@ def apply_library_pagination[T: tuple](
                         and_(
                             UserDeck.added_at == cursor.added_at,
                             Deck.id < cursor.id,
-                        )
-                    )
+                        ),
+                    ),
                 )
             )
 

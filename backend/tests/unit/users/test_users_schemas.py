@@ -12,7 +12,9 @@ CREATE_USER_DATA = {
 
 
 class TestCreateUserRequest:
-    @pytest.mark.parametrize("timezone", ["Europe/Moscow", "America/Argentina/Buenos_Aires", "UTC"])
+    @pytest.mark.parametrize(
+        "timezone", ["Europe/Moscow", "America/Argentina/Buenos_Aires", "UTC"]
+    )
     def test_keeps_known_timezone(self, timezone):
         payload = CreateUserRequest(**CREATE_USER_DATA, timezone=timezone)
 
@@ -23,7 +25,9 @@ class TestCreateUserRequest:
 
         assert payload.timezone == "UTC"
 
-    @pytest.mark.parametrize("timezone", [None, "", "Mars/Olympus", "europe/moscow", 3, "x" * 65])
+    @pytest.mark.parametrize(
+        "timezone", [None, "", "Mars/Olympus", "europe/moscow", 3, "x" * 65]
+    )
     def test_falls_back_to_utc_for_missing_or_unknown_timezone(self, timezone):
         payload = CreateUserRequest(**CREATE_USER_DATA, timezone=timezone)
 
@@ -40,7 +44,8 @@ class TestUpdateUserRequest:
     @pytest.mark.parametrize(
         "changes",
         [
-            {"username": "Alice"}, {"email": "alice@example.com"},
+            {"username": "Alice"},
+            {"email": "alice@example.com"},
             {"username": "Alice", "email": "alice@example.com"},
         ],
     )
@@ -51,10 +56,13 @@ class TestUpdateUserRequest:
         assert payload.model_fields_set == set(changes)
 
     def test_normalizes_all_related_fields(self):
-        payload = UpdateUserRequest(username=" \tAlice-01_\n", email=" \tALICE@EXAMPLE.COM\n")
+        payload = UpdateUserRequest(
+            username=" \tAlice-01_\n", email=" \tALICE@EXAMPLE.COM\n"
+        )
 
         assert payload.model_dump(exclude_unset=True) == {
-            "username": "Alice-01_", "email": "alice@example.com",
+            "username": "Alice-01_",
+            "email": "alice@example.com",
         }
 
     @pytest.mark.parametrize("field", ["username", "email"])
@@ -70,13 +78,16 @@ class TestUserProfileResponse:
     @pytest.mark.parametrize("field", ["deck_count", "total_saves_count"])
     def test_rejects_negative_counter(self, users_entity, field):
         data = {
-            "uuid": users_entity.uuid, "username": "test-user",
-            "created_at": users_entity.created_at, "deck_count": 0, "total_saves_count": 0,
+            "uuid": users_entity.uuid,
+            "username": "test-user",
+            "created_at": users_entity.created_at,
+            "deck_count": 0,
+            "total_saves_count": 0,
             field: -1,
         }
 
         with pytest.raises(ValidationError) as error:
-            UserProfileResponse(**data)
+            UserProfileResponse.model_validate(data)
 
         assert error.value.errors()[0]["loc"] == (field,)
         assert error.value.errors()[0]["type"] == "greater_than_equal"

@@ -1,26 +1,24 @@
 import asyncio
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
-import app.models  # noqa: F401 # sqlalchemy models registration
+from fastapi import Depends, FastAPI, Response
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+from app import models  # noqa: F401 # sqlalchemy models registration
 from app.auth.router import router as auth_router
 from app.bff.router import router as bff_router
 from app.cards.router import router as cards_router
 from app.decks.router import router as decks_router
-from app.rag.deps import get_rag_client
-from app.rag.router import router as rag_router
 from app.deps import get_resources, require_metrics_access
 from app.exception_handlers import register_exception_handlers
 from app.health import router as health_router
 from app.logging_config import setup_logging
 from app.middleware import setup_middlewares
+from app.rag.deps import get_rag_client
+from app.rag.router import router as rag_router
 from app.redis.deps import get_redis
-from app.training_sessions.router import router as training_sessions_router
-from app.users.router import router as users_router
-from fastapi import Depends, FastAPI, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
 from app.telemetry import (
     setup_otel_logging,
     setup_tracing,
@@ -28,6 +26,9 @@ from app.telemetry import (
     shutdown_tracing,
 )
 from app.tracing import traced
+from app.training_sessions.router import router as training_sessions_router
+from app.users.router import router as users_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,14 +45,19 @@ async def lifespan(app: FastAPI):
 
         trace_provider = setup_tracing()
         resources.push_async_callback(
-            asyncio.to_thread, shutdown_tracing, trace_provider,
+            asyncio.to_thread,
+            shutdown_tracing,
+            trace_provider,
         )
 
         log_provider, log_handler = setup_otel_logging(
             resource=trace_provider.resource,
         )
         resources.push_async_callback(
-            asyncio.to_thread, shutdown_otel_logging, log_provider, log_handler,
+            asyncio.to_thread,
+            shutdown_otel_logging,
+            log_provider,
+            log_handler,
         )
 
         redis = get_redis()
@@ -90,6 +96,7 @@ FastAPIInstrumentor.instrument_app(
     app,
     exclude_spans=["receive", "send"],
 )
+
 
 @app.get(
     "/metrics",

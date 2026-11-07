@@ -103,18 +103,24 @@ class TestUserCreate:
         ("username", "email", "expected_code", "expected_message"),
         [
             pytest.param(
-                "Alice", "bob@example.com",
-                "USERNAME_ALREADY_EXISTS", "Username is already in use",
+                "Alice",
+                "bob@example.com",
+                "USERNAME_ALREADY_EXISTS",
+                "Username is already in use",
                 id="username_taken",
             ),
             pytest.param(
-                "alice", "bob@example.com",
-                "USERNAME_ALREADY_EXISTS", "Username is already in use",
+                "alice",
+                "bob@example.com",
+                "USERNAME_ALREADY_EXISTS",
+                "Username is already in use",
                 id="username_case_insensitive",
             ),
             pytest.param(
-                "bob", "alice@example.com",
-                "EMAIL_ALREADY_EXISTS", "Email is already in use",
+                "bob",
+                "alice@example.com",
+                "EMAIL_ALREADY_EXISTS",
+                "Email is already in use",
                 id="email_taken",
             ),
             pytest.param(
@@ -145,12 +151,10 @@ class TestUserCreate:
         )
 
         async with async_session_maker() as session:
-            users_before = (
-                await session.execute(select(User.__table__))
-            ).mappings().all()
+            users_before = (await session.execute(select(User.__table__))).mappings().all()
             settings_before = (
-                await session.execute(select(UserSettings.__table__))
-            ).mappings().all()
+                (await session.execute(select(UserSettings.__table__))).mappings().all()
+            )
         assert len(users_before) == 1
         assert len(settings_before) == 1
 
@@ -166,12 +170,10 @@ class TestUserCreate:
             "message": expected_message,
         }
         async with async_session_maker() as session:
-            users_after = (
-                await session.execute(select(User.__table__))
-            ).mappings().all()
+            users_after = (await session.execute(select(User.__table__))).mappings().all()
             settings_after = (
-                await session.execute(select(UserSettings.__table__))
-            ).mappings().all()
+                (await session.execute(select(UserSettings.__table__))).mappings().all()
+            )
 
         assert users_after == users_before
         assert settings_after == settings_before
@@ -209,9 +211,7 @@ class TestUserCreate:
         }
         async with async_session_maker() as session:
             user_ids = (await session.scalars(select(User.id))).all()
-            settings_user_ids = (
-                await session.scalars(select(UserSettings.user_id))
-            ).all()
+            settings_user_ids = (await session.scalars(select(UserSettings.user_id))).all()
 
         assert user_ids == []
         assert settings_user_ids == []
@@ -220,13 +220,17 @@ class TestUserCreate:
         ("second_username", "second_email", "expected_code", "expected_message"),
         [
             pytest.param(
-                "alice", "bob@example.com",
-                "USERNAME_ALREADY_EXISTS", "Username is already in use",
+                "alice",
+                "bob@example.com",
+                "USERNAME_ALREADY_EXISTS",
+                "Username is already in use",
                 id="same_username",
             ),
             pytest.param(
-                "bob", "alice@example.com",
-                "EMAIL_ALREADY_EXISTS", "Email is already in use",
+                "bob",
+                "alice@example.com",
+                "EMAIL_ALREADY_EXISTS",
+                "Email is already in use",
                 id="same_email",
             ),
         ],
@@ -326,7 +330,7 @@ class TestUserCreate:
 
 class TestUserClientIsolation:
     async def test_each_client_sees_its_own_user(
-        self, 
+        self,
         user_factory: UserFactory,
         auth_client_factory: AuthClientFactory,
     ):

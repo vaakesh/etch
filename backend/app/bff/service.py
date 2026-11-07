@@ -1,8 +1,5 @@
 import asyncio
 import logging
-import time
-from datetime import datetime, timedelta, timezone
-from app.tracing import traced
 from typing import Literal
 from uuid import UUID
 
@@ -18,8 +15,6 @@ from app.cards.schemas import CardResponse, InternalCard
 from app.cards.service import CardService
 from app.common.schemas import CursorPage
 from app.common.types import PositiveInt, SearchQuery
-from app.common.utils import utcnow
-from app.decks.utils import calculate_accuracy, make_user_deck_identity
 from app.decks.errors import UserDeckNotFoundError
 from app.decks.models import UserDeck
 from app.decks.schemas import (
@@ -29,27 +24,31 @@ from app.decks.schemas import (
     InternalUserDeck,
 )
 from app.decks.service import DeckService, UserDeckService
+from app.decks.utils import calculate_accuracy, make_user_deck_identity
 from app.deps import UoWFactory
-from app.redis.schemas import UserDeckIdentity
 from app.redis.invalidation import CacheInvalidator
+from app.redis.schemas import UserDeckIdentity
 from app.redis.service import (
     RedisCacheService,
 )
+from app.tracing import traced
 from app.training_sessions.schemas import PracticeSessionResponse, ReviewSummaryResponse
 from app.training_sessions.service import TrainingSessionService
 from app.users.service import UserService
 
 logger = logging.getLogger(__name__)
 
+
 def get_is_favourite(user_deck: UserDeck) -> bool:
     if user_deck is None:
         return False
-    
+
     return user_deck.is_favourite
+
 
 class BffService:
     def __init__(
-        self, 
+        self,
         uow_factory: UoWFactory,
         cache_service: RedisCacheService,
         cache_invalidator: CacheInvalidator,
@@ -125,9 +124,7 @@ class BffService:
             deck_ids=cached_page.items,
         )
 
-        decks_by_id: dict[int, InternalDeck] = dict(
-            deck_lookup.cached
-        )
+        decks_by_id: dict[int, InternalDeck] = dict(deck_lookup.cached)
 
         if deck_lookup.missing:
             fetched_decks, missing_decks = await self.deck_service.get_visible_by_ids(
@@ -147,12 +144,7 @@ class BffService:
                     limit=limit,
                 )
 
-            decks_by_id.update(
-                {
-                    deck_id: deck
-                    for deck_id, deck in fetched_decks.items()
-                }
-            )
+            decks_by_id.update({deck_id: deck for deck_id, deck in fetched_decks.items()})
 
             await self.cache_service.cache_decks(
                 decks=[deck for deck in fetched_decks.values()],
@@ -173,10 +165,7 @@ class BffService:
             )
 
         return CursorPage[InternalDeck](
-            items=[
-                decks_by_id[deck_id]
-                for deck_id in cached_page.items
-            ],
+            items=[decks_by_id[deck_id] for deck_id in cached_page.items],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
         )
@@ -191,7 +180,7 @@ class BffService:
             user_id=user_id,
             deck_ids=deck_ids,
         )
-        user_decks: dict[UserDeckIdentity, UserDeck] = lookup_user_decks.cached
+        user_decks: dict[UserDeckIdentity, InternalUserDeck] = lookup_user_decks.cached
         if lookup_user_decks.missing:
             identities = lookup_user_decks.missing
             missing_deck_ids: list[int] = []
@@ -206,9 +195,9 @@ class BffService:
                 user_decks=fetched_user_decks,
             )
             for fetched_user_deck in fetched_user_decks:
-                user_decks[
-                    (fetched_user_deck.user_id, fetched_user_deck.deck_id)
-                ] = fetched_user_deck
+                user_decks[(fetched_user_deck.user_id, fetched_user_deck.deck_id)] = (
+                    fetched_user_deck
+                )
         return user_decks
 
     @traced("bff.service.get_cards_library_deck_page")
@@ -227,16 +216,17 @@ class BffService:
         cards_by_deck: dict[int, list[InternalCard]] = {}
 
         if deck_cards_lookup.missing:
-            fetched_cards_by_deck = await self._fetch_and_cache_library_deck_page_cards_previews(
-                user_id=user_id,
-                deck_ids=deck_cards_lookup.missing,
+            fetched_cards_by_deck = (
+                await self._fetch_and_cache_library_deck_page_cards_previews(
+                    user_id=user_id,
+                    deck_ids=deck_cards_lookup.missing,
+                )
             )
             cards_by_deck.update(fetched_cards_by_deck)
 
         cached_card_ids_by_deck = {
-            deck_id: card_ids[:2] # первые 2 карточки
-            for deck_id, card_ids
-            in deck_cards_lookup.cached.items()
+            deck_id: card_ids[:2]  # первые 2 карточки
+            for deck_id, card_ids in deck_cards_lookup.cached.items()
         }
 
         card_ids = list(
@@ -248,18 +238,13 @@ class BffService:
         )
 
         if not card_ids:
-            return {
-                deck_id: cards_by_deck.get(deck_id, [])
-                for deck_id in deck_ids
-            }
+            return {deck_id: cards_by_deck.get(deck_id, []) for deck_id in deck_ids}
 
         card_lookup = await self.cache_service.get_cached_cards(
             card_ids=card_ids,
         )
 
-        cards_by_id: dict[int, InternalCard] = dict(
-            card_lookup.cached
-        )
+        cards_by_id: dict[int, InternalCard] = dict(card_lookup.cached)
 
         fetched_cards: list[InternalCard] = []
 
@@ -268,12 +253,7 @@ class BffService:
                 card_ids=card_lookup.missing,
             )
 
-            cards_by_id.update(
-                {
-                    card.id: card
-                    for card in fetched_cards
-                }
-            )
+            cards_by_id.update({card.id: card for card in fetched_cards})
 
             await self.cache_service.cache_cards(
                 cards=fetched_cards,
@@ -281,16 +261,13 @@ class BffService:
 
         # ID карточек был в кэше, но самих карточек в БД не нашлось -> кэш deck_cards старый
         unresolved_card_ids = {
-            card_id
-            for card_id in card_lookup.missing
-            if card_id not in cards_by_id
+            card_id for card_id in card_lookup.missing if card_id not in cards_by_id
         }
 
         # какие именно deck_cards ссылаются на несуществующие карточки
         stale_deck_ids = {
             deck_id
-            for deck_id, card_ids
-            in cached_card_ids_by_deck.items()
+            for deck_id, card_ids in cached_card_ids_by_deck.items()
             if unresolved_card_ids.intersection(card_ids)
         }
 
@@ -302,20 +279,13 @@ class BffService:
 
             cards_by_deck.update(refreshed_cards)
 
-
         for deck_id, card_ids in cached_card_ids_by_deck.items():
             if deck_id in stale_deck_ids:
                 continue
 
-            cards_by_deck[deck_id] = [
-                cards_by_id[card_id]
-                for card_id in card_ids
-            ]
+            cards_by_deck[deck_id] = [cards_by_id[card_id] for card_id in card_ids]
 
-        return {
-            deck_id: cards_by_deck.get(deck_id, [])
-            for deck_id in deck_ids
-        }
+        return {deck_id: cards_by_deck.get(deck_id, []) for deck_id in deck_ids}
 
     async def _get_cards_library_card_page(
         self,
@@ -343,7 +313,6 @@ class BffService:
 
         cached_page = cards_page_lookup.page
 
-
         if not cached_page.items:
             return CursorPage[InternalCard](
                 items=[],
@@ -368,7 +337,8 @@ class BffService:
             unresolved_cards = []
 
             for missing_card_id in cards_lookup.missing:
-                # проходим по всему списку, можно оптимизировать и пройти только по fetched списку
+                # проходим по всему списку,
+                # можно оптимизировать и пройти только по fetched списку
                 if missing_card_id not in cards_by_id:
                     unresolved_cards.append(missing_card_id)
 
@@ -384,10 +354,7 @@ class BffService:
                 )
 
         return CursorPage[InternalCard](
-            items=[
-                cards_by_id[card_id]
-                for card_id in cached_page.items
-            ],
+            items=[cards_by_id[card_id] for card_id in cached_page.items],
             next_cursor=cached_page.next_cursor,
             has_more=cached_page.has_more,
         )
@@ -423,19 +390,17 @@ class BffService:
                 cursor=cursor,
                 limit=limit,
             )
-            decks, next_cursor, has_more = (
-                page.items, 
-                page.next_cursor, 
-                page.has_more
-            )
+            decks, next_cursor, has_more = (page.items, page.next_cursor, page.has_more)
         else:
-            decks, next_cursor, has_more = (
-                await self.user_deck_service.get_my_favourite_decks(
-                    user_id=user_id,
-                    search_query=search_query,
-                    cursor=cursor,
-                    limit=limit,
-                )
+            (
+                decks,
+                next_cursor,
+                has_more,
+            ) = await self.user_deck_service.get_my_favourite_decks(
+                user_id=user_id,
+                search_query=search_query,
+                cursor=cursor,
+                limit=limit,
             )
 
         await asyncio.gather(
@@ -470,19 +435,15 @@ class BffService:
         if not deck_ids:
             return {}
 
-        fetched_by_deck = (
-            await self.deck_service.get_all_cards_by_deck_ids(
-                user_id=user_id,
-                deck_ids=deck_ids,
-                offset=0,
-                limit=2,
-            )
+        fetched_by_deck = await self.deck_service.get_all_cards_by_deck_ids(
+            user_id=user_id,
+            deck_ids=deck_ids,
+            offset=0,
+            limit=2,
         )
 
         all_fetched_cards = [
-            card
-            for cards in list(fetched_by_deck.values())
-            for card in cards
+            card for cards in list(fetched_by_deck.values()) for card in cards
         ]
 
         await asyncio.gather(
@@ -508,7 +469,7 @@ class BffService:
         cursor: str | None = None,
         limit: int = 50,
     ) -> CursorPage[InternalCard]:
-        
+
         # no cache -> get from db
         cards, next_cursor, has_more = await self.card_service.get_cards_by_user_id(
             user_id=user_id,
@@ -549,14 +510,11 @@ class BffService:
     ) -> LibraryDeckItemResponse:
         return LibraryDeckItemResponse(
             deck=DeckResponse.model_validate(obj=deck),
-            viewer_state=DeckViewerStateResponse.validate(
+            viewer_state=DeckViewerStateResponse.from_user_deck(
                 user_deck=user_deck,
                 knowledge=knowledge,
             ),
-            preview_cards=[
-                CardResponse.model_validate(obj=card)
-                for card in cards
-            ],
+            preview_cards=[CardResponse.model_validate(obj=card) for card in cards],
         )
 
     @staticmethod
@@ -571,9 +529,9 @@ class BffService:
 
     @traced("bff.service.get_home_dashboard")
     async def get_home_dashboard(
-            self,
-            user_id: int,
-        ) -> HomeDashboardResponse:
+        self,
+        user_id: int,
+    ) -> HomeDashboardResponse:
         page = await self.deck_service.get_owned_decks(
             owner_id=user_id,
             search_query=None,
@@ -587,21 +545,18 @@ class BffService:
             deck_ids=[deck.id for deck in decks],
             user_id=user_id,
         )
-        user_decks_by_deck_id = {
-            user_deck.deck_id: user_deck
-            for user_deck in user_decks
-        }
+        user_decks_by_deck_id = {user_deck.deck_id: user_deck for user_deck in user_decks}
 
         knowledge_by_deck_id = await self.training_session_service.get_decks_knowledge(
             user_id=user_id,
             deck_ids=[deck.id for deck in decks],
         )
 
-        user_daily_activity: list[DailyActivityResponse] = (
-            await self.training_session_service.get_user_activity_for_last_days(
-                user_id=user_id,
-                days=7,
-            )
+        user_daily_activity: list[
+            DailyActivityResponse
+        ] = await self.training_session_service.get_user_activity_for_last_days(
+            user_id=user_id,
+            days=7,
         )
 
         result = HomeDashboardResponse(
@@ -613,11 +568,12 @@ class BffService:
                     description=deck.description,
                     words_count=deck.words_count,
                     user_accuracy=calculate_accuracy(
-                        user_decks_by_deck_id.get(deck.id, None),
+                        user_decks_by_deck_id.get(deck.id),
                     ),
                     user_knowledge=knowledge_by_deck_id[deck.id],
                     updated_at=deck.updated_at,
-                ) for deck in decks
+                )
+                for deck in decks
             ],
             progress=await self.training_session_service.get_user_progress(
                 user_id=user_id,
@@ -659,7 +615,7 @@ class BffService:
         return [
             CatalogDeckItemResponse(
                 deck=DeckResponse.model_validate(deck),
-                viewer_state=DeckViewerStateResponse.validate(
+                viewer_state=DeckViewerStateResponse.from_user_deck(
                     user_deck=user_decks_by_identity[
                         make_user_deck_identity(
                             user_id=user_id,
@@ -667,10 +623,13 @@ class BffService:
                         )
                     ],
                     knowledge=knowledge_by_deck_id[deck.id],
-                ) if make_user_deck_identity(
+                )
+                if make_user_deck_identity(
                     user_id=user_id,
                     deck_id=deck.id,
-                ) in user_decks_by_identity else None
+                )
+                in user_decks_by_identity
+                else None,
             )
             for deck in decks
         ]
@@ -722,15 +681,15 @@ class BffService:
             if (user_id, deck.id) not in user_decks:
                 raise UserDeckNotFoundError()
 
-
         result = CursorPage[LibraryDeckItemResponse](
             items=[
                 self._build_library_deck(
                     deck=deck,
                     user_deck=user_decks[(user_id, deck.id)],
                     knowledge=knowledge_by_deck_id[deck.id],
-                    cards=cards_by_deck[deck.id]
-                ) for deck in decks
+                    cards=cards_by_deck[deck.id],
+                )
+                for deck in decks
             ],
             next_cursor=library_result.next_cursor,
             has_more=library_result.has_more,
@@ -739,11 +698,11 @@ class BffService:
 
     @traced("bff.service.get_cards_library_page")
     async def get_cards_library_page(
-            self,
-            user_id: int,
-            search_query: SearchQuery = None,
-            cursor: str | None = None,
-            limit: int = 50,
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        cursor: str | None = None,
+        limit: int = 50,
     ) -> CursorPage[LibraryCardItemResponse]:
         cards_page = await self._get_cards_library_card_page(
             user_id=user_id,
@@ -753,25 +712,23 @@ class BffService:
         )
 
         return CursorPage[LibraryCardItemResponse](
-            items=[
-                self._build_library_card(card) for card in cards_page.items
-            ],
+            items=[self._build_library_card(card) for card in cards_page.items],
             next_cursor=cards_page.next_cursor,
             has_more=cards_page.has_more,
         )
 
     async def get_review_summary(
-            self,
-            user_id: int,
+        self,
+        user_id: int,
     ) -> ReviewSummaryResponse:
         return await self.training_session_service.get_review_summary(
             user_id=user_id,
         )
 
     async def resume_practice_session(
-            self,
-            user_id: int,
-            training_session_uuid: UUID,
+        self,
+        user_id: int,
+        training_session_uuid: UUID,
     ) -> PracticeSessionResponse:
         response = await self.training_session_service.resume_practice_session(
             user_id=user_id,
@@ -782,11 +739,11 @@ class BffService:
     # write
 
     async def start_practice_session(
-            self,
-            user_id: PositiveInt,
-            deck_uuid: UUID,
-            words_per_session: PositiveInt,
-            prompt_side: Literal["front", "back"],
+        self,
+        user_id: PositiveInt,
+        deck_uuid: UUID,
+        words_per_session: PositiveInt,
+        prompt_side: Literal["front", "back"],
     ) -> PracticeSessionResponse:
         response = await self.training_session_service.start_training_session(
             user_id=user_id,
@@ -797,10 +754,10 @@ class BffService:
         return response
 
     async def start_review_session(
-            self,
-            user_id: PositiveInt,
-            prompt_side: Literal["front", "back"],
-            words_per_session: PositiveInt,
+        self,
+        user_id: PositiveInt,
+        prompt_side: Literal["front", "back"],
+        words_per_session: PositiveInt,
     ) -> PracticeSessionResponse:
         return await self.training_session_service.start_review_session(
             user_id=user_id,

@@ -23,7 +23,7 @@ async def _postgres_ready(uow_factory: UoWFactory) -> bool:
             async with uow_factory() as uow:
                 await uow.session.execute(text("SELECT 1"))
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 — любая ошибка значит «не готов»
         return False
 
 
@@ -31,7 +31,7 @@ async def _redis_ready(redis: Redis) -> bool:
     try:
         async with asyncio.timeout(READINESS_TIMEOUT_SECONDS):
             return bool(await redis.ping())
-    except Exception:
+    except Exception:  # noqa: BLE001 — любая ошибка значит «не готов»
         return False
 
 

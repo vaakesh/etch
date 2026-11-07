@@ -1,17 +1,17 @@
-
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends
 from redis.asyncio import Redis
-from functools import lru_cache
 
 from app.config import get_settings
-from app.tracing import traced
 from app.redis.invalidation import CacheInvalidator
 from app.redis.service import (
     RedisCacheService,
     RedisRateLimiter,
 )
+from app.tracing import traced
+
 
 @lru_cache
 @traced("redis.deps.get_redis")
@@ -27,15 +27,18 @@ def get_redis() -> Redis:
     )
     return redis
 
+
 def get_redis_service(
     redis: Redis = Depends(get_redis),
 ):
     return RedisCacheService(redis=redis)
 
+
 def get_cache_invalidator(
     redis: Redis = Depends(get_redis),
 ) -> CacheInvalidator:
     return CacheInvalidator(redis=redis)
+
 
 def get_redis_rate_limiter(
     redis: Redis = Depends(get_redis),
@@ -43,6 +46,7 @@ def get_redis_rate_limiter(
     return RedisRateLimiter(
         redis=redis,
     )
+
 
 type RedisRateLimiterDeps = Annotated[
     RedisRateLimiter,

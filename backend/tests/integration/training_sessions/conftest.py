@@ -25,7 +25,12 @@ async def create_deck_with_cards(
         f"/decks/{deck_uuid}/cards/import",
         json={
             "cards": [
-                {"front_text": front, "back_text": back, "front_lang": "ru", "back_lang": "en"}
+                {
+                    "front_text": front,
+                    "back_text": back,
+                    "front_lang": "ru",
+                    "back_lang": "en",
+                }
                 for front, back in cards
             ],
         },

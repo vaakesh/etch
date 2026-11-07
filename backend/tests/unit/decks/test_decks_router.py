@@ -1,6 +1,6 @@
-from unittest.mock import AsyncMock
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -11,6 +11,7 @@ from app.auth.deps import get_current_user
 from app.auth.errors import AccessTokenNotFoundError
 from app.cards.errors import CardNotFoundError
 from app.cards.schemas import CreateCardRequest
+from app.decks.archiver import ArchiveExpiredError
 from app.decks.errors import (
     CannotFavouriteUnsavedDeckError,
     CannotSaveOwnDeckError,
@@ -18,14 +19,13 @@ from app.decks.errors import (
     DeckCardAlreadyExistsError,
     DeckCardNotFoundError,
     DeckIsNotSavedError,
-    DeckNotFoundError,
     DeckNotArchivedError,
+    DeckNotFoundError,
     DeckSizeLimitExceededError,
     InvalidDeckCardPositionError,
     PermissionDeniedError,
 )
 from app.decks.schemas import CreateDeckRequest, UpdateDeckRequest
-from app.decks.archiver import ArchiveExpiredError
 from tests.unit.factories import (
     make_card,
     make_deck,
@@ -133,8 +133,7 @@ class TestGetDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -181,7 +180,7 @@ class TestCreateDeck:
         assert response.json() == expected
 
         deck_service.create_deck.assert_awaited_once_with(
-            CreateDeckRequest(**payload),
+            CreateDeckRequest.model_validate(payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
             user_username=current_user.username,
@@ -326,7 +325,7 @@ class TestCreateDeck:
         assert response.json() == expected
 
         deck_service.create_deck.assert_awaited_once_with(
-            CreateDeckRequest(**payload),
+            CreateDeckRequest.model_validate(payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
             user_username=current_user.username,
@@ -431,7 +430,7 @@ class TestCreateDeck:
         }
 
         deck_service.create_deck.assert_awaited_once_with(
-            CreateDeckRequest(**payload),
+            CreateDeckRequest.model_validate(payload),
             user_id=current_user.id,
             user_uuid=current_user.uuid,
             user_username=current_user.username,
@@ -474,7 +473,7 @@ class TestUpdateDeck:
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
             deck_uuid=deck.uuid,
-            payload=UpdateDeckRequest(**payload),
+            payload=UpdateDeckRequest.model_validate(payload),
         )
 
     @pytest.mark.parametrize(
@@ -541,7 +540,7 @@ class TestUpdateDeck:
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
             deck_uuid=deck.uuid,
-            payload=UpdateDeckRequest(**payload),
+            payload=UpdateDeckRequest.model_validate(payload),
         )
 
     async def test_passes_empty_update_payload(
@@ -624,35 +623,53 @@ class TestUpdateDeck:
         [
             pytest.param(
                 {"title": "ab"},
-                [{
-                    "type": "string_too_short",
-                    "loc": ["body", "title", "constrained-str"],
-                    "msg": "String should have at least 3 characters",
-                    "input": "ab",
-                    "ctx": {"min_length": 3},
-                }, {"type": "none_required", "loc": ["body", "title", "none"], "msg": "Input should be None", "input": "ab"}],
+                [
+                    {
+                        "type": "string_too_short",
+                        "loc": ["body", "title", "constrained-str"],
+                        "msg": "String should have at least 3 characters",
+                        "input": "ab",
+                        "ctx": {"min_length": 3},
+                    },
+                    {
+                        "type": "none_required",
+                        "loc": ["body", "title", "none"],
+                        "msg": "Input should be None",
+                        "input": "ab",
+                    },
+                ],
                 id="title_too_short",
             ),
             pytest.param(
                 {"title": "a" * 51},
-                [{
-                    "type": "string_too_long",
-                    "loc": ["body", "title", "constrained-str"],
-                    "msg": "String should have at most 50 characters",
-                    "input": "a" * 51,
-                    "ctx": {"max_length": 50},
-                }, {"type": "none_required", "loc": ["body", "title", "none"], "msg": "Input should be None", "input": "a" * 51}],
+                [
+                    {
+                        "type": "string_too_long",
+                        "loc": ["body", "title", "constrained-str"],
+                        "msg": "String should have at most 50 characters",
+                        "input": "a" * 51,
+                        "ctx": {"max_length": 50},
+                    },
+                    {
+                        "type": "none_required",
+                        "loc": ["body", "title", "none"],
+                        "msg": "Input should be None",
+                        "input": "a" * 51,
+                    },
+                ],
                 id="title_too_long",
             ),
             pytest.param(
                 {"description": "d" * 3001},
-                [{
-                    "type": "string_too_long",
-                    "loc": ["body", "description"],
-                    "msg": "String should have at most 3000 characters",
-                    "input": "d" * 3001,
-                    "ctx": {"max_length": 3000},
-                }],
+                [
+                    {
+                        "type": "string_too_long",
+                        "loc": ["body", "description"],
+                        "msg": "String should have at most 3000 characters",
+                        "input": "d" * 3001,
+                        "ctx": {"max_length": 3000},
+                    }
+                ],
                 id="description_too_long",
             ),
         ],
@@ -751,7 +768,7 @@ class TestUpdateDeck:
         deck_service.update_deck.assert_awaited_once_with(
             user_id=current_user.id,
             deck_uuid=deck.uuid,
-            payload=UpdateDeckRequest(**payload),
+            payload=UpdateDeckRequest.model_validate(payload),
         )
 
     async def test_rejects_invalid_deck_uuid(
@@ -772,8 +789,7 @@ class TestUpdateDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -859,8 +875,7 @@ class TestDeleteDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -1090,8 +1105,7 @@ class TestGetDeckCards:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -1219,8 +1233,7 @@ class TestRemoveCardFromDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", field],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -1362,8 +1375,7 @@ class TestReorderDeckCards:
                     "type": "uuid_parsing",
                     "loc": ["body", "card_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -1851,9 +1863,7 @@ class TestLoadCardsToDeck:
                 {
                     "type": "too_long",
                     "loc": ["body", "cards"],
-                    "msg": (
-                        "List should have at most 500 items after validation, not 501"
-                    ),
+                    "msg": ("List should have at most 500 items after validation, not 501"),
                     "input": cards,
                     "ctx": {
                         "field_type": "List",
@@ -2063,8 +2073,7 @@ class TestAddCardToDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", field],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -2187,9 +2196,7 @@ class TestSetFavourite:
                 {
                     "type": "bool_parsing",
                     "loc": ["query", "value"],
-                    "msg": (
-                        "Input should be a valid boolean, unable to interpret input"
-                    ),
+                    "msg": ("Input should be a valid boolean, unable to interpret input"),
                     "input": "not-a-bool",
                 }
             ],
@@ -2216,8 +2223,7 @@ class TestSetFavourite:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -2307,8 +2313,7 @@ class TestSaveDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -2405,8 +2410,7 @@ class TestUnsaveDeck:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -2419,30 +2423,40 @@ class TestUnsaveDeck:
 
 class TestGetArchives:
     async def test_lists_only_service_returned_archive_offers(
-        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        current_user,
+        deck_service: AsyncMock,
     ):
-        deck_service.get_archives_for_user.return_value = [{
-            "uuid": UUID("0198ad01-b200-7000-8000-000000000201"),
-            "title": "Archived deck",
-            "expires_at": datetime(2030, 10, 1, tzinfo=UTC),
-            "preserved_deck_uuid": None,
-        }]
+        deck_service.get_archives_for_user.return_value = [
+            {
+                "uuid": UUID("0198ad01-b200-7000-8000-000000000201"),
+                "title": "Archived deck",
+                "expires_at": datetime(2030, 10, 1, tzinfo=UTC),
+                "preserved_deck_uuid": None,
+            }
+        ]
 
         response = await client.get("/decks/archives")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == [{
-            "uuid": "0198ad01-b200-7000-8000-000000000201",
-            "title": "Archived deck",
-            "expires_at": "2030-10-01T00:00:00Z",
-            "preserved_deck_uuid": None,
-        }]
+        assert response.json() == [
+            {
+                "uuid": "0198ad01-b200-7000-8000-000000000201",
+                "title": "Archived deck",
+                "expires_at": "2030-10-01T00:00:00Z",
+                "preserved_deck_uuid": None,
+            }
+        ]
         deck_service.get_archives_for_user.assert_awaited_once_with(current_user.id)
 
 
 class TestGetArchiveDeck:
     async def test_returns_archive_details(
-        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        current_user,
+        deck_service: AsyncMock,
     ):
         archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
         deck_service.get_archive_deck.return_value = {
@@ -2453,9 +2467,7 @@ class TestGetArchiveDeck:
             "archived_at": datetime(2026, 9, 1, tzinfo=UTC),
             "expires_at": datetime(2030, 10, 1, tzinfo=UTC),
             "archive_reason": "deleted",
-            "source_deck_uuid_snapshot": UUID(
-                "0198ad01-b200-7000-8000-000000000202"
-            ),
+            "source_deck_uuid_snapshot": UUID("0198ad01-b200-7000-8000-000000000202"),
             "preserved_deck_uuid": None,
         }
 
@@ -2474,7 +2486,8 @@ class TestGetArchiveDeck:
             "preserved_deck_uuid": None,
         }
         deck_service.get_archive_deck.assert_awaited_once_with(
-            deck_uuid=archive_uuid, user_id=current_user.id,
+            deck_uuid=archive_uuid,
+            user_id=current_user.id,
         )
 
     @pytest.mark.parametrize(
@@ -2487,14 +2500,25 @@ class TestGetArchiveDeck:
             (DeckNotArchivedError(), 409, "DECK_NOT_ARCHIVED", "Deck is not archived"),
             (DeckNotFoundError(), 404, "DECK_NOT_FOUND", "Deck not found"),
             (PermissionDeniedError(), 403, "DECK_PERMISSION_DENIED", "Permission denied"),
-            (ArchiveExpiredError("Archive preservation period has expired"),
-             410, "ARCHIVE_EXPIRED", "Archive preservation period has expired"),
+            (
+                ArchiveExpiredError("Archive preservation period has expired"),
+                410,
+                "ARCHIVE_EXPIRED",
+                "Archive preservation period has expired",
+            ),
         ],
     )
     async def test_returns_archive_access_error(
-        self, client: AsyncClient, current_user, deck_service: AsyncMock,
-        suffix, method_name, service_error, expected_status,
-        expected_code, expected_message,
+        self,
+        client: AsyncClient,
+        current_user,
+        deck_service: AsyncMock,
+        suffix,
+        method_name,
+        service_error,
+        expected_status,
+        expected_code,
+        expected_message,
     ):
         service_method = getattr(deck_service, method_name)
         service_method.side_effect = service_error
@@ -2519,31 +2543,38 @@ class TestGetArchiveDeck:
 
 class TestGetArchiveCards:
     async def test_returns_card_page(
-        self, client: AsyncClient, current_user, deck_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        current_user,
+        deck_service: AsyncMock,
     ):
         archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
-        deck_service.get_archive_cards.return_value = [{
-            "uuid": UUID("0198ad01-b200-7000-8000-000000000203"),
-            "front_text": "front",
-            "back_text": "back",
-            "front_lang": "en",
-            "back_lang": "ru",
-            "updated_at": datetime(2026, 9, 1, tzinfo=UTC),
-        }]
+        deck_service.get_archive_cards.return_value = [
+            {
+                "uuid": UUID("0198ad01-b200-7000-8000-000000000203"),
+                "front_text": "front",
+                "back_text": "back",
+                "front_lang": "en",
+                "back_lang": "ru",
+                "updated_at": datetime(2026, 9, 1, tzinfo=UTC),
+            }
+        ]
 
         response = await client.get(
             f"/decks/archives/{archive_uuid}/cards?offset=5&limit=10"
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == [{
-            "uuid": "0198ad01-b200-7000-8000-000000000203",
-            "front_text": "front",
-            "back_text": "back",
-            "front_lang": "en",
-            "back_lang": "ru",
-            "updated_at": "2026-09-01T00:00:00Z",
-        }]
+        assert response.json() == [
+            {
+                "uuid": "0198ad01-b200-7000-8000-000000000203",
+                "front_text": "front",
+                "back_text": "back",
+                "front_lang": "en",
+                "back_lang": "ru",
+                "updated_at": "2026-09-01T00:00:00Z",
+            }
+        ]
         deck_service.get_archive_cards.assert_awaited_once_with(
             deck_uuid=archive_uuid,
             user_id=current_user.id,
@@ -2552,7 +2583,9 @@ class TestGetArchiveCards:
         )
 
     async def test_rejects_invalid_page_size(
-        self, client: AsyncClient, deck_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        deck_service: AsyncMock,
     ):
         response = await client.get(
             "/decks/archives/0198ad01-b200-7000-8000-000000000201/cards?limit=501"
@@ -2562,24 +2595,35 @@ class TestGetArchiveCards:
         assert response.json() == {
             "code": "VALIDATION_ERROR",
             "message": "Validation error",
-            "details": [{
-                "type": "less_than_equal",
-                "loc": ["query", "limit"],
-                "msg": "Input should be less than or equal to 500",
-                "input": "501",
-                "ctx": {"le": 500},
-            }],
+            "details": [
+                {
+                    "type": "less_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be less than or equal to 500",
+                    "input": "501",
+                    "ctx": {"le": 500},
+                }
+            ],
         }
         deck_service.get_archive_cards.assert_not_awaited()
 
 
 class TestPreserveArchivedDeck:
-    @pytest.mark.parametrize(("already_preserved", "copy_deleted"), [
-        (False, False), (True, False), (True, True),
-    ])
+    @pytest.mark.parametrize(
+        ("already_preserved", "copy_deleted"),
+        [
+            (False, False),
+            (True, False),
+            (True, True),
+        ],
+    )
     async def test_returns_private_copy_uuid(
-        self, client: AsyncClient, current_user, deck_service: AsyncMock,
-        already_preserved, copy_deleted,
+        self,
+        client: AsyncClient,
+        current_user,
+        deck_service: AsyncMock,
+        already_preserved,
+        copy_deleted,
     ):
         archive_uuid = UUID("0198ad01-b200-7000-8000-000000000201")
         deck_service.preserve_archived_deck.return_value = SimpleNamespace(
@@ -2597,19 +2641,20 @@ class TestPreserveArchivedDeck:
             "copy_deleted": copy_deleted,
         }
         deck_service.preserve_archived_deck.assert_awaited_once_with(
-            archive_deck_uuid=archive_uuid, user_id=current_user.id,
+            archive_deck_uuid=archive_uuid,
+            user_id=current_user.id,
         )
 
     async def test_returns_gone_when_archive_expired(
-        self, client: AsyncClient, deck_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        deck_service: AsyncMock,
     ):
         deck_service.preserve_archived_deck.side_effect = ArchiveExpiredError(
             "Archive preservation period has expired"
         )
 
-        response = await client.post(
-            "/decks/0198ad01-b200-7000-8000-000000000201/preserve"
-        )
+        response = await client.post("/decks/0198ad01-b200-7000-8000-000000000201/preserve")
 
         assert response.status_code == status.HTTP_410_GONE
         assert response.json() == {
@@ -2619,33 +2664,59 @@ class TestPreserveArchivedDeck:
 
 
 class TestDeckAuthentication:
-    @pytest.mark.parametrize(("method", "suffix", "payload"), [
-        ("POST", "create", {"title": "English"}),
-        ("PATCH", "0198ad01-b200-7000-8000-000000000200", {}),
-        ("DELETE", "0198ad01-b200-7000-8000-000000000200", None),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/preserve", None),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/remove/0198ad01-b200-7000-8000-000000000100", None),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/reorder",
-         {"card_uuid": "0198ad01-b200-7000-8000-000000000100", "to_position": 1}),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/import",
-         {"cards": [{"front_text": "привет", "back_text": "hello"}]}),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/cards/0198ad01-b200-7000-8000-000000000100", None),
-        ("PATCH", "0198ad01-b200-7000-8000-000000000200/set-favourite", None),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/save", None),
-        ("POST", "0198ad01-b200-7000-8000-000000000200/unsave", None),
-        ("GET", "archives", None),
-        ("GET", "archives/0198ad01-b200-7000-8000-000000000201", None),
-        ("GET", "archives/0198ad01-b200-7000-8000-000000000201/cards", None),
-    ])
+    @pytest.mark.parametrize(
+        ("method", "suffix", "payload"),
+        [
+            ("POST", "create", {"title": "English"}),
+            ("PATCH", "0198ad01-b200-7000-8000-000000000200", {}),
+            ("DELETE", "0198ad01-b200-7000-8000-000000000200", None),
+            ("POST", "0198ad01-b200-7000-8000-000000000200/preserve", None),
+            (
+                "POST",
+                "0198ad01-b200-7000-8000-000000000200/cards/remove/0198ad01-b200-7000-8000-000000000100",
+                None,
+            ),
+            (
+                "POST",
+                "0198ad01-b200-7000-8000-000000000200/cards/reorder",
+                {"card_uuid": "0198ad01-b200-7000-8000-000000000100", "to_position": 1},
+            ),
+            (
+                "POST",
+                "0198ad01-b200-7000-8000-000000000200/cards/import",
+                {"cards": [{"front_text": "привет", "back_text": "hello"}]},
+            ),
+            (
+                "POST",
+                "0198ad01-b200-7000-8000-000000000200/cards/0198ad01-b200-7000-8000-000000000100",
+                None,
+            ),
+            ("PATCH", "0198ad01-b200-7000-8000-000000000200/set-favourite", None),
+            ("POST", "0198ad01-b200-7000-8000-000000000200/save", None),
+            ("POST", "0198ad01-b200-7000-8000-000000000200/unsave", None),
+            ("GET", "archives", None),
+            ("GET", "archives/0198ad01-b200-7000-8000-000000000201", None),
+            ("GET", "archives/0198ad01-b200-7000-8000-000000000201/cards", None),
+        ],
+    )
     async def test_returns_401_without_calling_deck_services(
-        self, app, client, deck_service, user_deck_service, monkeypatch,
-        method, suffix, payload,
+        self,
+        app,
+        client,
+        deck_service,
+        user_deck_service,
+        monkeypatch,
+        method,
+        suffix,
+        payload,
     ):
         async def reject_unauthenticated_user():
             raise AccessTokenNotFoundError()
 
         monkeypatch.setitem(
-            app.dependency_overrides, get_current_user, reject_unauthenticated_user,
+            app.dependency_overrides,
+            get_current_user,
+            reject_unauthenticated_user,
         )
 
         response = await client.request(method, f"/decks/{suffix}", json=payload)

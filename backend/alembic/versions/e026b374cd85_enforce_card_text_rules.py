@@ -3,6 +3,7 @@
 Revision ID: e026b374cd85
 Revises: d915a263bc74
 """
+
 from alembic import op
 
 revision = "e026b374cd85"
@@ -17,11 +18,13 @@ WHITESPACE = "\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085
 def upgrade() -> None:
     for field in ("front_text", "back_text"):
         op.create_check_constraint(
-            f"ck_cards_{field}_length", "cards",
+            f"ck_cards_{field}_length",
+            "cards",
             f"char_length({field}) BETWEEN 1 AND 255",
         )
         op.create_check_constraint(
-            f"ck_cards_{field}_trimmed", "cards",
+            f"ck_cards_{field}_trimmed",
+            "cards",
             f"{field} = btrim({field}, U&'{WHITESPACE}')",
         )
 

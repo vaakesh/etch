@@ -1,14 +1,8 @@
-
-
-
-
+from fastapi import Depends
 
 from app.bff.service import BffService
 from app.deps import UoWFactory, get_uow_factory
-from fastapi import Depends
-
 from app.redis.deps import CacheInvalidatorDeps, CacheServiceDeps
-
 
 
 def get_bff_service(

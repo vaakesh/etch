@@ -31,12 +31,14 @@ class TestDumpScopes:
             scopes.users_removed(entity),
         )
 
-        expected = {"scopes": [
-            {"name": "cards", "args": [100, 101]},
-            {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
-            {"name": "user_decks", "args": [[42, 200]]},
-            {"name": "users_removed", "args": [{"id": 42, "uuid": str(USER_UUID)}]},
-        ]}
+        expected = {
+            "scopes": [
+                {"name": "cards", "args": [100, 101]},
+                {"name": "deck_ids_by_uuids", "args": [str(DECK_UUID)]},
+                {"name": "user_decks", "args": [[42, 200]]},
+                {"name": "users_removed", "args": [{"id": 42, "uuid": str(USER_UUID)}]},
+            ]
+        }
         assert payload == expected
         assert orjson.loads(orjson.dumps(payload)) == expected
 
@@ -65,11 +67,14 @@ class TestScopeFn:
         entity.uuid = DECK_UUID
 
         assert group.args == (EntityIdentity(42, USER_UUID),)
-        assert dump_scopes(group) == {"scopes": [
-            {"name": "users_removed", "args": [{"id": 42, "uuid": str(USER_UUID)}]},
-        ]}
+        assert dump_scopes(group) == {
+            "scopes": [
+                {"name": "users_removed", "args": [{"id": 42, "uuid": str(USER_UUID)}]},
+            ]
+        }
         assert list(group) == [
-            DelKey("user:42"), DelKey(f"user:id-by-uuid:{USER_UUID}"),
+            DelKey("user:42"),
+            DelKey(f"user:id-by-uuid:{USER_UUID}"),
             DelKey("user:42:settings"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:42:cards:generation"),
@@ -78,7 +83,8 @@ class TestScopeFn:
     def test_captures_user_deck_identity_before_input_changes(self):
         identity = [42, 200]
 
-        group = scopes.user_decks(identity)
+        # mutable list on purpose: the scope must copy its input
+        group = scopes.user_decks(identity)  # ty: ignore[invalid-argument-type]
         identity[:] = [43, 201]
 
         assert group.args == (make_user_deck_identity(42, 200),)
@@ -86,41 +92,73 @@ class TestScopeFn:
 
     def test_rejects_keyword_arguments(self):
         with pytest.raises(TypeError, match="positional args only"):
-            scopes.cards(card_ids=[100])
+            scopes.cards(card_ids=[100])  # ty: ignore[unknown-argument]
 
 
 class TestLoadScopes:
-    @pytest.mark.parametrize(("group", "expected"), [
-        (scopes.users(42), [DelKey("user:42")]),
-        (scopes.users_settings(42), [DelKey("user:42:settings")]),
-        (scopes.user_ids_by_uuids(USER_UUID), [DelKey(f"user:id-by-uuid:{USER_UUID}")]),
-        (scopes.user_decks(make_user_deck_identity(42, 200)), [
-            DelKey("deck:user-deck:42:200"),
-        ]),
-        (scopes.decks(200), [DelKey("deck:200")]),
-        (scopes.deck_cards(200), [DelKey("deck:200:card-ids")]),
-        (scopes.deck_ids_by_uuids(DECK_UUID), [DelKey(f"deck:id-by-uuid:{DECK_UUID}")]),
-        (scopes.cards(100), [DelKey("card:100")]),
-        (scopes.card_ids_by_uuids(CARD_UUID), [DelKey(f"card:id-by-uuid:{CARD_UUID}")]),
-        (scopes.library_deck_pages(42), [BumpGeneration("library:42:decks:generation")]),
-        (scopes.library_card_pages(42), [BumpGeneration("library:42:cards:generation")]),
-        (scopes.library(42), [
-            BumpGeneration("library:42:decks:generation"),
-            BumpGeneration("library:42:cards:generation"),
-        ]),
-        (scopes.deck_with_cards(200), [DelKey("deck:200"), DelKey("deck:200:card-ids")]),
-        (scopes.users_removed(EntityIdentity(42, USER_UUID)), [
-            DelKey("user:42"), DelKey(f"user:id-by-uuid:{USER_UUID}"), DelKey("user:42:settings"),
-            BumpGeneration("library:42:decks:generation"),
-            BumpGeneration("library:42:cards:generation"),
-        ]),
-        (scopes.decks_removed(EntityIdentity(200, DECK_UUID)), [
-            DelKey("deck:200"), DelKey("deck:200:card-ids"), DelKey(f"deck:id-by-uuid:{DECK_UUID}"),
-        ]),
-        (scopes.cards_removed(EntityIdentity(100, CARD_UUID)), [
-            DelKey("card:100"), DelKey(f"card:id-by-uuid:{CARD_UUID}"),
-        ]),
-    ])
+    @pytest.mark.parametrize(
+        ("group", "expected"),
+        [
+            (scopes.users(42), [DelKey("user:42")]),
+            (scopes.users_settings(42), [DelKey("user:42:settings")]),
+            (scopes.user_ids_by_uuids(USER_UUID), [DelKey(f"user:id-by-uuid:{USER_UUID}")]),
+            (
+                scopes.user_decks(make_user_deck_identity(42, 200)),
+                [
+                    DelKey("deck:user-deck:42:200"),
+                ],
+            ),
+            (scopes.decks(200), [DelKey("deck:200")]),
+            (scopes.deck_cards(200), [DelKey("deck:200:card-ids")]),
+            (scopes.deck_ids_by_uuids(DECK_UUID), [DelKey(f"deck:id-by-uuid:{DECK_UUID}")]),
+            (scopes.cards(100), [DelKey("card:100")]),
+            (scopes.card_ids_by_uuids(CARD_UUID), [DelKey(f"card:id-by-uuid:{CARD_UUID}")]),
+            (
+                scopes.library_deck_pages(42),
+                [BumpGeneration("library:42:decks:generation")],
+            ),
+            (
+                scopes.library_card_pages(42),
+                [BumpGeneration("library:42:cards:generation")],
+            ),
+            (
+                scopes.library(42),
+                [
+                    BumpGeneration("library:42:decks:generation"),
+                    BumpGeneration("library:42:cards:generation"),
+                ],
+            ),
+            (
+                scopes.deck_with_cards(200),
+                [DelKey("deck:200"), DelKey("deck:200:card-ids")],
+            ),
+            (
+                scopes.users_removed(EntityIdentity(42, USER_UUID)),
+                [
+                    DelKey("user:42"),
+                    DelKey(f"user:id-by-uuid:{USER_UUID}"),
+                    DelKey("user:42:settings"),
+                    BumpGeneration("library:42:decks:generation"),
+                    BumpGeneration("library:42:cards:generation"),
+                ],
+            ),
+            (
+                scopes.decks_removed(EntityIdentity(200, DECK_UUID)),
+                [
+                    DelKey("deck:200"),
+                    DelKey("deck:200:card-ids"),
+                    DelKey(f"deck:id-by-uuid:{DECK_UUID}"),
+                ],
+            ),
+            (
+                scopes.cards_removed(EntityIdentity(100, CARD_UUID)),
+                [
+                    DelKey("card:100"),
+                    DelKey(f"card:id-by-uuid:{CARD_UUID}"),
+                ],
+            ),
+        ],
+    )
     def test_restores_scope_and_operations_after_json_round_trip(self, group, expected):
         payload = orjson.loads(orjson.dumps(dump_scopes(group)))
 
@@ -134,10 +172,14 @@ class TestLoadScopes:
     @pytest.mark.parametrize("name", ["unknown", "__dict__", "__class__", "__init__"])
     def test_rejects_unknown_or_non_scope_name(self, name):
         with pytest.raises(ValueError, match="Unknown cache scope"):
-            load_scopes({"scopes": [
-                {"name": "cards", "args": [100]},
-                {"name": name, "args": []},
-            ]})
+            load_scopes(
+                {
+                    "scopes": [
+                        {"name": "cards", "args": [100]},
+                        {"name": name, "args": []},
+                    ]
+                }
+            )
 
     def test_returns_empty_list_for_empty_payload(self):
         restored = load_scopes({"scopes": []})
@@ -147,13 +189,19 @@ class TestLoadScopes:
 
 class TestCacheInvalidatorInvalidateScopes:
     async def test_executes_unpacked_loaded_scopes_and_deduplicates_operations(
-        self, redis_client, redis_pipeline,
+        self,
+        redis_client,
+        redis_pipeline,
     ):
         invalidator = CacheInvalidator(redis_client)
-        loaded = load_scopes({"scopes": [
-            {"name": "cards", "args": [100]},
-            {"name": "library_card_pages", "args": [42, 42]},
-        ]})
+        loaded = load_scopes(
+            {
+                "scopes": [
+                    {"name": "cards", "args": [100]},
+                    {"name": "library_card_pages", "args": [42, 42]},
+                ]
+            }
+        )
 
         await invalidator.invalidate(*loaded, scopes.cards(100))
 
@@ -163,12 +211,18 @@ class TestCacheInvalidatorInvalidateScopes:
             call.execute(),
         ]
 
-    async def test_replays_same_loaded_scopes_after_redis_failure(self, redis_client, redis_pipeline):
+    async def test_replays_same_loaded_scopes_after_redis_failure(
+        self, redis_client, redis_pipeline
+    ):
         invalidator = CacheInvalidator(redis_client)
-        loaded = load_scopes({"scopes": [
-            {"name": "cards", "args": [100]},
-            {"name": "library_card_pages", "args": [42]},
-        ]})
+        loaded = load_scopes(
+            {
+                "scopes": [
+                    {"name": "cards", "args": [100]},
+                    {"name": "library_card_pages", "args": [42]},
+                ]
+            }
+        )
         redis_pipeline.execute.side_effect = ConnectionError("Redis unavailable")
 
         with pytest.raises(ConnectionError):
@@ -178,13 +232,17 @@ class TestCacheInvalidatorInvalidateScopes:
 
         assert redis_pipeline.unlink.call_args_list == [call("card:100"), call("card:100")]
         assert redis_pipeline.incr.call_args_list == [
-            call("library:42:cards:generation"), call("library:42:cards:generation"),
+            call("library:42:cards:generation"),
+            call("library:42:cards:generation"),
         ]
 
-    @pytest.mark.parametrize("payload", [
-        {"scopes": []},
-        {"scopes": [{"name": "cards", "args": []}]},
-    ])
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"scopes": []},
+            {"scopes": [{"name": "cards", "args": []}]},
+        ],
+    )
     async def test_empty_loaded_scopes_do_not_contact_redis(self, redis_client, payload):
         invalidator = CacheInvalidator(redis_client)
 

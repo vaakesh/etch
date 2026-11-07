@@ -559,9 +559,7 @@ class TestGetDecksLibraryPage:
                 {
                     "type": "bool_parsing",
                     "loc": ["query", "is_favourite"],
-                    "msg": (
-                        "Input should be a valid boolean, unable to interpret input"
-                    ),
+                    "msg": ("Input should be a valid boolean, unable to interpret input"),
                     "input": "not-a-bool",
                 },
                 id="invalid_favourite_filter",
@@ -804,7 +802,8 @@ class TestGetCardsLibraryPage:
                     "type": "int_parsing",
                     "loc": ["query", "limit"],
                     "msg": (
-                        "Input should be a valid integer, unable to parse string as an integer"
+                        "Input should be a valid integer, "
+                        "unable to parse string as an integer"
                     ),
                     "input": "not-an-int",
                 },
@@ -1149,8 +1148,7 @@ class TestStartPracticeSession:
                     "type": "uuid_parsing",
                     "loc": ["path", "deck_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -1283,8 +1281,7 @@ class TestResumePracticeSession:
                     "type": "uuid_parsing",
                     "loc": ["path", "training_session_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},

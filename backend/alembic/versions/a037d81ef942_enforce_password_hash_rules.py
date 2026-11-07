@@ -14,10 +14,14 @@ depends_on = None
 
 def upgrade() -> None:
     op.create_check_constraint(
-        "hashed_password_nonempty", "users", "char_length(hashed_password) >= 1",
+        "hashed_password_nonempty",
+        "users",
+        "char_length(hashed_password) >= 1",
     )
     op.create_check_constraint(
-        "hashed_password_no_whitespace", "users", "hashed_password !~ '[[:space:]]'",
+        "hashed_password_no_whitespace",
+        "users",
+        "hashed_password !~ '[[:space:]]'",
     )
 
 

@@ -1,23 +1,33 @@
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
-from app.tracing import traced
+
+from sqlalchemy import (
+    Integer,
+    Select,
+    and_,
+    cast,
+    delete,
+    exists,
+    func,
+    or_,
+    select,
+    update,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.cards.models import Card
 from app.common.query import apply_date_pagination, apply_search
 from app.common.types import SearchQuery
 from app.common.utils import utcnow
-from app.users.models import User
-from sqlalchemy import Integer, Select, and_, cast, delete, exists, func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
-
 from app.decks.query import apply_library_pagination
 from app.decks.schemas import ArchiveCleanupBatch, DeckLoad, LibraryCursor
 from app.decks.utils import make_user_deck_identity
 from app.redis.schemas import UserDeckIdentity
+from app.tracing import traced
 from app.training_sessions.models import TrainingSession
+from app.users.models import User
 
 from .models import Deck, DeckArchiveRecipient, DeckCard, UserDeck
 
@@ -34,19 +44,12 @@ class DeckRepository:
         stmt = select(Deck)
 
         if load.user:
-            stmt = stmt.options(
-                joinedload(Deck.user)
-            )
+            stmt = stmt.options(joinedload(Deck.user))
         # cards include card_links
         if load.cards:
-            stmt = stmt.options(
-                selectinload(Deck.card_links)
-                .selectinload(DeckCard.card)
-            )
+            stmt = stmt.options(selectinload(Deck.card_links).selectinload(DeckCard.card))
         elif load.card_links:
-            stmt = stmt.options(
-                selectinload(Deck.card_links)
-            )
+            stmt = stmt.options(selectinload(Deck.card_links))
 
         return stmt
 
@@ -54,9 +57,11 @@ class DeckRepository:
         self,
         viewer_id: int | None,
     ) -> Select[tuple[Deck]]:
-        stmt = self._deck_stmt(load=DeckLoad(
-            user=True,
-        ))
+        stmt = self._deck_stmt(
+            load=DeckLoad(
+                user=True,
+            )
+        )
 
         if viewer_id is None:
             return stmt.where(
@@ -96,13 +101,16 @@ class DeckRepository:
         await self.session.delete(deck)
 
     def add_archive_recipients(
-        self, recipients: list[DeckArchiveRecipient],
+        self,
+        recipients: list[DeckArchiveRecipient],
     ) -> None:
         self.session.add_all(recipients)
 
     @traced("decks.repository.get_archive_recipient_for_update")
     async def get_archive_recipient_for_update(
-        self, archive_deck_id: int, user_id: int,
+        self,
+        archive_deck_id: int,
+        user_id: int,
     ) -> DeckArchiveRecipient | None:
         stmt = (
             select(DeckArchiveRecipient)
@@ -116,7 +124,9 @@ class DeckRepository:
 
     @traced("decks.repository.get_archives_for_recipient")
     async def get_archives_for_recipient(
-        self, user_id: int, now: datetime,
+        self,
+        user_id: int,
+        now: datetime,
     ) -> list[tuple[Deck, DeckArchiveRecipient]]:
         stmt = (
             select(Deck, DeckArchiveRecipient)
@@ -140,7 +150,9 @@ class DeckRepository:
 
     @traced("decks.repository.get_with_archive_recipient")
     async def get_with_archive_recipient(
-        self, deck_uuid: UUID, user_id: int,
+        self,
+        deck_uuid: UUID,
+        user_id: int,
     ) -> tuple[Deck, DeckArchiveRecipient | None] | None:
         stmt = (
             select(Deck, DeckArchiveRecipient)
@@ -158,8 +170,8 @@ class DeckRepository:
 
     # read
     async def get_by_id(
-            self,
-            deck_id: int,
+        self,
+        deck_id: int,
     ) -> Deck | None:
         stmt = select(Deck).where(Deck.id == deck_id)
         result = await self.session.execute(stmt)
@@ -170,23 +182,27 @@ class DeckRepository:
         self,
         deck_uuid: UUID,
     ) -> tuple[Deck, list[DeckCard], list[Card]] | None:
-        deck = (await self.session.execute(
-            select(Deck)
-            .where(Deck.uuid == deck_uuid)
-            .with_for_update(of=Deck)
-        )).scalar_one_or_none()
+        deck = (
+            await self.session.execute(
+                select(Deck).where(Deck.uuid == deck_uuid).with_for_update(of=Deck)
+            )
+        ).scalar_one_or_none()
 
         if deck is None:
             return None
 
         deck_cards = (
-            await self.session.execute(
-                select(DeckCard)
-                .where(DeckCard.deck_id == deck.id)
-                .order_by(DeckCard.id)
-                .with_for_update(of=DeckCard)
+            (
+                await self.session.execute(
+                    select(DeckCard)
+                    .where(DeckCard.deck_id == deck.id)
+                    .order_by(DeckCard.id)
+                    .with_for_update(of=DeckCard)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         cards = (
             (
@@ -197,48 +213,70 @@ class DeckRepository:
                     .order_by(Card.id)
                     .with_for_update(of=Card)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
         return deck, list(deck_cards), list(cards)
 
     # checked
     async def lock_owned_public_deck_graphs(
-        self, owner_id: int,
+        self,
+        owner_id: int,
     ) -> list[tuple[Deck, list[DeckCard], list[Card]]]:
         """
         локает все публичные колоды пользователя, их связи и карточки\n
         возвращает список для каждой колоды
         """
-        decks = list((await self.session.execute(
-            select(Deck)
-            .where(
-                Deck.user_id == owner_id,
-                Deck.state == "active",
-                Deck.is_public.is_(True),
+        decks = list(
+            (
+                await self.session.execute(
+                    select(Deck)
+                    .where(
+                        Deck.user_id == owner_id,
+                        Deck.state == "active",
+                        Deck.is_public.is_(True),
+                    )
+                    .order_by(Deck.id)
+                    .with_for_update(of=Deck)
+                )
             )
-            .order_by(Deck.id)
-            .with_for_update(of=Deck)
-        )).scalars().all())
+            .scalars()
+            .all()
+        )
         if not decks:
             return []
 
         deck_ids = [deck.id for deck in decks]
-        links = list((await self.session.execute(
-            select(DeckCard)
-            .where(DeckCard.deck_id.in_(deck_ids))
-            .order_by(DeckCard.id)
-            .with_for_update(of=DeckCard)
-        )).scalars().all())
+        links = list(
+            (
+                await self.session.execute(
+                    select(DeckCard)
+                    .where(DeckCard.deck_id.in_(deck_ids))
+                    .order_by(DeckCard.id)
+                    .with_for_update(of=DeckCard)
+                )
+            )
+            .scalars()
+            .all()
+        )
         card_ids = sorted({link.card_id for link in links})
         cards = (
-            list((await self.session.execute(
-                select(Card)
-                .where(Card.id.in_(card_ids))
-                .order_by(Card.id)
-                .with_for_update(of=Card)
-            )).scalars().all())
-            if card_ids else []
+            list(
+                (
+                    await self.session.execute(
+                        select(Card)
+                        .where(Card.id.in_(card_ids))
+                        .order_by(Card.id)
+                        .with_for_update(of=Card)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if card_ids
+            else []
         )
         links_by_deck: dict[int, list[DeckCard]] = {deck.id: [] for deck in decks}
         for link in links:
@@ -255,11 +293,8 @@ class DeckRepository:
 
     @traced("decks.repository.get_by_uuid")
     async def get_by_uuid(
-            self, 
-            deck_uuid: UUID,
-            load: DeckLoad = DeckLoad(),
-            for_update: bool = False
-        ) -> Deck | None:
+        self, deck_uuid: UUID, load: DeckLoad = DeckLoad(), for_update: bool = False
+    ) -> Deck | None:
         stmt = self._deck_stmt(
             load=load,
         )
@@ -272,51 +307,56 @@ class DeckRepository:
         return rows
 
     async def get_by_uuid_and_is_public(self, deck_uuid: UUID) -> Deck | None:
-        stmt = (
-            select(Deck)
-            .where(
-                Deck.uuid == deck_uuid,
-                Deck.is_public.is_(True),    
-            )
+        stmt = select(Deck).where(
+            Deck.uuid == deck_uuid,
+            Deck.is_public.is_(True),
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-
 
     async def delete_expired_archived_decks(
         self,
         now: datetime,
         limit: int,
     ) -> ArchiveCleanupBatch:
-        decks = (await self.session.execute(
-            select(Deck.id, Deck.uuid)
-            .where(
-                Deck.state == "archived",
-                Deck.expires_at <= now,
+        decks = (
+            (
+                await self.session.execute(
+                    select(Deck.id, Deck.uuid)
+                    .where(
+                        Deck.state == "archived",
+                        Deck.expires_at <= now,
+                    )
+                    .order_by(Deck.expires_at, Deck.id)
+                    .limit(limit)
+                    .with_for_update(of=Deck, skip_locked=True)
+                )
             )
-            .order_by(Deck.expires_at, Deck.id)
-            .limit(limit)
-            .with_for_update(of=Deck, skip_locked=True)
-        )).tuples().all()
+            .tuples()
+            .all()
+        )
         if not decks:
             return ArchiveCleanupBatch()
 
         deck_ids = [deck_id for deck_id, _ in decks]
 
         candidate_card_ids = (
-            await self.session.execute(
-                select(Card.id)
-                .where(
-                    Card.user_id.is_(None),
-                    Card.id.in_(
-                        select(DeckCard.card_id)
-                        .where(DeckCard.deck_id.in_(deck_ids))
-                    ),
+            (
+                await self.session.execute(
+                    select(Card.id)
+                    .where(
+                        Card.user_id.is_(None),
+                        Card.id.in_(
+                            select(DeckCard.card_id).where(DeckCard.deck_id.in_(deck_ids))
+                        ),
+                    )
+                    .order_by(Card.id)
+                    .with_for_update(of=Card)
                 )
-                .order_by(Card.id)
-                .with_for_update(of=Card)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # блокируем сессии, чтобы они не меняли/блокировали UserDeck
         await self.session.execute(
@@ -327,11 +367,16 @@ class DeckRepository:
         )
 
         user_deck_keys = (
-            await self.session.execute(
-                select(UserDeck.user_id, UserDeck.deck_id)
-                .where(UserDeck.deck_id.in_(deck_ids))
+            (
+                await self.session.execute(
+                    select(UserDeck.user_id, UserDeck.deck_id).where(
+                        UserDeck.deck_id.in_(deck_ids)
+                    )
+                )
             )
-        ).tuples().all()
+            .tuples()
+            .all()
+        )
 
         # cascade:
         # delete deck_cards, user_decks, deck_archive_recipients
@@ -345,18 +390,17 @@ class DeckRepository:
         deleted_cards: list[tuple[int, UUID]] = []
 
         if candidate_card_ids:
-            deleted_cards = (
-                await self.session.execute(
-                    delete(Card)
-                    .where(
-                        Card.id.in_(candidate_card_ids),
-                        Card.user_id.is_(None),
-                        ~exists().where(DeckCard.card_id == Card.id),
-                    )
-                    .returning(Card.id, Card.uuid)
-                    .execution_options(synchronize_session=False)
+            result = await self.session.execute(
+                delete(Card)
+                .where(
+                    Card.id.in_(candidate_card_ids),
+                    Card.user_id.is_(None),
+                    ~exists().where(DeckCard.card_id == Card.id),
                 )
-            ).tuples().all()
+                .returning(Card.id, Card.uuid)
+                .execution_options(synchronize_session=False)
+            )
+            deleted_cards = list(result.tuples().all())
 
         return ArchiveCleanupBatch(
             decks=list(decks),
@@ -367,22 +411,15 @@ class DeckRepository:
             ],
         )
 
-        
-
     @traced("decks.repository.get_visible_by_uuid")
     async def get_visible_by_uuid(
         self,
         deck_uuid: UUID,
         viewer_id: int,
     ) -> Deck | None:
-        stmt = (
-            self._visible_decks_stmt(
-                viewer_id=viewer_id,
-            )
-            .where(
-                Deck.uuid == deck_uuid
-            )
-        )
+        stmt = self._visible_decks_stmt(
+            viewer_id=viewer_id,
+        ).where(Deck.uuid == deck_uuid)
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -394,12 +431,10 @@ class DeckRepository:
         owner_id: int,
         for_update: bool = False,
     ) -> Deck | None:
-        stmt = (
-            self._owned_decks_stmt(
-                owner_id=owner_id,
-            ).where(
-                Deck.uuid == deck_uuid,
-            )
+        stmt = self._owned_decks_stmt(
+            owner_id=owner_id,
+        ).where(
+            Deck.uuid == deck_uuid,
         )
 
         if for_update:
@@ -415,32 +450,27 @@ class DeckRepository:
     ) -> list[Deck]:
         stmt = (
             select(Deck)
-            .options(
-                selectinload(Deck.card_links).selectinload(DeckCard.card)
-            )
+            .options(selectinload(Deck.card_links).selectinload(DeckCard.card))
             .where(Deck.id.in_(deck_ids))
         )
         if for_update:
             stmt = stmt.with_for_update(of=Deck)
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_visible_by_ids(
         self,
         deck_ids: list[int],
         viewer_id: int,
     ) -> list[Deck]:
-        stmt = (
-            self._visible_decks_stmt(
-                viewer_id=viewer_id,
-            )
-            .where(
-                Deck.id.in_(deck_ids),
-            )
+        stmt = self._visible_decks_stmt(
+            viewer_id=viewer_id,
+        ).where(
+            Deck.id.in_(deck_ids),
         )
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         return rows
 
     async def has_archivable_user_decks(
@@ -476,14 +506,9 @@ class DeckRepository:
 
         stmt = apply_search(stmt, search_query, Deck.title)
 
-        stmt = (
-            stmt
-            .order_by(Deck.saves_count.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = stmt.order_by(Deck.saves_count.desc()).offset(offset).limit(limit)
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         return rows
 
     @traced("decks.repository.get_public_by_owner_id")
@@ -496,12 +521,10 @@ class DeckRepository:
         cursor_id: int | None = None,
         limit: int = 30,
     ) -> tuple[list[Deck], bool]:
-        stmt = (
-            self._visible_decks_stmt(
-                viewer_id=viewer_id,
-            ).where(
-                Deck.user_id == owner_id,
-            )
+        stmt = self._visible_decks_stmt(
+            viewer_id=viewer_id,
+        ).where(
+            Deck.user_id == owner_id,
         )
         stmt = apply_search(stmt, search_query, Deck.title)
 
@@ -515,7 +538,7 @@ class DeckRepository:
         )
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         has_more = len(rows) > limit
         return rows[:limit], has_more
 
@@ -527,10 +550,8 @@ class DeckRepository:
         cursor_id: int | None = None,
         limit: int = 30,
     ) -> tuple[list[Deck], bool]:
-        stmt = (
-            self._visible_decks_stmt(
-                viewer_id=viewer_id,
-            )
+        stmt = self._visible_decks_stmt(
+            viewer_id=viewer_id,
         )
 
         stmt = apply_search(stmt, search_query, Deck.title)
@@ -545,7 +566,7 @@ class DeckRepository:
         )
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         has_more = len(rows) > limit
         return rows[:limit], has_more
 
@@ -572,7 +593,7 @@ class DeckRepository:
         stmt = stmt.order_by(Deck.updated_at.desc(), Deck.id.desc())
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         return rows
 
     @traced("decks.repository.get_owned_by_owner_id")
@@ -584,48 +605,8 @@ class DeckRepository:
         cursor_id: int | None = None,
         limit: int = 30,
     ) -> tuple[list[Deck], bool]:
-        stmt = (
-            self._owned_decks_stmt(
-                owner_id=owner_id,
-            )
-        )
-
-        stmt = apply_search(stmt, search_query, Deck.title)
-
-        stmt = apply_date_pagination(
-            stmt,
-            date_column=Deck.updated_at,
-            id_column=Deck.id,
-            cursor_at=cursor_updated_at,
-            cursor_id=cursor_id,
-            limit=limit,
-        )
-
-        result = await self.session.execute(stmt)
-        rows = result.scalars().all()
-        has_more = len(rows) > limit
-        return rows[:limit], has_more
-
-    async def get_saved_by_user_id(
-        self,
-        user_id: int,
-        search_query: SearchQuery = None,
-        cursor_updated_at: datetime | None = None,
-        cursor_id: int | None = None,
-        limit: int = 30,
-    ) -> tuple[list[Deck], bool]:
-        stmt = (
-            self._deck_stmt(load=True)
-            .join(
-                UserDeck,
-                UserDeck.deck_id == Deck.id,
-            )
-            .where(
-                UserDeck.user_id == user_id,
-                UserDeck.is_saved.is_(True),
-                Deck.user_id != user_id,
-                Deck.is_public.is_(True),
-            )
+        stmt = self._owned_decks_stmt(
+            owner_id=owner_id,
         )
 
         stmt = apply_search(stmt, search_query, Deck.title)
@@ -758,12 +739,9 @@ class DeckCardRepository:
         deck_id: int,
         card_id: int,
     ) -> DeckCard | None:
-        stmt = (
-            select(DeckCard)
-            .where(
-                DeckCard.deck_id == deck_id,
-                DeckCard.card_id == card_id,
-            )
+        stmt = select(DeckCard).where(
+            DeckCard.deck_id == deck_id,
+            DeckCard.card_id == card_id,
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -794,7 +772,7 @@ class DeckCardRepository:
     ) -> list[tuple[int, Card]]:
         if not deck_ids or limit <= 0:
             return []
-        
+
         ranked_deck_cards = (
             select(
                 DeckCard.deck_id.label("deck_id"),
@@ -826,12 +804,12 @@ class DeckCardRepository:
             )
         )
         result = await self.session.execute(stmt)
-        return list(result.all())
+        return list(result.tuples().all())
 
     async def get_all_deck_ids_by_card_ids(
-            self,
-            card_ids: list[int],
-            for_update: bool = False,
+        self,
+        card_ids: list[int],
+        for_update: bool = False,
     ) -> list[int]:
         if not card_ids:
             return []
@@ -854,8 +832,8 @@ class DeckCardRepository:
 
     @traced("decks.deck_card_repository.get_max_position")
     async def get_max_position(
-            self,
-            deck_id: int,
+        self,
+        deck_id: int,
     ) -> int | None:
         stmt = (
             select(DeckCard.position)
@@ -870,11 +848,11 @@ class DeckCardRepository:
     # write
     @traced("decks.deck_card_repository.reorder_cards")
     async def reorder_cards(
-            self,
-            deck_id: int,
-            start: int,
-            end: int,
-            add_to_position: int,
+        self,
+        deck_id: int,
+        start: int,
+        end: int,
+        add_to_position: int,
     ):
         stmt = (
             update(DeckCard)
@@ -935,16 +913,15 @@ class DeckCardRepository:
                 DeckCard.position > deleted_position,
             )
             .values(
-                position = DeckCard.position - 1,
+                position=DeckCard.position - 1,
             )
         )
 
         await self.session.execute(stmt)
-        return None
 
     async def update_cards_count(
-            self,
-            deck_ids: list[int],
+        self,
+        deck_ids: list[int],
     ) -> None:
         if deck_ids:
             stmt = (
@@ -989,9 +966,13 @@ class UserDeckRepository:
 
     @traced("decks.user_deck_repository.count_saved")
     async def count_saved(self, deck_id: int) -> int:
-        stmt = select(func.count()).select_from(UserDeck).where(
-            UserDeck.deck_id == deck_id,
-            UserDeck.is_saved.is_(True),
+        stmt = (
+            select(func.count())
+            .select_from(UserDeck)
+            .where(
+                UserDeck.deck_id == deck_id,
+                UserDeck.is_saved.is_(True),
+            )
         )
         return int(await self.session.scalar(stmt) or 0)
 
@@ -1015,7 +996,8 @@ class UserDeckRepository:
 
     # checked
     async def get_archive_recipient_pairs(
-        self, deck_ids: list[int],
+        self,
+        deck_ids: list[int],
     ) -> list[tuple[int, int]]:
         """
         получает всех пользователей колод по deck_ids\n
@@ -1042,21 +1024,18 @@ class UserDeckRepository:
 
     @traced("decks.repository.get_by_user_id_and_deck_id")
     async def get_by_user_id_and_deck_id(
-            self,
-            user_id: int,
-            deck_id: int,
-            for_update: bool = False,
+        self,
+        user_id: int,
+        deck_id: int,
+        for_update: bool = False,
     ) -> UserDeck | None:
-        stmt = (
-            select(UserDeck)
-            .where(
-                UserDeck.user_id == user_id,
-                UserDeck.deck_id == deck_id,
-            )
+        stmt = select(UserDeck).where(
+            UserDeck.user_id == user_id,
+            UserDeck.deck_id == deck_id,
         )
         if for_update:
             stmt = stmt.with_for_update()
-        
+
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -1068,13 +1047,10 @@ class UserDeckRepository:
     ) -> list[UserDeck]:
         if not deck_ids:
             return []
-        
-        stmt = (
-            select(UserDeck)
-            .where(
-                UserDeck.user_id == user_id,
-                UserDeck.deck_id.in_(deck_ids),
-            )
+
+        stmt = select(UserDeck).where(
+            UserDeck.user_id == user_id,
+            UserDeck.deck_id.in_(deck_ids),
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -1087,14 +1063,12 @@ class UserDeckRepository:
         stmt = (
             select(User.id)
             .join(UserDeck, UserDeck.user_id == User.id)
-            .where(
-                UserDeck.deck_id.in_(deck_ids)
-            )
+            .where(UserDeck.deck_id.in_(deck_ids))
             .distinct()
             .order_by(User.id.asc())
         )
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_library_user_ids_by_deck_ids(
         self,
@@ -1117,10 +1091,13 @@ class UserDeckRepository:
             )
         )
         stmt = owner_ids.union(saved_ids).order_by("user_id")
-        return list((await self.session.execute(stmt)).scalars().all())
+        result = await self.session.execute(stmt)
+        # Deck.user_id IS NOT NULL is filtered in both branches
+        return [user_id for user_id in result.scalars().all() if user_id is not None]
 
     async def get_user_deck_keys_by_deck_ids(
-        self, deck_ids: list[int],
+        self,
+        deck_ids: list[int],
     ) -> list[UserDeckIdentity]:
         if not deck_ids:
             return []
@@ -1150,10 +1127,10 @@ class UserDeckRepository:
 
     @traced("decks.user_deck_repository.get_saved_decks_by_user_id")
     async def get_saved_decks_by_user_id(
-            self,
-            user_id: int,
-            offset: int,
-            limit: int,
+        self,
+        user_id: int,
+        offset: int,
+        limit: int,
     ) -> Sequence[tuple[Deck, UserDeck]]:
         stmt = (
             select(
@@ -1176,7 +1153,7 @@ class UserDeckRepository:
                         Deck.is_public.is_(False),
                         Deck.user_id == user_id,
                     ),
-                )
+                ),
             )
             .order_by(
                 Deck.updated_at.desc(),
@@ -1185,19 +1162,18 @@ class UserDeckRepository:
             .offset(offset)
             .limit(limit)
         )
-        
+
         result = await self.session.execute(stmt)
-        rows = result.all()
-        return rows
+        return result.tuples().all()
 
     @traced("decks.repository.get_favourite_decks_by_user_id")
     async def get_favourite_decks_by_user_id(
-            self,
-            user_id: int,
-            search_query: SearchQuery = None,
-            cursor_updated_at: datetime | None = None,
-            cursor_id: int | None = None,
-            limit: int = 16,
+        self,
+        user_id: int,
+        search_query: SearchQuery = None,
+        cursor_updated_at: datetime | None = None,
+        cursor_id: int | None = None,
+        limit: int = 16,
     ) -> tuple[list[Deck], bool]:
         stmt = (
             select(Deck)
@@ -1216,8 +1192,8 @@ class UserDeckRepository:
                     and_(
                         Deck.is_public.is_(False),
                         Deck.user_id == user_id,
-                    )
-                )
+                    ),
+                ),
             )
         )
 
@@ -1234,16 +1210,5 @@ class UserDeckRepository:
         result = await self.session.execute(stmt)
         rows = list(result.scalars().all())
         has_more = len(rows) > limit
-        
+
         return rows[:limit], has_more
-
-    # write
-    async def transfer_user_progress(
-        self,
-        from_deck_id: int,
-        to_deck_id: int,
-        user_id: int,
-    ) -> UserDeck:
-        stmt = (
-
-        )

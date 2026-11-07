@@ -3,6 +3,7 @@
 Revision ID: d571a829bc30
 Revises: c460f718ab29
 """
+
 from alembic import op
 
 revision = "d571a829bc30"
@@ -15,8 +16,10 @@ CHECKS = (
     ("ck_user_sessions_user_id_positive", "user_id > 0"),
     (
         "ck_user_sessions_uuid_v7",
-        "substring(uuid::text from 15 for 1) = '7' "
-        "AND substring(uuid::text from 20 for 1) IN ('8', '9', 'a', 'b')",
+        (
+            "substring(uuid::text from 15 for 1) = '7' "
+            "AND substring(uuid::text from 20 for 1) IN ('8', '9', 'a', 'b')"
+        ),
     ),
     ("ck_user_sessions_dates_order", "updated_at >= created_at"),
     ("ck_user_sessions_expiry_after_creation", "expires_at > created_at"),

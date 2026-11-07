@@ -4,9 +4,8 @@ from uuid import UUID
 
 from app.training_sessions.models import TrainingSessionKind, TrainingSessionStatus
 
-TEST_USER_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000042"
-)
+TEST_USER_UUID = UUID("0198ad01-b200-7000-8000-000000000042")
+
 
 def make_user(**overrides):
     data = {
@@ -15,12 +14,8 @@ def make_user(**overrides):
         "username": "test-user",
         "email": "test@example.com",
         "hashed_password": "hashed-test-password",
-        "created_at": datetime(
-            2026, 8, 15, 12, 0, tzinfo=UTC
-        ),
-        "updated_at": datetime(
-            2026, 8, 15, 13, 0, tzinfo=UTC
-        ),
+        "created_at": datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+        "updated_at": datetime(2026, 8, 15, 13, 0, tzinfo=UTC),
         "cards": [],
         "decks": [],
         "training_sessions": [],
@@ -31,6 +26,7 @@ def make_user(**overrides):
     data.update(overrides)
 
     return SimpleNamespace(**data)
+
 
 def make_user_settings(**overrides):
     data = {
@@ -44,10 +40,8 @@ def make_user_settings(**overrides):
     return SimpleNamespace(**data)
 
 
+TEST_CARD_UUID = UUID("0198ad01-b200-7000-8000-000000000100")
 
-TEST_CARD_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000100"
-)
 
 def make_card(**overrides):
     data = {
@@ -60,10 +54,20 @@ def make_card(**overrides):
         "front_lang": "ru",
         "back_lang": "en",
         "created_at": datetime(
-            2026, 8, 15, 14, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            14,
+            0,
+            tzinfo=UTC,
         ),
         "updated_at": datetime(
-            2026, 8, 15, 15, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            15,
+            0,
+            tzinfo=UTC,
         ),
     }
 
@@ -71,13 +75,9 @@ def make_card(**overrides):
     return SimpleNamespace(**data)
 
 
+TEST_DECK_UUID = UUID("0198ad01-b200-7000-8000-000000000200")
+TEST_DECK_CARD_UUID = UUID("0198ad01-b200-7000-8000-000000000300")
 
-TEST_DECK_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000200"
-)
-TEST_DECK_CARD_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000300"
-)
 
 def make_deck(**overrides):
     user = overrides.pop("user", None) or make_user()
@@ -98,12 +98,21 @@ def make_deck(**overrides):
         "saves_count": 5,
         "version": 1,
         "created_at": datetime(
-            2026, 8, 15, 14, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            14,
+            0,
+            tzinfo=UTC,
         ),
         "updated_at": datetime(
-            2026, 8, 15, 15, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            15,
+            0,
+            tzinfo=UTC,
         ),
-
         "user": user,
     }
 
@@ -116,6 +125,7 @@ def make_deck(**overrides):
 
     return deck
 
+
 def make_deck_card(**overrides):
     data = {
         "id": 300,
@@ -124,15 +134,26 @@ def make_deck_card(**overrides):
         "card_id": 100,
         "position": 1,
         "created_at": datetime(
-            2026, 8, 15, 14, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            14,
+            0,
+            tzinfo=UTC,
         ),
         "updated_at": datetime(
-            2026, 8, 15, 15, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            15,
+            0,
+            tzinfo=UTC,
         ),
     }
 
     data.update(overrides)
     return SimpleNamespace(**data)
+
 
 def make_user_deck(**overrides):
     data = {
@@ -146,7 +167,12 @@ def make_user_deck(**overrides):
         "is_saved": False,
         "last_seen_version": 1,
         "added_at": datetime(
-            2026, 8, 15, 14, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            14,
+            0,
+            tzinfo=UTC,
         ),
     }
 
@@ -154,13 +180,9 @@ def make_user_deck(**overrides):
     return SimpleNamespace(**data)
 
 
+TEST_TRAINING_SESSION_UUID = UUID("0198ad01-b200-7000-8000-000000000400")
+TEST_TRAINING_SESSION_ITEM_UUID = UUID("0198ad01-b200-7000-8000-000000000500")
 
-TEST_TRAINING_SESSION_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000400"
-)
-TEST_TRAINING_SESSION_ITEM_UUID = UUID(
-    "0198ad01-b200-7000-8000-000000000500"
-)
 
 def make_training_session(**overrides):
     deck = overrides.pop("deck") if "deck" in overrides else make_deck()
@@ -182,7 +204,12 @@ def make_training_session(**overrides):
         "prompt_side": "front",
         "answer_side": "back",
         "started_at": datetime(
-            2026, 8, 15, 16, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            16,
+            0,
+            tzinfo=UTC,
         ),
         "finished_at": None,
         "deck": deck,
@@ -198,6 +225,7 @@ def make_training_session(**overrides):
     session.deck_title = deck.title if deck is not None else None
 
     return session
+
 
 def make_training_session_item(**overrides):
     data = {
@@ -224,12 +252,10 @@ def make_training_session_item(**overrides):
     return SimpleNamespace(**data)
 
 
-
-TEST_USER_SESSION_UUID = UUID(
-    "ffffffff-ffff-ffff-ffff-ffffffffffff"
-)
+TEST_USER_SESSION_UUID = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
 TEST_ACCESS_TOKEN = "test-access-token"
 TEST_REFRESH_TOKEN = "test-refresh-token"
+
 
 def make_user_session(**overrides):
     data = {
@@ -240,13 +266,28 @@ def make_user_session(**overrides):
         "user_agent": "pytest",
         "ip": "127.0.0.1",
         "expires_at": datetime(
-            2026, 8, 20, 12, 0, tzinfo=UTC,
+            2026,
+            8,
+            20,
+            12,
+            0,
+            tzinfo=UTC,
         ),
         "created_at": datetime(
-            2026, 8, 15, 12, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            12,
+            0,
+            tzinfo=UTC,
         ),
         "updated_at": datetime(
-            2026, 8, 15, 12, 0, tzinfo=UTC,
+            2026,
+            8,
+            15,
+            12,
+            0,
+            tzinfo=UTC,
         ),
         "revoked_at": None,
         "replaced_by_session_id": None,

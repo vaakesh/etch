@@ -9,10 +9,10 @@ class ChatMessage(TypedDict):
 
 @dataclass(frozen=True)
 class Chunk:
-    chunk_id: str # etch.cards.create
-    title: str # "Etch: как создать карточку"
-    text: str # "# Etch: как создать картоку\n\nОткройте ..."
-    source: str # "content/ru/05-cards.md"
+    chunk_id: str  # etch.cards.create
+    title: str  # "Etch: как создать карточку"
+    text: str  # "# Etch: как создать картоку\n\nОткройте ..."
+    source: str  # "content/ru/05-cards.md"
 
 
 @dataclass(frozen=True)

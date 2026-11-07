@@ -77,7 +77,7 @@ class TestUserUpdate:
                 {"username": "alice", "email": "bob@example.com"},
                 id="updates_only_email",
             ),
-        ]
+        ],
     )
     async def test_updates_only_provided_fields(
         self,
@@ -128,7 +128,7 @@ class TestUserUpdate:
                 {"unknown": "value"},
                 id="unknown_field_only",
             ),
-        ]
+        ],
     )
     async def test_rejects_empty_update_without_changing_user(
         self,
@@ -168,7 +168,10 @@ class TestUserUpdate:
             assert user.email == alice.email
             assert user_settings.locale == alice.settings.locale
             assert user_settings.theme == alice.settings.theme
-            assert user_settings.show_previews_for_long is alice.settings.show_previews_for_long
+            assert (
+                user_settings.show_previews_for_long
+                is alice.settings.show_previews_for_long
+            )
 
     @pytest.mark.parametrize(
         ("update_payload", "expected_code", "expected_message"),
@@ -197,7 +200,7 @@ class TestUserUpdate:
                 "Username is already in use",
                 id="username_case_insensitive",
             ),
-        ]
+        ],
     )
     async def test_returns_409_when_identity_is_taken(
         self,
@@ -208,7 +211,7 @@ class TestUserUpdate:
         expected_code: str,
         expected_message: str,
     ):
-        alice = await user_factory(username="Alice", email="alice@example.com")
+        await user_factory(username="Alice", email="alice@example.com")
         kevin = await user_factory(username="Kevin", email="kevin@example.com")
         kevin_client = await auth_client_factory(kevin)
 
@@ -290,9 +293,7 @@ class TestUserUpdate:
         alice = await user_factory(username="alice", email="alice@example.com")
         alice_client = await auth_client_factory(alice)
 
-        response = await alice_client.patch(
-            "/users/me", json={"username": username}
-        )
+        response = await alice_client.patch("/users/me", json={"username": username})
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -482,8 +483,7 @@ class TestUserUpdate:
         assert {key: value for key, value in email_error.items() if key != "loc"} == {
             "type": "value_error",
             "msg": (
-                "value is not a valid email address: An email "
-                "address must have an @-sign."
+                "value is not a valid email address: An email address must have an @-sign."
             ),
             "input": "not-an-email",
             "ctx": {"reason": "An email address must have an @-sign."},
@@ -508,9 +508,7 @@ class TestUserUpdate:
         await user_factory(username="alice", email="alice@example.com")
         guest_client = await client_factory()
 
-        response = await guest_client.patch(
-            "/users/me", json={"username": "renamed"}
-        )
+        response = await guest_client.patch("/users/me", json={"username": "renamed"})
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json() == {
@@ -568,9 +566,7 @@ class TestUserUpdate:
         alice_client = await auth_client_factory(alice)
         bob_client = await auth_client_factory(bob)
 
-        update = await alice_client.patch(
-            "/users/me", json={"username": "renamed"}
-        )
+        update = await alice_client.patch("/users/me", json={"username": "renamed"})
         bob_response = await bob_client.get("/users/me")
 
         assert update.status_code == status.HTTP_200_OK

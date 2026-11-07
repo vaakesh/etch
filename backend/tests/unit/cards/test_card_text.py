@@ -6,14 +6,17 @@ from app.common.types import CardText
 
 
 class TestCardText:
-    @pytest.mark.parametrize(("value", "expected"), [
-        ("Word", "Word"),
-        ("  Слово  ", "Слово"),
-        ("\u00a0日本語 🙂\u2003", "日本語 🙂"),
-        (" \nFirst\n\tSecond  line\r\nThird\t ", "First\n\tSecond  line\r\nThird"),
-        ("a", "a"),
-        ("🙂" * 255, "🙂" * 255),
-    ])
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("Word", "Word"),
+            ("  Слово  ", "Слово"),
+            ("\u00a0日本語 🙂\u2003", "日本語 🙂"),
+            (" \nFirst\n\tSecond  line\r\nThird\t ", "First\n\tSecond  line\r\nThird"),
+            ("a", "a"),
+            ("🙂" * 255, "🙂" * 255),
+        ],
+    )
     def test_preserves_content_and_trims_edges(self, value, expected):
         adapter = TypeAdapter(CardText)
 
@@ -45,6 +48,8 @@ class TestCreateCardText:
         result = CreateCardRequest(**payload)
 
         assert result.model_dump() == {
-            "front_text": "Radio", "back_text": "Radio",
-            "front_lang": "ru", "back_lang": "en",
+            "front_text": "Radio",
+            "back_text": "Radio",
+            "front_lang": "ru",
+            "back_lang": "en",
         }

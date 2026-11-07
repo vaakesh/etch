@@ -7,8 +7,8 @@ from app.cards.repository import CardRepository
 from app.cards.service import CardService
 from app.decks.repository import DeckCardRepository, DeckRepository
 from app.decks.service import DeckService
-from app.redis.service import RedisCacheService
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
+from app.redis.service import RedisCacheService
 from tests.unit.factories import make_card, make_deck, make_deck_card
 from tests.unit.outbox_helpers import make_outbox_repo
 
@@ -67,7 +67,8 @@ def lock_context():
 def card_service(lock_context):
     uow, cache, *_ = lock_context
     return CardService(
-        uow_factory=lambda: uow, cache_service=cache,
+        uow_factory=lambda: uow,
+        cache_service=cache,
         cache_invalidator=create_autospec(CacheInvalidator, instance=True),
     )
 
@@ -77,12 +78,15 @@ class TestAddCardToDeck:
         uow, cache, card, deck, link, locks = lock_context
         uow.deck_card_repo.get_by_deck_id_and_card_id.return_value = None
         service = DeckService(
-            uow_factory=lambda: uow, cache_service=cache,
+            uow_factory=lambda: uow,
+            cache_service=cache,
             cache_invalidator=create_autospec(CacheInvalidator, instance=True),
         )
 
         result = await service.add_card_to_deck(
-            user_id=42, deck_uuid=deck.uuid, card_uuid=card.uuid,
+            user_id=42,
+            deck_uuid=deck.uuid,
+            card_uuid=card.uuid,
         )
 
         assert locks == ["deck", "card"]
@@ -104,26 +108,32 @@ class TestRemoveCardFromDeck:
         uow, cache, card, deck, link, locks = lock_context
         uow.deck_card_repo.get_by_deck_id_and_card_id.return_value = link
         service = DeckService(
-            uow_factory=lambda: uow, cache_service=cache,
+            uow_factory=lambda: uow,
+            cache_service=cache,
             cache_invalidator=create_autospec(CacheInvalidator, instance=True),
         )
 
         await service.remove_card_from_deck(
-            user_id=42, deck_uuid=deck.uuid, card_uuid=card.uuid,
+            user_id=42,
+            deck_uuid=deck.uuid,
+            card_uuid=card.uuid,
         )
 
         assert locks == ["deck", "card"]
         assert deck.words_count == 1
         uow.deck_card_repo.delete.assert_awaited_once_with(link)
         uow.deck_card_repo.update_deck_cards_positions_after_deleting.assert_awaited_once_with(
-            deck_id=200, deleted_position=1,
+            deck_id=200,
+            deleted_position=1,
         )
         assert uow.commit.await_count == 2
 
 
 class TestDeleteCard:
-    async def test_locks_decks_before_card_and_recounts_affected_decks(self, lock_context, card_service):
-        uow, cache, card, deck, link, locks = lock_context
+    async def test_locks_decks_before_card_and_recounts_affected_decks(
+        self, lock_context, card_service
+    ):
+        uow, _cache, card, _deck, _link, locks = lock_context
         service = card_service
 
         await service.delete_card(user_id=42, card_uuid=card.uuid)
@@ -136,22 +146,31 @@ class TestDeleteCard:
         uow.rollback.assert_not_awaited()
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
-            op for group in service.cache_invalidator.invalidate.await_args.args for op in group
+            op
+            for group in service.cache_invalidator.invalidate.await_args.args
+            for op in group
         } == {
             DelKey("card:100"),
             DelKey("card:id-by-uuid:0198ad01-b200-7000-8000-000000000100"),
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:cards:generation"),
             BumpGeneration("library:42:decks:generation"),
         }
 
     @pytest.mark.parametrize("initial_deck_ids", [[200], []])
     async def test_releases_locks_and_retries_when_card_gains_a_deck(
-        self, lock_context, initial_deck_ids, card_service,
+        self,
+        lock_context,
+        initial_deck_ids,
+        card_service,
     ):
-        uow, cache, card, deck, link, locks = lock_context
+        uow, _cache, card, _deck, _link, _locks = lock_context
         uow.deck_card_repo.get_all_deck_ids_by_card_ids.side_effect = [
-            initial_deck_ids, [200, 201], [200, 201], [200, 201],
+            initial_deck_ids,
+            [200, 201],
+            [200, 201],
+            [200, 201],
         ]
         service = card_service
 
@@ -171,20 +190,25 @@ class TestDeleteCard:
         assert uow.commit.await_count == 2
         service.cache_invalidator.invalidate.assert_awaited_once()
         assert {
-            op for group in service.cache_invalidator.invalidate.await_args.args for op in group
+            op
+            for group in service.cache_invalidator.invalidate.await_args.args
+            for op in group
         } == {
             DelKey("card:100"),
             DelKey("card:id-by-uuid:0198ad01-b200-7000-8000-000000000100"),
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
-            DelKey("deck:201"), DelKey("deck:201:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
+            DelKey("deck:201"),
+            DelKey("deck:201:card-ids"),
             BumpGeneration("library:42:cards:generation"),
             BumpGeneration("library:42:decks:generation"),
         }
 
     async def test_does_not_retry_when_card_loses_a_deck(self, lock_context, card_service):
-        uow, cache, card, deck, link, locks = lock_context
+        uow, _cache, card, _deck, _link, _locks = lock_context
         uow.deck_card_repo.get_all_deck_ids_by_card_ids.side_effect = [
-            [200, 201], [200],
+            [200, 201],
+            [200],
         ]
         service = card_service
 
@@ -195,9 +219,11 @@ class TestDeleteCard:
         uow.deck_card_repo.update_cards_count.assert_awaited_once_with(deck_ids=[200, 201])
 
     async def test_returns_not_found_without_locking_decks_for_another_owner(
-        self, lock_context, card_service,
+        self,
+        lock_context,
+        card_service,
     ):
-        uow, cache, card, deck, link, locks = lock_context
+        uow, _cache, card, _deck, _link, locks = lock_context
         card.user_id = 7
         service = card_service
 
@@ -210,9 +236,11 @@ class TestDeleteCard:
         uow.commit.assert_not_awaited()
 
     async def test_returns_not_found_when_card_disappears_before_its_lock(
-        self, lock_context, card_service,
+        self,
+        lock_context,
+        card_service,
     ):
-        uow, cache, card, deck, link, locks = lock_context
+        uow, _cache, card, _deck, _link, _locks = lock_context
         uow.card_repo.get_by_uuid.side_effect = [card, None]
         service = card_service
 
@@ -223,9 +251,11 @@ class TestDeleteCard:
         uow.commit.assert_not_awaited()
 
     async def test_returns_not_found_when_owner_changes_before_card_lock(
-        self, lock_context, card_service,
+        self,
+        lock_context,
+        card_service,
     ):
-        uow, cache, card, deck, link, locks = lock_context
+        uow, cache, card, _deck, _link, _locks = lock_context
         uow.card_repo.get_by_uuid.side_effect = [card, make_card(user_id=7)]
         service = card_service
 

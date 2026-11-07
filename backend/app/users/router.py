@@ -1,15 +1,27 @@
-from datetime import datetime
 import logging
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import UUID7
 
 from app.auth.cookies import clear_tokens_cookie
-from app.auth.deps import CurrentUser, CurrentUserWithSettings, OptionalCurrentUser, require_captcha
-from app.cards.deps import CardServiceDeps
-from app.cards.schemas import CardResponse
+from app.auth.deps import (
+    CurrentUser,
+    CurrentUserWithSettings,
+    OptionalCurrentUser,
+    require_captcha,
+)
 from app.common.schemas import CursorPage
 from app.common.types import PageLimit, PaginationCursor, SearchQuery, Username
 from app.decks.deps import DeckServiceDeps, UserDeckServiceDeps
 from app.decks.schemas import DeckListItemResponse, DeckResponse
+from app.redis.rate_limiters import (
+    profile_rate_limit,
+    public_users_rate_limit,
+    registration_rate_limit,
+    users_rate_limit,
+)
+from app.tracing import traced
 from app.training_sessions.deps import (
     TrainingSessionServiceDeps,
 )
@@ -22,22 +34,14 @@ from app.users.schemas import (
     CreateUserRequest,
     PrivateUserResponse,
     UpdateUserRequest,
+    UpdateUserSettingsRequest,
     UserProfileResponse,
     UserSettingsResponse,
-    UpdateUserSettingsRequest,
-)
-from fastapi import APIRouter, Depends, Query, Response, status
-from app.tracing import traced, trace_span
-
-from app.redis.rate_limiters import (
-    profile_rate_limit,
-    public_users_rate_limit,
-    registration_rate_limit,
-    users_rate_limit,
 )
 
 router = APIRouter(prefix="/users")
 logger = logging.getLogger(__name__)
+
 
 @router.get(
     "/me",
@@ -50,6 +54,7 @@ async def get_me(
     return PrivateUserResponse.from_user_with_settings(
         user=current_user,
     )
+
 
 # checked
 @router.post(
@@ -71,6 +76,7 @@ async def create_user(
         user=new_user,
     )
 
+
 # checked
 @router.patch(
     "/me",
@@ -89,6 +95,7 @@ async def update_user(
         payload=payload,
     )
 
+
 @router.delete(
     "/me",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -104,6 +111,7 @@ async def delete_user(
         current_user_id=current_user.id,
     )
     clear_tokens_cookie(response=response)
+
 
 # checked
 @router.patch(
@@ -123,6 +131,7 @@ async def update_settings(
         payload=payload,
     )
 
+
 @router.get(
     path="/profile/{username}",
     dependencies=[Depends(public_users_rate_limit)],
@@ -138,6 +147,7 @@ async def get_user_profile(
         viewer_id=current_user.id if current_user else None,
         username=username,
     )
+
 
 @router.get(
     "/me/daily-activity",
@@ -155,6 +165,7 @@ async def get_user_daily_activity(
         from_datetime=from_datetime,
         to_datetime=to_datetime,
     )
+
 
 @router.get(
     "/me/decks",
@@ -182,6 +193,7 @@ async def get_my_decks(
         has_more=page.has_more,
     )
 
+
 @router.get(
     "/me/training-sessions",
     response_model=CursorPage[TrainingSessionResponse],
@@ -195,19 +207,22 @@ async def get_my_training_sessions(
     status: TrainingSessionStatus | None = None,
     cursor: PaginationCursor = None,
 ):
-    training_sessions, next_cursor, has_more = (
-        await training_session_service.get_sessions_by_user_uuid(
-            user_uuid=current_user.uuid,
-            status=status,
-            cursor=cursor,
-            limit=limit,
-        )
+    (
+        training_sessions,
+        next_cursor,
+        has_more,
+    ) = await training_session_service.get_sessions_by_user_uuid(
+        user_uuid=current_user.uuid,
+        status=status,
+        cursor=cursor,
+        limit=limit,
     )
     return CursorPage[TrainingSessionResponse](
         items=training_sessions,
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
 
 @router.get(
     "/me/decks/saved",
@@ -228,6 +243,7 @@ async def get_my_saved_decks(
     )
 
     return saved_decks
+
 
 @router.get(
     "/{user_uuid}/decks",

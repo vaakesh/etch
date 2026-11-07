@@ -1,6 +1,7 @@
 from collections.abc import Callable
-from app.tracing import traced
 from uuid import UUID
+
+from sqlalchemy.exc import IntegrityError
 
 from app.cards.errors import (
     CardAlreadyExistsError,
@@ -11,16 +12,16 @@ from app.cards.models import Card
 from app.cards.schemas import CreateCardRequest, InternalCard, UpdateCardRequest
 from app.common.types import SearchQuery
 from app.common.utils import decode_cursor, encode_cursor
-from app.redis.service import RedisCacheService
 from app.redis.invalidation import CacheInvalidator, scopes
 from app.redis.outbox import cache_invalidation_message
+from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
-from sqlalchemy.exc import IntegrityError
+from app.tracing import traced
 
 
 class CardService:
     def __init__(
-        self, 
+        self,
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
         cache_invalidator: CacheInvalidator,
@@ -78,9 +79,9 @@ class CardService:
 
     # read
     async def get_by_uuid(
-            self,
-            card_uuid: UUID,
-        ) -> InternalCard:
+        self,
+        card_uuid: UUID,
+    ) -> InternalCard:
         async with self.uow_factory() as uow:
             card = await self._get_by_uuid(uow, card_uuid)
             return InternalCard.model_validate(card)
@@ -93,10 +94,7 @@ class CardService:
             cards = await uow.card_repo.get_by_ids(
                 card_ids=card_ids,
             )
-            return [
-                InternalCard.model_validate(card)
-                for card in cards
-            ]
+            return [InternalCard.model_validate(card) for card in cards]
 
     @traced("cards.service.get_cards_by_user_id")
     async def get_cards_by_user_id(
@@ -127,8 +125,8 @@ class CardService:
 
             return (
                 [InternalCard.model_validate(card) for card in cards],
-                next_cursor, 
-                has_more
+                next_cursor,
+                has_more,
             )
 
     # write
@@ -146,9 +144,7 @@ class CardService:
 
                 uow.card_repo.add(card)
 
-                invalidation = (
-                    scopes.library_card_pages(user_id),
-                )
+                invalidation = (scopes.library_card_pages(user_id),)
                 message = cache_invalidation_message(*invalidation)
                 uow.outbox_repo.add(message)
                 await uow.commit()
@@ -182,7 +178,8 @@ class CardService:
                     exclude_unset=True,
                 )
                 update_data = {
-                    field: value for field, value in update_data.items()
+                    field: value
+                    for field, value in update_data.items()
                     if getattr(card, field) != value
                 }
                 if not update_data:
@@ -211,10 +208,10 @@ class CardService:
             raise CardAlreadyExistsError() from e
 
     async def delete_card(
-            self, 
-            user_id: int,
-            card_uuid: UUID,
-        ) -> None:
+        self,
+        user_id: int,
+        card_uuid: UUID,
+    ) -> None:
         async with self.uow_factory() as uow:
             card, deck_ids = await self._lock_card_for_deletion(
                 uow=uow,
@@ -231,9 +228,7 @@ class CardService:
             await uow.deck_card_repo.normalize_positions(
                 deck_ids=deck_ids,
             )
-            await uow.deck_card_repo.update_cards_count(
-                deck_ids=deck_ids
-            )
+            await uow.deck_card_repo.update_cards_count(deck_ids=deck_ids)
             invalidation = (
                 scopes.cards(card_id),
                 scopes.card_ids_by_uuids(removed_uuid),
@@ -249,4 +244,4 @@ class CardService:
             await uow.outbox_repo.mark_published(message.id)
             await uow.commit()
 
-            return None
+            return

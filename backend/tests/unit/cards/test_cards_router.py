@@ -536,15 +536,24 @@ class TestUpdateCard:
             UpdateCardRequest(),
         )
 
-    @pytest.mark.parametrize("field", ["front_text", "back_text", "front_lang", "back_lang"])
+    @pytest.mark.parametrize(
+        "field", ["front_text", "back_text", "front_lang", "back_lang"]
+    )
     async def test_rejects_explicit_null(self, client, card, card_service, field):
         response = await client.patch(f"/cards/{card.uuid}", json={field: None})
 
         assert response.status_code == 422
         assert response.json() == {
-            "code": "VALIDATION_ERROR", "message": "Validation error",
-            "details": [{"type": "value_error", "loc": ["body", field],
-                         "msg": f"{field} value cannot be null", "input": None}],
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [
+                {
+                    "type": "value_error",
+                    "loc": ["body", field],
+                    "msg": f"{field} value cannot be null",
+                    "input": None,
+                }
+            ],
         }
         card_service.update_card.assert_not_awaited()
 
@@ -713,9 +722,12 @@ class TestUpdateCard:
             "message": "Validation error",
             "details": [
                 expected_detail,
-                {"type": "none_required",
-                 "loc": ["body", expected_detail["loc"][1], "none"],
-                 "msg": "Input should be None", "input": expected_detail["input"]},
+                {
+                    "type": "none_required",
+                    "loc": ["body", expected_detail["loc"][1], "none"],
+                    "msg": "Input should be None",
+                    "input": expected_detail["input"],
+                },
             ],
         }
 
@@ -793,8 +805,7 @@ class TestUpdateCard:
                     "type": "uuid_parsing",
                     "loc": ["path", "card_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -863,8 +874,7 @@ class TestDeleteCard:
                     "type": "uuid_parsing",
                     "loc": ["path", "card_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -879,19 +889,31 @@ class TestDeleteCard:
 
 
 class TestCardAuthentication:
-    @pytest.mark.parametrize(("method", "path", "payload"), [
-        ("POST", "/cards/", {"front_text": "привет", "back_text": "hello"}),
-        ("PATCH", "/cards/0198ad01-b200-7000-8000-000000000100", {}),
-        ("DELETE", "/cards/0198ad01-b200-7000-8000-000000000100", None),
-    ])
+    @pytest.mark.parametrize(
+        ("method", "path", "payload"),
+        [
+            ("POST", "/cards/", {"front_text": "привет", "back_text": "hello"}),
+            ("PATCH", "/cards/0198ad01-b200-7000-8000-000000000100", {}),
+            ("DELETE", "/cards/0198ad01-b200-7000-8000-000000000100", None),
+        ],
+    )
     async def test_returns_401_without_calling_card_service(
-        self, app, client, card_service, monkeypatch, method, path, payload,
+        self,
+        app,
+        client,
+        card_service,
+        monkeypatch,
+        method,
+        path,
+        payload,
     ):
         async def reject_unauthenticated_user():
             raise AccessTokenNotFoundError()
 
         monkeypatch.setitem(
-            app.dependency_overrides, get_current_user, reject_unauthenticated_user,
+            app.dependency_overrides,
+            get_current_user,
+            reject_unauthenticated_user,
         )
 
         response = await client.request(method, path, json=payload)

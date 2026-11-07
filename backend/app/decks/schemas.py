@@ -3,6 +3,18 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pydantic import (
+    UUID7,
+    BaseModel,
+    ConfigDict,
+    PastDatetime,
+    StrictBool,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic.json_schema import SkipJsonSchema
+
 from app.common.types import (
     Counter,
     DeckDescription,
@@ -14,23 +26,23 @@ from app.common.types import (
     Username,
 )
 from app.decks.models import Deck
-from app.errors import RequestValueError
-from pydantic import UUID7, BaseModel, ConfigDict, PastDatetime, StrictBool, ValidationInfo, field_validator, model_validator
-from pydantic.json_schema import SkipJsonSchema
-
 from app.decks.utils import calculate_accuracy
+from app.errors import RequestValueError
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeckLoad:
     user: bool = False
     card_links: bool = False
-    cards: bool = False # cards include card_links
+    cards: bool = False  # cards include card_links
+
 
 @dataclass
 class ArchiveCleanupBatch:
     decks: list[tuple[int, UUID]] = field(default_factory=list)
     cards: list[tuple[int, UUID]] = field(default_factory=list)
     user_deck_keys: list[tuple[int, int]] = field(default_factory=list)
+
 
 class DeckTimestamps(BaseModel):
     created_at: PastDatetime
@@ -55,6 +67,7 @@ class DeckTimestamps(BaseModel):
                 )
         return value
 
+
 class InternalDeck(DeckTimestamps):
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,21 +85,9 @@ class InternalDeck(DeckTimestamps):
 
     @classmethod
     def from_entity(cls, deck: Deck) -> InternalDeck:
-        return cls(
-            id=deck.id,
-            uuid=deck.uuid,
-            user_id=deck.user_id,
-            owner_uuid=deck.owner_uuid,
-            owner_username=deck.owner_username,
-            title=deck.title,
-            description=deck.description,
-            words_count=deck.words_count,
-            is_public=deck.is_public,
-            saves_count=deck.saves_count,
-            version=deck.version,
-            created_at=deck.created_at,
-            updated_at=deck.updated_at,
-        )
+        # ORM owner fields are nullable; validation rejects decks without an owner
+        return cls.model_validate(deck)
+
 
 class InternalUserDeck(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -133,6 +134,7 @@ class InternalUserDeck(BaseModel):
                 )
         return self
 
+
 class InternalDeckCard(DeckTimestamps):
     model_config = ConfigDict(from_attributes=True)
 
@@ -142,15 +144,18 @@ class InternalDeckCard(DeckTimestamps):
     card_id: PositiveInt
     position: DeckPosition
 
+
 class DeckCardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     uuid: UUID7
     position: DeckPosition
 
+
 class CreateDeckRequest(BaseModel):
     title: DeckTitle
     description: DeckDescription = None
     is_public: StrictBool = False
+
 
 class UpdateDeckRequest(BaseModel):
     title: DeckTitle | SkipJsonSchema[None] = None
@@ -169,6 +174,7 @@ class UpdateDeckRequest(BaseModel):
                     )
 
         return data
+
 
 class DeckResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -208,9 +214,11 @@ class ArchivedDeckResponse(BaseModel):
     source_deck_uuid_snapshot: UUID7 | None
     preserved_deck_uuid: UUID7 | None
 
+
 class DeckListItemResponse(BaseModel):
     deck: DeckResponse
     viewer_state: DeckViewerStateResponse
+
 
 class DeckViewerStateResponse(BaseModel):
     sessions_count: Counter
@@ -224,7 +232,7 @@ class DeckViewerStateResponse(BaseModel):
     is_saved: StrictBool
 
     @classmethod
-    def validate(
+    def from_user_deck(
         cls,
         user_deck: InternalUserDeck,
         knowledge: int,
@@ -233,18 +241,18 @@ class DeckViewerStateResponse(BaseModel):
             sessions_count=user_deck.sessions_count,
             correct_count=user_deck.correct_count,
             wrong_count=user_deck.wrong_count,
-            accuracy=calculate_accuracy(
-                user_deck=user_deck
-            ),
+            accuracy=calculate_accuracy(user_deck=user_deck),
             knowledge=knowledge,
             last_studied_at=user_deck.last_studied_at,
             is_favourite=user_deck.is_favourite,
             is_saved=user_deck.is_saved,
         )
 
+
 class ReorderCards(BaseModel):
     card_uuid: UUID7
     to_position: DeckPosition
+
 
 class LibraryCursor(BaseModel):
     last_studied_at: PastDatetime | None

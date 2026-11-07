@@ -1,6 +1,5 @@
 from uuid import UUID
 
-
 USER_UUID = UUID("0198ad01-b200-7000-8000-000000000042")
 USER_DATA = {
     "id": 42,

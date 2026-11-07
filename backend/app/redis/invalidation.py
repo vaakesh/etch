@@ -1,12 +1,11 @@
-from dataclasses import dataclass
 import functools
-from itertools import batched
 import logging
-from collections.abc import Callable, Iterable, Iterator
-from typing import Any, Mapping, Protocol
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from dataclasses import dataclass
+from itertools import batched
+from typing import Any, Protocol
 from uuid import UUID
 
-import orjson
 from redis import RedisError
 from redis.asyncio import Redis
 
@@ -30,9 +29,11 @@ from app.tracing import traced
 logger = logging.getLogger(__name__)
 UNLINK_BATCH_SIZE = 500
 
+
 @dataclass(frozen=True, slots=True)
 class DelKey:
     key: str
+
 
 @dataclass(frozen=True, slots=True)
 class BumpGeneration:
@@ -40,12 +41,17 @@ class BumpGeneration:
     # под которым ещё лежит старая страница.
     key: str
 
+
 type CacheOp = DelKey | BumpGeneration
 
 
 class _Entity(Protocol):
-    id: int
-    uuid: UUID
+    # read-only, so frozen EntityIdentity and ORM models both match
+    @property
+    def id(self) -> int: ...
+
+    @property
+    def uuid(self) -> UUID: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,9 +67,11 @@ class ArgCodec[T]:
     normalize - приводит аргумент к храниомому виду в момент вызова скоупа
     например, ORM -> EntityIdentity(id, uuid)
     """
+
     encode: Callable[[T], Any]
     decode: Callable[[Any], T]
     normalize: Callable[[Any], T] = lambda value: value
+
 
 INT = ArgCodec[int](encode=int, decode=int)
 UUID_ARG = ArgCodec[UUID](encode=str, decode=UUID)
@@ -78,48 +86,55 @@ ENTITY = ArgCodec[EntityIdentity](
     normalize=lambda e: EntityIdentity(id=e.id, uuid=e.uuid),
 )
 
+
 class ScopeFn[**P]:
     """Функция-скоуп вместе со своим кодеком аргументов.
- 
+
     Вызов не генерирует операции, а возвращает ленивый Scope (функция + аргументы).
     Имя берётся из атрибута класса scopes (__set_name__), по нему же
     load_scopes находит скоуп обратно через vars(scopes).
     """
- 
+
     def __init__(self, fn: Callable[P, Iterator[CacheOp]], codec: ArgCodec[Any]) -> None:
         self.fn = fn
         self.codec = codec
-        self.name = fn.__name__
+        self.name: str = getattr(fn, "__name__", repr(fn))
         functools.update_wrapper(self, fn)
- 
+
     def __set_name__(self, owner: type, name: str) -> None:
         self.name = name
- 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> "Scope":
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Scope:
         if kwargs:
             raise TypeError("cache scopes accept positional args only")
         return Scope(fn=self, args=tuple(map(self.codec.normalize, args)))
- 
+
     def __repr__(self) -> str:
         return f"<scope {self.name}>"
 
 
-def scope[**P](codec: ArgCodec) -> Callable[[Callable[P, Iterator[CacheOp]]], ScopeFn[P]]:
-    def decorator(fn: Callable[P, Iterator[CacheOp]]) -> ScopeFn[P]:
+class ScopeDecorator(Protocol):
+    def __call__[**P](self, fn: Callable[P, Iterator[CacheOp]], /) -> ScopeFn[P]: ...
+
+
+def scope(codec: ArgCodec) -> ScopeDecorator:
+    def decorator[**P](fn: Callable[P, Iterator[CacheOp]]) -> ScopeFn[P]:
         return ScopeFn(fn, codec)
+
     return decorator
+
 
 @dataclass(frozen=True, slots=True)
 class Scope:
     """Запомненный вызов скоупа. Итерируется в CacheOp."""
- 
+
     fn: ScopeFn[...]
     args: tuple[Any, ...]
- 
+
     @property
     def name(self) -> str:
         return self.fn.name
- 
+
     def __iter__(self) -> Iterator[CacheOp]:
         return self.fn.fn(*self.args)
 
@@ -148,7 +163,7 @@ class scopes:
                     user_uuid=user_uuid,
                 ),
             )
- 
+
     @scope(INT)
     def users_settings(*user_ids: int) -> Iterator[CacheOp]:
         for user_id in user_ids:
@@ -157,14 +172,12 @@ class scopes:
                     user_id=user_id,
                 ),
             )
- 
+
     @scope(USER_DECK)
     def user_decks(*identities: UserDeckIdentity) -> Iterator[CacheOp]:
         for identity in identities:
             yield DelKey(
-                key=make_user_deck_cache_key(
-                    identity=identity
-                ),
+                key=make_user_deck_cache_key(identity=identity),
             )
 
     # library pages (generation)
@@ -175,7 +188,7 @@ class scopes:
             yield BumpGeneration(
                 key=make_library_deck_page_generation_cache_key(user_id=user_id),
             )
- 
+
     @scope(INT)
     def library_card_pages(*user_ids: int) -> Iterator[CacheOp]:
         for user_id in user_ids:
@@ -189,17 +202,16 @@ class scopes:
     def decks(*deck_ids: int) -> Iterator[CacheOp]:
         for deck_id in deck_ids:
             yield DelKey(make_deck_cache_key(deck_id=deck_id))
- 
+
     @scope(UUID_ARG)
     def deck_ids_by_uuids(*deck_uuids: UUID) -> Iterator[CacheOp]:
         for deck_uuid in deck_uuids:
             yield DelKey(make_deck_uuid_cache_key(deck_uuid))
- 
+
     @scope(INT)
     def deck_cards(*deck_ids: int) -> Iterator[CacheOp]:
         for deck_id in deck_ids:
             yield DelKey(make_deck_cards_cache_key(deck_id=deck_id))
-
 
     # cards
 
@@ -207,12 +219,11 @@ class scopes:
     def cards(*card_ids: int) -> Iterator[CacheOp]:
         for card_id in card_ids:
             yield DelKey(make_card_cache_key(card_id=card_id))
- 
+
     @scope(UUID_ARG)
     def card_ids_by_uuids(*card_uuids: UUID) -> Iterator[CacheOp]:
         for card_uuid in card_uuids:
             yield DelKey(make_card_uuid_cache_key(card_uuid))
-
 
     # combined
     @scope(INT)
@@ -220,7 +231,7 @@ class scopes:
         """both library deck and card pages"""
         yield from scopes.library_deck_pages(*user_ids)
         yield from scopes.library_card_pages(*user_ids)
- 
+
     @scope(INT)
     def deck_with_cards(*deck_ids: int) -> Iterator[CacheOp]:
         """decks and its cards"""
@@ -251,6 +262,7 @@ class scopes:
         yield from scopes.cards(*card_ids)
         yield from scopes.card_ids_by_uuids(*card_uuids)
 
+
 def dump_scopes(*items: Scope) -> dict[str, Any]:
     """Scope -> JSON-совместимый dict (готов для JSONB)."""
     return {
@@ -264,9 +276,10 @@ def dump_scopes(*items: Scope) -> dict[str, Any]:
         ],
     }
 
+
 def load_scopes(payload: Mapping[str, Any]) -> list[Scope]:
     """dict из JSONB -> Scope для invalidate(*load_scopes(payload))."""
- 
+
     result: list[Scope] = []
     for item in payload["scopes"]:
         name = item["name"]

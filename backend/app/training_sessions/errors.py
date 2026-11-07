@@ -2,21 +2,26 @@ class TrainingSessionNotFoundError(Exception):
     def __init__(self, message: str = "Training session not found"):
         super().__init__(message)
 
+
 class TrainingSessionItemNotFoundError(Exception):
     def __init__(self, message: str = "Training session item not found"):
         super().__init__(message)
+
 
 class CardAlreadyAnsweredError(Exception):
     def __init__(self, message: str = "Card already answered"):
         super().__init__(message)
 
+
 class CardNotAnsweredError(Exception):
     def __init__(self, message: str = "Card must be answered before rating"):
         super().__init__(message)
 
+
 class TrainingSessionAlreadyFinishedError(Exception):
     def __init__(self, message: str = "Training session already finished"):
-            super().__init__(message)
+        super().__init__(message)
+
 
 class TrainingSessionDeckArchivedError(Exception):
     def __init__(
@@ -25,6 +30,7 @@ class TrainingSessionDeckArchivedError(Exception):
     ):
         super().__init__(message)
 
+
 class TrainingSessionDeckUnavailableError(Exception):
     def __init__(
         self,
@@ -32,17 +38,21 @@ class TrainingSessionDeckUnavailableError(Exception):
     ):
         super().__init__(message)
 
+
 class TrainingSessionAlreadyExistsError(Exception):
     def __init__(self, message: str = "Training session already exists"):
         super().__init__(message)
+
 
 class NoCardsToReviewError(Exception):
     def __init__(self, message: str = "No cards are due for review today"):
         super().__init__(message)
 
+
 class TrainingSessionNotFinishedYet(Exception):
     def __init__(self, message: str = "Training session not finished yet"):
         super().__init__(message)
+
 
 class PermissionDeniedError(Exception):
     def __init__(self, message: str = "Permission denied"):

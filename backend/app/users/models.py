@@ -1,13 +1,23 @@
-
-
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from app.database import Base
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
 
 if TYPE_CHECKING:
     from app.auth.models import UserSession
@@ -87,7 +97,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, 
+        BigInteger,
         primary_key=True,
     )
 
@@ -124,28 +134,28 @@ class User(Base):
         nullable=False,
     )
 
-    cards: Mapped[list["Card"]] = relationship(
+    cards: Mapped[list[Card]] = relationship(
         back_populates="user",
         passive_deletes="all",
         lazy="raise",
     )
-    decks: Mapped[list["Deck"]] = relationship(
+    decks: Mapped[list[Deck]] = relationship(
         back_populates="user",
         passive_deletes="all",
         lazy="raise",
     )
-    training_sessions: Mapped[list["TrainingSession"]] = relationship(
+    training_sessions: Mapped[list[TrainingSession]] = relationship(
         back_populates="user",
         passive_deletes="all",
         lazy="raise",
     )
-    user_sessions: Mapped[list["UserSession"]] = relationship(
+    user_sessions: Mapped[list[UserSession]] = relationship(
         foreign_keys="UserSession.user_id",
         back_populates="user",
         passive_deletes="all",
         lazy="raise",
     )
-    settings: Mapped["UserSettings"] = relationship(
+    settings: Mapped[UserSettings] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -182,7 +192,6 @@ class User(Base):
             "email",
             name="uq_users_email",
         ),
-
         CheckConstraint(
             "char_length(username) >= 3",
             name="username_min_length",

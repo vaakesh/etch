@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from app.common.limits import MAX_DECK_SIZE, MAX_SESSION_SIZE
 from fastapi import Query
 from pydantic import AfterValidator, Field, StringConstraints
+
+from app.common.limits import MAX_DECK_SIZE, MAX_SESSION_SIZE
 
 type CardText = Annotated[
     str,
@@ -43,6 +44,7 @@ type DeckTitle = Annotated[
         pattern=r"^[^\t\n\r\v\f\x85\u2028\u2029]*$",
     ),
 ]
+
 
 def _empty_description_to_none(value: str | None) -> str | None:
     return None if value == "" else value

@@ -49,7 +49,5 @@ def apply_date_pagination[T: tuple](
         )
 
     return (
-        stmt.order_by(None)
-        .order_by(date_column.desc(), id_column.desc())
-        .limit(limit + 1)
+        stmt.order_by(None).order_by(date_column.desc(), id_column.desc()).limit(limit + 1)
     )

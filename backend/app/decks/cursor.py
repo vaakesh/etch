@@ -1,7 +1,7 @@
 import base64
+import json
 from collections.abc import Callable
 from datetime import datetime
-import json
 from typing import Any
 
 from app.decks.schemas import LibraryCursor
@@ -51,18 +51,20 @@ class CursorCodec[T]:
                 failed_field="cursor",
             ) from exc
 
+
 def serialize_library_cursor(
     cursor: LibraryCursor,
 ) -> dict[str, Any]:
     return {
         "last_studied_at": (
             cursor.last_studied_at.isoformat()
-            if cursor.last_studied_at is not None 
+            if cursor.last_studied_at is not None
             else None
         ),
         "added_at": cursor.added_at.isoformat(),
         "id": cursor.id,
     }
+
 
 def deserialize_library_cursor(
     payload: dict[str, Any],
@@ -77,8 +79,7 @@ def deserialize_library_cursor(
     id = int(payload["id"])
 
     if (
-        last_studied_at is not None
-        and last_studied_at.tzinfo is None
+        last_studied_at is not None and last_studied_at.tzinfo is None
     ) or added_at.tzinfo is None:
         raise RequestValueError(
             message="Cursor datetime must include timezone",
@@ -96,6 +97,7 @@ def deserialize_library_cursor(
         added_at=added_at,
         id=id,
     )
+
 
 library_cursor_codec = CursorCodec[LibraryCursor](
     serialize=serialize_library_cursor,

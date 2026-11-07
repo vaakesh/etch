@@ -31,7 +31,8 @@ class TestGetClientInfo:
         result = await get_client_info(request)
 
         assert result == ClientInfo(
-            ip="2001:db8:85a3::8a2e:370:7334", user_agent="Mozilla/5.0",
+            ip="2001:db8:85a3::8a2e:370:7334",
+            user_agent="Mozilla/5.0",
         )
 
     async def test_returns_none_ip_when_connection_has_no_client(self):

@@ -3,6 +3,10 @@ import time
 from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 
+from fastapi import FastAPI, Request, Response
+from prometheus_client import Counter, Gauge, Histogram
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.logging_config import (
     RequestLogContext,
     bind_request_context,
@@ -11,9 +15,6 @@ from app.logging_config import (
     mark_exception_as_logged,
     reset_request_context,
 )
-from fastapi import FastAPI, Request, Response
-from prometheus_client import Counter, Gauge, Histogram
-from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(name=__name__)
 
@@ -39,8 +40,17 @@ http_request_duration_seconds = Histogram(
     documentation="HTTP request duration in seconds",
     labelnames=["method", "route", "status"],
     buckets=(
-        0.01, 0.025, 0.05, 0.1, 0.2, 0.3,
-        0.5, 1, 2, 5, 10,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.2,
+        0.3,
+        0.5,
+        1,
+        2,
+        5,
+        10,
     ),
 )
 http_requests_in_progress = Gauge(
@@ -73,7 +83,9 @@ class LoggerMiddleware(BaseHTTPMiddleware):
             duration_ms = (time.perf_counter() - started_at) * 1000
             response.headers["X-Request-ID"] = context.request_id
             self._log_completed(
-                request=request, context=context, response=response,
+                request=request,
+                context=context,
+                response=response,
                 duration_ms=duration_ms,
             )
             return response
@@ -220,5 +232,5 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
 def setup_middlewares(app: FastAPI) -> None:
     # the last middleware added runs first: logger -> prometheus -> router.
-    app.add_middleware(middleware_class=PrometheusMiddleware)
-    app.add_middleware(middleware_class=LoggerMiddleware)
+    app.add_middleware(PrometheusMiddleware)
+    app.add_middleware(LoggerMiddleware)

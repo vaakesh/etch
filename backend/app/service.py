@@ -1,33 +1,35 @@
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.repository import AuthRepository
-from app.tracing import traced
 from app.card_memory.repository import CardMemoryRepository
 from app.cards.repository import CardRepository
-from app.outbox.repository import OutboxRepository
 from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
+from app.outbox.repository import OutboxRepository
+from app.tracing import traced
 from app.training_sessions.repository import (
     TrainingSessionItemRepository,
     TrainingSessionRepository,
 )
 from app.users.repository import UserRepository, UserSettingsRepository
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 class UnitOfWork:
+    # session and repositories exist only inside `async with uow:`
+    session: AsyncSession
+    user_repo: UserRepository
+    training_session_repo: TrainingSessionRepository
+    card_repo: CardRepository
+    deck_repo: DeckRepository
+    deck_card_repo: DeckCardRepository
+    auth_repo: AuthRepository
+    user_deck_repo: UserDeckRepository
+    training_session_item_repo: TrainingSessionItemRepository
+    user_settings_repo: UserSettingsRepository
+    outbox_repo: OutboxRepository
+    card_memory_repo: CardMemoryRepository
+
     def __init__(self, async_session_maker: async_sessionmaker[AsyncSession]):
         self._async_session_maker = async_session_maker
-        self.session: AsyncSession | None = None
-        self.user_repo: UserRepository | None = None
-        self.training_session_repo: TrainingSessionRepository | None = None
-        self.card_repo: CardRepository | None = None
-        self.deck_repo: DeckRepository | None = None
-        self.deck_card_repo: DeckCardRepository | None = None
-        self.auth_repo: AuthRepository | None = None
-        self.user_deck_repo: UserDeckRepository | None = None
-        self.training_session_item_repo: TrainingSessionItemRepository | None = None
-        self.user_settings_repo: UserSettingsRepository | None = None
-        self.outbox_repo: OutboxRepository | None = None
-        self.card_memory_repo: CardMemoryRepository | None = None
 
     async def __aenter__(self):
         self.session = self._async_session_maker()
@@ -47,28 +49,13 @@ class UnitOfWork:
     @traced("uow.close")
     async def __aexit__(self, exc_type, exc, tb):
         try:
-            if exc_type is not None and self.session is not None:
+            if exc_type is not None:
                 await self.rollback()
         finally:
-            if self.session is not None:
-                await self.session.close()
-            self.session = None
-            self.user_repo = None
-            self.training_session_repo = None
-            self.card_repo = None
-            self.deck_repo = None
-            self.deck_card_repo = None
-            self.auth_repo = None
-            self.user_deck_repo = None
-            self.training_session_item_repo = None
-            self.user_settings_repo = None
-            self.outbox_repo = None
-            self.card_memory_repo = None
+            await self.session.close()
 
     @traced("uow.commit")
     async def commit(self):
-        if self.session is None:
-            raise RuntimeError("session is not initialized")
         try:
             await self.session.commit()
         except Exception:
@@ -76,12 +63,8 @@ class UnitOfWork:
             raise
 
     async def flush(self) -> None:
-        if self.session is None:
-            raise RuntimeError("session is not initialized")
         await self.session.flush()
-    
+
     @traced("uow.rollback")
     async def rollback(self):
-        if self.session is None:
-            raise RuntimeError("session is not initialized")
         await self.session.rollback()

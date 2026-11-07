@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, create_autospec
 from uuid import UUID
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.cards.errors import CardNotFoundError
 from app.cards.repository import CardRepository
@@ -22,8 +23,6 @@ from app.decks.service import DeckService, UserDeckService
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
 from app.redis.service import RedisCacheService
 from app.users.models import User
-from redis.exceptions import ConnectionError as RedisConnectionError
-
 from tests.unit.factories import make_card, make_deck, make_deck_card, make_user_deck
 from tests.unit.outbox_helpers import (
     OUTBOX_MESSAGE_ID,
@@ -32,7 +31,6 @@ from tests.unit.outbox_helpers import (
     make_outbox_repo,
     staged_message,
 )
-
 
 COPY_UUID = UUID("0198ad01-b200-7000-8000-000000000201")
 NOW = datetime(2026, 9, 1, tzinfo=UTC)
@@ -51,7 +49,9 @@ def cache_context(monkeypatch):
     data.pop("user")
     deck = Deck(**data)
     deck.user = User(
-        id=42, uuid=UUID("0198ad01-b200-7000-8000-000000000042"), username="test-user",
+        id=42,
+        uuid=UUID("0198ad01-b200-7000-8000-000000000042"),
+        username="test-user",
     )
     card = make_card()
     link = make_deck_card()
@@ -80,7 +80,11 @@ def cache_context(monkeypatch):
     uow.deck_card_repo.get_by_deck_id_and_card_id.return_value = link
     uow.deck_card_repo.get_max_position.return_value = 10
     uow.user_deck_repo.get_by_user_id_and_deck_id.return_value = state
-    uow.user_deck_repo.get_user_deck_keys_by_deck_ids.return_value = [(42, 200), (7, 200), (8, 200)]
+    uow.user_deck_repo.get_user_deck_keys_by_deck_ids.return_value = [
+        (42, 200),
+        (7, 200),
+        (8, 200),
+    ]
     uow.user_deck_repo.get_library_user_ids_by_deck_ids.return_value = [7, 42]
 
     def add_link(entity):
@@ -113,10 +117,15 @@ def cache_context(monkeypatch):
 
     workflow.make_private.side_effect = make_private
     workflow.preserve.return_value = DeckPreservationResult(
-        201, COPY_UUID, False, False,
+        201,
+        COPY_UUID,
+        False,
+        False,
         ArchiveChanges(
-            deck_ids={200, 201}, card_ids={100, 101},
-            user_ids={42}, user_deck_keys={(42, 200), (42, 201)},
+            deck_ids={200, 201},
+            card_ids={100, 101},
+            user_ids={42},
+            user_deck_keys={(42, 200), (42, 201)},
         ),
     )
     monkeypatch.setattr("app.decks.service.DeckArchiveWorkflow", lambda _uow: workflow)
@@ -124,7 +133,11 @@ def cache_context(monkeypatch):
     return SimpleNamespace(
         service=DeckService(lambda: uow, cache, invalidator),
         state_service=UserDeckService(lambda: uow, cache, invalidator),
-        uow=uow, invalidator=invalidator, deck=deck, card=card, state=state,
+        uow=uow,
+        invalidator=invalidator,
+        deck=deck,
+        card=card,
+        state=state,
         workflow=workflow,
     )
 
@@ -134,7 +147,10 @@ class TestCreateDeckInvalidation:
         ctx = cache_context
 
         await ctx.service.create_deck(
-            CreateDeckRequest(title="New deck"), 42, ctx.deck.user.uuid, "test-user",
+            CreateDeckRequest(title="New deck"),
+            42,
+            ctx.deck.user.uuid,
+            "test-user",
         )
 
         assert invalidated_ops(ctx) == {
@@ -143,11 +159,17 @@ class TestCreateDeckInvalidation:
 
 
 class TestUpdateDeckInvalidation:
-    @pytest.mark.parametrize("payload", [
-        {"title": "New title"}, {"description": "New description"},
-        {"description": None},
-    ])
-    async def test_refreshes_search_and_favourite_order_for_owner_and_savers(self, cache_context, payload):
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"title": "New title"},
+            {"description": "New description"},
+            {"description": None},
+        ],
+    )
+    async def test_refreshes_search_and_favourite_order_for_owner_and_savers(
+        self, cache_context, payload
+    ):
         ctx = cache_context
 
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(**payload))
@@ -174,8 +196,11 @@ class TestUpdateDeckInvalidation:
         ctx = cache_context
         ctx.workflow.make_private.side_effect = None
         ctx.workflow.make_private.return_value = DeckArchiveResult(
-            None, (7,), ArchiveChanges(
-                deck_ids={200, 201}, user_ids={8},
+            None,
+            (7,),
+            ArchiveChanges(
+                deck_ids={200, 201},
+                user_ids={8},
                 user_deck_keys={(7, 200), (7, 201), (9, 200), (9, 201)},
             ),
         )
@@ -183,9 +208,12 @@ class TestUpdateDeckInvalidation:
         await ctx.service.update_deck(42, ctx.deck.uuid, UpdateDeckRequest(is_public=False))
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:201"),
-            DelKey("deck:user-deck:7:200"), DelKey("deck:user-deck:7:201"),
-            DelKey("deck:user-deck:9:200"), DelKey("deck:user-deck:9:201"),
+            DelKey("deck:200"),
+            DelKey("deck:201"),
+            DelKey("deck:user-deck:7:200"),
+            DelKey("deck:user-deck:7:201"),
+            DelKey("deck:user-deck:9:200"),
+            DelKey("deck:user-deck:9:201"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
         }
@@ -202,11 +230,16 @@ class TestUpdateDeckInvalidation:
 
 
 class TestDeleteDeckInvalidation:
-    async def test_clears_deleted_and_transferred_states_including_nonrecipients(self, cache_context):
+    async def test_clears_deleted_and_transferred_states_including_nonrecipients(
+        self, cache_context
+    ):
         ctx = cache_context
         ctx.workflow.delete_deck.return_value = DeckArchiveResult(
-            None, (8,), ArchiveChanges(
-                deck_ids={200, 201}, user_ids={9},
+            None,
+            (8,),
+            ArchiveChanges(
+                deck_ids={200, 201},
+                user_ids={9},
                 user_deck_keys={(8, 200), (8, 201)},
             ),
         )
@@ -214,10 +247,14 @@ class TestDeleteDeckInvalidation:
         await ctx.service.delete_deck(ctx.deck.uuid, 42)
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:200:card-ids"), DelKey("deck:201"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
+            DelKey("deck:201"),
             DelKey("deck:id-by-uuid:0198ad01-b200-7000-8000-000000000200"),
-            DelKey("deck:user-deck:42:200"), DelKey("deck:user-deck:7:200"),
-            DelKey("deck:user-deck:8:200"), DelKey("deck:user-deck:8:201"),
+            DelKey("deck:user-deck:42:200"),
+            DelKey("deck:user-deck:7:200"),
+            DelKey("deck:user-deck:8:200"),
+            DelKey("deck:user-deck:8:201"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
         }
@@ -230,7 +267,8 @@ class TestDeleteDeckInvalidation:
         await ctx.service.delete_deck(ctx.deck.uuid, 42)
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
             DelKey("deck:id-by-uuid:0198ad01-b200-7000-8000-000000000200"),
             BumpGeneration("library:42:decks:generation"),
         }
@@ -243,17 +281,25 @@ class TestPreserveArchivedDeckInvalidation:
         await ctx.service.preserve_archived_deck(ctx.deck.uuid, 42)
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:201"),
-            DelKey("deck:user-deck:42:200"), DelKey("deck:user-deck:42:201"),
+            DelKey("deck:200"),
+            DelKey("deck:201"),
+            DelKey("deck:user-deck:42:200"),
+            DelKey("deck:user-deck:42:201"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:42:cards:generation"),
         }
 
     @pytest.mark.parametrize("copy_deleted", [False, True])
-    async def test_does_not_invalidate_already_preserved_copy(self, cache_context, copy_deleted):
+    async def test_does_not_invalidate_already_preserved_copy(
+        self, cache_context, copy_deleted
+    ):
         ctx = cache_context
         ctx.workflow.preserve.return_value = DeckPreservationResult(
-            None if copy_deleted else 201, COPY_UUID, True, copy_deleted, ArchiveChanges(),
+            None if copy_deleted else 201,
+            COPY_UUID,
+            True,
+            copy_deleted,
+            ArchiveChanges(),
         )
 
         await ctx.service.preserve_archived_deck(ctx.deck.uuid, 42)
@@ -270,7 +316,8 @@ class TestAddCardToDeckInvalidation:
         await ctx.service.add_card_to_deck(42, ctx.deck.uuid, ctx.card.uuid)
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
         }
@@ -291,24 +338,32 @@ class TestRemoveCardFromDeckInvalidation:
         await ctx.service.remove_card_from_deck(42, ctx.deck.uuid, ctx.card.uuid)
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
         }
 
 
 class TestLoadCardsToDeckInvalidation:
-    async def test_refreshes_owner_card_library_and_all_affected_deck_pages(self, cache_context):
+    async def test_refreshes_owner_card_library_and_all_affected_deck_pages(
+        self, cache_context
+    ):
         ctx = cache_context
 
         await ctx.service.load_cards_to_deck(
             ctx.deck.uuid,
-            [CreateCardRequest(front_text="front", back_text="back", front_lang="en", back_lang="ru")],
+            [
+                CreateCardRequest(
+                    front_text="front", back_text="back", front_lang="en", back_lang="ru"
+                )
+            ],
             42,
         )
 
         assert invalidated_ops(ctx) == {
-            DelKey("deck:200"), DelKey("deck:200:card-ids"),
+            DelKey("deck:200"),
+            DelKey("deck:200:card-ids"),
             BumpGeneration("library:42:decks:generation"),
             BumpGeneration("library:7:decks:generation"),
             BumpGeneration("library:42:cards:generation"),
@@ -333,7 +388,9 @@ class TestReorderCardsInvalidation:
 
 
 class TestSaveDeckInvalidation:
-    async def test_refreshes_state_and_saving_user_library_without_deck(self, cache_context):
+    async def test_refreshes_state_and_saving_user_library_without_deck(
+        self, cache_context
+    ):
         ctx = cache_context
         ctx.deck.user_id = 7
         ctx.state.is_saved = False
@@ -357,7 +414,9 @@ class TestSaveDeckInvalidation:
 
 
 class TestUnsaveDeckInvalidation:
-    async def test_refreshes_state_and_saving_user_library_without_deck(self, cache_context):
+    async def test_refreshes_state_and_saving_user_library_without_deck(
+        self, cache_context
+    ):
         ctx = cache_context
         ctx.deck.user_id = 7
         ctx.state.is_favourite = True
@@ -397,11 +456,22 @@ class TestSetFavouriteDeckInvalidation:
 
 
 class TestDeckMutationFailures:
-    @pytest.mark.parametrize("method", [
-        "create_deck", "update_deck", "delete_deck", "preserve_archived_deck",
-        "add_card_to_deck", "remove_card_from_deck", "load_cards_to_deck",
-        "reorder_cards", "save_deck", "unsave_deck", "set_favourite_deck",
-    ])
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "create_deck",
+            "update_deck",
+            "delete_deck",
+            "preserve_archived_deck",
+            "add_card_to_deck",
+            "remove_card_from_deck",
+            "load_cards_to_deck",
+            "reorder_cards",
+            "save_deck",
+            "unsave_deck",
+            "set_favourite_deck",
+        ],
+    )
     async def test_does_not_invalidate_when_commit_fails(self, cache_context, method):
         ctx = cache_context
         ctx.uow.commit.side_effect = RuntimeError("commit failed")
@@ -411,8 +481,14 @@ class TestDeckMutationFailures:
             ctx.deck.user_id = 7
             ctx.state.is_saved = method == "unsave_deck"
         calls = {
-            "create_deck": (ctx.service, (CreateDeckRequest(title="New deck"), 42, ctx.deck.user.uuid, "test-user")),
-            "update_deck": (ctx.service, (42, ctx.deck.uuid, UpdateDeckRequest(title="New title"))),
+            "create_deck": (
+                ctx.service,
+                (CreateDeckRequest(title="New deck"), 42, ctx.deck.user.uuid, "test-user"),
+            ),
+            "update_deck": (
+                ctx.service,
+                (42, ctx.deck.uuid, UpdateDeckRequest(title="New title")),
+            ),
             "delete_deck": (ctx.service, (ctx.deck.uuid, 42)),
             "preserve_archived_deck": (ctx.service, (ctx.deck.uuid, 42)),
             "add_card_to_deck": (ctx.service, (42, ctx.deck.uuid, ctx.card.uuid)),
@@ -432,12 +508,17 @@ class TestDeckMutationFailures:
         ctx.uow.outbox_repo.mark_published.assert_not_awaited()
 
     @pytest.mark.parametrize("method", ["update_deck", "delete_deck", "set_favourite_deck"])
-    async def test_leaves_event_pending_when_redis_fails_after_commit(self, cache_context, method):
+    async def test_leaves_event_pending_when_redis_fails_after_commit(
+        self, cache_context, method
+    ):
         ctx = cache_context
         failure = RedisConnectionError("Redis unavailable")
         ctx.invalidator.invalidate.side_effect = failure
         service, args = {
-            "update_deck": (ctx.service, (42, ctx.deck.uuid, UpdateDeckRequest(title="New title"))),
+            "update_deck": (
+                ctx.service,
+                (42, ctx.deck.uuid, UpdateDeckRequest(title="New title")),
+            ),
             "delete_deck": (ctx.service, (ctx.deck.uuid, 42)),
             "set_favourite_deck": (ctx.state_service, (42, ctx.deck.uuid, True)),
         }[method]
@@ -465,11 +546,17 @@ class TestDeckMutationFailures:
 
         ctx.invalidator.invalidate.assert_not_awaited()
 
-    @pytest.mark.parametrize("method", ["add_card_to_deck", "remove_card_from_deck", "reorder_cards"])
+    @pytest.mark.parametrize(
+        "method", ["add_card_to_deck", "remove_card_from_deck", "reorder_cards"]
+    )
     async def test_does_not_invalidate_missing_card(self, cache_context, method):
         ctx = cache_context
         ctx.uow.card_repo.get_by_uuid.return_value = None
-        args = (42, ctx.deck.uuid, ctx.card.uuid, 2) if method == "reorder_cards" else (42, ctx.deck.uuid, ctx.card.uuid)
+        args = (
+            (42, ctx.deck.uuid, ctx.card.uuid, 2)
+            if method == "reorder_cards"
+            else (42, ctx.deck.uuid, ctx.card.uuid)
+        )
 
         with pytest.raises(CardNotFoundError):
             await getattr(ctx.service, method)(*args)

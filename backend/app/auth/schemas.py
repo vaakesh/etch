@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.common.types import Password, Username
 from pydantic import BaseModel, ConfigDict
+
+from app.common.types import Password, Username
 
 
 @dataclass(slots=True, frozen=True)
@@ -46,15 +47,18 @@ class AuthSessionResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
 
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     username: Username
     password: Password
 
+
 class ChangePasswordRequest(BaseModel):
     current_password: Password
     new_password: Password
+
 
 class ChallengeParametersResponse(BaseModel):
     algorithm: str

@@ -24,8 +24,19 @@ class TestUsername:
 
     @pytest.mark.parametrize(
         "value",
-        ["ab", "abcdefghijklmnopqrs", "", "   ", "Алиса", "Alice🙂",
-         "alice.name", "alice/name", "ali ce", "ali\tce", "ali\nce"],
+        [
+            "ab",
+            "abcdefghijklmnopqrs",
+            "",
+            "   ",
+            "Алиса",
+            "Alice🙂",
+            "alice.name",
+            "alice/name",
+            "ali ce",
+            "ali\tce",
+            "ali\nce",
+        ],
     )
     def test_rejects_invalid_length_or_characters(self, value):
         adapter = TypeAdapter(Username)

@@ -1,14 +1,18 @@
 from uuid import UUID
-from app.tracing import traced
 
-from app.users.models import User, UserSettings
-from sqlalchemy import Select, and_, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.common.types import PositiveInt, Username
-from app.decks.models import Deck, UserDeck
-from app.users.schemas import UpdateUserSettingsRequest, UserSettingsUpdateData, UserUpdateData
+from app.decks.models import Deck
+from app.tracing import traced
+from app.users.models import User, UserSettings
+from app.users.schemas import (
+    UserSettingsUpdateData,
+    UserUpdateData,
+)
+
 
 class UserSettingsRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -98,17 +102,14 @@ class UserRepository:
             select(
                 User,
                 func.count(Deck.id).label("total_decks"),
-                func.count(Deck.id)
-                .filter(Deck.is_public.is_(True))
-                .label("public_decks"),
+                func.count(Deck.id).filter(Deck.is_public.is_(True)).label("public_decks"),
                 func.coalesce(
-                    func.sum(Deck.saves_count)
-                    .filter(Deck.is_public.is_(True)),
+                    func.sum(Deck.saves_count).filter(Deck.is_public.is_(True)),
                     0,
                 ).label("total_saves_count"),
             )
             .outerjoin(
-                Deck, 
+                Deck,
                 Deck.user_id == User.id,
             )
             .where(
@@ -117,20 +118,18 @@ class UserRepository:
             .group_by(User.id)
         )
         result = await self.session.execute(stmt)
-        return result.one_or_none()
+        return result.tuples().one_or_none()
 
     @traced("users.repository.get_by_id")
     async def get_by_id(
-            self, 
-            user_id: int,
-            for_update: bool = False,
-            include_settings: bool = False,
-        ) -> User | None:
+        self,
+        user_id: int,
+        for_update: bool = False,
+        include_settings: bool = False,
+    ) -> User | None:
         stmt = select(User).where(User.id == user_id)
         if include_settings:
-            stmt = stmt.options(
-                joinedload(User.settings)
-            )
+            stmt = stmt.options(joinedload(User.settings))
         if for_update:
             stmt = stmt.with_for_update(of=User)
         result = await self.session.execute(stmt)
@@ -138,17 +137,15 @@ class UserRepository:
 
     @traced("users.repository.get_by_uuid")
     async def get_by_uuid(
-            self, 
-            user_uuid: UUID,
-            for_update: bool = False,
-            include_settings: bool = False,
-        ) -> User | None:
+        self,
+        user_uuid: UUID,
+        for_update: bool = False,
+        include_settings: bool = False,
+    ) -> User | None:
         stmt = select(User).where(User.uuid == user_uuid)
 
         if include_settings:
-            stmt = stmt.options(
-                joinedload(User.settings)
-            )
+            stmt = stmt.options(joinedload(User.settings))
 
         if for_update:
             stmt = stmt.with_for_update(of=User)

@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(lifespan=lifespan)
 
+
 @app.post("/ask", response_model=Answer)
 async def ask(
     body: AskRequest,

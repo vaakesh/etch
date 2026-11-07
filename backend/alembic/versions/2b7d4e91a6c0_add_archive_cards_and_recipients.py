@@ -5,6 +5,7 @@ Revises: 19e4a62c0d5b
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "2b7d4e91a6c0"
@@ -15,21 +16,32 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column(
-        "cards", sa.Column("archive_deck_id", sa.BigInteger(), nullable=True),
+        "cards",
+        sa.Column("archive_deck_id", sa.BigInteger(), nullable=True),
     )
     op.create_foreign_key(
-        "fk_cards_archive_deck_id_decks", "cards", "decks",
-        ["archive_deck_id"], ["id"], ondelete="CASCADE",
+        "fk_cards_archive_deck_id_decks",
+        "cards",
+        "decks",
+        ["archive_deck_id"],
+        ["id"],
+        ondelete="CASCADE",
     )
     op.create_index("ix_cards_archive_deck_id", "cards", ["archive_deck_id"])
     op.alter_column(
-        "cards", "user_id", existing_type=sa.BigInteger(), nullable=True,
+        "cards",
+        "user_id",
+        existing_type=sa.BigInteger(),
+        nullable=True,
     )
     op.create_check_constraint(
-        "ck_cards_archive_deck_id_positive", "cards", "archive_deck_id > 0",
+        "ck_cards_archive_deck_id_positive",
+        "cards",
+        "archive_deck_id > 0",
     )
     op.create_check_constraint(
-        "ck_cards_owner_or_archive", "cards",
+        "ck_cards_owner_or_archive",
+        "cards",
         "(user_id IS NOT NULL AND archive_deck_id IS NULL) OR "
         "(user_id IS NULL AND archive_deck_id IS NOT NULL)",
     )
@@ -42,11 +54,15 @@ def upgrade() -> None:
         sa.Column("preserved_deck_id", sa.BigInteger(), nullable=True),
         sa.Column("preserved_deck_uuid_snapshot", sa.UUID(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["archive_deck_id"], ["decks.id"], ondelete="CASCADE",
+            ["archive_deck_id"],
+            ["decks.id"],
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
-            ["preserved_deck_id"], ["decks.id"], ondelete="SET NULL",
+            ["preserved_deck_id"],
+            ["decks.id"],
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("archive_deck_id", "user_id"),
         sa.CheckConstraint(
@@ -54,7 +70,8 @@ def upgrade() -> None:
             name="ck_deck_archive_recipient_archive_deck_id_positive",
         ),
         sa.CheckConstraint(
-            "user_id > 0", name="ck_deck_archive_recipient_user_id_positive",
+            "user_id > 0",
+            name="ck_deck_archive_recipient_user_id_positive",
         ),
         sa.CheckConstraint(
             "preserved_deck_id > 0",
@@ -113,10 +130,15 @@ def downgrade() -> None:
     op.drop_constraint("ck_cards_owner_or_archive", "cards", type_="check")
     op.drop_constraint("ck_cards_archive_deck_id_positive", "cards", type_="check")
     op.alter_column(
-        "cards", "user_id", existing_type=sa.BigInteger(), nullable=False,
+        "cards",
+        "user_id",
+        existing_type=sa.BigInteger(),
+        nullable=False,
     )
     op.drop_index("ix_cards_archive_deck_id", table_name="cards")
     op.drop_constraint(
-        "fk_cards_archive_deck_id_decks", "cards", type_="foreignkey",
+        "fk_cards_archive_deck_id_decks",
+        "cards",
+        type_="foreignkey",
     )
     op.drop_column("cards", "archive_deck_id")

@@ -1,34 +1,42 @@
-from collections.abc import Callable
 import logging
+from collections.abc import Callable
 from uuid import UUID
 
-from asyncpg import UniqueViolationError
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.utils import hash_password_async
-from app.errors import RequestValueError
-from app.service import UnitOfWork
-from app.tracing import traced, trace_span
+from app.common.types import Username
 from app.decks.archiver import DeckArchiveWorkflow
+from app.errors import RequestValueError
+from app.redis.invalidation import CacheInvalidator, scopes
+from app.redis.outbox import cache_invalidation_message
+from app.redis.service import RedisCacheService
+from app.service import UnitOfWork
+from app.tracing import traced
 from app.users.errors import (
     PermissionDeniedError,
-    UserAlreadyExistsError,
     UserNotFoundError,
     translate_user_integrity_error,
 )
 from app.users.models import User, UserSettings
-from app.users.schemas import CreateUserRequest, InternalUser, InternalUserSettings, InternalUserWithSettings, UpdateUserSettingsRequest, UpdateUserRequest, UserProfileResponse, UserSettingsUpdateData, UserUpdateData
-from sqlalchemy.exc import IntegrityError
-
-from app.redis.service import RedisCacheService
-from app.redis.invalidation import CacheInvalidator, scopes
-from app.redis.outbox import cache_invalidation_message
-from app.common.types import Username
+from app.users.schemas import (
+    CreateUserRequest,
+    InternalUser,
+    InternalUserSettings,
+    InternalUserWithSettings,
+    UpdateUserRequest,
+    UpdateUserSettingsRequest,
+    UserProfileResponse,
+    UserSettingsUpdateData,
+    UserUpdateData,
+)
 
 logger = logging.getLogger(__name__)
 
+
 class UserService:
     def __init__(
-        self, 
+        self,
         uow_factory: Callable[[], UnitOfWork],
         cache_service: RedisCacheService,
         cache_invalidator: CacheInvalidator,
@@ -39,8 +47,8 @@ class UserService:
 
     # helpers
     async def _get_by_uuid(
-        self, 
-        uow: UnitOfWork, 
+        self,
+        uow: UnitOfWork,
         user_uuid: UUID,
         for_update: bool = False,
         get_settings: bool = False,
@@ -61,7 +69,7 @@ class UserService:
         self,
         viewer_id: int | None,
         username: Username,
-    ) -> UserProfileResponse:   
+    ) -> UserProfileResponse:
         async with self.uow_factory() as uow:
             profile = await uow.user_repo.get_user_profile(
                 profile_username=username,
@@ -69,26 +77,19 @@ class UserService:
 
             if profile is None:
                 raise UserNotFoundError()
-            
+
             user, total_decks, public_decks, total_saves_count = profile
 
-            is_own_profile = (
-                viewer_id is not None
-                and viewer_id == user.id
-            )
+            is_own_profile = viewer_id is not None and viewer_id == user.id
 
-            deck_count = (
-                total_decks
-                if is_own_profile
-                else public_decks
-            )
+            deck_count = total_decks if is_own_profile else public_decks
 
             return UserProfileResponse(
                 uuid=user.uuid,
                 username=user.username,
                 created_at=user.created_at,
                 deck_count=deck_count,
-                total_saves_count=total_saves_count,              
+                total_saves_count=total_saves_count,
             )
 
     @traced("users.service.get_by_uuid")
@@ -129,15 +130,11 @@ class UserService:
         )
         cached_user = user_lookup.cached.get(user_uuid)
         if cached_user is not None:
-            user_settings_lookup = (
-                await self.cache_service.get_cached_users_settings(
-                    user_ids=[cached_user.id],
-                )
+            user_settings_lookup = await self.cache_service.get_cached_users_settings(
+                user_ids=[cached_user.id],
             )
 
-            cached_user_settings = (
-                user_settings_lookup.cached.get(cached_user.id)
-            )
+            cached_user_settings = user_settings_lookup.cached.get(cached_user.id)
             if cached_user_settings is not None:
                 return InternalUserWithSettings.from_parts(
                     user=cached_user,
@@ -171,8 +168,8 @@ class UserService:
     # checked
     @traced("users.service.create_user")
     async def create_user(
-            self,
-            payload: CreateUserRequest,
+        self,
+        payload: CreateUserRequest,
     ) -> InternalUserWithSettings:
         try:
             async with self.uow_factory() as uow:
@@ -289,9 +286,7 @@ class UserService:
                 obj=user_settings,
             )
 
-            invalidation = (
-                scopes.users_settings(internal_user_settings.user_id),
-            )
+            invalidation = (scopes.users_settings(internal_user_settings.user_id),)
             message = cache_invalidation_message(*invalidation)
             uow.outbox_repo.add(message)
             await uow.commit()
@@ -304,14 +299,13 @@ class UserService:
 
     async def _archive_decks_after_user_deletion(
         self,
-    ):
-        ...
+    ): ...
 
     @traced("users.service.delete_user")
     async def delete_user(
-            self,
-            current_user_id: int,
-        ) -> None:
+        self,
+        current_user_id: int,
+    ) -> None:
         async with self.uow_factory() as uow:
             user = await uow.user_repo.get_by_id(
                 user_id=current_user_id,
@@ -353,9 +347,12 @@ class UserService:
                 )
             )
             affected_user_ids = sorted(
-                set(await uow.user_deck_repo.get_library_user_ids_by_deck_ids(
-                    deck_ids=sorted(affected_deck_ids),
-                )) - {user_id}
+                set(
+                    await uow.user_deck_repo.get_library_user_ids_by_deck_ids(
+                        deck_ids=sorted(affected_deck_ids),
+                    )
+                )
+                - {user_id}
             )
 
             archived = await DeckArchiveWorkflow(uow).archive_owner_public_decks(
@@ -366,15 +363,17 @@ class UserService:
 
             invalidation = (
                 removed_user,
-                scopes.user_decks(*sorted(
-                    existing_user_deck_keys
-                    | removed_user_deck_keys
-                    | archived.changes.user_deck_keys
-                )),
+                scopes.user_decks(
+                    *sorted(
+                        existing_user_deck_keys
+                        | removed_user_deck_keys
+                        | archived.changes.user_deck_keys
+                    )
+                ),
                 scopes.library_deck_pages(*affected_user_ids),
-                scopes.deck_with_cards(*sorted(
-                    affected_deck_ids | archived.changes.deck_ids
-                )),
+                scopes.deck_with_cards(
+                    *sorted(affected_deck_ids | archived.changes.deck_ids)
+                ),
                 scopes.deck_ids_by_uuids(*owned_deck_uuids),
                 scopes.cards(*owned_card_ids),
                 scopes.card_ids_by_uuids(*owned_card_uuids),

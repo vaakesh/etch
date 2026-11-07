@@ -1,15 +1,16 @@
 from fastapi import Request
 
+from app.auth.deps import CurrentUser
 from app.redis.deps import RedisRateLimiterDeps
 from app.redis.service import RateLimit, RateLimitIdentity, RateLimitPolicy
-from app.auth.deps import CurrentUser
-from app.tracing import traced
+
 
 def limit(
     policy: RateLimitPolicy,
     by_identity: RateLimitIdentity,
 ):
     if by_identity == "user":
+
         async def user_dependency(
             user: CurrentUser,
             rate_limiter: RedisRateLimiterDeps,
@@ -18,22 +19,21 @@ def limit(
                 policy=policy,
                 rate_limiter=rate_limiter,
                 by_identity=by_identity,
-                identity_key=user.id,
+                identity_key=str(user.id),
             )
             await limiter()
 
         return user_dependency
 
     if by_identity == "ip":
+
         async def ip_dependency(
             request: Request,
             rate_limiter: RedisRateLimiterDeps,
         ):
             host = (
-                request.client.host
-                if request.client and request.client.host
-                else "unknown"
-            ) 
+                request.client.host if request.client and request.client.host else "unknown"
+            )
             limiter = RateLimit(
                 policy=policy,
                 rate_limiter=rate_limiter,
@@ -45,6 +45,7 @@ def limit(
         return ip_dependency
 
     raise ValueError(f"{by_identity} identity not found")
+
 
 PROFILE_RATE_LIMIT_POLICY = RateLimitPolicy(
     route="profile",

@@ -1,7 +1,5 @@
 from functools import lru_cache
 
-from app.config import get_settings
-from app.tracing import traced
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -9,6 +7,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+
+from app.config import get_settings
+from app.tracing import traced
 
 
 @lru_cache
@@ -19,6 +20,7 @@ def get_engine() -> AsyncEngine:
         url=settings.database_url(),
         echo=False,
     )
+
 
 @lru_cache
 def get_async_session_maker() -> async_sessionmaker[AsyncSession]:

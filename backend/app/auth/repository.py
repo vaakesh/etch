@@ -1,10 +1,12 @@
 from datetime import datetime
-from app.tracing import traced
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, delete, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import UserSession
 from app.common.query import apply_date_pagination
-from sqlalchemy import delete, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.tracing import traced
 
 
 class AuthRepository:
@@ -78,7 +80,7 @@ class AuthRepository:
         )
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         has_more = len(rows) > limit
         return rows[:limit], has_more
 
@@ -100,7 +102,7 @@ class AuthRepository:
             )
             .values(revoked_at=revoked_at)
         )
-        result = await self.session.execute(stmt)
+        result = cast(CursorResult[Any], await self.session.execute(stmt))
         return bool(result.rowcount)
 
     @traced("auth.repository.revoke_all_active_sessions_by_user_id")
@@ -140,5 +142,5 @@ class AuthRepository:
             .where(UserSession.id.in_(stale_ids))
             .execution_options(synchronize_session=False)
         )
-        result = await self.session.execute(stmt)
+        result = cast(CursorResult[Any], await self.session.execute(stmt))
         return result.rowcount

@@ -5,10 +5,12 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
 
+
 @pytest.fixture(scope="function")
 def app() -> FastAPI:
     app = create_app()
     return app
+
 
 @pytest_asyncio.fixture(scope="function")
 async def client(app: FastAPI):

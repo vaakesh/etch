@@ -11,23 +11,22 @@ from app.card_memory.repository import CardMemoryRepository
 from app.decks.repository import DeckRepository
 from app.fsrs.types import CardState, Rating
 from app.redis.invalidation import CacheInvalidator
-from app.training_sessions.repository import (
-    TrainingSessionItemRepository,
-    TrainingSessionRepository,
-)
 from app.training_sessions.errors import (
     CardNotAnsweredError,
     TrainingSessionItemNotFoundError,
     TrainingSessionNotFoundError,
 )
 from app.training_sessions.models import TrainingSessionStatus
+from app.training_sessions.repository import (
+    TrainingSessionItemRepository,
+    TrainingSessionRepository,
+)
 from app.training_sessions.schemas import (
     RateAnswerResponse,
     SkipAnswerRequest,
     SubmittedAnswerRequest,
 )
 from app.training_sessions.service import TrainingSessionService
-
 from tests.unit.factories import (
     make_deck,
     make_training_session,
@@ -72,14 +71,14 @@ def memory_context(monkeypatch):
     uow.deck_repo = create_autospec(DeckRepository, instance=True)
     uow.training_session_repo = create_autospec(TrainingSessionRepository, instance=True)
     uow.training_session_item_repo = create_autospec(
-        TrainingSessionItemRepository, instance=True,
+        TrainingSessionItemRepository,
+        instance=True,
     )
     uow.card_memory_repo = create_autospec(CardMemoryRepository, instance=True)
     uow.deck_repo.get_by_id.return_value = deck
     uow.training_session_repo.get_by_uuid.return_value = session
-    uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.return_value = (
-        item
-    )
+    item_repo = uow.training_session_item_repo
+    item_repo.get_item_by_sequence_number_and_session_id.return_value = item
     uow.card_memory_repo.get_or_create_for_update.return_value = memory
 
     service = TrainingSessionService(
@@ -87,7 +86,11 @@ def memory_context(monkeypatch):
         cache_invalidator=create_autospec(CacheInvalidator, instance=True),
     )
     return SimpleNamespace(
-        service=service, uow=uow, session=session, item=item, memory=memory,
+        service=service,
+        uow=uow,
+        session=session,
+        item=item,
+        memory=memory,
     )
 
 
@@ -123,7 +126,9 @@ class TestSubmitAnswerCardMemory:
         ids=["wrong-answer", "skip"],
     )
     async def test_wrong_answer_or_skip_reviews_memory_as_again(
-        self, memory_context, user_answer,
+        self,
+        memory_context,
+        user_answer,
     ):
         ctx = memory_context
 
@@ -168,13 +173,16 @@ class TestSubmitAnswerCardMemory:
         assert ctx.memory.due == NOW + timedelta(days=46)
 
     async def test_takes_answer_time_after_waiting_for_memory_lock(
-        self, memory_context, monkeypatch,
+        self,
+        memory_context,
+        monkeypatch,
     ):
         ctx = memory_context
         lock_released_at = NOW + timedelta(seconds=1)
         clock = {"now": NOW}
         monkeypatch.setattr(
-            "app.training_sessions.service.utcnow", lambda: clock["now"],
+            "app.training_sessions.service.utcnow",
+            lambda: clock["now"],
         )
 
         async def wait_for_lock(**kwargs):
@@ -317,7 +325,8 @@ class TestRateAnswer:
         ctx.uow.commit.assert_awaited_once()
 
     async def test_stores_rating_without_memory_for_item_without_learning_key(
-        self, rate_context,
+        self,
+        rate_context,
     ):
         ctx = rate_context
         ctx.item.learning_key_snapshot = None
@@ -347,12 +356,14 @@ class TestRateAnswer:
         with pytest.raises(TrainingSessionNotFoundError):
             await rate(ctx, 3, user_id=43)
 
-        ctx.uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.assert_not_awaited()
+        item_repo = ctx.uow.training_session_item_repo
+        item_repo.get_item_by_sequence_number_and_session_id.assert_not_awaited()
         ctx.uow.commit.assert_not_awaited()
 
     async def test_rejects_missing_item(self, rate_context):
         ctx = rate_context
-        ctx.uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.return_value = None
+        item_repo = ctx.uow.training_session_item_repo
+        item_repo.get_item_by_sequence_number_and_session_id.return_value = None
 
         with pytest.raises(TrainingSessionItemNotFoundError):
             await rate(ctx, 3)

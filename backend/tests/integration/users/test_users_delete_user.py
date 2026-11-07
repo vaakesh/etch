@@ -8,8 +8,6 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.models import UserSession
-from app.cards.models import Card
-from app.decks.models import Deck, DeckCard, UserDeck
 from app.users.models import User, UserSettings
 from tests.integration.conftest import ClientFactory
 from tests.integration.users.conftest import AuthClientFactory, UserFactory
@@ -38,7 +36,9 @@ class TestUserDelete:
         for header in response.headers.get_list("set-cookie"):
             cookies.load(header)
         assert set(cookies) == {"access_token", "refresh_token"}
-        assert all(cookie.value == "" and cookie["max-age"] == "0" for cookie in cookies.values())
+        assert all(
+            cookie.value == "" and cookie["max-age"] == "0" for cookie in cookies.values()
+        )
 
         async with async_session_maker() as session:
             stmt = select(
@@ -46,7 +46,9 @@ class TestUserDelete:
                 exists(select(UserSettings.user_id)).label("has_user_settings"),
                 exists(select(UserSession.id)).label("has_user_sessions"),
             )
-            has_users, has_user_settings, has_user_sessions = (await session.execute(stmt)).one()
+            has_users, has_user_settings, has_user_sessions = (
+                await session.execute(stmt)
+            ).one()
             assert has_users is False
             assert has_user_settings is False
             assert has_user_sessions is False

@@ -1,7 +1,16 @@
 from datetime import datetime
 
 import pytest
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, create_engine, select
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    select,
+)
 
 from app.common.query import apply_date_pagination, apply_search
 from app.decks.models import Deck, UserDeck
@@ -13,33 +22,76 @@ from app.decks.schemas import LibraryCursor
 def query_db():
     metadata = MetaData()
     decks = Table(
-        "decks", metadata,
+        "decks",
+        metadata,
         Column("id", Integer, primary_key=True),
-        Column("title", String), Column("description", String),
+        Column("title", String),
+        Column("description", String),
         Column("updated_at", DateTime),
     )
     links = Table(
-        "user_decks", metadata,
+        "user_decks",
+        metadata,
         Column("deck_id", Integer, primary_key=True),
-        Column("last_studied_at", DateTime), Column("added_at", DateTime),
+        Column("last_studied_at", DateTime),
+        Column("added_at", DateTime),
     )
     engine = create_engine("sqlite://")
     metadata.create_all(engine)
     with engine.begin() as connection:
-        connection.execute(decks.insert(), [
-            dict(id=1, title="Red", description="blue", updated_at=datetime(2026, 1, 1)),
-            dict(id=2, title="red blue", description="", updated_at=datetime(2026, 1, 2)),
-            dict(id=3, title="red", description="green", updated_at=datetime(2026, 1, 2)),
-            dict(id=4, title="100%_done", description="", updated_at=datetime(2026, 1, 3)),
-            dict(id=5, title="100XXdone", description="", updated_at=datetime(2026, 1, 3)),
-        ])
-        connection.execute(links.insert(), [
-            dict(deck_id=1, last_studied_at=None, added_at=datetime(2026, 1, 1)),
-            dict(deck_id=2, last_studied_at=None, added_at=datetime(2026, 1, 2)),
-            dict(deck_id=3, last_studied_at=None, added_at=datetime(2026, 1, 2)),
-            dict(deck_id=4, last_studied_at=datetime(2026, 1, 3), added_at=datetime(2026, 1, 2)),
-            dict(deck_id=5, last_studied_at=datetime(2026, 1, 3), added_at=datetime(2026, 1, 2)),
-        ])
+        connection.execute(
+            decks.insert(),
+            [
+                {
+                    "id": 1,
+                    "title": "Red",
+                    "description": "blue",
+                    "updated_at": datetime(2026, 1, 1),
+                },
+                {
+                    "id": 2,
+                    "title": "red blue",
+                    "description": "",
+                    "updated_at": datetime(2026, 1, 2),
+                },
+                {
+                    "id": 3,
+                    "title": "red",
+                    "description": "green",
+                    "updated_at": datetime(2026, 1, 2),
+                },
+                {
+                    "id": 4,
+                    "title": "100%_done",
+                    "description": "",
+                    "updated_at": datetime(2026, 1, 3),
+                },
+                {
+                    "id": 5,
+                    "title": "100XXdone",
+                    "description": "",
+                    "updated_at": datetime(2026, 1, 3),
+                },
+            ],
+        )
+        connection.execute(
+            links.insert(),
+            [
+                {"deck_id": 1, "last_studied_at": None, "added_at": datetime(2026, 1, 1)},
+                {"deck_id": 2, "last_studied_at": None, "added_at": datetime(2026, 1, 2)},
+                {"deck_id": 3, "last_studied_at": None, "added_at": datetime(2026, 1, 2)},
+                {
+                    "deck_id": 4,
+                    "last_studied_at": datetime(2026, 1, 3),
+                    "added_at": datetime(2026, 1, 2),
+                },
+                {
+                    "deck_id": 5,
+                    "last_studied_at": datetime(2026, 1, 3),
+                    "added_at": datetime(2026, 1, 2),
+                },
+            ],
+        )
         yield connection, decks
     engine.dispose()
 
@@ -81,21 +133,29 @@ class TestApplySearch:
 
 
 class TestApplyDatePagination:
-    @pytest.mark.parametrize(("at", "cursor_id", "expected"), [
-        (None, None, [5, 4, 3]),
-        (datetime(2026, 1, 3), 5, [4, 3, 2]),
-        (datetime(2026, 1, 2), 3, [2, 1]),
-        (datetime(2026, 1, 1), 1, []),
-        (None, 3, [5, 4, 3]),
-        (datetime(2026, 1, 2), None, [5, 4, 3]),
-    ])
-    def test_returns_rows_after_boundary_with_one_extra(self, query_db, at, cursor_id, expected):
+    @pytest.mark.parametrize(
+        ("at", "cursor_id", "expected"),
+        [
+            (None, None, [5, 4, 3]),
+            (datetime(2026, 1, 3), 5, [4, 3, 2]),
+            (datetime(2026, 1, 2), 3, [2, 1]),
+            (datetime(2026, 1, 1), 1, []),
+            (None, 3, [5, 4, 3]),
+            (datetime(2026, 1, 2), None, [5, 4, 3]),
+        ],
+    )
+    def test_returns_rows_after_boundary_with_one_extra(
+        self, query_db, at, cursor_id, expected
+    ):
         connection, decks = query_db
 
         stmt = apply_date_pagination(
             select(decks.c.id).order_by(decks.c.id),
-            date_column=decks.c.updated_at, id_column=decks.c.id,
-            cursor_at=at, cursor_id=cursor_id, limit=2,
+            date_column=decks.c.updated_at,
+            id_column=decks.c.id,
+            cursor_at=at,
+            cursor_id=cursor_id,
+            limit=2,
         )
 
         assert connection.scalars(stmt).all() == expected
@@ -105,21 +165,45 @@ class TestApplyDatePagination:
         stmt = apply_search(select(decks.c.id).where(decks.c.id != 2), "red", decks.c.title)
 
         stmt = apply_date_pagination(
-            stmt, date_column=decks.c.updated_at, id_column=decks.c.id,
-            cursor_at=None, cursor_id=None, limit=1,
+            stmt,
+            date_column=decks.c.updated_at,
+            id_column=decks.c.id,
+            cursor_at=None,
+            cursor_id=None,
+            limit=1,
         )
 
         assert connection.scalars(stmt).all() == [3, 1]
 
 
 class TestApplyLibraryPagination:
-    @pytest.mark.parametrize(("cursor", "expected"), [
-        (None, [5, 4, 3]),
-        (LibraryCursor(last_studied_at=datetime(2026, 1, 3), added_at=datetime(2026, 1, 2), id=5), [4, 3, 2]),
-        (LibraryCursor(last_studied_at=datetime(2026, 1, 3), added_at=datetime(2026, 1, 2), id=4), [3, 2, 1]),
-        (LibraryCursor(last_studied_at=None, added_at=datetime(2026, 1, 2), id=3), [2, 1]),
-        (LibraryCursor(last_studied_at=None, added_at=datetime(2026, 1, 1), id=1), []),
-    ])
+    @pytest.mark.parametrize(
+        ("cursor", "expected"),
+        [
+            (None, [5, 4, 3]),
+            (
+                LibraryCursor(
+                    last_studied_at=datetime(2026, 1, 3),
+                    added_at=datetime(2026, 1, 2),
+                    id=5,
+                ),
+                [4, 3, 2],
+            ),
+            (
+                LibraryCursor(
+                    last_studied_at=datetime(2026, 1, 3),
+                    added_at=datetime(2026, 1, 2),
+                    id=4,
+                ),
+                [3, 2, 1],
+            ),
+            (
+                LibraryCursor(last_studied_at=None, added_at=datetime(2026, 1, 2), id=3),
+                [2, 1],
+            ),
+            (LibraryCursor(last_studied_at=None, added_at=datetime(2026, 1, 1), id=1), []),
+        ],
+    )
     def test_pages_through_studied_and_unstudied_decks(self, query_db, cursor, expected):
         connection, _ = query_db
         stmt = select(Deck.id).join(UserDeck, UserDeck.deck_id == Deck.id)

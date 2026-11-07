@@ -22,6 +22,7 @@ def get_unique_constraint_name(
 
     return cause.constraint_name
 
+
 USER_EXPECTED_CONSTRAINT_ERRORS: dict[
     str,
     type[Exception],
@@ -30,24 +31,28 @@ USER_EXPECTED_CONSTRAINT_ERRORS: dict[
     "uq_users_username_lower": UsernameAlreadyExistsError,
 }
 
+
 def translate_user_integrity_error(
     exc: IntegrityError,
 ) -> Exception | None:
     constraint = get_unique_constraint_name(exc)
+    if constraint is None:
+        return None
 
-    error_type = USER_EXPECTED_CONSTRAINT_ERRORS.get(
-        constraint
-    )
+    error_type = USER_EXPECTED_CONSTRAINT_ERRORS.get(constraint)
 
     return error_type() if error_type is not None else None
+
 
 class UserNotFoundError(Exception):
     def __init__(self, message: str = "User not found"):
         super().__init__(message)
 
+
 class UserAlreadyExistsError(Exception):
     def __init__(self, message: str = "Username or email is already in use"):
         super().__init__(message)
+
 
 class PermissionDeniedError(Exception):
     def __init__(self, message: str = "Permission denied"):

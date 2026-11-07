@@ -1,6 +1,7 @@
+from fastapi import APIRouter, Depends, Query
 from pydantic import UUID7
 
-from app.auth.deps import CurrentUser, OptionalCurrentUser, get_current_user
+from app.auth.deps import CurrentUser, get_current_user
 from app.bff.deps import get_bff_service
 from app.bff.schemas import (
     CatalogDeckItemResponse,
@@ -19,7 +20,6 @@ from app.training_sessions.schemas import (
     StartReviewSessionRequest,
 )
 from app.users.models import User
-from fastapi import APIRouter, Depends, Query
 
 router = APIRouter(
     prefix="/bff",
@@ -36,6 +36,7 @@ async def get_home_dashboard(
         user_id=current_user.id,
     )
     return result
+
 
 @router.get("/catalog", response_model=list[CatalogDeckItemResponse])
 async def get_catalog_page(
@@ -89,6 +90,7 @@ async def get_cards_library_page(
     )
     return result
 
+
 @router.post(
     "/practice/{deck_uuid}/start",
     response_model=PracticeSessionResponse,
@@ -107,6 +109,7 @@ async def start_practice_session(
         words_per_session=payload.words_per_session,
     )
 
+
 @router.get(
     "/reviews/summary",
     response_model=ReviewSummaryResponse,
@@ -116,6 +119,7 @@ async def get_review_summary(
     bff_service: BffService = Depends(get_bff_service),
 ):
     return await bff_service.get_review_summary(user_id=current_user.id)
+
 
 @router.post(
     "/reviews/start",
@@ -132,6 +136,7 @@ async def start_review_session(
         prompt_side=payload.prompt_side,
         words_per_session=payload.words_per_session,
     )
+
 
 @router.get(
     "/practice/{training_session_uuid}/resume",

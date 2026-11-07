@@ -1,24 +1,25 @@
 import logging
 from datetime import datetime
-from app.tracing import traced
 from uuid import UUID
 
-from app.cards.models import Card
-from app.cards.schemas import InternalCard
-from app.common.query import apply_date_pagination, apply_search
-from app.common.types import SearchQuery
-from app.decks.models import Deck, DeckCard
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cards.models import Card
+from app.common.query import apply_date_pagination, apply_search
+from app.common.types import SearchQuery
+from app.decks.models import Deck, DeckCard
+from app.tracing import traced
+
 logger = logging.getLogger(__name__)
+
 
 class CardRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     # base
-    async def get(self, card_id: int) -> Card:
+    async def get(self, card_id: int) -> Card | None:
         return await self.session.get(Card, card_id)
 
     def add(self, card: Card) -> None:
@@ -36,10 +37,10 @@ class CardRepository:
     # read
     @traced("cards.repository.get_by_uuid")
     async def get_by_uuid(
-            self, 
-            card_uuid: UUID,
-            for_update: bool = False,
-        ) -> Card | None:
+        self,
+        card_uuid: UUID,
+        for_update: bool = False,
+    ) -> Card | None:
         stmt = select(Card).where(Card.uuid == card_uuid)
         if for_update:
             stmt = stmt.with_for_update(of=Card).execution_options(
@@ -85,25 +86,17 @@ class CardRepository:
         self,
         card_ids: list[int],
     ) -> list[Card]:
-        stmt = (
-            select(Card)
-            .where(
-                Card.id.in_(card_ids),
-            )
+        stmt = select(Card).where(
+            Card.id.in_(card_ids),
         )
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
-        return rows
+        return list(result.scalars().all())
 
     async def get_identities_by_user_id(
         self,
         user_id: int,
     ) -> list[tuple[int, UUID]]:
-        stmt = (
-            select(Card.id, Card.uuid)
-            .where(Card.user_id == user_id)
-            .order_by(Card.id)
-        )
+        stmt = select(Card.id, Card.uuid).where(Card.user_id == user_id).order_by(Card.id)
         return list((await self.session.execute(stmt)).tuples().all())
 
     @traced("cards.repository.get_all_by_user_id")
@@ -115,11 +108,8 @@ class CardRepository:
         cursor_id: int | None = None,
         limit: int = 50,
     ) -> tuple[list[Card], bool]:
-        stmt = (
-            select(Card)
-            .where(
-                Card.user_id == user_id,
-            )
+        stmt = select(Card).where(
+            Card.user_id == user_id,
         )
 
         if search_query:
@@ -136,6 +126,6 @@ class CardRepository:
         )
 
         result = await self.session.execute(stmt)
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
         has_more = len(rows) > limit
         return rows[:limit], has_more

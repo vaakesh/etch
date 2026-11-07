@@ -4,9 +4,10 @@ Revision ID: 7d2f4a9c1b8e
 Revises: c6e18a9d42f0
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "7d2f4a9c1b8e"
 down_revision = "c6e18a9d42f0"

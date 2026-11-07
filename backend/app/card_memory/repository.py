@@ -3,14 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.card_memory.models import CardMemoryState
-from app.card_memory.replay import MemoryKey, ReviewEvent
-from app.card_memory.utils import effective_rating
-from app.cards.models import Card
-from app.decks.models import Deck, DeckCard, UserDeck
-from app.fsrs.types import CardState
-from app.tracing import traced
-from app.training_sessions.models import CardSide, TrainingSession, TrainingSessionItem
 from sqlalchemy import (
     ColumnElement,
     DateTime,
@@ -25,6 +17,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.card_memory.models import CardMemoryState
+from app.card_memory.replay import MemoryKey, ReviewEvent
+from app.card_memory.utils import effective_rating
+from app.cards.models import Card
+from app.decks.models import Deck, DeckCard, UserDeck
+from app.fsrs.types import CardState
+from app.tracing import traced
+from app.training_sessions.models import CardSide, TrainingSession, TrainingSessionItem
 
 # Ключ памяти в журнале ответов: пользователь и слово из item, направление из сессии.
 # user_id из item, чтобы история слова читалась по индексу только этого пользователя
@@ -103,9 +104,9 @@ class CardMemoryRepository:
             .group_by(CardMemoryState.prompt_side)
         )
         rows = (await self.session.execute(stmt)).all()
-        summary = {
-            side: DueSideSummary(due_now=0, due_today=0, next_due_at=None)
-            for side in ("front", "back")
+        sides: tuple[CardSide, ...] = ("front", "back")
+        summary: dict[CardSide, DueSideSummary] = {
+            side: DueSideSummary(due_now=0, due_today=0, next_due_at=None) for side in sides
         }
         for row in rows:
             summary[row.prompt_side] = DueSideSummary(
@@ -148,11 +149,7 @@ class CardMemoryRepository:
             .subquery("due_words")
         )
         # Самые просроченные первыми
-        stmt = (
-            select(due_words)
-            .order_by(due_words.c.due, due_words.c.card_id)
-            .limit(limit)
-        )
+        stmt = select(due_words).order_by(due_words.c.due, due_words.c.card_id).limit(limit)
         rows = (await self.session.execute(stmt)).all()
         return [
             DueCard(card_id=row.card_id, learning_key=row.learning_key, due=row.due)
@@ -209,10 +206,9 @@ class CardMemoryRepository:
             .group_by(DeckCard.deck_id, DeckCard.id)
             .subquery("per_card")
         )
-        stmt = (
-            select(per_card.c.deck_id, func.avg(per_card.c.r).label("knowledge"))
-            .group_by(per_card.c.deck_id)
-        )
+        stmt = select(
+            per_card.c.deck_id, func.avg(per_card.c.r).label("knowledge")
+        ).group_by(per_card.c.deck_id)
         rows = (await self.session.execute(stmt)).all()
         return {row.deck_id: float(row.knowledge) for row in rows}
 
@@ -285,17 +281,19 @@ class CardMemoryRepository:
         # параллельный submit_answer, не трогаем
         await self.session.execute(
             pg_insert(CardMemoryState)
-            .values([
-                {
-                    "user_id": user_id,
-                    "learning_key": learning_key,
-                    "prompt_side": prompt_side,
-                    "state": CardState.LEARNING,
-                    "step": 0,
-                    "due": now,
-                }
-                for user_id, learning_key, prompt_side in sorted(keys)
-            ])
+            .values(
+                [
+                    {
+                        "user_id": user_id,
+                        "learning_key": learning_key,
+                        "prompt_side": prompt_side,
+                        "state": CardState.LEARNING,
+                        "step": 0,
+                        "due": now,
+                    }
+                    for user_id, learning_key, prompt_side in sorted(keys)
+                ]
+            )
             .on_conflict_do_nothing(
                 index_elements=["user_id", "learning_key", "prompt_side"],
             )

@@ -29,11 +29,13 @@ from tests.unit.factories import (
 class TestTrainingSessionUuidValidation:
     @pytest.fixture
     def bff_service(self, app):
-        from app.bff.deps import get_bff_service
-        from app.bff.service import BffService
         from unittest.mock import create_autospec
 
+        from app.bff.deps import get_bff_service
+        from app.bff.service import BffService
+
         service = create_autospec(BffService, instance=True)
+
         async def provide_bff_service():
             return service
 
@@ -41,33 +43,67 @@ class TestTrainingSessionUuidValidation:
         yield service
         app.dependency_overrides.pop(get_bff_service, None)
 
-    @pytest.mark.parametrize("method, path, payload, field", [
-        ("GET", "/training-sessions/{uuid}", None, "session_uuid"),
-        ("GET", "/training-sessions/{uuid}/history", None, "session_uuid"),
-        ("POST", "/training-sessions/{uuid}/activity", {"event": "resume"}, "session_uuid"),
-        ("PUT", "/training-sessions/{uuid}/items/1/submit", {"action": "skip"}, "training_session_uuid"),
-        ("PUT", "/training-sessions/{uuid}/items/1/rating", {"rating": 3}, "training_session_uuid"),
-        ("GET", "/bff/practice/{uuid}/resume", None, "training_session_uuid"),
-        ("POST", "/bff/practice/{uuid}/start", {"prompt_side": "front", "words_per_session": 1}, "deck_uuid"),
-    ])
-    async def test_rejects_uuid_v4_before_calling_service(self, client, training_session_service, bff_service, method, path, payload, field):
+    @pytest.mark.parametrize(
+        "method, path, payload, field",
+        [
+            ("GET", "/training-sessions/{uuid}", None, "session_uuid"),
+            ("GET", "/training-sessions/{uuid}/history", None, "session_uuid"),
+            (
+                "POST",
+                "/training-sessions/{uuid}/activity",
+                {"event": "resume"},
+                "session_uuid",
+            ),
+            (
+                "PUT",
+                "/training-sessions/{uuid}/items/1/submit",
+                {"action": "skip"},
+                "training_session_uuid",
+            ),
+            (
+                "PUT",
+                "/training-sessions/{uuid}/items/1/rating",
+                {"rating": 3},
+                "training_session_uuid",
+            ),
+            ("GET", "/bff/practice/{uuid}/resume", None, "training_session_uuid"),
+            (
+                "POST",
+                "/bff/practice/{uuid}/start",
+                {"prompt_side": "front", "words_per_session": 1},
+                "deck_uuid",
+            ),
+        ],
+    )
+    async def test_rejects_uuid_v4_before_calling_service(
+        self, client, training_session_service, bff_service, method, path, payload, field
+    ):
         value = "0198ad01-b200-4000-8000-000000000400"
 
         response = await client.request(method, path.format(uuid=value), json=payload)
 
         assert response.status_code == 422
         assert response.json() == {
-            "code": "VALIDATION_ERROR", "message": "Validation error",
-            "details": [{"type": "uuid_version", "loc": ["path", field],
-                         "msg": "UUID version 7 expected", "input": value,
-                         "ctx": {"expected_version": 7}}],
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [
+                {
+                    "type": "uuid_version",
+                    "loc": ["path", field],
+                    "msg": "UUID version 7 expected",
+                    "input": value,
+                    "ctx": {"expected_version": 7},
+                }
+            ],
         }
         assert training_session_service.mock_calls == []
         assert bff_service.mock_calls == []
 
 
 class TestGetTrainingSession:
-    async def test_returns_preserved_session_without_deck(self, client, training_session_service):
+    async def test_returns_preserved_session_without_deck(
+        self, client, training_session_service
+    ):
         training_session = make_training_session(deck=None)
         training_session_service.get_by_uuid.return_value = training_session
 
@@ -75,11 +111,19 @@ class TestGetTrainingSession:
 
         assert response.status_code == 200
         assert response.json() == {
-            "uuid": "0198ad01-b200-7000-8000-000000000400", "kind": "deck",
-            "deck_uuid": None, "deck_title": None, "status": "in_progress",
-            "requested_count": 10, "answered_count": 3, "correct_count": 2, "wrong_count": 1,
-            "prompt_side": "front", "answer_side": "back",
-            "started_at": "2026-08-15T16:00:00Z", "finished_at": None,
+            "uuid": "0198ad01-b200-7000-8000-000000000400",
+            "kind": "deck",
+            "deck_uuid": None,
+            "deck_title": None,
+            "status": "in_progress",
+            "requested_count": 10,
+            "answered_count": 3,
+            "correct_count": 2,
+            "wrong_count": 1,
+            "prompt_side": "front",
+            "answer_side": "back",
+            "started_at": "2026-08-15T16:00:00Z",
+            "finished_at": None,
         }
 
     async def test_returns_session_for_authenticated_viewer(
@@ -164,9 +208,7 @@ class TestGetTrainingSession:
         training_session,
         training_session_service: AsyncMock,
     ):
-        training_session_service.get_by_uuid.side_effect = (
-            TrainingSessionNotFoundError()
-        )
+        training_session_service.get_by_uuid.side_effect = TrainingSessionNotFoundError()
 
         response = await client.get(f"/training-sessions/{training_session.uuid}")
 
@@ -193,8 +235,7 @@ class TestGetTrainingSession:
                     "type": "uuid_parsing",
                     "loc": ["path", "session_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -233,9 +274,7 @@ class TestGetTrainingSessionHistory:
             second_item,
         ]
 
-        response = await client.get(
-            f"/training-sessions/{training_session.uuid}/history"
-        )
+        response = await client.get(f"/training-sessions/{training_session.uuid}/history")
 
         expected = [
             {
@@ -282,9 +321,7 @@ class TestGetTrainingSessionHistory:
     ):
         training_session_service.get_session_history.return_value = []
 
-        response = await client.get(
-            f"/training-sessions/{training_session.uuid}/history"
-        )
+        response = await client.get(f"/training-sessions/{training_session.uuid}/history")
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == []
@@ -376,9 +413,7 @@ class TestGetTrainingSessionHistory:
                 {
                     "type": "bool_parsing",
                     "loc": ["query", "only_answered_items"],
-                    "msg": (
-                        "Input should be a valid boolean, unable to interpret input"
-                    ),
+                    "msg": ("Input should be a valid boolean, unable to interpret input"),
                     "input": "not-a-bool",
                 },
                 id="invalid_only_answered_items",
@@ -436,9 +471,7 @@ class TestGetTrainingSessionHistory:
     ):
         training_session_service.get_session_history.side_effect = service_error
 
-        response = await client.get(
-            f"/training-sessions/{training_session.uuid}/history"
-        )
+        response = await client.get(f"/training-sessions/{training_session.uuid}/history")
 
         assert response.status_code == expected_status
         assert response.json()["message"] == expected_message
@@ -466,8 +499,7 @@ class TestGetTrainingSessionHistory:
                     "type": "uuid_parsing",
                     "loc": ["path", "session_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -527,7 +559,7 @@ class TestSubmitAnswer:
             user_id=current_user.id,
             training_session_uuid=training_session.uuid,
             sequence_number=1,
-            user_answer=SubmittedAnswerRequest(**payload),
+            user_answer=SubmittedAnswerRequest.model_validate(payload),
         )
 
     async def test_skips_answer(
@@ -620,7 +652,7 @@ class TestSubmitAnswer:
             user_id=current_user.id,
             training_session_uuid=training_session.uuid,
             sequence_number=10,
-            user_answer=SubmittedAnswerRequest(**payload),
+            user_answer=SubmittedAnswerRequest.model_validate(payload),
         )
 
     async def test_normalizes_answer(
@@ -727,7 +759,7 @@ class TestSubmitAnswer:
             user_id=current_user.id,
             training_session_uuid=training_session.uuid,
             sequence_number=1,
-            user_answer=SubmittedAnswerRequest(**payload),
+            user_answer=SubmittedAnswerRequest.model_validate(payload),
         )
 
     @pytest.mark.parametrize(
@@ -961,7 +993,7 @@ class TestSubmitAnswer:
             user_id=current_user.id,
             training_session_uuid=training_session.uuid,
             sequence_number=1,
-            user_answer=SubmittedAnswerRequest(**payload),
+            user_answer=SubmittedAnswerRequest.model_validate(payload),
         )
 
     async def test_rejects_sequence_number_below_minimum(
@@ -1012,8 +1044,7 @@ class TestSubmitAnswer:
                     "type": "uuid_parsing",
                     "loc": ["path", "training_session_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},

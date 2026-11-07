@@ -7,12 +7,17 @@ from app.errors import RequestValueError
 
 
 class TestDeckTitle:
-    @pytest.mark.parametrize(('value', 'expected'), [
-        ('English A1', 'English A1'),
-        ('  Английский A1  ', 'Английский A1'),
-        ('\u00a0日本語 🙂\u2003', '日本語 🙂'),
-        ('A  B', 'A  B'), ('ABC', 'ABC'), ('a' * 50, 'a' * 50),
-    ])
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("English A1", "English A1"),
+            ("  Английский A1  ", "Английский A1"),
+            ("\u00a0日本語 🙂\u2003", "日本語 🙂"),
+            ("A  B", "A  B"),
+            ("ABC", "ABC"),
+            ("a" * 50, "a" * 50),
+        ],
+    )
     def test_accepts_title_and_trims_edges(self, value, expected):
         adapter = TypeAdapter(DeckTitle)
 
@@ -20,7 +25,23 @@ class TestDeckTitle:
 
         assert result == expected
 
-    @pytest.mark.parametrize('value', ['', '   ', 'ab', 'a' * 51, 'A\tB', 'A\nB', 'A\rB', 'A\vB', 'A\fB', 'A\x85B', 'A\u2028B', 'A\u2029B'])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            "   ",
+            "ab",
+            "a" * 51,
+            "A\tB",
+            "A\nB",
+            "A\rB",
+            "A\vB",
+            "A\fB",
+            "A\x85B",
+            "A\u2028B",
+            "A\u2029B",
+        ],
+    )
     def test_rejects_invalid_length_or_line_breaks(self, value):
         adapter = TypeAdapter(DeckTitle)
 
@@ -29,12 +50,17 @@ class TestDeckTitle:
 
 
 class TestDeckDescription:
-    @pytest.mark.parametrize(('value', 'expected'), [
-        (None, None), ('', None), (' \t\n\u00a0\u2003', None),
-        ('Description', 'Description'),
-        ('  First\n\tSecond  ', 'First\n\tSecond'),
-        ('a' * 3000, 'a' * 3000),
-    ])
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (None, None),
+            ("", None),
+            (" \t\n\u00a0\u2003", None),
+            ("Description", "Description"),
+            ("  First\n\tSecond  ", "First\n\tSecond"),
+            ("a" * 3000, "a" * 3000),
+        ],
+    )
     def test_normalizes_description_and_preserves_formatting(self, value, expected):
         adapter = TypeAdapter(DeckDescription)
 
@@ -46,7 +72,7 @@ class TestDeckDescription:
         adapter = TypeAdapter(DeckDescription)
 
         with pytest.raises(ValidationError):
-            adapter.validate_python('a' * 3001)
+            adapter.validate_python("a" * 3001)
 
 
 class TestUpdateDeckRequest:
@@ -74,27 +100,29 @@ class TestUpdateDeckRequest:
         assert "title" not in schema.get("required", [])
 
     def test_omitted_description_is_excluded_from_update(self):
-        payload = UpdateDeckRequest(title='English')
+        payload = UpdateDeckRequest(title="English")
 
         result = payload.model_dump(exclude_unset=True)
 
-        assert result == {'title': 'English'}
+        assert result == {"title": "English"}
 
-    @pytest.mark.parametrize('value', [None, '', ' \t\n '])
+    @pytest.mark.parametrize("value", [None, "", " \t\n "])
     def test_explicit_empty_description_clears_value(self, value):
         payload = UpdateDeckRequest(description=value)
 
         result = payload.model_dump(exclude_unset=True)
 
-        assert result == {'description': None}
+        assert result == {"description": None}
 
 
 class TestCreateDeckRequest:
     def test_normalizes_text_for_storage(self):
-        payload = {'title': '  Английский A1  ', 'description': ' \n '}
+        payload = {"title": "  Английский A1  ", "description": " \n "}
 
-        result = CreateDeckRequest(**payload)
+        result = CreateDeckRequest.model_validate(payload)
 
         assert result.model_dump() == {
-            'title': 'Английский A1', 'description': None, 'is_public': False,
+            "title": "Английский A1",
+            "description": None,
+            "is_public": False,
         }

@@ -1,10 +1,11 @@
-import pytest
 from datetime import UTC, datetime
 from unittest.mock import Mock, create_autospec
 
-from app.redis.service import RedisCacheService
-from app.redis.invalidation import CacheInvalidator
+import pytest
+
 from app.decks.repository import DeckRepository
+from app.redis.invalidation import CacheInvalidator
+from app.redis.service import RedisCacheService
 from app.service import UnitOfWork
 from app.users.repository import UserRepository, UserSettingsRepository
 from app.users.service import UserService

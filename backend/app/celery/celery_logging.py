@@ -2,13 +2,12 @@ import atexit
 import logging
 import os
 
-from celery import current_task, signals
 from opentelemetry.instrumentation.logging.handler import LoggingHandler
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.resources import Resource
 
 from app.telemetry import setup_otel_logging, shutdown_otel_logging
-
+from celery import current_task, signals
 
 _provider: LoggerProvider | None = None
 _handler: LoggingHandler | None = None
@@ -18,10 +17,7 @@ class CeleryLogContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         # Ошибки самого экспортера оставляем в консоли.
         # Отправка их через тот же экспортер может создать цикл.
-        if (
-            record.name == "opentelemetry"
-            or record.name.startswith("opentelemetry.")
-        ):
+        if record.name == "opentelemetry" or record.name.startswith("opentelemetry."):
             return False
 
         # Эти поля будут доступны в Loki как атрибуты записи.

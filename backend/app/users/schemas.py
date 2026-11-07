@@ -1,6 +1,17 @@
 from datetime import datetime
 from typing import TypedDict
 
+from pydantic import (
+    UUID7,
+    BaseModel,
+    ConfigDict,
+    PastDatetime,
+    StrictBool,
+    ValidationInfo,
+    field_validator,
+)
+from pydantic.json_schema import SkipJsonSchema
+
 from app.common.types import Counter, Password, PositiveInt, Username
 from app.errors import RequestValueError
 from app.users.types import (
@@ -12,10 +23,7 @@ from app.users.types import (
     Theme,
     Timezone,
 )
-from pydantic import UUID7, BaseModel, ConfigDict, PastDatetime, StrictBool, ValidationInfo, field_validator
-from pydantic.json_schema import SkipJsonSchema
 
-from app.users.models import User
 
 class UserTimestamps(BaseModel):
     created_at: PastDatetime
@@ -51,6 +59,7 @@ class InternalUser(UserTimestamps):
     email: NormalizedEmail
     hashed_password: PasswordHash
 
+
 class InternalUserSettings(UserTimestamps):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,6 +68,7 @@ class InternalUserSettings(UserTimestamps):
     theme: Theme
     show_previews_for_long: StrictBool
     timezone: Timezone
+
 
 class InternalUserWithSettings(UserTimestamps):
     model_config = ConfigDict(from_attributes=True)
@@ -73,7 +83,7 @@ class InternalUserWithSettings(UserTimestamps):
     @classmethod
     def from_parts(
         cls,
-        user: InternalUser, 
+        user: InternalUser,
         settings: InternalUserSettings,
     ) -> InternalUserWithSettings:
         return cls(
@@ -87,6 +97,7 @@ class InternalUserWithSettings(UserTimestamps):
             settings=settings,
         )
 
+
 # external models
 class UserProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -97,6 +108,7 @@ class UserProfileResponse(BaseModel):
     deck_count: Counter
     total_saves_count: Counter
 
+
 class UserSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,6 +116,7 @@ class UserSettingsResponse(BaseModel):
     theme: Theme
     show_previews_for_long: StrictBool
     timezone: Timezone
+
 
 class PrivateUserResponse(UserTimestamps):
     model_config = ConfigDict(from_attributes=True)
@@ -129,8 +142,9 @@ class PrivateUserResponse(UserTimestamps):
                 theme=user.settings.theme,
                 show_previews_for_long=user.settings.show_previews_for_long,
                 timezone=user.settings.timezone,
-            )
+            ),
         )
+
 
 class CreateUserRequest(BaseModel):
     username: Username
@@ -147,6 +161,7 @@ class CreateUserRequest(BaseModel):
             return DEFAULT_TIMEZONE
         return value
 
+
 class UpdateUserRequest(BaseModel):
     username: Username | SkipJsonSchema[None] = None
     email: NormalizedEmail | SkipJsonSchema[None] = None
@@ -161,9 +176,11 @@ class UpdateUserRequest(BaseModel):
             )
         return value
 
+
 class UserUpdateData(TypedDict, total=False):
     username: Username
     email: NormalizedEmail
+
 
 class UpdateUserSettingsRequest(BaseModel):
     locale: Locale | SkipJsonSchema[None] = None
@@ -180,6 +197,7 @@ class UpdateUserSettingsRequest(BaseModel):
                 failed_field=info.field_name,
             )
         return value
+
 
 class UserSettingsUpdateData(TypedDict, total=False):
     locale: Locale

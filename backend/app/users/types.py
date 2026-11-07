@@ -18,7 +18,11 @@ type Theme = Annotated[
 type Locale = Annotated[
     str,
     StringConstraints(min_length=5, max_length=6, pattern=r"^[a-z]{2,3}-[A-Z]{2}$"),
-    Field(description="Locale with a 2–3 letter language and a 2-letter region, e.g. ru-RU or fil-PH"),
+    Field(
+        description=(
+            "Locale with a 2–3 letter language and a 2-letter region, e.g. ru-RU or fil-PH"
+        )
+    ),
 ]
 
 AVAILABLE_TIMEZONES = frozenset(available_timezones())

@@ -22,7 +22,10 @@ def delivery_context():
     handler = AsyncMock()
     publisher = OutboxPublisher(Mock(return_value=uow), {"example.v1": handler})
     message = OutboxMessage(
-        id=17, event_type="example.v1", payload={"object_id": 42}, published=False,
+        id=17,
+        event_type="example.v1",
+        payload={"object_id": 42},
+        published=False,
     )
     return publisher, uow, handler, message
 
@@ -88,7 +91,8 @@ class TestPublish:
 
 class TestPublishPending:
     async def test_selects_only_registered_event_types_and_delivers_pending_message(
-        self, delivery_context,
+        self,
+        delivery_context,
     ):
         publisher, uow, handler, message = delivery_context
         uow.outbox_repo.get_pending.return_value = [message]
@@ -97,13 +101,15 @@ class TestPublishPending:
 
         assert published == 1
         uow.outbox_repo.get_pending.assert_awaited_once_with(
-            event_types=["example.v1"], created_before=CREATED_BEFORE, limit=25,
+            event_types=["example.v1"],
+            created_before=CREATED_BEFORE,
+            limit=25,
         )
         handler.assert_awaited_once_with({"object_id": 42})
 
     @pytest.mark.parametrize("limit", [0, 1001])
     async def test_rejects_invalid_batch_limit(self, delivery_context, limit):
-        publisher, uow, handler, message = delivery_context
+        publisher, uow, _handler, _message = delivery_context
 
         with pytest.raises(ValueError, match="limit must be between"):
             await publisher.publish_pending(created_before=CREATED_BEFORE, limit=limit)

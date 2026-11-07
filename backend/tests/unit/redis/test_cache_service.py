@@ -19,7 +19,11 @@ from tests.unit.redis.cases import (
 @pytest.mark.parametrize("case", CACHE_CASES, ids=lambda case: case.name)
 class TestCacheEntities:
     async def test_stores_complete_payload_with_ttl_and_uuid_index(
-        self, cache_service, redis_client, redis_pipeline, case,
+        self,
+        cache_service,
+        redis_client,
+        redis_pipeline,
+        case,
     ):
         await getattr(cache_service, case.cache_method)(**cache_kwargs(case))
 
@@ -28,9 +32,13 @@ class TestCacheEntities:
         assert orjson.loads(entity_write["value"]) == case.payload
         assert entity_write["ex"] == case.ttl + 17
         if case.uuid is not None:
-            assert redis_pipeline.set.call_args_list[1:] == [call(
-                name=case.uuid_key, value=str(case.identity), ex=604817,
-            )]
+            assert redis_pipeline.set.call_args_list[1:] == [
+                call(
+                    name=case.uuid_key,
+                    value=str(case.identity),
+                    ex=604817,
+                )
+            ]
             assert redis_pipeline.execute.await_count == 2
         else:
             assert redis_pipeline.set.call_count == 1
@@ -38,7 +46,10 @@ class TestCacheEntities:
         redis_client.pipeline.assert_called_with(transaction=False)
 
     async def test_does_not_contact_redis_for_empty_input(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         await getattr(cache_service, case.cache_method)(**cache_kwargs(case, empty=True))
 
@@ -46,10 +57,20 @@ class TestCacheEntities:
 
     @pytest.mark.parametrize("failure_stage", ["pipeline", "set", "execute"])
     async def test_propagates_redis_error_when_write_fails(
-        self, cache_service, redis_client, redis_pipeline, case, failure_stage,
+        self,
+        cache_service,
+        redis_client,
+        redis_pipeline,
+        case,
+        failure_stage,
     ):
-        target = redis_client.pipeline if failure_stage == "pipeline" else getattr(
-            redis_pipeline, failure_stage,
+        target = (
+            redis_client.pipeline
+            if failure_stage == "pipeline"
+            else getattr(
+                redis_pipeline,
+                failure_stage,
+            )
         )
         failure = ConnectionError("Redis unavailable")
         target.side_effect = failure
@@ -64,7 +85,11 @@ class TestCacheEntities:
 class TestGetCachedEntities:
     @pytest.mark.parametrize("as_bytes", [False, True], ids=["string", "bytes"])
     async def test_returns_complete_cached_payload(
-        self, cache_service, redis_client, case, as_bytes,
+        self,
+        cache_service,
+        redis_client,
+        case,
+        as_bytes,
     ):
         value = orjson.dumps(case.payload)
         redis_client.mget.return_value = [value if as_bytes else value.decode()]
@@ -79,7 +104,10 @@ class TestGetCachedEntities:
         redis_client.delete.assert_not_awaited()
 
     async def test_returns_missing_identity_without_deleting_absent_key(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.return_value = [None]
 
@@ -91,7 +119,11 @@ class TestGetCachedEntities:
 
     @pytest.mark.parametrize("value", ["not-json", "{}", "null"])
     async def test_treats_corrupted_value_as_miss_and_deletes_it(
-        self, cache_service, redis_client, case, value,
+        self,
+        cache_service,
+        redis_client,
+        case,
+        value,
     ):
         redis_client.mget.return_value = [value]
 
@@ -102,7 +134,10 @@ class TestGetCachedEntities:
         redis_client.delete.assert_awaited_once_with(case.key)
 
     async def test_propagates_redis_error_when_corrupted_value_cannot_be_deleted(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.return_value = ["not-json"]
         failure = TimeoutError("Redis unavailable")
@@ -115,7 +150,10 @@ class TestGetCachedEntities:
         redis_client.delete.assert_awaited_once_with(case.key)
 
     async def test_propagates_redis_error_when_read_fails(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         failure = RedisError("Redis unavailable")
         redis_client.mget.side_effect = failure
@@ -127,9 +165,14 @@ class TestGetCachedEntities:
         redis_client.delete.assert_not_awaited()
 
     async def test_does_not_contact_redis_for_empty_input(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
-        result = await getattr(cache_service, case.get_method)(**get_kwargs(case, empty=True))
+        result = await getattr(cache_service, case.get_method)(
+            **get_kwargs(case, empty=True)
+        )
 
         assert result.cached == {}
         assert result.missing == []
@@ -139,7 +182,10 @@ class TestGetCachedEntities:
 @pytest.mark.parametrize("case", UUID_CASES, ids=lambda case: case.name)
 class TestGetCachedEntitiesByUuids:
     async def test_returns_payload_keyed_by_requested_uuid(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.side_effect = [[str(case.identity)], [orjson.dumps(case.payload)]]
 
@@ -150,11 +196,15 @@ class TestGetCachedEntitiesByUuids:
         }
         assert result.missing == []
         assert redis_client.mget.await_args_list == [
-            call(keys=[case.uuid_key]), call(keys=[case.key]),
+            call(keys=[case.uuid_key]),
+            call(keys=[case.key]),
         ]
 
     async def test_returns_miss_without_reading_entities_when_index_is_absent(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.return_value = [None]
 
@@ -165,7 +215,10 @@ class TestGetCachedEntitiesByUuids:
         redis_client.mget.assert_awaited_once_with(keys=[case.uuid_key])
 
     async def test_deletes_invalid_uuid_index_and_returns_miss(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.return_value = ["not-an-id"]
 
@@ -177,7 +230,10 @@ class TestGetCachedEntitiesByUuids:
         redis_client.mget.assert_awaited_once_with(keys=[case.uuid_key])
 
     async def test_returns_miss_when_entity_is_absent(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.side_effect = [[str(case.identity)], [None]]
 
@@ -188,7 +244,10 @@ class TestGetCachedEntitiesByUuids:
         redis_client.delete.assert_not_awaited()
 
     async def test_rejects_entity_with_different_uuid(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.side_effect = [[str(case.identity)], [orjson.dumps(case.payload)]]
 
@@ -203,12 +262,21 @@ class TestGetCachedEntitiesByUuids:
 
     @pytest.mark.parametrize("failure_stage", ["index", "entity"])
     async def test_propagates_redis_error_when_read_fails(
-        self, cache_service, redis_client, case, failure_stage,
+        self,
+        cache_service,
+        redis_client,
+        case,
+        failure_stage,
     ):
         failure = ConnectionError("Redis unavailable")
-        redis_client.mget.side_effect = [failure] if failure_stage == "index" else [
-            [str(case.identity)], failure,
-        ]
+        redis_client.mget.side_effect = (
+            [failure]
+            if failure_stage == "index"
+            else [
+                [str(case.identity)],
+                failure,
+            ]
+        )
 
         with pytest.raises(ConnectionError) as error:
             await getattr(cache_service, case.uuid_get_method)([case.uuid])
@@ -216,10 +284,14 @@ class TestGetCachedEntitiesByUuids:
         assert error.value is failure
 
     async def test_reads_same_entity_once_for_duplicate_uuid_indices(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         redis_client.mget.side_effect = [
-            [str(case.identity), str(case.identity)], [orjson.dumps(case.payload)],
+            [str(case.identity), str(case.identity)],
+            [orjson.dumps(case.payload)],
         ]
 
         result = await getattr(cache_service, case.uuid_get_method)([case.uuid, OTHER_UUID])
@@ -231,7 +303,10 @@ class TestGetCachedEntitiesByUuids:
         assert redis_client.mget.await_args_list[1] == call(keys=[case.key])
 
     async def test_does_not_contact_redis_for_empty_input(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         result = await getattr(cache_service, case.uuid_get_method)([])
 
@@ -241,7 +316,7 @@ class TestGetCachedEntitiesByUuids:
 
 
 class TestGetCachedDeckCards:
-    @pytest.mark.parametrize("value", ['[true]', '["100"]', '[1.5]', '[null]'])
+    @pytest.mark.parametrize("value", ["[true]", '["100"]', "[1.5]", "[null]"])
     async def test_rejects_non_integer_card_ids(self, cache_service, redis_client, value):
         redis_client.mget.return_value = [value]
 
@@ -252,7 +327,9 @@ class TestGetCachedDeckCards:
         redis_client.delete.assert_awaited_once_with("deck:200:card-ids")
 
     async def test_preserves_hits_and_miss_order_while_removing_only_corrupted_keys(
-        self, cache_service, redis_client,
+        self,
+        cache_service,
+        redis_client,
     ):
         redis_client.mget.return_value = ["[100,101]", None, "{}", "[]"]
 
@@ -260,28 +337,38 @@ class TestGetCachedDeckCards:
 
         assert result.cached == {200: [100, 101], 203: []}
         assert result.missing == [201, 202]
-        redis_client.mget.assert_awaited_once_with(keys=[
-            "deck:200:card-ids", "deck:201:card-ids",
-            "deck:202:card-ids", "deck:203:card-ids",
-        ])
+        redis_client.mget.assert_awaited_once_with(
+            keys=[
+                "deck:200:card-ids",
+                "deck:201:card-ids",
+                "deck:202:card-ids",
+                "deck:203:card-ids",
+            ]
+        )
         redis_client.delete.assert_awaited_once_with("deck:202:card-ids")
 
     async def test_caches_empty_deck_as_empty_list(self, cache_service, redis_pipeline):
         await cache_service.cache_deck_cards({200: []})
 
         redis_pipeline.set.assert_called_once_with(
-            name="deck:200:card-ids", value=b"[]", ex=3617,
+            name="deck:200:card-ids",
+            value=b"[]",
+            ex=3617,
         )
         redis_pipeline.execute.assert_awaited_once_with()
 
 
 @pytest.mark.parametrize(
-    "case", [case for case in CACHE_CASES if case.name in {"users", "cards", "decks", "settings"}],
+    "case",
+    [case for case in CACHE_CASES if case.name in {"users", "cards", "decks", "settings"}],
     ids=lambda case: case.name,
 )
 class TestGetCachedEntityDates:
     async def test_removes_cached_entity_with_update_date_before_creation(
-        self, cache_service, redis_client, case,
+        self,
+        cache_service,
+        redis_client,
+        case,
     ):
         payload = {**case.payload, "updated_at": "2019-01-01T12:00:00Z"}
         redis_client.mget.return_value = [orjson.dumps(payload)]
@@ -295,9 +382,13 @@ class TestGetCachedEntityDates:
 
 class TestGetCachedUserDecks:
     async def test_removes_cached_state_with_answers_without_completed_sessions(
-        self, cache_service, redis_client,
+        self,
+        cache_service,
+        redis_client,
     ):
-        redis_client.mget.return_value = [orjson.dumps({**USER_DECK_DATA, "correct_count": 1})]
+        redis_client.mget.return_value = [
+            orjson.dumps({**USER_DECK_DATA, "correct_count": 1})
+        ]
 
         result = await cache_service.get_cached_user_decks(user_id=42, deck_ids=[200])
 
@@ -307,11 +398,21 @@ class TestGetCachedUserDecks:
 
 
 class TestWithJitter:
-    @pytest.mark.parametrize(("base", "spread", "offset", "expected"), [
-        (300, 300, 0, 300), (300, 300, 300, 600), (60, 0, 0, 60),
-    ])
+    @pytest.mark.parametrize(
+        ("base", "spread", "offset", "expected"),
+        [
+            (300, 300, 0, 300),
+            (300, 300, 300, 600),
+            (60, 0, 0, 60),
+        ],
+    )
     def test_adds_random_offset_within_requested_range(
-        self, monkeypatch, base, spread, offset, expected,
+        self,
+        monkeypatch,
+        base,
+        spread,
+        offset,
+        expected,
     ):
         randint = Mock(return_value=offset)
         monkeypatch.setattr("app.redis.service.random.randint", randint)

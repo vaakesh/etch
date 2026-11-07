@@ -100,7 +100,8 @@ class TestGetArchives:
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
         await archive_studied_deck(client, deck_uuid)
         [first_archive_uuid] = await get_archive_uuids_by_source(
-            async_session_maker, deck_uuid,
+            async_session_maker,
+            deck_uuid,
         )
         copy_uuid = await preserve(client, first_archive_uuid)
 
@@ -108,7 +109,8 @@ class TestGetArchives:
         archives = await get_archives(client)
 
         [second_archive_uuid] = await get_archive_uuids_by_source(
-            async_session_maker, copy_uuid,
+            async_session_maker,
+            copy_uuid,
         )
         assert len(archives) == 1
         assert archives[0]["uuid"] == second_archive_uuid

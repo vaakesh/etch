@@ -16,7 +16,6 @@ from app.training_sessions.errors import (
     TrainingSessionDeckUnavailableError,
 )
 
-
 EXTRA_ARGS: dict[type[Exception], tuple] = {
     DeckSizeLimitExceededError: (5000, 100, 1),
 }
@@ -95,7 +94,10 @@ class TestErrorResponseShape:
         ],
     )
     async def test_returns_session_deck_error_contract(
-        self, error, expected_status, expected_payload,
+        self,
+        error,
+        expected_status,
+        expected_payload,
     ):
         status_code, payload = await request_error(error)
 

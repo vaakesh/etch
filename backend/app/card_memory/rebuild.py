@@ -21,7 +21,7 @@ class RebuildStats:
     updated: int = 0
     unchanged: int = 0
 
-    def merge(self, other: "RebuildStats") -> None:
+    def merge(self, other: RebuildStats) -> None:
         self.batches += other.batches
         self.keys += other.keys
         self.events += other.events

@@ -1,6 +1,6 @@
+import re
 from datetime import UTC, date, datetime, timedelta, timezone
 from http.cookies import SimpleCookie
-import re
 from unittest.mock import AsyncMock
 
 import pytest
@@ -19,9 +19,9 @@ from app.errors import RequestValueError
 from app.training_sessions.models import TrainingSessionStatus
 from app.users.errors import (
     EmailAlreadyExistsError,
-    UsernameAlreadyExistsError,
     PermissionDeniedError,
     UserAlreadyExistsError,
+    UsernameAlreadyExistsError,
     UserNotFoundError,
 )
 from app.users.schemas import (
@@ -292,7 +292,7 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UpdateUserSettingsRequest(**payload),
+            payload=UpdateUserSettingsRequest.model_validate(payload),
         )
 
     @pytest.mark.parametrize(
@@ -392,7 +392,7 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UpdateUserSettingsRequest(**payload),
+            payload=UpdateUserSettingsRequest.model_validate(payload),
         )
 
     async def test_returns_422_for_empty_payload(
@@ -430,7 +430,7 @@ class TestChangeSettings:
 
         user_service.update_user_settings.assert_awaited_once_with(
             current_user_id=current_user.id,
-            payload=UpdateUserSettingsRequest(**payload),
+            payload=UpdateUserSettingsRequest.model_validate(payload),
         )
 
 
@@ -1269,9 +1269,7 @@ class TestGetMyTrainingSessions:
                 {
                     "type": "enum",
                     "loc": ["query", "status"],
-                    "msg": (
-                        "Input should be 'in_progress', 'completed' or 'abandoned'"
-                    ),
+                    "msg": ("Input should be 'in_progress', 'completed' or 'abandoned'"),
                     "input": "invalid",
                     "ctx": {"expected": ("'in_progress', 'completed' or 'abandoned'")},
                 }
@@ -1321,7 +1319,7 @@ class TestGetMySavedDecks:
         user_deck = make_user_deck(is_saved=True)
         saved_deck = DeckListItemResponse(
             deck=DeckResponse.model_validate(deck),
-            viewer_state=DeckViewerStateResponse.validate(user_deck, knowledge=0),
+            viewer_state=DeckViewerStateResponse.from_user_deck(user_deck, knowledge=0),
         )
 
         user_deck_service.get_page_of_saved_decks_by_user_id.return_value = [saved_deck]
@@ -1397,23 +1395,21 @@ class TestGetMySavedDecks:
         saved_decks = [
             DeckListItemResponse(
                 deck=DeckResponse.model_validate(first_deck),
-                viewer_state=DeckViewerStateResponse.validate(
+                viewer_state=DeckViewerStateResponse.from_user_deck(
                     first_user_deck,
                     knowledge=73,
                 ),
             ),
             DeckListItemResponse(
                 deck=DeckResponse.model_validate(second_deck),
-                viewer_state=DeckViewerStateResponse.validate(
+                viewer_state=DeckViewerStateResponse.from_user_deck(
                     second_user_deck,
                     knowledge=40,
                 ),
             ),
         ]
 
-        (
-            user_deck_service.get_page_of_saved_decks_by_user_id.return_value
-        ) = saved_decks
+        (user_deck_service.get_page_of_saved_decks_by_user_id.return_value) = saved_decks
 
         response = await client.get("/users/me/decks/saved")
 
@@ -1610,10 +1606,14 @@ class TestGetMySavedDecks:
 class TestGetUserProfile:
     @pytest.mark.parametrize("optional_current_user", [None, make_user()], indirect=True)
     async def test_returns_profile_for_anonymous_or_authenticated_viewer(
-        self, client, optional_current_user, user_service,
+        self,
+        client,
+        optional_current_user,
+        user_service,
     ):
         user_service.get_user_profile.return_value = make_user(
-            deck_count=3, total_saves_count=7,
+            deck_count=3,
+            total_saves_count=7,
         )
 
         response = await client.get("/users/profile/test-user")
@@ -1632,10 +1632,15 @@ class TestGetUserProfile:
         )
 
     async def test_preserves_username_case_and_strips_spaces(
-        self, client, current_user, user_service,
+        self,
+        client,
+        current_user,
+        user_service,
     ):
         user_service.get_user_profile.return_value = make_user(
-            username="Test-User", deck_count=0, total_saves_count=0,
+            username="Test-User",
+            deck_count=0,
+            total_saves_count=0,
         )
 
         response = await client.get("/users/profile/%20Test-User%20")
@@ -1649,11 +1654,15 @@ class TestGetUserProfile:
             "total_saves_count": 0,
         }
         user_service.get_user_profile.assert_awaited_once_with(
-            viewer_id=current_user.id, username="Test-User",
+            viewer_id=current_user.id,
+            username="Test-User",
         )
 
     async def test_returns_404_when_profile_does_not_exist(
-        self, client, current_user, user_service,
+        self,
+        client,
+        current_user,
+        user_service,
     ):
         user_service.get_user_profile.side_effect = UserNotFoundError()
 
@@ -1661,10 +1670,12 @@ class TestGetUserProfile:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json() == {
-            "code": "USER_NOT_FOUND", "message": "User not found",
+            "code": "USER_NOT_FOUND",
+            "message": "User not found",
         }
         user_service.get_user_profile.assert_awaited_once_with(
-            viewer_id=current_user.id, username="missing-user",
+            viewer_id=current_user.id,
+            username="missing-user",
         )
 
     async def test_rejects_too_short_username(self, client, user_service):
@@ -1674,13 +1685,15 @@ class TestGetUserProfile:
         assert response.json() == {
             "code": "VALIDATION_ERROR",
             "message": "Validation error",
-            "details": [{
-                "type": "string_too_short",
-                "loc": ["path", "username"],
-                "msg": "String should have at least 3 characters",
-                "input": "ab",
-                "ctx": {"min_length": 3},
-            }],
+            "details": [
+                {
+                    "type": "string_too_short",
+                    "loc": ["path", "username"],
+                    "msg": "String should have at least 3 characters",
+                    "input": "ab",
+                    "ctx": {"min_length": 3},
+                }
+            ],
         }
         user_service.get_user_profile.assert_not_awaited()
 
@@ -1690,14 +1703,25 @@ class TestCreateUser:
         ("service_error", "expected_code", "expected_message"),
         [
             (EmailAlreadyExistsError(), "EMAIL_ALREADY_EXISTS", "Email is already in use"),
-            (UsernameAlreadyExistsError(), "USERNAME_ALREADY_EXISTS", "Username is already in use"),
+            (
+                UsernameAlreadyExistsError(),
+                "USERNAME_ALREADY_EXISTS",
+                "Username is already in use",
+            ),
         ],
     )
     async def test_returns_specific_conflict(
-        self, client, user_service, service_error, expected_code, expected_message,
+        self,
+        client,
+        user_service,
+        service_error,
+        expected_code,
+        expected_message,
     ):
         payload = {
-            "username": "new-user", "email": "new@example.com", "password": "password123",
+            "username": "new-user",
+            "email": "new@example.com",
+            "password": "password123",
         }
         user_service.create_user.side_effect = service_error
 
@@ -2454,12 +2478,23 @@ class TestUpdateUser:
                 [
                     {
                         "type": "value_error",
-                        "loc": ["body", "email", (
-                            "chain[function-after[functools.partial(<function max_length_validator at <address>>, max_length=255)(), "
-                            "function-after[functools.partial(<function min_length_validator at <address>>, min_length=1)(), "
-                            "function-after[_validate(), str]]],function-wrap[_apply_constraint_with_incompatibility_info()],"
-                            "function-wrap[_apply_constraint_with_incompatibility_info()]]"
-                        )],
+                        "loc": [
+                            "body",
+                            "email",
+                            (
+                                "chain[function-after[functools.partial("
+                                "<function max_length_validator at <address>>, "
+                                "max_length=255)(), "
+                                "function-after[functools.partial("
+                                "<function min_length_validator at <address>>, "
+                                "min_length=1)(), "
+                                "function-after[_validate(), str]]],"
+                                "function-wrap["
+                                "_apply_constraint_with_incompatibility_info()],"
+                                "function-wrap["
+                                "_apply_constraint_with_incompatibility_info()]]"
+                            ),
+                        ],
                         "msg": (
                             "value is not a valid email address: An email "
                             "address must have an @-sign."
@@ -2479,7 +2514,11 @@ class TestUpdateUser:
         ],
     )
     async def test_rejects_invalid_payload(
-        self, client: AsyncClient, payload, expected_details, user_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        payload,
+        expected_details,
+        user_service: AsyncMock,
     ):
         response = await client.patch("/users/me", json=payload)
 
@@ -2498,10 +2537,14 @@ class TestUpdateUser:
         user_service.update_user.assert_not_awaited()
 
     async def test_returns_422_when_update_body_is_empty(
-        self, client: AsyncClient, current_user, user_service: AsyncMock,
+        self,
+        client: AsyncClient,
+        current_user,
+        user_service: AsyncMock,
     ):
         user_service.update_user.side_effect = RequestValueError(
-            message="Update body is empty", failed_field="body",
+            message="Update body is empty",
+            failed_field="body",
         )
 
         response = await client.patch("/users/me", json={})
@@ -2520,7 +2563,8 @@ class TestUpdateUser:
             ],
         }
         user_service.update_user.assert_awaited_once_with(
-            current_user_id=current_user.id, payload=UpdateUserRequest(),
+            current_user_id=current_user.id,
+            payload=UpdateUserRequest(),
         )
 
     @pytest.mark.parametrize(
@@ -2533,7 +2577,11 @@ class TestUpdateUser:
         ],
     )
     async def test_rejects_null_before_calling_service(
-        self, client: AsyncClient, user_service: AsyncMock, payload, field,
+        self,
+        client: AsyncClient,
+        user_service: AsyncMock,
+        payload,
+        field,
     ):
         response = await client.patch("/users/me", json=payload)
 
@@ -2543,8 +2591,10 @@ class TestUpdateUser:
             "message": "Validation error",
             "details": [
                 {
-                    "type": "value_error", "loc": ["body", field],
-                    "msg": "Field must not be null", "input": None,
+                    "type": "value_error",
+                    "loc": ["body", field],
+                    "msg": "Field must not be null",
+                    "input": None,
                 },
             ],
         }
@@ -2943,8 +2993,7 @@ class TestGetPublicDecksByUser:
                     "type": "uuid_parsing",
                     "loc": ["path", "user_uuid"],
                     "msg": (
-                        "Input should be a valid UUID, invalid character: "
-                        "found `n` at 1"
+                        "Input should be a valid UUID, invalid character: found `n` at 1"
                     ),
                     "input": "not-a-uuid",
                     "ctx": {"error": "invalid character: found `n` at 1"},
@@ -2956,7 +3005,6 @@ class TestGetPublicDecksByUser:
         assert response.json() == expected
 
         deck_service.get_public_by_owner_uuid.assert_not_awaited()
-
 
     @pytest.mark.parametrize(
         ("limit", "expected_detail"),
@@ -3108,21 +3156,36 @@ class TestUserAuthentication:
     @pytest.mark.parametrize(
         ("auth_error", "expected"),
         [
-            (AccessTokenNotFoundError(), {"code": "ACCESS_TOKEN_NOT_FOUND", "message": "Not authorized"}),
+            (
+                AccessTokenNotFoundError(),
+                {"code": "ACCESS_TOKEN_NOT_FOUND", "message": "Not authorized"},
+            ),
             (InvalidTokenError(), {"code": "INVALID_TOKEN", "message": "Invalid token"}),
         ],
         ids=["missing_token", "invalid_token"],
     )
     async def test_rejects_unauthorized_requests_before_calling_services(
-        self, app, client, monkeypatch, user_service, deck_service,
-        user_deck_service, training_session_service, method, path, payload,
-        auth_error, expected,
+        self,
+        app,
+        client,
+        monkeypatch,
+        user_service,
+        deck_service,
+        user_deck_service,
+        training_session_service,
+        method,
+        path,
+        payload,
+        auth_error,
+        expected,
     ):
         async def reject_user():
             raise auth_error
 
         monkeypatch.setitem(app.dependency_overrides, get_current_user, reject_user)
-        monkeypatch.setitem(app.dependency_overrides, get_current_user_with_settings, reject_user)
+        monkeypatch.setitem(
+            app.dependency_overrides, get_current_user_with_settings, reject_user
+        )
 
         response = await client.request(method, path, json=payload)
 

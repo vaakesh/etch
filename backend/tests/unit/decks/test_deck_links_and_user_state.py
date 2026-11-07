@@ -5,16 +5,16 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
+from app.decks.errors import CannotFavouriteUnsavedDeckError
 from app.decks.schemas import (
     DeckCardResponse,
     InternalDeckCard,
     InternalUserDeck,
     ReorderCards,
 )
-from app.decks.errors import CannotFavouriteUnsavedDeckError
 from app.decks.service import UserDeckService
-from app.redis.invalidation import CacheInvalidator
 from app.errors import RequestValueError
+from app.redis.invalidation import CacheInvalidator
 from tests.unit.factories import make_deck, make_deck_card, make_user_deck
 
 
@@ -32,7 +32,9 @@ def favourite_context():
 
 class TestSetFavouriteDeck:
     @pytest.mark.parametrize("value", [True, False])
-    async def test_repeated_value_does_not_write_or_invalidate(self, favourite_context, value):
+    async def test_repeated_value_does_not_write_or_invalidate(
+        self, favourite_context, value
+    ):
         service, uow, cache = favourite_context
         state = make_user_deck(is_saved=True, is_favourite=value)
         uow.user_deck_repo.get_by_user_id_and_deck_id.return_value = state
@@ -99,7 +101,9 @@ class TestDeckCardIdentifiers:
     @pytest.mark.parametrize("position", [0, 5001])
     def test_reorder_rejects_position_outside_deck(self, position):
         with pytest.raises(ValidationError) as error:
-            ReorderCards(card_uuid=UUID("0198ad01-b200-7000-8000-000000000100"), to_position=position)
+            ReorderCards(
+                card_uuid=UUID("0198ad01-b200-7000-8000-000000000100"), to_position=position
+            )
 
         assert error.value.errors()[0]["loc"] == ("to_position",)
 
@@ -172,13 +176,19 @@ class TestUserDeckState:
 
         assert error.value.failed_field == field
 
-    @pytest.mark.parametrize(("sessions_count", "last_studied_at"), [
-        (0, datetime(2020, 1, 2, tzinfo=UTC)),
-        (1, None),
-    ])
-    def test_rejects_study_date_inconsistent_with_sessions(self, sessions_count, last_studied_at):
+    @pytest.mark.parametrize(
+        ("sessions_count", "last_studied_at"),
+        [
+            (0, datetime(2020, 1, 2, tzinfo=UTC)),
+            (1, None),
+        ],
+    )
+    def test_rejects_study_date_inconsistent_with_sessions(
+        self, sessions_count, last_studied_at
+    ):
         state = make_user_deck(
-            sessions_count=sessions_count, last_studied_at=last_studied_at,
+            sessions_count=sessions_count,
+            last_studied_at=last_studied_at,
         )
 
         with pytest.raises(RequestValueError) as error:
@@ -186,13 +196,17 @@ class TestUserDeckState:
 
         assert error.value.failed_field == "last_studied_at"
 
-    @pytest.mark.parametrize("last_studied_at", [
-        datetime(2020, 1, 1, tzinfo=UTC),
-        datetime(2020, 1, 2),
-    ])
+    @pytest.mark.parametrize(
+        "last_studied_at",
+        [
+            datetime(2020, 1, 1, tzinfo=UTC),
+            datetime(2020, 1, 2),
+        ],
+    )
     def test_rejects_earlier_or_timezone_incompatible_study_date(self, last_studied_at):
         state = make_user_deck(
-            sessions_count=1, last_studied_at=last_studied_at,
+            sessions_count=1,
+            last_studied_at=last_studied_at,
             added_at=datetime(2020, 1, 2, tzinfo=UTC),
         )
 
@@ -201,16 +215,24 @@ class TestUserDeckState:
 
         assert error.value.failed_field == "last_studied_at"
 
-    @pytest.mark.parametrize("last_studied_at", [
-        datetime(2020, 1, 1, tzinfo=UTC),
-        datetime(2020, 1, 2, tzinfo=UTC),
-    ])
+    @pytest.mark.parametrize(
+        "last_studied_at",
+        [
+            datetime(2020, 1, 1, tzinfo=UTC),
+            datetime(2020, 1, 2, tzinfo=UTC),
+        ],
+    )
     @pytest.mark.parametrize(("correct_count", "wrong_count"), [(0, 0), (3, 2)])
     def test_accepts_completed_sessions_with_valid_study_date(
-        self, last_studied_at, correct_count, wrong_count,
+        self,
+        last_studied_at,
+        correct_count,
+        wrong_count,
     ):
         state = make_user_deck(
-            sessions_count=1, correct_count=correct_count, wrong_count=wrong_count,
+            sessions_count=1,
+            correct_count=correct_count,
+            wrong_count=wrong_count,
             last_studied_at=last_studied_at,
             added_at=datetime(2020, 1, 1, tzinfo=UTC),
         )

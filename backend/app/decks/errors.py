@@ -65,11 +65,11 @@ class InvalidDeckCardPositionError(Exception):
 
 class DeckSizeLimitExceededError(Exception):
     def __init__(
-            self,
-            limit: int,
-            current: int,
-            requested: int,
-        ):
+        self,
+        limit: int,
+        current: int,
+        requested: int,
+    ):
         remaining = max(limit - current, 0)
         message = (
             f"Deck size limit exceeded: deck has {current}/{limit} cards, "

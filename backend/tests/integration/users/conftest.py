@@ -3,9 +3,10 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Protocol, TypedDict, Unpack
 
-from httpx import AsyncClient
 import pytest
 import pytest_asyncio
+from httpx import AsyncClient
+
 from tests.integration.conftest import ClientFactory, solve_captcha
 
 # Для двух отдельных сеансов ОДНОГО пользователя:
@@ -28,21 +29,25 @@ from tests.integration.conftest import ClientFactory, solve_captcha
 # Нет необходимости создавать отдельную фикстуру на каждого alice/bob/admin:
 # нужные различия передаются аргументами фабрики внутри теста.
 
+
 class UserOverrides(TypedDict, total=False):
     username: str
     email: str
     password: str
+
 
 class UserPayload(TypedDict):
     username: str
     email: str
     password: str
 
+
 @dataclass(frozen=True)
 class CreatedSettings:
     locale: str
     theme: str
     show_previews_for_long: bool
+
 
 @dataclass(frozen=True)
 class CreatedUser:
@@ -54,12 +59,13 @@ class CreatedUser:
     password: str = field(repr=False)
     settings: CreatedSettings
 
+
 class UserPayloadFactory(Protocol):
     def __call__(
         self,
         **overrides: Unpack[UserOverrides],
-    ) -> UserPayload:
-        ...
+    ) -> UserPayload: ...
+
 
 @pytest.fixture(scope="function")
 def user_payload_factory() -> UserPayloadFactory:
@@ -79,21 +85,22 @@ def user_payload_factory() -> UserPayloadFactory:
 
     return make_payload
 
+
 class UserFactory(Protocol):
     def __call__(
         self,
         **overrides: Unpack[UserOverrides],
-    ) -> Awaitable[CreatedUser]:
-        ...
+    ) -> Awaitable[CreatedUser]: ...
+
 
 @pytest.fixture(scope="function")
 def user_factory(
-    client_factory: ClientFactory, 
+    client_factory: ClientFactory,
     user_payload_factory: UserPayloadFactory,
 ) -> UserFactory:
     async def create_user(
-            **overrides: Unpack[UserOverrides],
-        ) -> CreatedUser:
+        **overrides: Unpack[UserOverrides],
+    ) -> CreatedUser:
         payload = user_payload_factory(**overrides)
         registration_client = await client_factory()
         response = await registration_client.post(
@@ -114,24 +121,24 @@ def user_factory(
                 locale="ru-RU",
                 theme="light",
                 show_previews_for_long=True,
-            )
+            ),
         )
+
     return create_user
+
 
 class AuthClientFactory(Protocol):
     def __call__(
         self,
         user: CreatedUser,
-    ) -> Awaitable[AsyncClient]:
-        ...
+    ) -> Awaitable[AsyncClient]: ...
+
 
 @pytest.fixture(scope="function")
 def auth_client_factory(
     client_factory: ClientFactory,
 ) -> AuthClientFactory:
-    async def make_authenticated_client(
-        user: CreatedUser
-    ) -> AsyncClient:
+    async def make_authenticated_client(user: CreatedUser) -> AsyncClient:
         client = await client_factory()
         response = await client.post(
             url="/auth/login",
@@ -143,11 +150,14 @@ def auth_client_factory(
         )
         assert response.status_code == 204
         return client
+
     return make_authenticated_client
+
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def user(user_factory: UserFactory) -> CreatedUser:
     return await user_factory()
+
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def auth_client(

@@ -1,5 +1,11 @@
-from collections.abc import Awaitable, Callable
 import logging
+from collections.abc import Awaitable, Callable
+from typing import cast
+
+from fastapi import FastAPI, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 
 from app.auth.cookies import clear_tokens_cookie
 from app.auth.errors import (
@@ -18,6 +24,7 @@ from app.cards.errors import (
 from app.cards.errors import (
     PermissionDeniedError as CardPermissionDeniedError,
 )
+from app.decks.archiver import ArchiveExpiredError, DeckProgressConflictError
 from app.decks.errors import (
     CannotFavouriteUnsavedDeckError,
     CannotSaveOwnDeckError,
@@ -27,13 +34,12 @@ from app.decks.errors import (
     DeckIsEmptyError,
     DeckIsNotFavouriteError,
     DeckIsNotSavedError,
-    DeckNotFoundError,
     DeckNotArchivedError,
+    DeckNotFoundError,
     DeckSizeLimitExceededError,
     InvalidDeckCardPositionError,
     UserDeckNotFoundError,
 )
-from app.decks.archiver import ArchiveExpiredError, DeckProgressConflictError
 from app.decks.errors import (
     PermissionDeniedError as DeckPermissionDeniedError,
 )
@@ -41,12 +47,12 @@ from app.errors import (
     MetricsAccessDeniedError,
     RequestValueError,
 )
-from app.redis.errors import RateLimitError
 from app.rag.errors import (
     RagBadResponseError,
     RagTimeoutError,
     RagUnavailableError,
 )
+from app.redis.errors import RateLimitError
 from app.training_sessions.errors import (
     CardAlreadyAnsweredError,
     CardNotAnsweredError,
@@ -63,18 +69,14 @@ from app.training_sessions.errors import (
     PermissionDeniedError as TrainingSessionPermissionDeniedError,
 )
 from app.users.errors import (
-    PermissionDeniedError as UserPermissionDeniedError,
-)
-from app.users.errors import (
     EmailAlreadyExistsError,
     UserAlreadyExistsError,
     UsernameAlreadyExistsError,
     UserNotFoundError,
 )
-from fastapi import FastAPI, Request, Response, status
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from redis.exceptions import RedisError
+from app.users.errors import (
+    PermissionDeniedError as UserPermissionDeniedError,
+)
 
 type ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
@@ -91,17 +93,14 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
     (AccessTokenNotFoundError, status.HTTP_401_UNAUTHORIZED, "ACCESS_TOKEN_NOT_FOUND"),
     (MetricsAccessDeniedError, status.HTTP_401_UNAUTHORIZED, "METRICS_ACCESS_DENIED"),
     (CaptchaError, status.HTTP_403_FORBIDDEN, "CAPTCHA_INVALID"),
-
     (UserNotFoundError, status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND"),
     (UserAlreadyExistsError, status.HTTP_409_CONFLICT, "USER_ALREADY_EXISTS"),
     (EmailAlreadyExistsError, status.HTTP_409_CONFLICT, "EMAIL_ALREADY_EXISTS"),
     (UsernameAlreadyExistsError, status.HTTP_409_CONFLICT, "USERNAME_ALREADY_EXISTS"),
     (UserPermissionDeniedError, status.HTTP_403_FORBIDDEN, "USER_PERMISSION_DENIED"),
-
     (CardNotFoundError, status.HTTP_404_NOT_FOUND, "CARD_NOT_FOUND"),
     (CardAlreadyExistsError, status.HTTP_409_CONFLICT, "CARD_ALREADY_EXISTS"),
     (CardPermissionDeniedError, status.HTTP_403_FORBIDDEN, "CARD_PERMISSION_DENIED"),
-
     (DeckNotFoundError, status.HTTP_404_NOT_FOUND, "DECK_NOT_FOUND"),
     (DeckNotArchivedError, status.HTTP_409_CONFLICT, "DECK_NOT_ARCHIVED"),
     (DeckAlreadyExistsError, status.HTTP_409_CONFLICT, "DECK_ALREADY_EXISTS"),
@@ -122,7 +121,6 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
     ),
     (DeckIsNotFavouriteError, status.HTTP_409_CONFLICT, "DECK_IS_NOT_FAVOURITE"),
     (CannotSaveOwnDeckError, status.HTTP_409_CONFLICT, "CANNOT_SAVE_OWN_DECK"),
-
     (TrainingSessionNotFoundError, status.HTTP_404_NOT_FOUND, "TRAINING_SESSION_NOT_FOUND"),
     (
         TrainingSessionItemNotFoundError,
@@ -142,7 +140,11 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
         status.HTTP_409_CONFLICT,
         "TRAINING_SESSION_ALREADY_FINISHED",
     ),
-    (TrainingSessionNotFinishedYet, status.HTTP_409_CONFLICT, "TRAINING_SESSION_NOT_FINISHED"),
+    (
+        TrainingSessionNotFinishedYet,
+        status.HTTP_409_CONFLICT,
+        "TRAINING_SESSION_NOT_FINISHED",
+    ),
     (
         TrainingSessionDeckArchivedError,
         status.HTTP_409_CONFLICT,
@@ -158,11 +160,9 @@ ERROR_RESPONSES: tuple[tuple[type[Exception], int, str], ...] = (
         status.HTTP_403_FORBIDDEN,
         "TRAINING_SESSION_PERMISSION_DENIED",
     ),
-
     (RagUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, "RAG_UNAVAILABLE"),
     (RagTimeoutError, status.HTTP_504_GATEWAY_TIMEOUT, "RAG_TIMEOUT"),
     (RagBadResponseError, status.HTTP_502_BAD_GATEWAY, "RAG_BAD_RESPONSE"),
-
     (RateLimitError, status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
 )
 
@@ -206,6 +206,7 @@ async def unhandled_exception_handler(
             "message": "Internal server error",
         },
     )
+
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +268,16 @@ async def request_value_error_handler(
     )
 
 
+def _add_handler[E: Exception](
+    app: FastAPI,
+    exception_class: type[E],
+    handler: Callable[[Request, E], Awaitable[Response]],
+) -> None:
+    # starlette types handlers as accepting any Exception;
+    # E ties the handler to the exception class it is registered for
+    app.add_exception_handler(exception_class, cast(ExceptionHandler, handler))
+
+
 def register_exception_handlers(app: FastAPI):
     for exception_class, status_code, code in ERROR_RESPONSES:
         app.add_exception_handler(
@@ -274,8 +285,8 @@ def register_exception_handlers(app: FastAPI):
             make_error_handler(status_code=status_code, code=code),
         )
 
-    app.add_exception_handler(InvalidRefreshTokenError, invalid_refresh_token_handler)
-    app.add_exception_handler(RequestValueError, request_value_error_handler)
-    app.add_exception_handler(RequestValidationError, request_validation_handler)
-    app.add_exception_handler(RedisError, redis_unavailable_handler)
-    app.add_exception_handler(Exception, unhandled_exception_handler)
+    _add_handler(app, InvalidRefreshTokenError, invalid_refresh_token_handler)
+    _add_handler(app, RequestValueError, request_value_error_handler)
+    _add_handler(app, RequestValidationError, request_validation_handler)
+    _add_handler(app, RedisError, redis_unavailable_handler)
+    _add_handler(app, Exception, unhandled_exception_handler)

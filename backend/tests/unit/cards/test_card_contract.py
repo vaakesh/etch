@@ -5,13 +5,18 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.cards.schemas import CardResponse, InternalCard, LoadedCardResponse, UpdateCardRequest
 from app.cards.repository import CardRepository
+from app.cards.schemas import (
+    CardResponse,
+    InternalCard,
+    LoadedCardResponse,
+    UpdateCardRequest,
+)
 from app.cards.service import CardService
 from app.decks.schemas import ReorderCards
 from app.errors import RequestValueError
-from app.redis.service import RedisCacheService
 from app.redis.invalidation import CacheInvalidator
+from app.redis.service import RedisCacheService
 from tests.unit.factories import make_card
 
 CARD_UUID = UUID("0198ad01-b200-7000-8000-000000000100")
@@ -46,12 +51,17 @@ class TestInternalCard:
         assert error.value.errors()[0]["loc"] == ("uuid",)
         assert error.value.errors()[0]["type"] == "uuid_version"
 
-    @pytest.mark.parametrize("updated_at", [
-        datetime(2020, 1, 1, tzinfo=UTC), datetime(2020, 1, 2),
-    ])
+    @pytest.mark.parametrize(
+        "updated_at",
+        [
+            datetime(2020, 1, 1, tzinfo=UTC),
+            datetime(2020, 1, 2),
+        ],
+    )
     def test_rejects_earlier_or_incompatible_update_date(self, updated_at):
         card = make_card(
-            uuid=CARD_UUID, created_at=datetime(2020, 1, 2, tzinfo=UTC),
+            uuid=CARD_UUID,
+            created_at=datetime(2020, 1, 2, tzinfo=UTC),
             updated_at=updated_at,
         )
 
@@ -79,31 +89,44 @@ class TestCardReferences:
 
     def test_reorder_rejects_uuid_other_than_v7(self):
         with pytest.raises(ValidationError) as error:
-            ReorderCards(card_uuid="00000000-0000-4000-8000-000000000001", to_position=1)
+            ReorderCards.model_validate(
+                {"card_uuid": "00000000-0000-4000-8000-000000000001", "to_position": 1}
+            )
 
         assert error.value.errors()[0]["type"] == "uuid_version"
 
-    @pytest.mark.parametrize(("method", "path", "field"), [
-        ("PATCH", "/cards/00000000-0000-4000-8000-000000000001", "card_uuid"),
-        ("DELETE", "/cards/00000000-0000-4000-8000-000000000001", "card_uuid"),
-        ("GET", "/decks/00000000-0000-4000-8000-000000000001", "deck_uuid"),
-        ("GET", "/users/00000000-0000-4000-8000-000000000001/decks", "user_uuid"),
-    ])
+    @pytest.mark.parametrize(
+        ("method", "path", "field"),
+        [
+            ("PATCH", "/cards/00000000-0000-4000-8000-000000000001", "card_uuid"),
+            ("DELETE", "/cards/00000000-0000-4000-8000-000000000001", "card_uuid"),
+            ("GET", "/decks/00000000-0000-4000-8000-000000000001", "deck_uuid"),
+            ("GET", "/users/00000000-0000-4000-8000-000000000001/decks", "user_uuid"),
+        ],
+    )
     async def test_routes_reject_uuid_other_than_v7(self, client, method, path, field):
         response = await client.request(method, path, json={})
 
         assert response.status_code == 422
         assert response.json() == {
-            "code": "VALIDATION_ERROR", "message": "Validation error",
-            "details": [{"type": "uuid_version", "loc": ["path", field],
-                         "msg": "UUID version 7 expected",
-                         "input": "00000000-0000-4000-8000-000000000001",
-                         "ctx": {"expected_version": 7}}],
+            "code": "VALIDATION_ERROR",
+            "message": "Validation error",
+            "details": [
+                {
+                    "type": "uuid_version",
+                    "loc": ["path", field],
+                    "msg": "UUID version 7 expected",
+                    "input": "00000000-0000-4000-8000-000000000001",
+                    "ctx": {"expected_version": 7},
+                }
+            ],
         }
 
 
 class TestUpdateCardRequest:
-    @pytest.mark.parametrize("field", ["front_text", "back_text", "front_lang", "back_lang"])
+    @pytest.mark.parametrize(
+        "field", ["front_text", "back_text", "front_lang", "back_lang"]
+    )
     def test_rejects_explicit_null(self, field):
         with pytest.raises(RequestValueError) as error:
             UpdateCardRequest(**{field: None})
@@ -115,7 +138,9 @@ class TestUpdateCardRequest:
 
         assert result.model_dump(exclude_unset=True) == {"front_text": "Word"}
 
-    @pytest.mark.parametrize("field", ["front_text", "back_text", "front_lang", "back_lang"])
+    @pytest.mark.parametrize(
+        "field", ["front_text", "back_text", "front_lang", "back_lang"]
+    )
     def test_schema_does_not_allow_null(self, field):
         schema = UpdateCardRequest.model_json_schema()
         prop = schema["properties"][field]
@@ -127,9 +152,18 @@ class TestUpdateCardRequest:
 
 class TestUpdateCard:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("payload", [
-        {}, {"front_text": " привет ", "back_text": "hello", "front_lang": " RU ", "back_lang": "EN"},
-    ])
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {},
+            {
+                "front_text": " привет ",
+                "back_text": "hello",
+                "front_lang": " RU ",
+                "back_lang": "EN",
+            },
+        ],
+    )
     async def test_preserves_date_without_writing_when_content_is_unchanged(self, payload):
         card = make_card(uuid=CARD_UUID)
         uow = MagicMock()
@@ -141,10 +175,14 @@ class TestUpdateCard:
         cache = create_autospec(RedisCacheService, instance=True)
         invalidator = create_autospec(CacheInvalidator, instance=True)
         service = CardService(
-            uow_factory=lambda: uow, cache_service=cache, cache_invalidator=invalidator,
+            uow_factory=lambda: uow,
+            cache_service=cache,
+            cache_invalidator=invalidator,
         )
 
-        result = await service.update_card(CARD_UUID, card.user_id, UpdateCardRequest(**payload))
+        result = await service.update_card(
+            CARD_UUID, card.user_id, UpdateCardRequest(**payload)
+        )
 
         assert result.model_dump() == {
             "id": 100,

@@ -1,9 +1,9 @@
 from typing import Annotated
 
-from app.cards.service import CardService
-from app.deps import UoWFactory, get_uow_factory
 from fastapi import Depends
 
+from app.cards.service import CardService
+from app.deps import UoWFactory, get_uow_factory
 from app.redis.deps import CacheInvalidatorDeps, CacheServiceDeps
 from app.tracing import traced
 
@@ -19,6 +19,7 @@ def get_card_service(
         cache_service=cache_service,
         cache_invalidator=cache_invalidator,
     )
+
 
 CardServiceDeps = Annotated[
     CardService,

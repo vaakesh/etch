@@ -1,9 +1,6 @@
 from datetime import datetime
 from uuid import UUID
 
-from app.database import Base
-from app.fsrs.types import Card, CardState
-from app.training_sessions.models import CardSide
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -19,6 +16,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database import Base
+from app.fsrs.types import Card, CardState
+from app.training_sessions.models import CardSide
 
 card_state_enum = SQLAlchemyEnum(
     CardState,

@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 from asyncpg.exceptions import CheckViolationError, UniqueViolationError
 from sqlalchemy.exc import IntegrityError
 
 from app.users.errors import EmailAlreadyExistsError, UsernameAlreadyExistsError
-from app.users.schemas import CreateUserRequest
 from app.users.models import User, UserSettings
-from tests.unit.users.cases import USER_UUID, USER_WITH_SETTINGS_DATA
+from app.users.schemas import CreateUserRequest
+from tests.unit.users.cases import SETTINGS_DATA, USER_UUID, USER_WITH_SETTINGS_DATA
 
 
 class TestCreateUser:
@@ -34,26 +34,36 @@ class TestCreateUser:
         users_uow.flush.side_effect = populate_database_defaults
 
     async def test_creates_user_with_hashed_password_and_default_settings(
-        self, users_domain_service, users_uow, users_cache, password_hasher, persisted_defaults,
+        self,
+        users_domain_service,
+        users_uow,
+        users_cache,
+        password_hasher,
+        persisted_defaults,
     ):
         payload = CreateUserRequest(
-            username="new-user", email="new@example.com", password="password123",
+            username="new-user",
+            email="new@example.com",
+            password="password123",
         )
 
         result = await users_domain_service.create_user(payload)
 
         assert result.model_dump(mode="json") == {
             **USER_WITH_SETTINGS_DATA,
-            "username": "new-user", "email": "new@example.com",
+            "username": "new-user",
+            "email": "new@example.com",
             "hashed_password": "hashed-password",
-            "settings": {**USER_WITH_SETTINGS_DATA["settings"], "theme": "light"},
+            "settings": {**SETTINGS_DATA, "theme": "light"},
         }
         password_hasher.assert_called_once_with("password123")
         users_uow.user_repo.add.assert_called_once()
         user = users_uow.user_repo.add.call_args.args[0]
         assert isinstance(user, User)
         assert (user.username, user.email, user.hashed_password) == (
-            "new-user", "new@example.com", "hashed-password",
+            "new-user",
+            "new@example.com",
+            "hashed-password",
         )
         users_uow.user_settings_repo.add.assert_called_once()
         settings = users_uow.user_settings_repo.add.call_args.args[0]
@@ -69,7 +79,11 @@ class TestCreateUser:
         assert users_cache.mock_calls == []
 
     async def test_stores_timezone_from_registration_in_settings(
-        self, users_domain_service, users_uow, password_hasher, persisted_defaults,
+        self,
+        users_domain_service,
+        users_uow,
+        password_hasher,
+        persisted_defaults,
     ):
         payload = CreateUserRequest(
             username="new-user",
@@ -94,16 +108,25 @@ class TestCreateUser:
         ],
     )
     async def test_translates_known_unique_conflicts_and_preserves_cause(
-        self, users_uow, users_domain_service, users_cache, password_hasher, constraint, expected_error,
+        self,
+        users_uow,
+        users_domain_service,
+        users_cache,
+        password_hasher,
+        constraint,
+        expected_error,
     ):
         cause = UniqueViolationError("duplicate value")
-        cause.constraint_name = constraint
+        # asyncpg fills constraint_name from the server message at runtime
+        cause.constraint_name = constraint  # ty: ignore[unresolved-attribute]
         original = Exception("driver error")
         original.__cause__ = cause
         database_error = IntegrityError("INSERT", {}, original)
         users_uow.flush.side_effect = database_error
         payload = CreateUserRequest(
-            username="new-user", email="new@example.com", password="password123",
+            username="new-user",
+            email="new@example.com",
+            password="password123",
         )
 
         with pytest.raises(expected_error) as error:
@@ -124,7 +147,13 @@ class TestCreateUser:
         ],
     )
     async def test_propagates_unexpected_integrity_error_unchanged(
-        self, users_uow, users_domain_service, users_cache, password_hasher, cause_type, constraint,
+        self,
+        users_uow,
+        users_domain_service,
+        users_cache,
+        password_hasher,
+        cause_type,
+        constraint,
     ):
         cause = cause_type("unexpected database failure")
         cause.constraint_name = constraint
@@ -133,7 +162,9 @@ class TestCreateUser:
         database_error = IntegrityError("INSERT", {}, original)
         users_uow.flush.side_effect = database_error
         payload = CreateUserRequest(
-            username="new-user", email="new@example.com", password="password123",
+            username="new-user",
+            email="new@example.com",
+            password="password123",
         )
 
         with pytest.raises(IntegrityError) as error:
@@ -152,17 +183,26 @@ class TestCreateUser:
         ],
     )
     async def test_handles_integrity_failure_at_commit(
-        self, users_domain_service, users_uow, users_cache, password_hasher,
-        persisted_defaults, constraint, expected_error,
+        self,
+        users_domain_service,
+        users_uow,
+        users_cache,
+        password_hasher,
+        persisted_defaults,
+        constraint,
+        expected_error,
     ):
         cause = UniqueViolationError("duplicate value")
-        cause.constraint_name = constraint
+        # asyncpg fills constraint_name from the server message at runtime
+        cause.constraint_name = constraint  # ty: ignore[unresolved-attribute]
         original = Exception("driver error")
         original.__cause__ = cause
         database_error = IntegrityError("INSERT", {}, original)
         users_uow.commit.side_effect = database_error
         payload = CreateUserRequest(
-            username="new-user", email="new@example.com", password="password123",
+            username="new-user",
+            email="new@example.com",
+            password="password123",
         )
 
         with pytest.raises(expected_error) as error:

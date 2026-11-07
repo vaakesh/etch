@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     qdrant_url: HttpUrl
     qdrant_grpc_port: Port
     qdrant_collection: NonemptyString
-    qdrant_timeout: PositiveFloat
+    qdrant_timeout: PositiveInt
     llm_url: HttpUrl
     llm_model: NonemptyString
     llm_api_key: SecretStr

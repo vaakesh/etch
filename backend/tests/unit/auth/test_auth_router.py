@@ -408,6 +408,7 @@ class TestLoginRequestValidation:
         assert response.headers.get_list("set-cookie") == []
         auth_service.login.assert_not_awaited()
 
+
 class TestLogout:
     async def test_logs_out_refresh_session_and_clears_cookies(
         self,
@@ -730,10 +731,17 @@ class TestChangePassword:
 class TestChangePasswordRequestValidation:
     @pytest.mark.parametrize(
         "password",
-        [pytest.param("a" * 8, id="minimum-length"), pytest.param("a" * 128, id="maximum-length")],
+        [
+            pytest.param("a" * 8, id="minimum-length"),
+            pytest.param("a" * 128, id="maximum-length"),
+        ],
     )
     async def test_accepts_password_length_boundaries(
-        self, client, current_user, auth_service, password,
+        self,
+        client,
+        current_user,
+        auth_service,
+        password,
     ):
         response = await client.put(
             "/auth/password",
@@ -743,7 +751,9 @@ class TestChangePasswordRequestValidation:
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert response.content == b""
         auth_service.change_password.assert_awaited_once_with(
-            user_id=current_user.id, current_password=password, new_password=password,
+            user_id=current_user.id,
+            current_password=password,
+            new_password=password,
         )
 
     @pytest.mark.parametrize(
@@ -1146,8 +1156,12 @@ class TestGetSessions:
 class TestAuthRateLimits:
     @pytest.mark.parametrize(
         (
-            "path", "request_kwargs", "service_method",
-            "redis_key", "requests", "window_seconds",
+            "path",
+            "request_kwargs",
+            "service_method",
+            "redis_key",
+            "requests",
+            "window_seconds",
         ),
         [
             pytest.param(
@@ -1169,20 +1183,36 @@ class TestAuthRateLimits:
                 id="cookie-login",
             ),
             pytest.param(
-                "/auth/logout", {}, "logout",
-                "rate_limit:ip:127.0.0.1:auth:actions", 60, 60,
+                "/auth/logout",
+                {},
+                "logout",
+                "rate_limit:ip:127.0.0.1:auth:actions",
+                60,
+                60,
                 id="logout",
             ),
             pytest.param(
-                "/auth/refresh", {}, "refresh",
-                "rate_limit:ip:127.0.0.1:auth:actions", 60, 60,
+                "/auth/refresh",
+                {},
+                "refresh",
+                "rate_limit:ip:127.0.0.1:auth:actions",
+                60,
+                60,
                 id="refresh",
             ),
         ],
     )
     async def test_rejects_request_without_calling_service_when_ip_limit_is_exceeded(
-        self, client, auth_service, redis_rate_limiter,
-        path, request_kwargs, service_method, redis_key, requests, window_seconds,
+        self,
+        client,
+        auth_service,
+        redis_rate_limiter,
+        path,
+        request_kwargs,
+        service_method,
+        redis_key,
+        requests,
+        window_seconds,
     ):
         redis_rate_limiter.check.return_value = False
         client.cookies.set("refresh_token", "active-refresh-token")
@@ -1196,12 +1226,18 @@ class TestAuthRateLimits:
         }
         assert response.headers.get_list("set-cookie") == []
         redis_rate_limiter.check.assert_awaited_once_with(
-            redis_key=redis_key, requests=requests, window_seconds=window_seconds,
+            redis_key=redis_key,
+            requests=requests,
+            window_seconds=window_seconds,
         )
         getattr(auth_service, service_method).assert_not_awaited()
 
     async def test_rejects_sessions_request_when_user_limit_is_exceeded(
-        self, client, current_user, auth_service, redis_rate_limiter,
+        self,
+        client,
+        current_user,
+        auth_service,
+        redis_rate_limiter,
     ):
         redis_rate_limiter.check.return_value = False
 

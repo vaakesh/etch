@@ -1,7 +1,8 @@
+from fastapi import APIRouter, Depends, Path, Query
 from pydantic import UUID7
-from app.common.limits import MAX_SESSION_SIZE
 
 from app.auth.deps import CurrentUser, OptionalCurrentUser
+from app.common.limits import MAX_SESSION_SIZE
 from app.redis.rate_limiters import (
     public_training_sessions_rate_limit,
     rate_answer_rate_limit,
@@ -22,12 +23,12 @@ from app.training_sessions.schemas import (
     TrainingSessionResponse,
 )
 from app.training_sessions.types import UserAnswer
-from fastapi import APIRouter, Depends, Path, Query
 
 router = APIRouter(prefix="/training-sessions")
 
+
 @router.get(
-    "/{session_uuid}", 
+    "/{session_uuid}",
     response_model=TrainingSessionResponse,
     dependencies=[Depends(public_training_sessions_rate_limit)],
 )
@@ -41,6 +42,7 @@ async def get_training_session(
         current_user_id=current_user.id if current_user else None,
     )
     return training_session
+
 
 @router.get(
     "/{session_uuid}/history",
@@ -78,6 +80,7 @@ async def get_training_session_history(
     ]
     return result
 
+
 @router.post(
     "/{session_uuid}/activity",
     response_model=TrainingSessionActivityResponse,
@@ -95,10 +98,11 @@ async def record_activity(
         payload=payload,
     )
 
+
 @router.put(
-        "/{training_session_uuid}/items/{sequence_number}/submit",
-        response_model=SubmitAnswerResponse,
-        dependencies=[Depends(submit_answer_rate_limit)],
+    "/{training_session_uuid}/items/{sequence_number}/submit",
+    response_model=SubmitAnswerResponse,
+    dependencies=[Depends(submit_answer_rate_limit)],
 )
 async def submit_answer(
     training_session_uuid: UUID7,
@@ -114,10 +118,11 @@ async def submit_answer(
         user_answer=user_answer,
     )
 
+
 @router.put(
-        "/{training_session_uuid}/items/{sequence_number}/rating",
-        response_model=RateAnswerResponse,
-        dependencies=[Depends(rate_answer_rate_limit)],
+    "/{training_session_uuid}/items/{sequence_number}/rating",
+    response_model=RateAnswerResponse,
+    dependencies=[Depends(rate_answer_rate_limit)],
 )
 async def rate_answer(
     training_session_uuid: UUID7,

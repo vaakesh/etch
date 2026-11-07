@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, call, create_autospec
 from uuid import UUID
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.auth.errors import InvalidLoginCredentials, InvalidRefreshTokenError
 from app.auth.repository import AuthRepository
@@ -14,8 +15,6 @@ from app.redis.invalidation import CacheInvalidator, DelKey
 from app.service import UnitOfWork
 from app.users.errors import UserNotFoundError
 from app.users.repository import UserRepository
-from redis.exceptions import ConnectionError as RedisConnectionError
-
 from tests.unit.factories import make_user, make_user_session
 from tests.unit.outbox_helpers import (
     OUTBOX_MESSAGE_ID,
@@ -24,7 +23,6 @@ from tests.unit.outbox_helpers import (
     make_outbox_repo,
     staged_message,
 )
-
 
 NOW = datetime(2026, 8, 16, 12, 0, tzinfo=UTC)
 
@@ -64,17 +62,27 @@ def auth_context(monkeypatch):
     factory = Mock(return_value=uow)
     invalidator = create_autospec(CacheInvalidator, instance=True)
     service = AuthService(
-        uow_factory=factory, auth_tokens_service=tokens, cache_invalidator=invalidator,
+        uow_factory=factory,
+        auth_tokens_service=tokens,
+        cache_invalidator=invalidator,
     )
     return SimpleNamespace(
-        service=service, uow=uow, factory=factory, tokens=tokens, invalidator=invalidator,
-        user=user, session=session, verify=verify, hash_password=hash_password,
+        service=service,
+        uow=uow,
+        factory=factory,
+        tokens=tokens,
+        invalidator=invalidator,
+        user=user,
+        session=session,
+        verify=verify,
+        hash_password=hash_password,
     )
 
 
 class TestLogin:
     async def test_returns_tokens_and_commits_session_with_hashed_refresh_token(
-        self, auth_context,
+        self,
+        auth_context,
     ):
         ctx = auth_context
         calls = Mock()
@@ -114,7 +122,9 @@ class TestLogin:
 
     @pytest.mark.parametrize("scenario", ["user-missing", "wrong-password"])
     async def test_rejects_credentials_without_issuing_tokens_or_committing(
-        self, auth_context, scenario,
+        self,
+        auth_context,
+        scenario,
     ):
         ctx = auth_context
         if scenario == "user-missing":
@@ -141,7 +151,9 @@ class TestLogin:
         ],
     )
     async def test_rejects_login_when_user_changed_during_verification(
-        self, auth_context, locked_user,
+        self,
+        auth_context,
+        locked_user,
     ):
         ctx = auth_context
         ctx.uow.user_repo.get_by_id.return_value = locked_user
@@ -165,11 +177,14 @@ class TestLogin:
 
 
 class TestLoginByBearerTokenWithoutRefresh:
-    async def test_returns_access_token_without_creating_refresh_session(self, auth_context):
+    async def test_returns_access_token_without_creating_refresh_session(
+        self, auth_context
+    ):
         ctx = auth_context
 
         result = await ctx.service.login_by_bearer_token_without_refresh(
-            "test-user", "password123",
+            "test-user",
+            "password123",
         )
 
         assert result == AccessTokenResponse("bearer-access-token", "Bearer")
@@ -184,7 +199,9 @@ class TestLoginByBearerTokenWithoutRefresh:
 
     @pytest.mark.parametrize("scenario", ["user-missing", "wrong-password"])
     async def test_rejects_invalid_credentials_without_creating_access_token(
-        self, auth_context, scenario,
+        self,
+        auth_context,
+        scenario,
     ):
         ctx = auth_context
         if scenario == "user-missing":
@@ -193,14 +210,18 @@ class TestLoginByBearerTokenWithoutRefresh:
             ctx.verify.return_value = False
 
         with pytest.raises(InvalidLoginCredentials):
-            await ctx.service.login_by_bearer_token_without_refresh("test-user", "wrong-password")
+            await ctx.service.login_by_bearer_token_without_refresh(
+                "test-user", "wrong-password"
+            )
 
         ctx.tokens.create_access_token.assert_not_called()
         ctx.uow.commit.assert_not_awaited()
 
 
 class TestRefresh:
-    async def test_rotates_session_and_revokes_old_session_before_commit(self, auth_context):
+    async def test_rotates_session_and_revokes_old_session_before_commit(
+        self, auth_context
+    ):
         ctx = auth_context
         calls = Mock()
         calls.attach_mock(ctx.uow.auth_repo.get_user_id_by_refresh, "find_owner")
@@ -223,7 +244,8 @@ class TestRefresh:
         assert result == TokenPair("new-access-token", "new-refresh-token")
         ctx.tokens.hash_refresh_token.assert_called_once_with("old-refresh-token")
         ctx.uow.auth_repo.get_user_session_by_refresh.assert_awaited_once_with(
-            "a" * 64, for_update=True,
+            "a" * 64,
+            for_update=True,
         )
         assert calls.mock_calls == [
             call.find_owner("a" * 64),
@@ -243,12 +265,18 @@ class TestRefresh:
         [
             pytest.param(None, id="session-deleted-after-owner-lookup"),
             pytest.param(make_user_session(revoked_at=NOW), id="revoked-session"),
-            pytest.param(make_user_session(replaced_by_session_id=601), id="replaced-session"),
+            pytest.param(
+                make_user_session(replaced_by_session_id=601), id="replaced-session"
+            ),
             pytest.param(make_user_session(expires_at=NOW), id="expires-now"),
-            pytest.param(make_user_session(expires_at=NOW - timedelta(seconds=1)), id="expired"),
+            pytest.param(
+                make_user_session(expires_at=NOW - timedelta(seconds=1)), id="expired"
+            ),
         ],
     )
-    async def test_rejects_invalid_session_without_issuing_tokens(self, auth_context, session):
+    async def test_rejects_invalid_session_without_issuing_tokens(
+        self, auth_context, session
+    ):
         ctx = auth_context
         ctx.uow.auth_repo.get_user_session_by_refresh.return_value = session
 
@@ -260,7 +288,9 @@ class TestRefresh:
         ctx.uow.auth_repo.add.assert_not_called()
         ctx.uow.commit.assert_not_awaited()
 
-    async def test_rejects_unknown_token_without_locking_user_or_session(self, auth_context):
+    async def test_rejects_unknown_token_without_locking_user_or_session(
+        self, auth_context
+    ):
         ctx = auth_context
         ctx.uow.auth_repo.get_user_id_by_refresh.return_value = None
 
@@ -286,7 +316,8 @@ class TestRefresh:
             await ctx.service.refresh("revoked-refresh-token")
 
         ctx.uow.auth_repo.get_user_session_by_refresh.assert_awaited_once_with(
-            "a" * 64, for_update=True,
+            "a" * 64,
+            for_update=True,
         )
         ctx.tokens.issue_tokens.assert_not_called()
         ctx.uow.auth_repo.add.assert_not_called()
@@ -301,7 +332,9 @@ class TestRefresh:
         assert result == TokenPair("new-access-token", "new-refresh-token")
         ctx.uow.commit.assert_awaited_once_with()
 
-    async def test_raises_when_session_user_is_missing_without_revoking_session(self, auth_context):
+    async def test_raises_when_session_user_is_missing_without_revoking_session(
+        self, auth_context
+    ):
         ctx = auth_context
         ctx.uow.user_repo.get_by_id.return_value = None
 
@@ -340,19 +373,22 @@ class TestChangePassword:
             call(user_id=42, for_update=True),
         ]
         ctx.verify.assert_called_once_with(
-            password="old-password", password_hash="hashed-test-password",
+            password="old-password",
+            password_hash="hashed-test-password",
         )
         ctx.hash_password.assert_called_once_with(password="new-password")
         assert ctx.user.hashed_password == "new-password-hash"
         ctx.uow.auth_repo.revoke_all_active_sessions_by_user_id.assert_awaited_once_with(
-            user_id=42, revoked_at=NOW,
+            user_id=42,
+            revoked_at=NOW,
         )
         assert ctx.uow.commit.await_args_list == [call(), call()]
 
     async def test_invalidates_cached_user_after_commit(self, auth_context):
         ctx = auth_context
         ctx.uow.commit.side_effect = first_commit_precedes_invalidation(
-            ctx.uow, ctx.invalidator,
+            ctx.uow,
+            ctx.invalidator,
         )
 
         await ctx.service.change_password(42, "old-password", "new-password")
@@ -389,7 +425,9 @@ class TestChangePassword:
 
     @pytest.mark.parametrize("scenario", ["user-missing", "wrong-password"])
     async def test_rejects_credentials_without_changing_hash_or_revoking_sessions(
-        self, auth_context, scenario,
+        self,
+        auth_context,
+        scenario,
     ):
         ctx = auth_context
         if scenario == "user-missing":
@@ -417,7 +455,9 @@ class TestChangePassword:
         ],
     )
     async def test_rejects_change_when_user_changed_during_hashing(
-        self, auth_context, locked_user,
+        self,
+        auth_context,
+        locked_user,
     ):
         ctx = auth_context
         ctx.uow.user_repo.get_by_id.side_effect = [ctx.user, locked_user]
@@ -445,7 +485,9 @@ class TestChangePassword:
 
 class TestLogout:
     @pytest.mark.parametrize("refresh_token", [None, ""])
-    async def test_does_not_open_transaction_without_refresh_token(self, auth_context, refresh_token):
+    async def test_does_not_open_transaction_without_refresh_token(
+        self, auth_context, refresh_token
+    ):
         ctx = auth_context
 
         result = await ctx.service.logout(refresh_token)
@@ -459,7 +501,9 @@ class TestLogout:
         calls = Mock()
         calls.attach_mock(ctx.uow.auth_repo.get_user_id_by_refresh, "find_owner")
         calls.attach_mock(ctx.uow.user_repo.get_by_id, "lock_user")
-        calls.attach_mock(ctx.uow.auth_repo.revoke_active_session_by_refresh_token_hash, "revoke_session")
+        calls.attach_mock(
+            ctx.uow.auth_repo.revoke_active_session_by_refresh_token_hash, "revoke_session"
+        )
         ctx.uow.auth_repo.revoke_active_session_by_refresh_token_hash.return_value = True
 
         result = await ctx.service.logout("active-refresh-token")
@@ -467,7 +511,8 @@ class TestLogout:
         assert result is None
         ctx.tokens.hash_refresh_token.assert_called_once_with("active-refresh-token")
         ctx.uow.auth_repo.revoke_active_session_by_refresh_token_hash.assert_awaited_once_with(
-            refresh_token_hash="a" * 64, revoked_at=NOW,
+            refresh_token_hash="a" * 64,
+            revoked_at=NOW,
         )
         ctx.uow.commit.assert_awaited_once_with()
         assert calls.mock_calls == [
@@ -484,11 +529,14 @@ class TestLogout:
 
         assert result is None
         ctx.uow.auth_repo.revoke_active_session_by_refresh_token_hash.assert_awaited_once_with(
-            refresh_token_hash="a" * 64, revoked_at=NOW,
+            refresh_token_hash="a" * 64,
+            revoked_at=NOW,
         )
         ctx.uow.commit.assert_not_awaited()
 
-    async def test_does_not_lock_user_or_update_sessions_for_unknown_token(self, auth_context):
+    async def test_does_not_lock_user_or_update_sessions_for_unknown_token(
+        self, auth_context
+    ):
         ctx = auth_context
         ctx.uow.auth_repo.get_user_id_by_refresh.return_value = None
 
@@ -529,7 +577,8 @@ class TestGetActiveUserSessions:
         ctx.uow.commit.assert_not_awaited()
 
     async def test_returns_next_cursor_from_last_session_when_more_exist(
-        self, auth_context,
+        self,
+        auth_context,
     ):
         ctx = auth_context
         newer_session = make_user_session(
@@ -537,11 +586,13 @@ class TestGetActiveUserSessions:
             created_at=datetime(2026, 8, 16, 11, 0, tzinfo=UTC),
         )
         ctx.uow.auth_repo.get_active_user_sessions.return_value = (
-            [newer_session, ctx.session], True,
+            [newer_session, ctx.session],
+            True,
         )
 
         sessions, next_cursor, has_more = await ctx.service.get_active_user_sessions(
-            42, limit=2,
+            42,
+            limit=2,
         )
 
         assert sessions == [newer_session, ctx.session]
@@ -618,7 +669,8 @@ class TestSessionClientInfo:
         assert session.user_agent == "Mozilla/5.0"
 
     async def test_refresh_stores_current_client_in_replacement_session(
-        self, auth_context,
+        self,
+        auth_context,
     ):
         ctx = auth_context
         client = ClientInfo(ip="198.51.100.9", user_agent="Mozilla/5.0 (new)")

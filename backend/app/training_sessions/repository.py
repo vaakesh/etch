@@ -2,20 +2,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
-from app.tracing import traced
 
-from app.bff.schemas import DailyActivityResponse, UserProgressResponse
-from app.cards.models import Card
-from app.common.query import apply_date_pagination
-from app.common.types import PositiveInt
-from app.common.utils import utcnow
-from app.decks.models import Deck, DeckCard
-from app.training_sessions.models import (
-    TrainingSession,
-    TrainingSessionItem,
-    TrainingSessionKind,
-    TrainingSessionStatus,
-)
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -31,13 +18,26 @@ from sqlalchemy import (
     insert,
     literal,
     null,
-    or_,
     select,
     true,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
+
+from app.bff.schemas import UserProgressResponse
+from app.cards.models import Card
+from app.common.query import apply_date_pagination
+from app.common.types import PositiveInt
+from app.common.utils import utcnow
+from app.decks.models import Deck, DeckCard
+from app.tracing import traced
+from app.training_sessions.models import (
+    TrainingSession,
+    TrainingSessionItem,
+    TrainingSessionKind,
+    TrainingSessionStatus,
+)
 
 
 class TrainingSessionItemRepository:
@@ -46,12 +46,12 @@ class TrainingSessionItemRepository:
 
     # helpers
     def _snapshot_columns(
-            self,
-            training_session_id: PositiveInt,
-            user_id: PositiveInt,
-            prompt_side: Literal["front", "back"],
-            answer_side: Literal["front", "back"],
-            sequence_number,
+        self,
+        training_session_id: PositiveInt,
+        user_id: PositiveInt,
+        prompt_side: Literal["front", "back"],
+        answer_side: Literal["front", "back"],
+        sequence_number,
     ) -> list:
         # Колонки снимка карточки в порядке _insert_snapshot_rows
         side_columns = {
@@ -78,14 +78,14 @@ class TrainingSessionItemRepository:
         ]
 
     def _ranked_cards_subquery(
-            self,
-            training_session_id: PositiveInt,
-            user_id: PositiveInt,
-            deck_id: PositiveInt,
-            prompt_side: Literal["front", "back"],
-            answer_side: Literal["front", "back"],
-            sequence_number,
-            where_extra: list,
+        self,
+        training_session_id: PositiveInt,
+        user_id: PositiveInt,
+        deck_id: PositiveInt,
+        prompt_side: Literal["front", "back"],
+        answer_side: Literal["front", "back"],
+        sequence_number,
+        where_extra: list,
     ):
         return (
             select(
@@ -104,14 +104,12 @@ class TrainingSessionItemRepository:
         )
 
     async def _insert_snapshot_rows(
-            self,
-            ranked_cards,
-            limit: int,
+        self,
+        ranked_cards,
+        limit: int,
     ) -> list[TrainingSessionItem]:
         snapshot_query = (
-            select(ranked_cards)
-            .order_by(ranked_cards.c.sequence_number)
-            .limit(limit)
+            select(ranked_cards).order_by(ranked_cards.c.sequence_number).limit(limit)
         )
 
         stmt = (
@@ -171,12 +169,9 @@ class TrainingSessionItemRepository:
         sequence_number: int,
         for_update: bool = False,
     ) -> TrainingSessionItem | None:
-        stmt = (
-            select(TrainingSessionItem)
-            .where(
-                TrainingSessionItem.training_session_id == training_session_id,
-                TrainingSessionItem.sequence_number == sequence_number,
-            )
+        stmt = select(TrainingSessionItem).where(
+            TrainingSessionItem.training_session_id == training_session_id,
+            TrainingSessionItem.sequence_number == sequence_number,
         )
         if for_update:
             stmt = stmt.with_for_update()
@@ -185,8 +180,8 @@ class TrainingSessionItemRepository:
 
     @traced("training_sessions.item_repository.get_next_cards")
     async def get_next_cards(
-            self,
-            training_session_id: int,
+        self,
+        training_session_id: int,
     ) -> list[TrainingSessionItem]:
         stmt = (
             select(TrainingSessionItem)
@@ -208,27 +203,8 @@ class TrainingSessionItemRepository:
         last_sequence_number: int,
         page_size: int = 30,
         only_answered_items: bool = False,
-    ) -> Sequence[tuple[TrainingSessionItem, TrainingSessionStatus]]:
-        # stmt = (
-        #     select(TrainingSessionItem, TrainingSession.status)
-        #     .join(
-        #         TrainingSession,
-        #         TrainingSession.id == TrainingSessionItem.training_session_id
-        #     )
-        #     .where(
-        #         TrainingSession.uuid == session_uuid,
-        #         TrainingSession.user_id == user_id,
-        #         TrainingSessionItem.sequence_number > last_sequence_number,
-        #     )
-        # )
-        # if only_answered_items:
-        #     stmt = stmt.where(
-        #         TrainingSessionItem.is_answered.is_(True),
-        #     )
-        # stmt = stmt.limit(page_size)
-        # result = await self.session.execute(stmt)
-        # rows = result.all()
-        # return list(rows)
+    ) -> Sequence[tuple[TrainingSessionItem | None, TrainingSessionStatus]]:
+        """Item is None when the session exists but has no matching items."""
         conditions = [
             TrainingSessionItem.training_session_id == TrainingSession.id,
             TrainingSessionItem.sequence_number > last_sequence_number,
@@ -248,8 +224,7 @@ class TrainingSessionItemRepository:
             .limit(page_size)
         )
         result = await self.session.execute(stmt)
-        rows = result.all()
-        return rows
+        return result.tuples().all()
 
     @traced("training_sessions.item_repository.get_user_activity")
     async def get_user_activity(
@@ -308,10 +283,7 @@ class TrainingSessionItemRepository:
             .cte("completed_items")
         )
 
-        week_cutoff = datetime.combine(
-            utcnow().date() - timedelta(days=6),
-            time.min
-        )
+        week_cutoff = datetime.combine(utcnow().date() - timedelta(days=6), time.min)
 
         weekly_answered = func.count().filter(
             completed_items.c.answered_at >= week_cutoff,
@@ -322,24 +294,19 @@ class TrainingSessionItemRepository:
             completed_items.c.is_correct.is_(True),
         )
 
-        item_stats = (
-            select(
-                func.count(
-                    func.distinct(completed_items.c.learning_key_snapshot)
-                ).label("user_words_explored"),
-                weekly_answered.label("weekly_answered"),
-                weekly_correct.label("weekly_correct"),
-            )
-            .cte("item_stats")
-        )
+        item_stats = select(
+            func.count(func.distinct(completed_items.c.learning_key_snapshot)).label(
+                "user_words_explored"
+            ),
+            weekly_answered.label("weekly_answered"),
+            weekly_correct.label("weekly_correct"),
+        ).cte("item_stats")
 
         session_stats = (
             select(
                 func.coalesce(
                     cast(
-                        func.floor(
-                            func.sum(TrainingSession.active_study_time_ms) / 1000
-                        ),
+                        func.floor(func.sum(TrainingSession.active_study_time_ms) / 1000),
                         Integer,
                     ),
                     0,
@@ -361,33 +328,22 @@ class TrainingSessionItemRepository:
             Date,
         ).label("activity_day")
 
-        activity_days = (
-            select(activity_day)
-            .distinct()
-            .cte("activity_days")
-        )
+        activity_days = select(activity_day).distinct().cte("activity_days")
 
-        numbered_days = (
-            select(
-                activity_days.c.activity_day,
-                (
-                    activity_days.c.activity_day
-                    - cast(
-                        func.row_number().over(
-                            order_by=activity_days.c.activity_day
-                        ),
-                        Integer,
-                    )
-                ).label("island"),
-            )
-            .cte("numbered_days")
-        )
+        numbered_days = select(
+            activity_days.c.activity_day,
+            (
+                activity_days.c.activity_day
+                - cast(
+                    func.row_number().over(order_by=activity_days.c.activity_day),
+                    Integer,
+                )
+            ).label("island"),
+        ).cte("numbered_days")
 
         streaks = (
             select(
-                func.max(
-                    numbered_days.c.activity_day
-                ).label("last_day"),
+                func.max(numbered_days.c.activity_day).label("last_day"),
                 func.count().label("streak"),
             )
             .group_by(numbered_days.c.island)
@@ -431,20 +387,20 @@ class TrainingSessionItemRepository:
 
         result = await self.session.execute(stmt)
         row = result.mappings().one()
-        
+
         return UserProgressResponse.model_validate(row)
 
     # write
     @traced("training_sessions.item_repository.create_snapshot")
     async def create_snapshot(
-            self,
-            training_session_id: PositiveInt,
-            user_id: PositiveInt,
-            deck_id: PositiveInt,
-            prompt_side: Literal["front", "back"],
-            answer_side: Literal["front", "back"],
-            words_per_session: PositiveInt,
-            positions: list[int] | None = None,
+        self,
+        training_session_id: PositiveInt,
+        user_id: PositiveInt,
+        deck_id: PositiveInt,
+        prompt_side: Literal["front", "back"],
+        answer_side: Literal["front", "back"],
+        words_per_session: PositiveInt,
+        positions: list[int] | None = None,
     ) -> list[TrainingSessionItem]:
         """
         создает снимок карточек в случайном порядке\n
@@ -453,11 +409,7 @@ class TrainingSessionItemRepository:
         сортировки всей колоды\n
         None - берём всю колоду
         """
-        where_extra = (
-            [DeckCard.position.in_(positions)]
-            if positions is not None
-            else []
-        )
+        where_extra = [DeckCard.position.in_(positions)] if positions is not None else []
 
         ranked_cards = self._ranked_cards_subquery(
             training_session_id=training_session_id,
@@ -476,12 +428,12 @@ class TrainingSessionItemRepository:
 
     @traced("training_sessions.item_repository.create_review_snapshot")
     async def create_review_snapshot(
-            self,
-            training_session_id: PositiveInt,
-            user_id: PositiveInt,
-            card_ids: list[int],
-            prompt_side: Literal["front", "back"],
-            answer_side: Literal["front", "back"],
+        self,
+        training_session_id: PositiveInt,
+        user_id: PositiveInt,
+        card_ids: list[int],
+        prompt_side: Literal["front", "back"],
+        answer_side: Literal["front", "back"],
     ) -> list[TrainingSessionItem]:
         """
         снимок карточек сессии повторения: card_ids уже выбраны по due,
@@ -507,14 +459,14 @@ class TrainingSessionItemRepository:
         )
 
     async def fill_snapshot_gap(
-            self,
-            training_session_id: PositiveInt,
-            user_id: PositiveInt,
-            deck_id: PositiveInt,
-            prompt_side: Literal["front", "back"],
-            answer_side: Literal["front", "back"],
-            needed_count: PositiveInt,
-            sequence_offset: int,
+        self,
+        training_session_id: PositiveInt,
+        user_id: PositiveInt,
+        deck_id: PositiveInt,
+        prompt_side: Literal["front", "back"],
+        answer_side: Literal["front", "back"],
+        needed_count: PositiveInt,
+        sequence_offset: int,
     ) -> list[TrainingSessionItem]:
         """
         Добор карточек поверх уже вставленных create_snapshot - на случай,
@@ -535,8 +487,7 @@ class TrainingSessionItemRepository:
             prompt_side=prompt_side,
             answer_side=answer_side,
             sequence_number=(
-                func.row_number().over(order_by=func.random())
-                + sequence_offset
+                func.row_number().over(order_by=func.random()) + sequence_offset
             ),
             where_extra=[Card.id.not_in(already_inserted)],
         )
@@ -545,9 +496,6 @@ class TrainingSessionItemRepository:
             ranked_cards=ranked_cards,
             limit=needed_count,
         )
-
-
-    
 
 
 class TrainingSessionRepository:
@@ -621,10 +569,10 @@ class TrainingSessionRepository:
 
     @traced("training_sessions.repository.get_by_uuid")
     async def get_by_uuid(
-            self, 
-            session_uuid: UUID,
-            for_update: bool = False,
-        ) -> TrainingSession | None:
+        self,
+        session_uuid: UUID,
+        for_update: bool = False,
+    ) -> TrainingSession | None:
         stmt = (
             select(TrainingSession)
             .options(
@@ -642,10 +590,10 @@ class TrainingSessionRepository:
 
     @traced("training_sessions.repository.get_active_review_session")
     async def get_active_review_session(
-            self,
-            user_id: int,
-            for_update: bool = False,
-        ) -> TrainingSession | None:
+        self,
+        user_id: int,
+        for_update: bool = False,
+    ) -> TrainingSession | None:
         stmt = select(TrainingSession).where(
             TrainingSession.user_id == user_id,
             TrainingSession.kind == TrainingSessionKind.REVIEW,

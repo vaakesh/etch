@@ -17,6 +17,7 @@ from openai import (
     RateLimitError,
 )
 from openai.types.responses import ResponseUsage
+from openai.types.responses.response_usage import InputTokensDetails, OutputTokensDetails
 
 from rag.errors import RagError
 from rag.openai_llm import OpenAILLM
@@ -183,8 +184,8 @@ class TestGenerate:
             input_tokens=120,
             output_tokens=50,
             total_tokens=170,
-            input_tokens_details={"cached_tokens": 20, "cache_write_tokens": 0},
-            output_tokens_details={"reasoning_tokens": 30},
+            input_tokens_details=InputTokensDetails(cached_tokens=20, cache_write_tokens=0),
+            output_tokens_details=OutputTokensDetails(reasoning_tokens=30),
         )
 
         with caplog.at_level(logging.INFO, logger="rag.openai_llm"):

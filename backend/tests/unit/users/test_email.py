@@ -23,8 +23,17 @@ class TestNormalizedEmail:
 
     @pytest.mark.parametrize(
         "value",
-        ["", " \t\n", "alice", "@example.com", "alice@", "ali ce@example.com",
-         "ali\tce@example.com", "ali\nce@example.com", "alice@exa mple.com"],
+        [
+            "",
+            " \t\n",
+            "alice",
+            "@example.com",
+            "alice@",
+            "ali ce@example.com",
+            "ali\tce@example.com",
+            "ali\nce@example.com",
+            "alice@exa mple.com",
+        ],
     )
     def test_rejects_empty_or_invalid_email(self, value):
         adapter = TypeAdapter(NormalizedEmail)
@@ -43,7 +52,9 @@ class TestNormalizedEmail:
 
     @pytest.mark.parametrize("length", [255, 256])
     def test_rejects_address_exceeding_emailstr_limit(self, length):
-        value = "a" * 64 + "@" + "b" * 63 + "." + "c" * 63 + "." + "d" * (length - 197) + ".com"
+        value = (
+            "a" * 64 + "@" + "b" * 63 + "." + "c" * 63 + "." + "d" * (length - 197) + ".com"
+        )
         adapter = TypeAdapter(NormalizedEmail)
 
         with pytest.raises(ValidationError):

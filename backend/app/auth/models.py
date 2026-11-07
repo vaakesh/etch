@@ -1,21 +1,32 @@
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
+
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import UUID as postgresUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.users.models import User
+
 
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    uuid: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
@@ -65,9 +76,9 @@ class UserSession(Base):
         nullable=True,
     )
 
-    user: Mapped["User"] = relationship(
-        "User", 
-        foreign_keys=[user_id], 
+    user: Mapped[User] = relationship(
+        "User",
+        foreign_keys=[user_id],
         back_populates="user_sessions",
         lazy="raise",
     )

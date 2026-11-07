@@ -1,19 +1,20 @@
-from dataclasses import dataclass, field
 import logging
 import random
-from collections.abc import Callable, Hashable
-from typing import Literal, Protocol
+from collections.abc import Callable, Hashable, Mapping
+from dataclasses import dataclass
+from typing import Literal, Protocol, cast
 from uuid import UUID
 
 import orjson
+from redis.asyncio import Redis
+
 from app.cards.schemas import InternalCard
 from app.common.schemas import CursorPage
 from app.common.types import NormalizedSearch
-from app.decks.models import UserDeck
 from app.decks.schemas import InternalDeck, InternalUserDeck
+from app.decks.utils import make_user_deck_identity
 from app.errors import RequestValueError
 from app.redis.errors import RateLimitError
-from app.tracing import traced, trace_span
 from app.redis.keys import (
     make_card_cache_key,
     make_card_uuid_cache_key,
@@ -42,12 +43,8 @@ from app.redis.ttl import (
     USER_SETTINGS_TTL,
     USER_TTL,
 )
-from redis.asyncio import Redis
-
-from app.users.schemas import InternalUser, InternalUserSettings, UserProfileResponse
-from app.decks.repository import DeckCardRepository, DeckRepository, UserDeckRepository
-from app.cards.repository import CardRepository
-from app.decks.utils import make_user_deck_identity
+from app.tracing import trace_span, traced
+from app.users.schemas import InternalUser, InternalUserSettings
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +76,7 @@ class RateLimit:
         self.identity_key = identity_key
 
     async def __call__(self):
-        redis_key = (
-            f"rate_limit:"
-            f"{self.by_identity}:"
-            f"{self.identity_key}:"
-            f"{self.policy.route}"
-        )
+        redis_key = f"rate_limit:{self.by_identity}:{self.identity_key}:{self.policy.route}"
 
         can = await self.rate_limiter.check(
             redis_key=redis_key,
@@ -93,6 +85,7 @@ class RateLimit:
         )
         if not can:
             raise RateLimitError()
+
 
 RATE_LIMIT_SCRIPT = """
     local value = redis.call('INCR', KEYS[1])
@@ -103,6 +96,7 @@ RATE_LIMIT_SCRIPT = """
 
     return value
 """
+
 
 class RedisRateLimiter:
     def __init__(self, redis: Redis):
@@ -125,21 +119,20 @@ class RedisRateLimiter:
 
         return value <= requests
 
+
 class RedisCacheService:
     """
     Redis is a required dependency: Redis errors propagate to the caller.
     Invalid cache entries are treated as misses and removed when possible.
     """
+
     def __init__(self, redis: Redis):
         self.redis = redis
 
     # helpers
 
     @staticmethod
-    def with_jitter(
-            base: int, 
-            spread: int = 300
-        ) -> int:
+    def with_jitter(base: int, spread: int = 300) -> int:
         return base + random.randint(0, spread)
 
     async def _redis_set(
@@ -159,11 +152,12 @@ class RedisCacheService:
         self,
         key: str,
     ) -> str | None:
-        return await self.redis.get(key)
+        # client is created with decode_responses=True
+        return cast(str | None, await self.redis.get(key))
 
     async def _redis_set_many(
         self,
-        entries: dict[str, bytes | str],
+        entries: Mapping[str, bytes | str],
         ex: int,
     ) -> None:
         if not entries:
@@ -187,7 +181,8 @@ class RedisCacheService:
         if not keys:
             return []
 
-        return await self.redis.mget(keys=keys)
+        # client is created with decode_responses=True
+        return cast(list[str | None], await self.redis.mget(keys=keys))
 
     async def _redis_delete(
         self,
@@ -225,7 +220,7 @@ class RedisCacheService:
             if parsed_generation < 0:
                 raise ValueError("Library cache generation must be non-negative")
             return parsed_generation
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logger.warning(
                 "Ignoring invalid library cache generation",
                 extra={
@@ -272,7 +267,7 @@ class RedisCacheService:
         """
         try:
             return deserializer(value)
-        except (TypeError, ValueError, RequestValueError):
+        except TypeError, ValueError, RequestValueError:
             logger.warning(
                 "Ignoring invalid cached value",
                 extra={
@@ -295,14 +290,11 @@ class RedisCacheService:
 
         for index, item in enumerate(payload):
             if not isinstance(item, int) or isinstance(item, bool):
-                raise ValueError(
-                    f"Expected integer ID at index {index}"
-                )
+                raise ValueError(f"Expected integer ID at index {index}")
 
             ids.append(item)
 
         return ids
-
 
     # cache operations
 
@@ -315,8 +307,7 @@ class RedisCacheService:
     ) -> None:
         entries = {
             key_factory(entity_uuid): str(entity_id)
-            for entity_uuid, entity_id
-            in zip(entity_uuids, entity_ids, strict=True)
+            for entity_uuid, entity_id in zip(entity_uuids, entity_ids, strict=True)
         }
         await self._redis_set_many(
             entries=entries,
@@ -372,12 +363,7 @@ class RedisCacheService:
         if not users:
             return
 
-        entries = {
-            make_user_cache_key(
-                user.id
-            ): user.model_dump_json()
-            for user in users
-        }
+        entries = {make_user_cache_key(user.id): user.model_dump_json() for user in users}
         await self._redis_set_many(
             entries=entries,
             ex=USER_TTL,
@@ -443,14 +429,15 @@ class RedisCacheService:
     async def cache_user_decks(
         self,
         user_id: int,
-        user_decks: list[UserDeck],
+        user_decks: list[InternalUserDeck],
     ) -> None:
         entries = {
             make_user_deck_cache_key(
                 identity=make_user_deck_identity(
-                    user_id=user_deck.user_id, deck_id=user_deck.deck_id,
+                    user_id=user_deck.user_id,
+                    deck_id=user_deck.deck_id,
                 ),
-            ): InternalUserDeck.model_validate(user_deck).model_dump_json()
+            ): user_deck.model_dump_json()
             for user_deck in user_decks
         }
 
@@ -472,7 +459,7 @@ class RedisCacheService:
         result = await self._get_many(
             identities=identities,
             key_factory=make_user_deck_cache_key,
-            deserializer=InternalUserDeck.model_validate_json
+            deserializer=InternalUserDeck.model_validate_json,
         )
         return result
 
@@ -588,7 +575,7 @@ class RedisCacheService:
     ) -> None:
         if expected_generation is None:
             return
-        
+
         key = make_library_deck_page_cache_key(
             user_id=user_id,
             generation=expected_generation,
@@ -633,7 +620,7 @@ class RedisCacheService:
                 page=None,
                 generation=None,
             )
-        
+
         key = make_library_deck_page_cache_key(
             user_id=user_id,
             generation=generation,
@@ -687,12 +674,8 @@ class RedisCacheService:
         values: list[bytes] = []
 
         for deck_id, card_ids in deck_cards.items():
-            keys.append(
-                make_deck_cards_cache_key(deck_id=deck_id)
-            )
-            values.append(
-                orjson.dumps(card_ids)
-            )
+            keys.append(make_deck_cards_cache_key(deck_id=deck_id))
+            values.append(orjson.dumps(card_ids))
 
         await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
@@ -726,10 +709,7 @@ class RedisCacheService:
             for card in cards
         ]
 
-        values: list[str] = [
-            card.model_dump_json()
-            for card in cards
-        ]
+        values: list[str] = [card.model_dump_json() for card in cards]
 
         await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
@@ -781,10 +761,7 @@ class RedisCacheService:
             for deck in decks
         ]
 
-        values: list[str] = [
-            deck.model_dump_json()
-            for deck in decks
-        ]
+        values: list[str] = [deck.model_dump_json() for deck in decks]
 
         await self._redis_set_many(
             entries=dict(zip(keys, values, strict=True)),
@@ -833,10 +810,7 @@ class RedisCacheService:
                 missing=[],
             )
 
-        keys = [
-            key_factory(identity)
-            for identity in identities
-        ]
+        keys = [key_factory(identity) for identity in identities]
         values = await self._redis_mget(
             keys=keys,
         )

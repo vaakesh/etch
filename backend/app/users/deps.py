@@ -1,11 +1,10 @@
 from typing import Annotated
 
-from app.deps import UoWFactory, get_uow_factory
-from app.users.service import UserService
 from fastapi import Depends
 
+from app.deps import UoWFactory, get_uow_factory
 from app.redis.deps import CacheInvalidatorDeps, CacheServiceDeps
-from app.tracing import traced
+from app.users.service import UserService
 
 
 def get_user_service(
@@ -18,6 +17,7 @@ def get_user_service(
         cache_service=cache_service,
         cache_invalidator=cache_invalidator,
     )
+
 
 UserServiceDeps = Annotated[
     UserService,

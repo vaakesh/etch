@@ -2,20 +2,11 @@ import asyncio
 import threading
 import time
 from datetime import UTC, datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
+from argon2.exceptions import InvalidHashError
 
-from app.errors import RequestValueError
-from app.common.utils import (
-    format_duration,
-    decode_cursor,
-    encode_cursor,
-    utcnow,
-)
-from app.decks.utils import (
-    calculate_accuracy,
-    make_user_deck_identity,
-)
 from app.auth.utils import (
     PASSWORD_HASH_CONCURRENCY,
     hash_password,
@@ -23,9 +14,18 @@ from app.auth.utils import (
     verify_password,
     verify_password_async,
 )
-from argon2.exceptions import InvalidHashError
+from app.common.utils import (
+    decode_cursor,
+    encode_cursor,
+    format_duration,
+    utcnow,
+)
+from app.decks.utils import (
+    calculate_accuracy,
+    make_user_deck_identity,
+)
+from app.errors import RequestValueError
 
-from types import SimpleNamespace
 
 class TestUtcnow:
     def test_returns_current_utc_datetime(self):
@@ -36,6 +36,7 @@ class TestUtcnow:
         after = datetime.now(UTC)
         assert result.tzinfo is UTC
         assert before <= result <= after
+
 
 class TestFormatDuration:
     @pytest.mark.parametrize(
@@ -51,6 +52,7 @@ class TestFormatDuration:
     )
     def test_formats_duration_with_color(self, duration: float, expected: str):
         assert format_duration(duration) == expected
+
 
 class TestCursor:
     @pytest.mark.parametrize(
@@ -106,6 +108,7 @@ class TestCursor:
 
         assert exc_info.value.failed_field == "cursor"
 
+
 class TestCalculateAccuracy:
     @pytest.mark.parametrize(
         ("correct_count", "wrong_count", "expected"),
@@ -136,6 +139,7 @@ class TestCalculateAccuracy:
     def test_returns_zero_when_user_deck_is_none(self):
         assert calculate_accuracy(None) == 0
 
+
 class TestMakeUserDeckIdentity:
     @pytest.mark.parametrize(
         ("user_id", "deck_id"),
@@ -155,6 +159,7 @@ class TestMakeUserDeckIdentity:
             user_id,
             deck_id,
         )
+
 
 class TestPassword:
     def test_hash_password_returns_hash_different_from_password(self):

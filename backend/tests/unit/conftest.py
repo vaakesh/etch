@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import create_autospec
 
-from fastapi import FastAPI
 import pytest
+from fastapi import FastAPI
 
 from app.auth.deps import (
     get_auth_service,
@@ -60,10 +60,12 @@ def app(app: FastAPI, request):
         get_training_session_service: "training_session_service",
         get_user_service: "user_service",
     }
-    app.dependency_overrides.update({
-        dependency: provide_fixture(fixture_name)
-        for dependency, fixture_name in dependencies.items()
-    })
+    app.dependency_overrides.update(
+        {
+            dependency: provide_fixture(fixture_name)
+            for dependency, fixture_name in dependencies.items()
+        }
+    )
 
     try:
         yield app

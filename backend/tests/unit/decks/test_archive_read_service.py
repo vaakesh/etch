@@ -14,7 +14,6 @@ from app.decks.errors import (
 from app.decks.models import Deck, DeckArchiveRecipient
 from app.decks.service import DeckService
 
-
 ARCHIVE_UUID = UUID("0198ad01-b200-7000-8000-000000000201")
 SOURCE_UUID = UUID("0198ad01-b200-7000-8000-000000000202")
 CARD_UUID = UUID("0198ad01-b200-7000-8000-000000000203")
@@ -55,7 +54,7 @@ def archive_read_context(monkeypatch):
 
 class TestGetArchiveDeck:
     async def test_returns_archive_details_for_recipient(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
+        service, uow, _deck, _recipient = archive_read_context
 
         result = await service.get_archive_deck(ARCHIVE_UUID, user_id=7)
 
@@ -71,32 +70,33 @@ class TestGetArchiveDeck:
             "preserved_deck_uuid": None,
         }
         uow.deck_repo.get_with_archive_recipient.assert_awaited_once_with(
-            deck_uuid=ARCHIVE_UUID, user_id=7,
+            deck_uuid=ARCHIVE_UUID,
+            user_id=7,
         )
 
     async def test_rejects_active_deck(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
+        service, _uow, deck, _recipient = archive_read_context
         deck.state = "active"
 
         with pytest.raises(DeckNotArchivedError):
             await service.get_archive_deck(ARCHIVE_UUID, user_id=7)
 
     async def test_rejects_missing_deck(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
+        service, uow, _deck, _recipient = archive_read_context
         uow.deck_repo.get_with_archive_recipient.return_value = None
 
         with pytest.raises(DeckNotFoundError):
             await service.get_archive_deck(ARCHIVE_UUID, user_id=7)
 
     async def test_rejects_user_without_recipient_row(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
+        service, uow, deck, _recipient = archive_read_context
         uow.deck_repo.get_with_archive_recipient.return_value = (deck, None)
 
         with pytest.raises(PermissionDeniedError):
             await service.get_archive_deck(ARCHIVE_UUID, user_id=8)
 
     async def test_rejects_archive_at_expiry(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
+        service, _uow, deck, _recipient = archive_read_context
         deck.expires_at = NOW
 
         with pytest.raises(ArchiveExpiredError):
@@ -105,38 +105,48 @@ class TestGetArchiveDeck:
 
 class TestGetArchiveCards:
     async def test_returns_ordered_page_for_recipient(self, archive_read_context):
-        service, uow, deck, recipient = archive_read_context
-        uow.deck_card_repo.get_cards_by_deck_id.return_value = [Card(
-            id=3,
-            uuid=CARD_UUID,
-            user_id=None,
-            front_text="front",
-            back_text="back",
-            front_lang="en",
-            back_lang="ru",
-            updated_at=NOW - timedelta(days=1),
-        )]
+        service, uow, _deck, _recipient = archive_read_context
+        uow.deck_card_repo.get_cards_by_deck_id.return_value = [
+            Card(
+                id=3,
+                uuid=CARD_UUID,
+                user_id=None,
+                front_text="front",
+                back_text="back",
+                front_lang="en",
+                back_lang="ru",
+                updated_at=NOW - timedelta(days=1),
+            )
+        ]
 
         result = await service.get_archive_cards(
-            ARCHIVE_UUID, user_id=7, offset=5, limit=10,
+            ARCHIVE_UUID,
+            user_id=7,
+            offset=5,
+            limit=10,
         )
 
-        assert [card.model_dump() for card in result] == [{
-            "uuid": CARD_UUID,
-            "front_text": "front",
-            "back_text": "back",
-            "front_lang": "en",
-            "back_lang": "ru",
-            "updated_at": NOW - timedelta(days=1),
-        }]
+        assert [card.model_dump() for card in result] == [
+            {
+                "uuid": CARD_UUID,
+                "front_text": "front",
+                "back_text": "back",
+                "front_lang": "en",
+                "back_lang": "ru",
+                "updated_at": NOW - timedelta(days=1),
+            }
+        ]
         uow.deck_card_repo.get_cards_by_deck_id.assert_awaited_once_with(
-            deck_id=2, offset=5, limit=10,
+            deck_id=2,
+            offset=5,
+            limit=10,
         )
 
     async def test_does_not_read_cards_without_archive_access(
-        self, archive_read_context,
+        self,
+        archive_read_context,
     ):
-        service, uow, deck, recipient = archive_read_context
+        service, uow, deck, _recipient = archive_read_context
         uow.deck_repo.get_with_archive_recipient.return_value = (deck, None)
 
         with pytest.raises(PermissionDeniedError):

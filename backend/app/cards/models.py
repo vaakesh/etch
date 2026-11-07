@@ -1,30 +1,41 @@
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
-from uuid import uuid7
+from uuid import UUID, uuid7
 
-from app.database import Base
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.common.sql import trimmed_sql
+from app.database import Base
 
 if TYPE_CHECKING:
     from app.decks.models import DeckCard
     from app.users.models import User
 
+
 class Card(Base):
     __tablename__ = "cards"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    uuid: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    uuid: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
-    learning_key: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    learning_key: Mapped[UUID] = mapped_column(
+        postgresUUID(as_uuid=True),
         default=uuid7,
         server_default=text("uuidv7()"),
         nullable=False,
@@ -50,9 +61,9 @@ class Card(Base):
         default="ru",
         server_default="ru",
         nullable=False,
-        )
+    )
     back_lang: Mapped[str] = mapped_column(
-        String(3), 
+        String(3),
         default="en",
         server_default="en",
         nullable=False,
@@ -70,10 +81,10 @@ class Card(Base):
         nullable=False,
     )
 
-    user: Mapped["User | None"] = relationship("User", back_populates="cards", lazy="raise")
-    deck_links: Mapped[list["DeckCard"]] = relationship(
+    user: Mapped[User | None] = relationship("User", back_populates="cards", lazy="raise")
+    deck_links: Mapped[list[DeckCard]] = relationship(
         "DeckCard",
-        back_populates="card", 
+        back_populates="card",
         cascade="all, delete-orphan",
         passive_deletes=True,
         lazy="raise",
@@ -111,12 +122,6 @@ class Card(Base):
             "char_length(back_text) BETWEEN 1 AND 255",
             name="ck_cards_back_text_length",
         ),
-        CheckConstraint(
-            "front_text = btrim(front_text, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
-            name="ck_cards_front_text_trimmed",
-        ),
-        CheckConstraint(
-            "back_text = btrim(back_text, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
-            name="ck_cards_back_text_trimmed",
-        ),
+        CheckConstraint(trimmed_sql("front_text"), name="ck_cards_front_text_trimmed"),
+        CheckConstraint(trimmed_sql("back_text"), name="ck_cards_back_text_trimmed"),
     )

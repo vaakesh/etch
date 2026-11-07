@@ -1,11 +1,10 @@
 from typing import Annotated
 
-from app.decks.service import DeckService, UserDeckService
-from app.deps import UoWFactory, get_uow_factory
 from fastapi import Depends
 
+from app.decks.service import DeckService, UserDeckService
+from app.deps import UoWFactory, get_uow_factory
 from app.redis.deps import CacheInvalidatorDeps, CacheServiceDeps
-from app.tracing import traced
 
 
 def get_deck_service(
@@ -19,6 +18,7 @@ def get_deck_service(
         cache_invalidator=cache_invalidator,
     )
 
+
 def get_user_deck_service(
     cache_service: CacheServiceDeps,
     cache_invalidator: CacheInvalidatorDeps,
@@ -29,6 +29,7 @@ def get_user_deck_service(
         cache_service=cache_service,
         cache_invalidator=cache_invalidator,
     )
+
 
 DeckServiceDeps = Annotated[
     DeckService,

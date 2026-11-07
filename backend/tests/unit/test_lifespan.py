@@ -33,16 +33,20 @@ async def lifespan_runtime(monkeypatch):
     monkeypatch.setattr(main, "setup_logging", Mock())
     monkeypatch.setattr(main, "setup_tracing", Mock(return_value=trace_provider))
     monkeypatch.setattr(
-        main, "setup_otel_logging", Mock(return_value=(log_provider, log_handler)),
+        main,
+        "setup_otel_logging",
+        Mock(return_value=(log_provider, log_handler)),
     )
     monkeypatch.setattr(main, "shutdown_tracing", shutdown_tracing)
     monkeypatch.setattr(main, "shutdown_otel_logging", shutdown_logging)
     monkeypatch.setattr(main, "get_redis", redis_factory)
     monkeypatch.setattr(rag_deps.httpx, "AsyncClient", http_factory)
     monkeypatch.setattr(
-        rag_deps, "get_settings",
+        rag_deps,
+        "get_settings",
         lambda: SimpleNamespace(
-            rag_base_url="http://rag-service:8000", rag_request_timeout=60,
+            rag_base_url="http://rag-service:8000",
+            rag_request_timeout=60,
         ),
     )
 
@@ -72,7 +76,8 @@ async def lifespan_runtime(monkeypatch):
 
 class TestLifespan:
     async def test_reuses_rag_dependency_and_closes_resources_on_shutdown(
-        self, lifespan_runtime,
+        self,
+        lifespan_runtime,
     ):
         runtime = lifespan_runtime
 
@@ -90,14 +95,16 @@ class TestLifespan:
         runtime.redis.aclose.assert_awaited_once()
         runtime.shutdown_tracing.assert_called_once_with(runtime.trace_provider)
         runtime.shutdown_logging.assert_called_once_with(
-            runtime.log_provider, runtime.log_handler,
+            runtime.log_provider,
+            runtime.log_handler,
         )
         assert rag_deps.get_rag_client.cache_info().currsize == 0
         assert runtime.redis_factory.cache_info().currsize == 0
         assert get_resources.cache_info().currsize == 0
 
     async def test_closes_created_resources_when_redis_startup_fails(
-        self, lifespan_runtime,
+        self,
+        lifespan_runtime,
     ):
         runtime = lifespan_runtime
         runtime.redis.ping.side_effect = RuntimeError("Redis startup failed")
@@ -115,11 +122,15 @@ class TestLifespan:
         assert get_resources.cache_info().currsize == 0
 
     async def test_closes_http_when_rag_client_construction_fails(
-        self, lifespan_runtime, monkeypatch,
+        self,
+        lifespan_runtime,
+        monkeypatch,
     ):
         runtime = lifespan_runtime
         monkeypatch.setattr(
-            rag_deps, "RagClient", Mock(side_effect=ValueError("Invalid RAG client")),
+            rag_deps,
+            "RagClient",
+            Mock(side_effect=ValueError("Invalid RAG client")),
         )
 
         with pytest.raises(ValueError, match="Invalid RAG client"):
@@ -134,11 +145,15 @@ class TestLifespan:
         assert get_resources.cache_info().currsize == 0
 
     async def test_shuts_down_tracing_when_logging_setup_fails(
-        self, lifespan_runtime, monkeypatch,
+        self,
+        lifespan_runtime,
+        monkeypatch,
     ):
         runtime = lifespan_runtime
         monkeypatch.setattr(
-            main, "setup_otel_logging", Mock(side_effect=RuntimeError("Logging failed")),
+            main,
+            "setup_otel_logging",
+            Mock(side_effect=RuntimeError("Logging failed")),
         )
 
         with pytest.raises(RuntimeError, match="Logging failed"):
@@ -152,7 +167,9 @@ class TestLifespan:
 
     @pytest.mark.parametrize("failing_close", ["http", "redis", "tracing", "logging"])
     async def test_attempts_all_cleanup_and_clears_caches_when_a_close_fails(
-        self, lifespan_runtime, failing_close,
+        self,
+        lifespan_runtime,
+        failing_close,
     ):
         runtime = lifespan_runtime
         runtime.closers[failing_close].side_effect = RuntimeError("Close failed")
@@ -170,7 +187,8 @@ class TestLifespan:
         assert get_resources.cache_info().currsize == 0
 
     async def test_creates_fresh_rag_client_after_lifespan_restarts(
-        self, lifespan_runtime,
+        self,
+        lifespan_runtime,
     ):
         runtime = lifespan_runtime
 

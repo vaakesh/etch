@@ -3,13 +3,11 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from app.database import Base
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum as SQLAlchemyEnum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -20,11 +18,16 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy import (
+    Enum as SQLAlchemyEnum,
+)
 from sqlalchemy.dialects.postgresql import UUID as postgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.limits import MAX_SESSION_SIZE
+from app.common.sql import single_line_sql, trimmed_sql
 from app.common.types import DeckTitle
+from app.database import Base
 
 if TYPE_CHECKING:
     from app.decks.models import Deck
@@ -40,10 +43,12 @@ card_side_enum = SQLAlchemyEnum(
     create_constraint=True,
 )
 
+
 class TrainingSessionStatus(StrEnum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     ABANDONED = "abandoned"
+
 
 session_status_enum = SQLAlchemyEnum(
     TrainingSessionStatus,
@@ -51,9 +56,7 @@ session_status_enum = SQLAlchemyEnum(
     native_enum=False,
     create_constraint=True,
     validate_strings=True,
-    values_callable=lambda enum_class: [
-        member.value for member in enum_class
-    ],
+    values_callable=lambda enum_class: [member.value for member in enum_class],
 )
 
 
@@ -63,16 +66,16 @@ class TrainingSessionKind(StrEnum):
     # Повторение слов FSRS со сроком due из всех доступных колод
     REVIEW = "review"
 
+
 session_kind_enum = SQLAlchemyEnum(
     TrainingSessionKind,
     name="training_session_kind",
     native_enum=False,
     create_constraint=True,
     validate_strings=True,
-    values_callable=lambda enum_class: [
-        member.value for member in enum_class
-    ],
+    values_callable=lambda enum_class: [member.value for member in enum_class],
 )
+
 
 class TrainingSession(Base):
     __tablename__ = "training_sessions"
@@ -83,7 +86,7 @@ class TrainingSession(Base):
         server_default=text("uuidv7()"),
         unique=True,
         nullable=False,
-        index=True
+        index=True,
     )
 
     user_id: Mapped[int] = mapped_column(
@@ -150,7 +153,7 @@ class TrainingSession(Base):
     )
     answer_side: Mapped[CardSide] = mapped_column(
         String(5),
-        nullable=False, 
+        nullable=False,
         default="back",
         server_default="back",
     )
@@ -182,9 +185,13 @@ class TrainingSession(Base):
         nullable=True,
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="training_sessions", lazy="raise")
-    deck: Mapped["Deck | None"] = relationship("Deck", back_populates="training_sessions", lazy="raise")
-    items: Mapped[list["TrainingSessionItem"]] = relationship(
+    user: Mapped[User] = relationship(
+        "User", back_populates="training_sessions", lazy="raise"
+    )
+    deck: Mapped[Deck | None] = relationship(
+        "Deck", back_populates="training_sessions", lazy="raise"
+    )
+    items: Mapped[list[TrainingSessionItem]] = relationship(
         "TrainingSessionItem",
         back_populates="training_session",
         # Второй путь к сессии — составной ключ (training_session_id, user_id)
@@ -220,11 +227,11 @@ class TrainingSession(Base):
             name="ck_training_session_deck_title_snapshot_length",
         ),
         CheckConstraint(
-            "deck_title_snapshot = btrim(deck_title_snapshot, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
+            trimmed_sql("deck_title_snapshot"),
             name="ck_training_session_deck_title_snapshot_trimmed",
         ),
         CheckConstraint(
-            "deck_title_snapshot = translate(deck_title_snapshot, U&'\\0009\\000A\\000B\\000C\\000D\\0085\\2028\\2029', '')",
+            single_line_sql("deck_title_snapshot"),
             name="ck_training_session_deck_title_snapshot_single_line",
         ),
         CheckConstraint(
@@ -255,7 +262,8 @@ class TrainingSession(Base):
         ),
         CheckConstraint(
             "substring(activity_tracker_uuid::text from 15 for 1) = '7' "
-            "AND substring(activity_tracker_uuid::text from 20 for 1) IN ('8', '9', 'a', 'b')",
+            "AND substring(activity_tracker_uuid::text from 20 for 1) "
+            "IN ('8', '9', 'a', 'b')",
             name="ck_training_session_tracker_uuid_v7",
         ),
         CheckConstraint(
@@ -367,7 +375,7 @@ class TrainingSessionItem(Base):
     # Самооценка FSRS (1 = again ... 4 = easy). NULL — оценка выводится из is_correct
     self_rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
-    training_session: Mapped["TrainingSession"] = relationship(
+    training_session: Mapped[TrainingSession] = relationship(
         "TrainingSession",
         back_populates="items",
         foreign_keys=[training_session_id],
@@ -376,7 +384,9 @@ class TrainingSessionItem(Base):
 
     __table_args__ = (
         CheckConstraint("id > 0", name="ck_training_session_item_id_positive"),
-        CheckConstraint("training_session_id > 0", name="ck_training_session_item_session_id_positive"),
+        CheckConstraint(
+            "training_session_id > 0", name="ck_training_session_item_session_id_positive"
+        ),
         CheckConstraint("user_id > 0", name="ck_training_session_item_user_id_positive"),
         ForeignKeyConstraint(
             ["training_session_id", "user_id"],
@@ -384,7 +394,9 @@ class TrainingSessionItem(Base):
             name="fk_training_session_items_session_user",
             ondelete="CASCADE",
         ),
-        CheckConstraint("original_card_id > 0", name="ck_training_session_item_card_id_positive"),
+        CheckConstraint(
+            "original_card_id > 0", name="ck_training_session_item_card_id_positive"
+        ),
         CheckConstraint(
             "substring(uuid::text from 15 for 1) = '7' "
             "AND substring(uuid::text from 20 for 1) IN ('8', '9', 'a', 'b')",
@@ -392,11 +404,13 @@ class TrainingSessionItem(Base):
         ),
         CheckConstraint(
             "substring(learning_key_snapshot::text from 15 for 1) = '7' "
-            "AND substring(learning_key_snapshot::text from 20 for 1) IN ('8', '9', 'a', 'b')",
+            "AND substring(learning_key_snapshot::text from 20 for 1) "
+            "IN ('8', '9', 'a', 'b')",
             name="ck_training_session_item_learning_key_snapshot_v7",
         ),
         UniqueConstraint(
-            "training_session_id", "original_card_id",
+            "training_session_id",
+            "original_card_id",
             name="uq_training_session_item_original_card",
         ),
         CheckConstraint(
@@ -421,7 +435,7 @@ class TrainingSessionItem(Base):
         ),
         *(
             CheckConstraint(
-                f"{field} = btrim({field}, U&'\\0009\\000A\\000B\\000C\\000D\\001C\\001D\\001E\\001F\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')",
+                trimmed_sql(field),
                 name=f"ck_training_session_item_{field}_trimmed",
             )
             for field in ("prompt_text", "answer_text", "user_typed_text")
@@ -444,7 +458,7 @@ class TrainingSessionItem(Base):
         ),
         CheckConstraint(
             "is_answered = (is_correct IS NOT NULL)",
-            name="ck_training_session_item_answer_correct_state"
+            name="ck_training_session_item_answer_correct_state",
         ),
         CheckConstraint(
             "self_rating BETWEEN 1 AND 4",

@@ -1,8 +1,7 @@
 import app.celery.celery_logging  # noqa: F401 — регистрация сигналов логирования
+from app.config import get_settings
 from celery import Celery
 from celery.schedules import crontab
-
-from app.config import get_settings
 
 celery_app = Celery(
     "etch",

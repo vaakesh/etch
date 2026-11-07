@@ -8,6 +8,7 @@ from app.errors import RequestValueError
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
+
 def format_duration(duration: float) -> str:
     if duration > 1.0:
         color = "\x1b[31m"
@@ -26,6 +27,7 @@ def encode_cursor(time_condition: datetime, entity_id: int) -> str:
     }
     raw = json.dumps(payload, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).decode()
+
 
 def decode_cursor(cursor: str) -> tuple[datetime, int]:
     try:

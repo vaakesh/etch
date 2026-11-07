@@ -136,7 +136,9 @@ class TestHomeDeckKnowledge:
         alice = await user_factory(username="alice", email="alice@example.com")
         client = await auth_client_factory(alice)
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
-        await put_memory(async_session_maker, alice, "кот", "front", stability, elapsed_days)
+        await put_memory(
+            async_session_maker, alice, "кот", "front", stability, elapsed_days
+        )
 
         deck = await get_home_deck(client, deck_uuid)
 

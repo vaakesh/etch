@@ -1,19 +1,14 @@
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack
-from itertools import count
-import logging
 
-from altcha import Challenge, Payload, solve_challenge
-from httpx import ASGITransport, AsyncClient
-import pytest_asyncio
 import pytest
+import pytest_asyncio
+from altcha import Challenge, Payload, solve_challenge
+from fastapi import FastAPI, status
+from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy import NullPool, text
-from fastapi import FastAPI, status
-import app.models  # noqa: F401 # sqlalchemy models registration
-from app.main import create_app
-from app.config import Settings, get_settings
-from app.redis.deps import get_redis
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -21,24 +16,31 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+import app.models  # sqlalchemy models registration
+from app.config import Settings, get_settings
 from app.database import (
     Base,
     get_async_session_maker,
     get_engine,
 )
+from app.main import create_app
+from app.redis.deps import get_redis
 
 logger = logging.getLogger(__name__)
 TEST_DB_NAME = "etch_test_integration"
+
 
 @pytest.fixture(scope="session")
 def settings():
     settings = get_settings()
     if settings.db_name != TEST_DB_NAME:
         pytest.exit(
-            f"Tests aborted: wrong database configured: got \"{settings.db_name}\", expected \"{TEST_DB_NAME}\""
+            "Tests aborted: wrong database configured: "
+            f'got "{settings.db_name}", expected "{TEST_DB_NAME}"'
         )
     logger.debug("test database verified: %s", settings.db_name)
     yield settings
+
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def engine(settings: Settings):
@@ -56,14 +58,11 @@ async def engine(settings: Settings):
 async def truncate_database(engine: AsyncEngine) -> None:
     preparer = engine.dialect.identifier_preparer
     tables = ", ".join(
-        preparer.format_table(table)
-        for table in Base.metadata.tables.values()
+        preparer.format_table(table) for table in Base.metadata.tables.values()
     )
 
     async with engine.begin() as connection:
-        await connection.execute(
-            text(f"TRUNCATE TABLE {tables} RESTART IDENTITY")
-        )
+        await connection.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY"))
 
 
 @pytest_asyncio.fixture(
@@ -123,6 +122,7 @@ def async_session_maker(engine: AsyncEngine):
     logger.debug("async database session factory created")
     return async_session_maker
 
+
 @pytest.fixture(scope="session")
 def app(
     settings: Settings,
@@ -131,10 +131,13 @@ def app(
 ):
     logger.debug("creating test app")
     app = create_app()
+
     def provide_test_settings():
         return settings
+
     def provide_test_engine():
         return engine
+
     def provide_test_session_maker():
         return async_session_maker
 
@@ -158,6 +161,7 @@ async def client(app: FastAPI):
     ) as client:
         yield client
 
+
 async def solve_captcha(client: AsyncClient) -> dict[str, str]:
     # Solutions are single-use: every protected request needs its own headers.
     response = await client.get("/auth/challenge")
@@ -170,10 +174,9 @@ async def solve_captcha(client: AsyncClient) -> dict[str, str]:
 
 type ClientFactory = Callable[[], Awaitable[AsyncClient]]
 
+
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def client_factory(
-    app: FastAPI
-) -> AsyncIterator[ClientFactory]:
+async def client_factory(app: FastAPI) -> AsyncIterator[ClientFactory]:
     async with AsyncExitStack() as stack:
 
         async def make_client() -> AsyncClient:

@@ -1,11 +1,11 @@
 import base64
-from datetime import UTC, datetime
 import re
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, create_autospec
 
-from altcha import Challenge, Payload, Solution, solve_challenge
 import pytest
+from altcha import Challenge, Payload, Solution, solve_challenge
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
@@ -48,9 +48,15 @@ def challenge(captcha_service) -> Challenge:
     return Challenge.from_dict(captcha_service.create_challenge())
 
 
+def solve(challenge: Challenge) -> Solution:
+    solution = solve_challenge(challenge)
+    assert solution is not None
+    return solution
+
+
 @pytest.fixture
 def solution(challenge) -> Solution:
-    return solve_challenge(challenge)
+    return solve(challenge)
 
 
 class TestCreateChallenge:
@@ -224,7 +230,7 @@ class TestVerify:
         issued_at = datetime(2020, 1, 1, tzinfo=UTC)
         monkeypatch.setattr("app.auth.service.utcnow", lambda: issued_at)
         challenge = Challenge.from_dict(captcha_service.create_challenge())
-        payload = Payload(challenge, solve_challenge(challenge)).to_base64()
+        payload = Payload(challenge, solve(challenge)).to_base64()
 
         with pytest.raises(CaptchaError):
             await captcha_service.verify(payload)

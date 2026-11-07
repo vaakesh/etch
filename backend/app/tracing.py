@@ -13,7 +13,9 @@ tracer = trace.get_tracer(__name__)
 @contextmanager
 def trace_span(name: str):
     with tracer.start_as_current_span(
-        name, record_exception=False, set_status_on_exception=False,
+        name,
+        record_exception=False,
+        set_status_on_exception=False,
     ) as span:
         try:
             yield span
@@ -28,8 +30,10 @@ def trace_span(name: str):
 
 def traced(name: str):
     """Preserve sync/async signatures and the current trace's parent span."""
+
     def decorate(function):
         if iscoroutinefunction(function):
+
             @wraps(function)
             async def async_wrapper(*args, **kwargs):
                 with trace_span(name):

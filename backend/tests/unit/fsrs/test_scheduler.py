@@ -311,9 +311,7 @@ class TestSameDayEasyLimit:
         now = START + timedelta(days=8)
 
         limited, _ = Scheduler().review(card, Rating.EASY, now)
-        reference, _ = Scheduler(limit_same_day_easy=False).review(
-            card, Rating.EASY, now
-        )
+        reference, _ = Scheduler(limit_same_day_easy=False).review(card, Rating.EASY, now)
 
         assert limited == reference
 

@@ -111,14 +111,32 @@ class TestStartReviewSession:
         assert review.status == TrainingSessionStatus.IN_PROGRESS
         assert review.requested_count == 2
         assert [
-            (item.prompt_text, item.answer_text, item.user_id, item.original_card_id,
-             item.learning_key_snapshot, item.is_answered)
+            (
+                item.prompt_text,
+                item.answer_text,
+                item.user_id,
+                item.original_card_id,
+                item.learning_key_snapshot,
+                item.is_answered,
+            )
             for item in items
         ] == [
-            ("кот", "cat", user.id, cards_by_text["кот"].id,
-             cards_by_text["кот"].learning_key, False),
-            ("пёс", "dog", user.id, cards_by_text["пёс"].id,
-             cards_by_text["пёс"].learning_key, False),
+            (
+                "кот",
+                "cat",
+                user.id,
+                cards_by_text["кот"].id,
+                cards_by_text["кот"].learning_key,
+                False,
+            ),
+            (
+                "пёс",
+                "dog",
+                user.id,
+                cards_by_text["пёс"].id,
+                cards_by_text["пёс"].learning_key,
+                False,
+            ),
         ]
 
     async def test_takes_only_words_of_requested_side_due_today(
@@ -204,7 +222,10 @@ class TestStartReviewSession:
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
         await study_deck(client, deck_uuid, "front", {"кот": "cat"})
         await set_memory_due(
-            async_session_maker, "кот", "front", datetime.now(UTC) - timedelta(hours=1),
+            async_session_maker,
+            "кот",
+            "front",
+            datetime.now(UTC) - timedelta(hours=1),
         )
         review = await start_review(client, "front", 10)
 
@@ -226,7 +247,10 @@ class TestStartReviewSession:
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
         await study_deck(client, deck_uuid, "front", {"кот": "cat"})
         await set_memory_due(
-            async_session_maker, "кот", "front", datetime.now(UTC) - timedelta(hours=1),
+            async_session_maker,
+            "кот",
+            "front",
+            datetime.now(UTC) - timedelta(hours=1),
         )
         first = await start_review(client, "front", 10)
 
@@ -252,7 +276,10 @@ class TestStartReviewSession:
         deck_uuid = await create_deck(client, "Animals", [("кот", "cat")])
         await study_deck(client, deck_uuid, "front", {"кот": "cat"})
         await set_memory_due(
-            async_session_maker, "кот", "front", datetime.now(UTC) + timedelta(days=30),
+            async_session_maker,
+            "кот",
+            "front",
+            datetime.now(UTC) + timedelta(days=30),
         )
 
         response = await client.post(
@@ -278,11 +305,17 @@ class TestStartReviewSession:
         alice_client = await auth_client_factory(alice)
         bob_client = await auth_client_factory(bob)
         public_uuid = await create_deck(
-            alice_client, "Public", [("кот", "cat")], is_public=True,
+            alice_client,
+            "Public",
+            [("кот", "cat")],
+            is_public=True,
         )
         await study_deck(bob_client, public_uuid, "front", {"кот": "cat"})
         await set_memory_due(
-            async_session_maker, "кот", "front", datetime.now(UTC) - timedelta(hours=1),
+            async_session_maker,
+            "кот",
+            "front",
+            datetime.now(UTC) - timedelta(hours=1),
         )
 
         response = await alice_client.post(

@@ -1,8 +1,9 @@
 import asyncio
 
 from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
+
 from app.tracing import traced
-from argon2.exceptions import VerifyMismatchError, InvalidHashError
 
 ph = PasswordHasher()
 
@@ -14,6 +15,7 @@ _password_hash_semaphore = asyncio.Semaphore(PASSWORD_HASH_CONCURRENCY)
 @traced("auth.hash_password")
 def hash_password(password: str) -> str:
     return ph.hash(password)
+
 
 @traced("auth.verify_password")
 def verify_password(password: str, password_hash: str) -> bool:

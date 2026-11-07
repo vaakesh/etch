@@ -11,25 +11,31 @@ from tests.unit.redis.cases import CARD_UUID
 class TestCacheInvalidationMessage:
     def test_builds_pending_cache_event_from_scopes(self):
         message = cache_invalidation_message(
-            scopes.cards(100), scopes.library_card_pages(42),
+            scopes.cards(100),
+            scopes.library_card_pages(42),
         )
 
         assert message.event_type == "cache.invalidation.v1"
-        assert message.payload == {"scopes": [
-            {"name": "cards", "args": [100]},
-            {"name": "library_card_pages", "args": [42]},
-        ]}
+        assert message.payload == {
+            "scopes": [
+                {"name": "cards", "args": [100]},
+                {"name": "library_card_pages", "args": [42]},
+            ]
+        }
         assert message.id is None
         assert message.published_at is None
 
     def test_omits_scopes_without_arguments(self):
         message = cache_invalidation_message(
-            scopes.decks(), scopes.library_deck_pages(42),
+            scopes.decks(),
+            scopes.library_deck_pages(42),
         )
 
-        assert message.payload == {"scopes": [
-            {"name": "library_deck_pages", "args": [42]},
-        ]}
+        assert message.payload == {
+            "scopes": [
+                {"name": "library_deck_pages", "args": [42]},
+            ]
+        }
 
 
 class TestCacheInvalidationHandler:
@@ -37,26 +43,40 @@ class TestCacheInvalidationHandler:
         invalidator = create_autospec(CacheInvalidator, instance=True)
         handler = CacheInvalidationHandler(invalidator)
 
-        await handler({"scopes": [
-            {"name": "cards", "args": [100]},
-            {"name": "library_card_pages", "args": [42]},
-        ]})
+        await handler(
+            {
+                "scopes": [
+                    {"name": "cards", "args": [100]},
+                    {"name": "library_card_pages", "args": [42]},
+                ]
+            }
+        )
 
         invalidator.invalidate.assert_awaited_once_with(
-            scopes.cards(100), scopes.library_card_pages(42),
+            scopes.cards(100),
+            scopes.library_card_pages(42),
         )
 
     async def test_delivers_scopes_from_jsonb_payload(self, redis_client, redis_pipeline):
         handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
 
-        await handler({"scopes": [
-            {"name": "cards_removed", "args": [{"id": 100, "uuid": str(CARD_UUID)}]},
-            {"name": "user_decks", "args": [[42, 200]]},
-            {"name": "library_card_pages", "args": [42]},
-        ]})
+        await handler(
+            {
+                "scopes": [
+                    {
+                        "name": "cards_removed",
+                        "args": [{"id": 100, "uuid": str(CARD_UUID)}],
+                    },
+                    {"name": "user_decks", "args": [[42, 200]]},
+                    {"name": "library_card_pages", "args": [42]},
+                ]
+            }
+        )
 
         assert redis_pipeline.method_calls == [
-            call.unlink("card:100", f"card:id-by-uuid:{CARD_UUID}", "deck:user-deck:42:200"),
+            call.unlink(
+                "card:100", f"card:id-by-uuid:{CARD_UUID}", "deck:user-deck:42:200"
+            ),
             call.incr("library:42:cards:generation"),
             call.execute(),
         ]
@@ -74,10 +94,14 @@ class TestCacheInvalidationHandler:
         handler = CacheInvalidationHandler(CacheInvalidator(redis_client))
 
         with pytest.raises(ValueError, match="Unknown cache scope"):
-            await handler({"scopes": [
-                {"name": "cards", "args": [100]},
-                {"name": "unknown", "args": []},
-            ]})
+            await handler(
+                {
+                    "scopes": [
+                        {"name": "cards", "args": [100]},
+                        {"name": "unknown", "args": []},
+                    ]
+                }
+            )
 
         redis_client.pipeline.assert_not_called()
 

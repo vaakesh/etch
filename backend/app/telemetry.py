@@ -1,27 +1,26 @@
+import logging
 import os
 from functools import lru_cache
 
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-import logging
-
 from opentelemetry.exporter.otlp.proto.http._log_exporter import (
     OTLPLogExporter,
 )
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter,
+)
 from opentelemetry.instrumentation.logging.handler import LoggingHandler
-from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from app.logging_config import RequestContextFilter
 from app.database import get_engine
+from app.logging_config import RequestContextFilter
+
 
 def setup_otel_logging(
     resource: Resource,
@@ -108,9 +107,7 @@ def setup_tracing() -> TracerProvider:
         engine=get_engine().sync_engine,
         tracer_provider=provider,
     )
-    RedisInstrumentor().instrument(
-        tracer_provider=provider
-    )
+    RedisInstrumentor().instrument(tracer_provider=provider)
 
     return provider
 

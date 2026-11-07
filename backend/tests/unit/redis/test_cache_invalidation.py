@@ -8,20 +8,28 @@ from app.redis.invalidation import CacheInvalidator, DelKey, scopes
 from tests.unit.redis.cases import CARD_UUID, DECK_UUID, USER_UUID
 
 
-@pytest.mark.parametrize(("scope_fn", "identity", "key"), [
-    (scopes.users, 42, "user:42"),
-    (scopes.users_settings, 42, "user:42:settings"),
-    (scopes.cards, 100, "card:100"),
-    (scopes.decks, 200, "deck:200"),
-    (scopes.deck_cards, 200, "deck:200:card-ids"),
-    (scopes.user_decks, make_user_deck_identity(42, 200), "deck:user-deck:42:200"),
-    (scopes.user_ids_by_uuids, USER_UUID, f"user:id-by-uuid:{USER_UUID}"),
-    (scopes.card_ids_by_uuids, CARD_UUID, f"card:id-by-uuid:{CARD_UUID}"),
-    (scopes.deck_ids_by_uuids, DECK_UUID, f"deck:id-by-uuid:{DECK_UUID}"),
-])
+@pytest.mark.parametrize(
+    ("scope_fn", "identity", "key"),
+    [
+        (scopes.users, 42, "user:42"),
+        (scopes.users_settings, 42, "user:42:settings"),
+        (scopes.cards, 100, "card:100"),
+        (scopes.decks, 200, "deck:200"),
+        (scopes.deck_cards, 200, "deck:200:card-ids"),
+        (scopes.user_decks, make_user_deck_identity(42, 200), "deck:user-deck:42:200"),
+        (scopes.user_ids_by_uuids, USER_UUID, f"user:id-by-uuid:{USER_UUID}"),
+        (scopes.card_ids_by_uuids, CARD_UUID, f"card:id-by-uuid:{CARD_UUID}"),
+        (scopes.deck_ids_by_uuids, DECK_UUID, f"deck:id-by-uuid:{DECK_UUID}"),
+    ],
+)
 class TestInvalidateEntries:
     async def test_unlinks_requested_cache_key(
-        self, redis_client, redis_pipeline, scope_fn, identity, key,
+        self,
+        redis_client,
+        redis_pipeline,
+        scope_fn,
+        identity,
+        key,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -32,7 +40,11 @@ class TestInvalidateEntries:
         redis_pipeline.execute.assert_awaited_once_with()
 
     async def test_does_not_contact_redis_for_empty_scope(
-        self, redis_client, scope_fn, identity, key,
+        self,
+        redis_client,
+        scope_fn,
+        identity,
+        key,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -41,7 +53,12 @@ class TestInvalidateEntries:
         redis_client.pipeline.assert_not_called()
 
     async def test_propagates_original_redis_error(
-        self, redis_client, redis_pipeline, scope_fn, identity, key,
+        self,
+        redis_client,
+        redis_pipeline,
+        scope_fn,
+        identity,
+        key,
     ):
         invalidator = CacheInvalidator(redis_client)
         failure = ConnectionError("Redis unavailable")
@@ -55,13 +72,20 @@ class TestInvalidateEntries:
         redis_pipeline.execute.assert_awaited_once_with()
 
 
-@pytest.mark.parametrize(("scope_fn", "kind"), [
-    (scopes.library_card_pages, "cards"),
-    (scopes.library_deck_pages, "decks"),
-])
+@pytest.mark.parametrize(
+    ("scope_fn", "kind"),
+    [
+        (scopes.library_card_pages, "cards"),
+        (scopes.library_deck_pages, "decks"),
+    ],
+)
 class TestInvalidateLibraryPages:
     async def test_advances_each_users_generation_without_expiration(
-        self, redis_client, redis_pipeline, scope_fn, kind,
+        self,
+        redis_client,
+        redis_pipeline,
+        scope_fn,
+        kind,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -79,7 +103,10 @@ class TestInvalidateLibraryPages:
         redis_pipeline.expire.assert_not_called()
 
     async def test_does_not_contact_redis_for_empty_scope(
-        self, redis_client, scope_fn, kind,
+        self,
+        redis_client,
+        scope_fn,
+        kind,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -89,11 +116,21 @@ class TestInvalidateLibraryPages:
 
     @pytest.mark.parametrize("failure_stage", ["pipeline", "incr", "execute"])
     async def test_propagates_original_generation_invalidation_error(
-        self, redis_client, redis_pipeline, scope_fn, kind, failure_stage,
+        self,
+        redis_client,
+        redis_pipeline,
+        scope_fn,
+        kind,
+        failure_stage,
     ):
         invalidator = CacheInvalidator(redis_client)
-        target = redis_client.pipeline if failure_stage == "pipeline" else getattr(
-            redis_pipeline, failure_stage,
+        target = (
+            redis_client.pipeline
+            if failure_stage == "pipeline"
+            else getattr(
+                redis_pipeline,
+                failure_stage,
+            )
         )
         failure = ConnectionError("Redis unavailable")
         target.side_effect = failure
@@ -106,7 +143,9 @@ class TestInvalidateLibraryPages:
 
 class TestCacheInvalidatorInvalidate:
     async def test_executes_explicit_scopes_and_deduplicates_overlapping_operations(
-        self, redis_client, redis_pipeline,
+        self,
+        redis_client,
+        redis_pipeline,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -124,9 +163,13 @@ class TestCacheInvalidatorInvalidate:
 
         assert redis_pipeline.method_calls == [
             call.unlink(
-                "card:100", "deck:200", "deck:201",
-                "deck:200:card-ids", "deck:201:card-ids",
-                "deck:user-deck:42:200", "deck:user-deck:43:201",
+                "card:100",
+                "deck:200",
+                "deck:201",
+                "deck:200:card-ids",
+                "deck:201:card-ids",
+                "deck:user-deck:42:200",
+                "deck:user-deck:43:201",
             ),
             call.incr("library:42:decks:generation"),
             call.incr("library:43:decks:generation"),
@@ -136,7 +179,9 @@ class TestCacheInvalidatorInvalidate:
         ]
 
     async def test_accepts_materialized_operations_alongside_scopes(
-        self, redis_client, redis_pipeline,
+        self,
+        redis_client,
+        redis_pipeline,
     ):
         invalidator = CacheInvalidator(redis_client)
 
@@ -152,15 +197,22 @@ class TestCacheInvalidatorInvalidate:
 
         redis_client.pipeline.assert_not_called()
 
-    @pytest.mark.parametrize(("card_count", "expected_batch_sizes"), [
-        (1, [1]),
-        (500, [500]),
-        (501, [500, 1]),
-        (1000, [500, 500]),
-        (1001, [500, 500, 1]),
-    ])
+    @pytest.mark.parametrize(
+        ("card_count", "expected_batch_sizes"),
+        [
+            (1, [1]),
+            (500, [500]),
+            (501, [500, 1]),
+            (1000, [500, 500]),
+            (1001, [500, 500, 1]),
+        ],
+    )
     async def test_unlinks_keys_in_batches_of_at_most_500(
-        self, redis_client, redis_pipeline, card_count, expected_batch_sizes,
+        self,
+        redis_client,
+        redis_pipeline,
+        card_count,
+        expected_batch_sizes,
     ):
         invalidator = CacheInvalidator(redis_client)
 

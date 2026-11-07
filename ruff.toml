@@ -1,0 +1,11 @@
+# Root stdlib-only scripts (setup.py, tests/); backend and user-guide-rag
+# have their own [tool.ruff] in pyproject.toml.
+
+[lint]
+ignore = [
+    "SIM117", # tests nest assertRaises inside patch contexts on purpose
+]
+
+[lint.isort]
+# keep `import x` and `from x import y` sorted together by module name
+force-sort-within-sections = true

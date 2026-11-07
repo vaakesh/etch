@@ -46,7 +46,10 @@ class TestSubmitAnswerCardMemory:
         practice = await start_practice(client, deck_uuid, "front", 1)
 
         response = await submit_answer(
-            client, practice["training_session_uuid"], 1, "cat",
+            client,
+            practice["training_session_uuid"],
+            1,
+            "cat",
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -95,7 +98,10 @@ class TestSubmitAnswerCardMemory:
         practice = await start_practice(client, deck_uuid, "front", 1)
 
         response = await submit_answer(
-            client, practice["training_session_uuid"], 1, answer,
+            client,
+            practice["training_session_uuid"],
+            1,
+            answer,
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -124,7 +130,10 @@ class TestSubmitAnswerCardMemory:
         second = await start_practice(client, deck_uuid, "front", 1)
 
         response = await submit_answer(
-            client, second["training_session_uuid"], 1, "cat",
+            client,
+            second["training_session_uuid"],
+            1,
+            "cat",
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -150,7 +159,10 @@ class TestSubmitAnswerCardMemory:
         backward = await start_practice(client, deck_uuid, "back", 1)
 
         response = await submit_answer(
-            client, backward["training_session_uuid"], 1, "dog",
+            client,
+            backward["training_session_uuid"],
+            1,
+            "dog",
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -169,14 +181,18 @@ class TestSubmitAnswerCardMemory:
         client = await auth_client_factory(alice)
         # Два слова: после первого ответа сессия ещё не завершена
         deck_uuid = await create_deck_with_cards(
-            client, [("кот", "cat"), ("собака", "dog")],
+            client,
+            [("кот", "cat"), ("собака", "dog")],
         )
         practice = await start_practice(client, deck_uuid, "front", 2)
         await submit_answer(client, practice["training_session_uuid"], 1, "wrong")
         before = await load_memory_states(async_session_maker)
 
         response = await submit_answer(
-            client, practice["training_session_uuid"], 1, "wrong",
+            client,
+            practice["training_session_uuid"],
+            1,
+            "wrong",
         )
 
         assert response.status_code == status.HTTP_200_OK

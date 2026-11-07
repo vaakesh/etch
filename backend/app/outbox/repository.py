@@ -16,7 +16,11 @@ class OutboxRepository:
         self.session.add(message)
 
     async def get_pending(
-        self, *, event_types: Sequence[str], created_before: datetime, limit: int,
+        self,
+        *,
+        event_types: Sequence[str],
+        created_before: datetime,
+        limit: int,
     ) -> list[OutboxMessage]:
         if not event_types:
             return []
@@ -36,10 +40,7 @@ class OutboxRepository:
     async def mark_published(self, message_id: int) -> bool:
         result = await self.session.execute(
             update(OutboxMessage)
-            .where(
-                OutboxMessage.id == message_id,
-                OutboxMessage.published.is_(False)
-            )
+            .where(OutboxMessage.id == message_id, OutboxMessage.published.is_(False))
             .values(published=True, published_at=utcnow())
             .returning(OutboxMessage.id)
             .execution_options(synchronize_session=False)

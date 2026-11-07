@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import stat
 import tempfile
+from typing import Any
 import unittest
 from unittest.mock import patch
 
@@ -381,7 +382,9 @@ class SetupTests(unittest.TestCase):
         self.assertIn("dev checks passed", self.output.getvalue())
         self.assertNotIn("secret-must-not-appear", self.output.getvalue())
 
-    def test_check_without_profile_copies_missing_token_before_bind_mount_validation(self):
+    def test_check_without_profile_copies_missing_token_before_bind_mount_validation(
+        self,
+    ):
         config = self.project_config()
         token = self.root / "prometheus/metrics_token"
         token.unlink()
@@ -390,7 +393,9 @@ class SetupTests(unittest.TestCase):
         (self.root / "backend/.env").write_text(
             "metrics_token=mock-metrics-secret\n", encoding="utf-8"
         )
-        config["services"]["api"]["environment"]["metrics_token"] = "mock-metrics-secret"
+        config["services"]["api"]["environment"]["metrics_token"] = (
+            "mock-metrics-secret"
+        )
         config["services"]["prometheus"] = {
             "volumes": [{"type": "bind", "source": str(token)}]
         }
@@ -532,10 +537,13 @@ class SetupTests(unittest.TestCase):
                 }
             },
         }
-        cases = (
+        cases: tuple[tuple[dict[str, Any], str], ...] = (
             ({"services": services}, "db_name"),
             ({"token": "other-token"}, "metrics_token"),
-            ({"acl": "user secret-must-not-appear on >other +@all\n"}, "redis_password"),
+            (
+                {"acl": "user secret-must-not-appear on >other +@all\n"},
+                "redis_password",
+            ),
             ({"broker": "amqp://etch:wrong@rabbitmq:5672//"}, "celery_broker_url"),
         )
         for change, setting in cases:
@@ -596,7 +604,10 @@ class SetupTests(unittest.TestCase):
         config["services"] = {
             "loki": {
                 "volumes": [
-                    {"type": "bind", "source": str(self.root / "observability/loki.yaml")}
+                    {
+                        "type": "bind",
+                        "source": str(self.root / "observability/loki.yaml"),
+                    }
                 ]
             }
         }

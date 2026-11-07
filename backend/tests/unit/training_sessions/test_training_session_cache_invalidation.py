@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.decks.repository import DeckRepository, UserDeckRepository
 from app.redis.invalidation import BumpGeneration, CacheInvalidator, DelKey
@@ -13,21 +14,19 @@ from app.training_sessions.repository import (
 )
 from app.training_sessions.schemas import SubmittedAnswerRequest
 from app.training_sessions.service import TrainingSessionService
-from redis.exceptions import ConnectionError as RedisConnectionError
-
-from tests.unit.outbox_helpers import (
-    OUTBOX_MESSAGE_ID,
-    assert_invalidation_delivered_from_outbox,
-    assert_no_invalidation_staged,
-    make_outbox_repo,
-    staged_message,
-)
 from tests.unit.factories import (
     TEST_TRAINING_SESSION_UUID,
     make_deck,
     make_training_session,
     make_training_session_item,
     make_user_deck,
+)
+from tests.unit.outbox_helpers import (
+    OUTBOX_MESSAGE_ID,
+    assert_invalidation_delivered_from_outbox,
+    assert_no_invalidation_staged,
+    make_outbox_repo,
+    staged_message,
 )
 
 NOW = datetime(2026, 8, 15, 17, 0, tzinfo=UTC)
@@ -68,26 +67,34 @@ def cache_context(monkeypatch):
     uow.deck_repo = create_autospec(DeckRepository, instance=True)
     uow.user_deck_repo = create_autospec(UserDeckRepository, instance=True)
     uow.training_session_repo = create_autospec(
-        TrainingSessionRepository, instance=True,
+        TrainingSessionRepository,
+        instance=True,
     )
     uow.training_session_item_repo = create_autospec(
-        TrainingSessionItemRepository, instance=True,
+        TrainingSessionItemRepository,
+        instance=True,
     )
     uow.deck_repo.get_by_id.return_value = deck
     uow.deck_repo.get_by_uuid.return_value = deck
     uow.user_deck_repo.get_by_user_id_and_deck_id.return_value = state
     uow.training_session_repo.get_by_uuid.return_value = session
-    uow.training_session_item_repo.get_item_by_sequence_number_and_session_id.return_value = item
+    item_repo = uow.training_session_item_repo
+    item_repo.get_item_by_sequence_number_and_session_id.return_value = item
     uow.training_session_item_repo.create_snapshot.return_value = [
-        make_training_session_item(sequence_number=number)
-        for number in range(1, 6)
+        make_training_session_item(sequence_number=number) for number in range(1, 6)
     ]
     service = TrainingSessionService(
-        uow_factory=lambda: uow, cache_invalidator=invalidator,
+        uow_factory=lambda: uow,
+        cache_invalidator=invalidator,
     )
     return SimpleNamespace(
-        service=service, uow=uow, invalidator=invalidator,
-        deck=deck, session=session, item=item, state=state,
+        service=service,
+        uow=uow,
+        invalidator=invalidator,
+        deck=deck,
+        session=session,
+        item=item,
+        state=state,
     )
 
 
@@ -110,7 +117,9 @@ async def start(ctx, user_id=42):
 
 
 class TestSubmitAnswerInvalidation:
-    async def test_refreshes_state_and_library_order_when_session_completes(self, cache_context):
+    async def test_refreshes_state_and_library_order_when_session_completes(
+        self, cache_context
+    ):
         ctx = cache_context
         ctx.session.answered_count = 9
 
@@ -170,7 +179,10 @@ class TestStartTrainingSessionInvalidation:
         ],
     )
     async def test_does_not_invalidate_when_library_is_unchanged(
-        self, cache_context, user_id, has_state,
+        self,
+        cache_context,
+        user_id,
+        has_state,
     ):
         ctx = cache_context
         if not has_state:
@@ -183,7 +195,9 @@ class TestStartTrainingSessionInvalidation:
         ctx.uow.commit.assert_awaited_once()
         assert_no_invalidation_staged(ctx.uow, ctx.invalidator)
 
-    async def test_refreshes_library_when_state_is_created_for_own_deck(self, cache_context):
+    async def test_refreshes_library_when_state_is_created_for_own_deck(
+        self, cache_context
+    ):
         ctx = cache_context
         ctx.uow.user_deck_repo.get_by_user_id_and_deck_id.return_value = None
 

@@ -1,12 +1,21 @@
 from datetime import datetime
 from typing import Any
 
+from pydantic import (
+    UUID7,
+    BaseModel,
+    ConfigDict,
+    PastDatetime,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic.json_schema import SkipJsonSchema
+
 from app.cards.models import Card
 from app.cards.types import CardImportBatch
 from app.common.types import CardLang, CardText, Counter, DeckPosition, PositiveInt
 from app.errors import RequestValueError
-from pydantic import UUID7, BaseModel, ConfigDict, PastDatetime, ValidationInfo, field_validator, model_validator
-from pydantic.json_schema import SkipJsonSchema
 
 
 class InternalCard(BaseModel):
@@ -43,17 +52,9 @@ class InternalCard(BaseModel):
 
     @classmethod
     def from_entity(cls, card: Card) -> InternalCard:
-        return cls(
-            id=card.id,
-            uuid=card.uuid,
-            user_id=card.user_id,
-            front_text=card.front_text,
-            back_text=card.back_text,
-            front_lang=card.front_lang,
-            back_lang=card.back_lang,
-            created_at=card.created_at,
-            updated_at=card.updated_at,
-        )
+        # ORM user_id is nullable; validation rejects cards without an owner
+        return cls.model_validate(card)
+
 
 class CreateCardRequest(BaseModel):
     front_text: CardText
@@ -61,6 +62,7 @@ class CreateCardRequest(BaseModel):
 
     front_lang: CardLang = "ru"
     back_lang: CardLang = "en"
+
 
 class UpdateCardRequest(BaseModel):
     front_text: CardText | SkipJsonSchema[None] = None
@@ -81,6 +83,7 @@ class UpdateCardRequest(BaseModel):
                     )
         return data
 
+
 class CardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,12 +97,15 @@ class CardResponse(BaseModel):
 
     updated_at: PastDatetime
 
+
 class LoadCardsRequest(BaseModel):
     cards: CardImportBatch[CreateCardRequest]
+
 
 class LoadedCardResponse(BaseModel):
     uuid: UUID7
     position: DeckPosition
+
 
 class LoadCardsResponse(BaseModel):
     imported_count: Counter

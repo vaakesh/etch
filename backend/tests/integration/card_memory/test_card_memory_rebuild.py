@@ -116,7 +116,10 @@ class TestRebuildCardMemory:
         await delete_memory_states(async_session_maker)
         second = await start_practice(client, deck_uuid, "front", 1)
         response = await submit_answer(
-            client, second["training_session_uuid"], 1, "cat",
+            client,
+            second["training_session_uuid"],
+            1,
+            "cat",
         )
         assert response.status_code == status.HTTP_200_OK
         # submit_answer начал слово заново и не учёл первый ответ
@@ -132,6 +135,7 @@ class TestRebuildCardMemory:
         assert memory.step is None
         assert memory.stability == 2.3065
         assert memory.difficulty == pytest.approx(2.111214235785395, rel=1e-12)
+        assert stale.last_review is not None
         assert memory.last_review == stale.last_review
         assert memory.due == stale.last_review + timedelta(days=2)
 
@@ -191,7 +195,8 @@ class TestRebuildCardMemory:
         alice = await user_factory(username="alice", email="alice@example.com")
         client = await auth_client_factory(alice)
         deck_uuid = await create_deck_with_cards(
-            client, [("кот", "cat"), ("пёс", "dog")],
+            client,
+            [("кот", "cat"), ("пёс", "dog")],
         )
         first = await start_practice(client, deck_uuid, "front", 1)
         await submit_answer(client, first["training_session_uuid"], 1, "cat")
@@ -202,18 +207,21 @@ class TestRebuildCardMemory:
         await submit_answer(client, second["training_session_uuid"], 1, None)
         await submit_answer(client, second["training_session_uuid"], 2, None)
         before = [
-            state.to_fsrs_card()
-            for state in await load_memory_states(async_session_maker)
+            state.to_fsrs_card() for state in await load_memory_states(async_session_maker)
         ]
 
         stats = await rebuild(async_session_maker, apply=False)
 
         assert stats == RebuildStats(
-            batches=1, keys=2, events=3, created=0, updated=1, unchanged=1,
+            batches=1,
+            keys=2,
+            events=3,
+            created=0,
+            updated=1,
+            unchanged=1,
         )
         after = [
-            state.to_fsrs_card()
-            for state in await load_memory_states(async_session_maker)
+            state.to_fsrs_card() for state in await load_memory_states(async_session_maker)
         ]
         assert after == before
 
@@ -226,7 +234,8 @@ class TestRebuildCardMemory:
         alice = await user_factory(username="alice", email="alice@example.com")
         client = await auth_client_factory(alice)
         deck_uuid = await create_deck_with_cards(
-            client, [("кот", "cat"), ("пёс", "dog")],
+            client,
+            [("кот", "cat"), ("пёс", "dog")],
         )
         practice = await start_practice(client, deck_uuid, "front", 2)
         await submit_answer(client, practice["training_session_uuid"], 1, None)
@@ -237,9 +246,7 @@ class TestRebuildCardMemory:
 
         assert stats == RebuildStats(batches=2, keys=2, events=2, created=2)
         async with async_session_maker() as session:
-            learning_keys = sorted(
-                (await session.scalars(select(Card.learning_key))).all()
-            )
+            learning_keys = sorted((await session.scalars(select(Card.learning_key))).all())
         states = await load_memory_states(async_session_maker)
         assert [state.learning_key for state in states] == learning_keys
         for state in states:

@@ -3,8 +3,8 @@ import re
 import sys
 import textwrap
 import time
-from copy import copy
 from contextvars import ContextVar, Token
+from copy import copy
 from dataclasses import dataclass
 from http import HTTPStatus
 from pprint import pformat
@@ -12,11 +12,11 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode
 from uuid import uuid4
 
+from opentelemetry import trace
 from sqlalchemy import event
 from sqlalchemy.engine import Connection, ExceptionContext
 from sqlalchemy.engine.interfaces import ExecutionContext
 from sqlalchemy.ext.asyncio import AsyncEngine
-from opentelemetry import trace
 
 LOG_FORMAT = (
     "%(asctime)s.%(msecs)03dZ | %(levelname)s | "
@@ -30,11 +30,11 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 RESET = "\x1b[0m"
 
 COLORS = {
-    logging.DEBUG: "\x1b[37m",      # white
-    logging.INFO: "\x1b[32m",       # green
-    logging.WARNING: "\x1b[33m",    # yellow
-    logging.ERROR: "\x1b[31m",      # red
-    logging.CRITICAL: "\x1b[1;31m", # bold red
+    logging.DEBUG: "\x1b[37m",  # white
+    logging.INFO: "\x1b[32m",  # green
+    logging.WARNING: "\x1b[33m",  # yellow
+    logging.ERROR: "\x1b[31m",  # red
+    logging.CRITICAL: "\x1b[1;31m",  # bold red
 }
 
 SQL_LOGGER = logging.getLogger("app.sql")
@@ -51,16 +51,18 @@ SQL_CLAUSE_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
-SENSITIVE_QUERY_FIELDS = frozenset({
-    "access_token",
-    "api_key",
-    "authorization",
-    "code",
-    "password",
-    "refresh_token",
-    "secret",
-    "token",
-})
+SENSITIVE_QUERY_FIELDS = frozenset(
+    {
+        "access_token",
+        "api_key",
+        "authorization",
+        "code",
+        "password",
+        "refresh_token",
+        "secret",
+        "token",
+    }
+)
 LOGGED_EXCEPTION_ATTRIBUTE = "_etch_already_logged"
 
 
@@ -96,14 +98,10 @@ class RequestContextFilter(logging.Filter):
         record.request_id = context.request_id if context else "-"
         span_context = trace.get_current_span().get_span_context()
         record.trace_id = (
-            format(span_context.trace_id, "032x")
-            if span_context.is_valid
-            else "-"
+            format(span_context.trace_id, "032x") if span_context.is_valid else "-"
         )
         record.span_id = (
-            format(span_context.span_id, "016x")
-            if span_context.is_valid
-            else "-"
+            format(span_context.span_id, "016x") if span_context.is_valid else "-"
         )
         return True
 
@@ -128,9 +126,7 @@ class ColoredFormatter(logging.Formatter):
 
         if self.use_colors:
             color = self.COLORS.get(record.levelno, self.RESET)
-            formatted_record.levelname = (
-                f"{color}{level_name}{self.RESET}"
-            )
+            formatted_record.levelname = f"{color}{level_name}{self.RESET}"
         else:
             formatted_record.levelname = level_name
 
@@ -142,10 +138,7 @@ def _is_duplicate_uvicorn_exception(record: logging.LogRecord) -> bool:
         return False
 
     exception = record.exc_info[1]
-    return bool(
-        exception
-        and getattr(exception, LOGGED_EXCEPTION_ATTRIBUTE, False)
-    )
+    return bool(exception and getattr(exception, LOGGED_EXCEPTION_ATTRIBUTE, False))
 
 
 def _single_line(value: str) -> str:
@@ -198,7 +191,7 @@ def format_http_status(status_code: int) -> str:
 def mark_exception_as_logged(exception: BaseException) -> None:
     try:
         setattr(exception, LOGGED_EXCEPTION_ATTRIBUTE, True)
-    except (AttributeError, TypeError):
+    except AttributeError, TypeError:
         pass
 
 
@@ -320,9 +313,7 @@ def _start_sql_timer(
     if not sql_logging_config.enabled:
         return
 
-    connection.info.setdefault(SQL_START_TIMES_KEY, []).append(
-        time.perf_counter()
-    )
+    connection.info.setdefault(SQL_START_TIMES_KEY, []).append(time.perf_counter())
 
 
 def _pop_sql_start_time(connection: Connection | None) -> float | None:
@@ -390,9 +381,7 @@ def _log_failed_sql(exception_context: ExceptionContext) -> None:
         duration_ms,
         type(exception_context.original_exception).__name__,
         _indent_log_block(_format_sql_statement(statement)),
-        _indent_log_block(
-            _format_sql_parameters(exception_context.parameters)
-        ),
+        _indent_log_block(_format_sql_parameters(exception_context.parameters)),
     )
 
 
@@ -452,7 +441,7 @@ def setup_logging(
         "uvicorn.error",
         "fastapi",
         "sqlalchemy.engine",
-        "sqlalchemy.pool"
+        "sqlalchemy.pool",
     ):
         logger = logging.getLogger(name)
         logger.handlers = []
