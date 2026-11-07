@@ -1,0 +1,298 @@
+/* Self-contained styles: the dialog is reused outside the library page (deck details),
+   so it must not depend on an ancestor page class or its custom properties. */
+
+.deckDeleteDialog {
+  --delete-ink-deep: #291e49;
+  --delete-muted: #685e7e;
+  --delete-line: rgb(64 43 103 / 16%);
+  --delete-line-strong: rgb(64 43 103 / 28%);
+  --delete-hover-ink: #493873;
+  --delete-hover-bg: #ddf8f5;
+  --delete-name-bg: #eefcfb;
+  --delete-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  width: min(480px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  color: var(--delete-ink-deep);
+  background: transparent;
+  border: 0;
+  border-radius: 22px;
+  box-shadow: 0 28px 72px rgb(39 35 33 / 28%);
+  animation: deckDeleteDialogEnter 280ms var(--delete-spring) both;
+}
+
+.deckDeleteDialog::backdrop {
+  background: rgb(41 30 73 / 42%);
+  backdrop-filter: blur(8px) saturate(0.82);
+  animation: deckDeleteBackdropEnter 220ms ease-out both;
+}
+
+.deckDeleteShell {
+  overflow: hidden;
+  background: rgb(255 255 255 / 94%);
+  border: 1px solid rgb(196 79 121 / 22%);
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+
+.deckDeleteHeader {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 25px 26px 20px;
+  background: linear-gradient(125deg, #eeeaff, #ddf8f5 52%, #f9dced);
+  border-bottom: 1px solid rgb(118 98 207 / 14%);
+}
+
+.deckDeleteMark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #9d3269;
+  background: #f2acd5;
+  border: 1px solid rgb(196 79 121 / 28%);
+  border-radius: 14px;
+  transform: rotate(-3deg);
+}
+
+.deckDeleteMark svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.8;
+}
+
+.deckDeleteEyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #9d3269;
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.deckDeleteHeader h2 {
+  margin: 0;
+  color: var(--delete-ink-deep);
+  font-size: 1.42rem;
+  font-weight: 680;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.deckDeleteBody {
+  display: grid;
+  gap: 12px;
+  padding: 24px 26px;
+}
+
+.deckDeleteBody p {
+  margin: 0;
+  color: var(--delete-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.deckDeleteName {
+  display: block;
+  padding: 12px 14px;
+  overflow-wrap: anywhere;
+  color: var(--delete-ink-deep);
+  font-size: 0.92rem;
+  font-weight: 680;
+  line-height: 1.4;
+  background: var(--delete-name-bg);
+  border: 1px solid var(--delete-line);
+  border-radius: 11px;
+}
+
+.deckDeleteBody .deckDeleteWarning {
+  color: #9d454a;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.deckDeleteActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 18px 26px 24px;
+  background: linear-gradient(100deg, rgb(238 234 255 / 62%), rgb(221 248 245 / 56%));
+  border-top: 1px solid var(--delete-line);
+}
+
+.deckDeleteCancel,
+.deckDeleteConfirm {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 680;
+  cursor: pointer;
+  border-radius: 11px;
+  transition:
+    color 170ms ease,
+    background-color 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease,
+    transform 170ms ease;
+}
+
+.deckDeleteCancel {
+  color: var(--delete-ink-deep);
+  background: #fff;
+  border: 1px solid var(--delete-line-strong);
+}
+
+.deckDeleteCancel:hover,
+.deckDeleteCancel:focus-visible {
+  color: var(--delete-hover-ink);
+  background: var(--delete-hover-bg);
+  border-color: rgb(118 98 207 / 32%);
+  transform: translateY(-1px);
+}
+
+.deckDeleteConfirm {
+  color: #fff;
+  background: linear-gradient(135deg, #c44f79, #aa3d72);
+  border: 1px solid #b84676;
+  box-shadow: 0 8px 18px rgb(196 79 121 / 24%);
+}
+
+.deckDeleteConfirm:hover,
+.deckDeleteConfirm:focus-visible {
+  color: #fff;
+  background: linear-gradient(135deg, #af3f6c, #91305f);
+  border-color: #9d3269;
+  box-shadow: 0 10px 22px rgb(196 79 121 / 30%);
+  transform: translateY(-1px);
+}
+
+.deckDeleteCancel:active,
+.deckDeleteConfirm:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.deckDeleteConfirm svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.8;
+}
+
+@keyframes deckDeleteDialogEnter {
+  from {
+    opacity: 0;
+    scale: 0.96;
+    translate: 0 14px;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0;
+  }
+}
+
+@keyframes deckDeleteBackdropEnter {
+  from {
+    background: rgb(43 33 28 / 0%);
+    backdrop-filter: blur(0) saturate(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deckDeleteDialog,
+  .deckDeleteDialog::backdrop {
+    animation: none;
+  }
+}
+
+:global(html[data-theme="dark"]) .deckDeleteDialog {
+  color: var(--dark-text);
+  color-scheme: dark;
+  box-shadow: 0 28px 72px var(--dark-shadow-strong);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteDialog::backdrop {
+  background: var(--dark-scrim);
+  backdrop-filter: none;
+}
+
+:global(html[data-theme="dark"]) .deckDeleteShell {
+  background: var(--dark-surface);
+  border-color: var(--dark-danger-medium);
+  box-shadow: inset 0 1px 0 var(--dark-highlight);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteHeader {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteHeader h2 {
+  color: var(--dark-text);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteMark {
+  color: var(--dark-background);
+  background: var(--dark-danger);
+  border-color: var(--dark-danger);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteEyebrow,
+:global(html[data-theme="dark"]) .deckDeleteBody .deckDeleteWarning {
+  color: var(--dark-danger);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteBody p {
+  color: var(--dark-text-muted);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteName {
+  color: var(--dark-text);
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteActions {
+  background: var(--dark-surface-raised);
+  border-color: var(--dark-border);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteCancel {
+  color: var(--dark-text);
+  background: var(--dark-surface);
+  border-color: var(--dark-border-strong);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteCancel:hover,
+:global(html[data-theme="dark"]) .deckDeleteCancel:focus-visible {
+  color: var(--dark-cta);
+  background: var(--dark-cta-soft);
+  border-color: var(--dark-cta-medium);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteConfirm {
+  color: var(--dark-background);
+  background: var(--dark-danger);
+  border-color: var(--dark-danger);
+  box-shadow: 0 8px 18px var(--dark-shadow);
+}
+
+:global(html[data-theme="dark"]) .deckDeleteConfirm:hover,
+:global(html[data-theme="dark"]) .deckDeleteConfirm:focus-visible {
+  color: var(--dark-background);
+  background: var(--dark-danger-hover);
+  border-color: var(--dark-danger-hover);
+  box-shadow: 0 10px 22px var(--dark-shadow);
+}

@@ -292,11 +292,13 @@ function HistoryIcon() {
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2.15"
+      strokeWidth="1.9"
       viewBox="0 0 24 24"
     >
-      <path d="M5.2 8.5A7.5 7.5 0 1 1 4.7 14" />
-      <path d="M5.2 4.5v4h4M12 8.2v4.2l2.8 1.7" />
+      <rect height="16.5" rx="2.5" width="15" x="4.5" y="4.5" />
+      <rect height="3.4" rx="1.2" width="6" x="9" y="2.8" />
+      <path d="M7.8 11.4l1.4 1.4 2.4-2.7M14 11.6h2.6" />
+      <path d="M8 15.4l2.6 2.6M10.6 15.4L8 18M14 16.7h2.6" />
     </svg>
   );
 }

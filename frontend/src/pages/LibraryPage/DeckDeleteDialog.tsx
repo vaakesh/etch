@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type FormEvent, type PointerEvent } from "react";
 import { defineMessages, useLocalizedMessages } from "../../i18n";
-import styles from "./LibraryPage.module.css";
+import styles from "./DeckDeleteDialog.module.css";
 
 const MESSAGES = defineMessages(
   {

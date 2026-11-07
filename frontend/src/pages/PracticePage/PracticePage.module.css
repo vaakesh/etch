@@ -911,14 +911,17 @@
     border-color var(--practice-motion-fast);
 }
 
+/* Icon-only link: the 44px hit area stays, the frame appears only on hover/press. */
 .historyDetailsButton {
   width: 44px;
   text-decoration: none;
+  background: transparent;
+  border-color: transparent;
 }
 
 .historyDetailsButton svg {
-  width: 19px;
-  height: 19px;
+  width: 26px;
+  height: 26px;
 }
 
 .historyRepeatButton {
@@ -2559,11 +2562,15 @@
     color: var(--history-action-deep);
   }
 
-  .historyDetailsButton:hover,
   .historyRepeatButton:not(.historyRepeatButtonAccent):hover:not(:disabled) {
     color: var(--history-secondary);
     background: var(--history-secondary-surface-hover);
     border-color: var(--history-secondary);
+  }
+
+  .historyDetailsButton:hover {
+    color: var(--history-secondary);
+    background: var(--history-secondary-surface-hover);
   }
 
   .secondaryAction:hover,
@@ -2655,10 +2662,14 @@
   }
 }
 
-.historyDetailsButton:active,
 .historyRepeatButton:not(.historyRepeatButtonAccent):active:not(:disabled) {
   background: var(--history-secondary-surface-hover);
   border-color: var(--history-secondary);
+  box-shadow: none;
+}
+
+.historyDetailsButton:active {
+  background: var(--history-secondary-surface-hover);
   box-shadow: none;
 }
 
