@@ -128,6 +128,11 @@ class DeckRepository:
                 DeckArchiveRecipient.user_id == user_id,
                 Deck.state == "archived",
                 Deck.expires_at > now,
+                # восстановленный архив, чья копия уже удалена, повторно не предлагаем
+                or_(
+                    DeckArchiveRecipient.preserved_at.is_(None),
+                    DeckArchiveRecipient.preserved_deck_id.is_not(None),
+                ),
             )
             .order_by(Deck.expires_at, Deck.id)
         )
