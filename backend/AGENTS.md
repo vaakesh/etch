@@ -2,6 +2,7 @@
 
 - Все Python-команды, тесты и инструменты backend запускать через uv из каталога backend: `uv run python`, `uv run pytest`, `uv run alembic` и т. п. Для отдельных инструментов использовать `uvx`, когда это уместно.
 - Не запускать Python, pytest и другие инструменты напрямую, в том числе через `.venv/bin/...`.
+- После изменения Python-кода должны проходить `uv run ruff format --check .`, `uv run ruff check .` и `uv run ty check`. Запускать их через `uv run`, а не `uvx`: версии зафиксированы в dev-зависимостях, а `uvx` может взять старую версию из кэша. Ошибки исправлять в коде; `# noqa` и `# ty: ignore` ставить только точечно и с комментарием, почему проверка здесь неприменима.
 - Перед добавлением, изменением или ревью трейсинга прочитать [tracing_rules.md](tracing_rules.md) и соблюдать эти правила.
 - Перед добавлением, изменением или ревью инвалидации кэша прочитать [app/redis/invalidation_rules.md](app/redis/invalidation_rules.md) и соблюдать эти правила.
 - Перед написанием или изменением интеграционных тестов прочитать [tests/integration/integration_rules.md](tests/integration/integration_rules.md) и соблюдать эти рекомендации.
