@@ -15,6 +15,26 @@
 		header X-Robots-Tag "noindex, nofollow"
 		encode zstd gzip
 
+		# Метаданные установки проверяют кеш и не используют SPA fallback.
+		handle /manifest.webmanifest {
+			root * /srv
+			header Content-Type application/manifest+json
+			header Cache-Control "no-cache"
+			file_server
+		}
+
+		handle /icons/* {
+			root * /srv
+			header Cache-Control "no-cache"
+			file_server
+		}
+
+		handle /favicon.svg {
+			root * /srv
+			header Cache-Control "no-cache"
+			file_server
+		}
+
 		# vite генерирует ассеты с хешем в имени; отсутствующий ассет должен отдавать 404, а не html
 		handle /assets/* {
 			root * /srv

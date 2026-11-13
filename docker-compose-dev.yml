@@ -165,6 +165,7 @@ services:
       - ./frontend/package-lock.json:/frontend/package-lock.json
       - ./frontend/package.json:/frontend/package.json
       - ./frontend/prettier.config.mjs:/frontend/prettier.config.mjs
+      - ./frontend/pwa-icons.ts:/frontend/pwa-icons.ts:ro
       - ./frontend/tsconfig.app.json:/frontend/tsconfig.app.json
       - ./frontend/tsconfig.json:/frontend/tsconfig.json
       - ./frontend/tsconfig.node.json:/frontend/tsconfig.node.json
